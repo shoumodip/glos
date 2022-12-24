@@ -1,12 +1,32 @@
-{
-    print 34 + 35
-    print 500 - 80
-    print 23 * 3
-    print 1260 / 3
-    print 17 * 2 + 35
-    print 500 + -40 * 2
-    print true
-    print false
-    print !true
-    print !false
+print true
+print false
+print !true
+print !false
+
+print 34 + 35
+print 500 - 80
+print 23 * 3
+print 1260 / 3
+print 17 * 2 + 35
+print 500 + -40 * 2
+
+if true {
+    print 69
+} else {
+    print 420
+}
+
+if false {
+    print 69
+} else {
+    print 420
+}
+
+if true {
+    print 69
+    print 420
+}
+
+if false {
+    print 420
 }

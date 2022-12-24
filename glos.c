@@ -135,11 +135,14 @@ enum {
 
     TOKEN_LNOT,
 
+    TOKEN_IF,
+    TOKEN_ELSE,
+
     TOKEN_PRINT,
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_TOKENS == 14);
 char *cstr_from_token_type(int type)
 {
     switch (type) {
@@ -175,6 +178,12 @@ char *cstr_from_token_type(int type)
 
     case TOKEN_LNOT:
         return "'!'";
+
+    case TOKEN_IF:
+        return "keyword 'if'";
+
+    case TOKEN_ELSE:
+        return "keyword 'else'";
 
     case TOKEN_PRINT:
         return "keyword 'print'";
@@ -239,7 +248,7 @@ char lexer_consume(void)
     return lexer.str.data[-1];
 }
 
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_TOKENS == 14);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -288,6 +297,10 @@ Token lexer_next(void)
         } else if (str_eq(token.str, str_from_cstr("false"))) {
             token.type = TOKEN_BOOL;
             token.data = 0;
+        } else if (str_eq(token.str, str_from_cstr("if"))) {
+            token.type = TOKEN_IF;
+        } else if (str_eq(token.str, str_from_cstr("else"))) {
+            token.type = TOKEN_ELSE;
         } else if (str_eq(token.str, str_from_cstr("print"))) {
             token.type = TOKEN_PRINT;
         } else {
@@ -353,6 +366,19 @@ bool lexer_read(int type)
     return !lexer.peeked;
 }
 
+Token lexer_expect(int type)
+{
+    Token token = lexer_next();
+    if (token.type != type) {
+        print_pos(stderr, token.pos);
+        fprintf(stderr, "error: expected %s, got %s\n",
+                cstr_from_token_type(type),
+                cstr_from_token_type(token.type));
+        exit(1);
+    }
+    return token;
+}
+
 bool lexer_peek_row(Token *token)
 {
 	*token = lexer_peek();
@@ -366,6 +392,7 @@ enum {
     NODE_BINARY,
 
     NODE_BLOCK,
+    NODE_IF,
 
     NODE_PRINT,
     COUNT_NODES
@@ -378,6 +405,10 @@ enum {
 
 #define NODE_BLOCK_START 0
 
+#define NODE_IF_COND 0
+#define NODE_IF_THEN 1
+#define NODE_IF_ELSE 2
+
 #define NODE_PRINT_VALUE 0
 
 typedef struct {
@@ -385,7 +416,7 @@ typedef struct {
     size_t kind;
     Token token;
 
-    size_t nodes[2];
+    size_t nodes[3];
     size_t next;
 } Node;
 
@@ -420,7 +451,7 @@ enum {
     POWER_PRE
 };
 
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_TOKENS == 14);
 int power_from_token_type(int type)
 {
     switch (type) {
@@ -443,7 +474,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_TOKENS == 14);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -484,7 +515,7 @@ size_t parse_expr(int mbp)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_TOKENS == 14);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -495,6 +526,19 @@ size_t parse_stmt(void)
         node = node_new(NODE_BLOCK, token);
         for (size_t *list = &nodes[node].nodes[NODE_BLOCK_START]; !lexer_read(TOKEN_RBRACE); ) {
             list = node_list_push(list, parse_stmt());
+        }
+        break;
+
+    case TOKEN_IF:
+        node = node_new(NODE_IF, token);
+        nodes[node].nodes[NODE_IF_COND] = parse_expr(POWER_NIL);
+
+        lexer_buffer(lexer_expect(TOKEN_LBRACE));
+        nodes[node].nodes[NODE_IF_THEN] = parse_stmt();
+
+        if (lexer_read(TOKEN_ELSE)) {
+            lexer_buffer(lexer_expect(TOKEN_LBRACE));
+            nodes[node].nodes[NODE_IF_ELSE] = parse_stmt();
         }
         break;
 
@@ -524,6 +568,10 @@ enum {
 
     OP_LNOT,
 
+    OP_GOTO,
+    OP_ELSE,
+
+    OP_HALT,
     OP_PRINT,
     COUNT_OPS
 };
@@ -533,7 +581,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 9);
+static_assert(COUNT_OPS == 12);
 void print_op(FILE *file, Op op)
 {
     switch (op.type) {
@@ -567,6 +615,18 @@ void print_op(FILE *file, Op op)
 
     case OP_LNOT:
         fprintf(file, "lnot\n");
+        break;
+
+    case OP_GOTO:
+        fprintf(file, "goto %zu\n", op.data);
+        break;
+
+    case OP_ELSE:
+        fprintf(file, "else %zu\n", op.data);
+        break;
+
+    case OP_HALT:
+        fprintf(file, "halt\n");
         break;
 
     case OP_PRINT:
@@ -653,8 +713,8 @@ size_t type_assert_arith(size_t node)
     return actual;
 }
 
-static_assert(COUNT_NODES == 5);
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_NODES == 6);
+static_assert(COUNT_TOKENS == 14);
 void check_expr(size_t node)
 {
     switch (nodes[node].type) {
@@ -712,14 +772,23 @@ void check_expr(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 5);
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_NODES == 6);
+static_assert(COUNT_TOKENS == 14);
 void check_stmt(size_t node)
 {
     switch (nodes[node].type) {
     case NODE_BLOCK:
         for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
             check_stmt(node);
+        }
+        break;
+
+    case NODE_IF:
+        check_expr(nodes[node].nodes[NODE_IF_COND]);
+        check_stmt(nodes[node].nodes[NODE_IF_THEN]);
+
+        if (nodes[node].nodes[NODE_IF_ELSE] != 0) {
+            check_stmt(nodes[node].nodes[NODE_IF_ELSE]);
         }
         break;
 
@@ -751,8 +820,8 @@ size_t type_size(size_t type)
     }
 }
 
-static_assert(COUNT_NODES == 5);
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_NODES == 6);
+static_assert(COUNT_TOKENS == 14);
 void compile_expr(size_t node)
 {
     switch (nodes[node].type) {
@@ -823,8 +892,8 @@ void compile_expr(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 5);
-static_assert(COUNT_TOKENS == 12);
+static_assert(COUNT_NODES == 6);
+static_assert(COUNT_TOKENS == 14);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].type) {
@@ -833,6 +902,24 @@ void compile_stmt(size_t node)
             compile_stmt(node);
         }
         break;
+
+    case NODE_IF: {
+        compile_expr(nodes[node].nodes[NODE_IF_COND]);
+
+        const size_t then_addr = ops_count;
+        ops_push(OP_ELSE, 0);
+        compile_stmt(nodes[node].nodes[NODE_IF_THEN]);
+
+        if (nodes[node].nodes[NODE_IF_ELSE] != 0) {
+            const size_t else_addr = ops_count;
+            ops_push(OP_GOTO, 0);
+            ops[then_addr].data = ops_count;
+            compile_stmt(nodes[node].nodes[NODE_IF_ELSE]);
+            ops[else_addr].data = ops_count;
+        } else {
+            ops[then_addr].data = ops_count;
+        }
+    } break;
 
     case NODE_PRINT:
         compile_expr(nodes[node].nodes[NODE_PRINT_VALUE]);
@@ -846,7 +933,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 9);
+static_assert(COUNT_OPS == 12);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -911,6 +998,22 @@ void generate(char *path)
             fprintf(file, "push rbx\n");
             break;
 
+        case OP_GOTO:
+            fprintf(file, "jmp I%zu\n", op.data);
+            break;
+
+        case OP_ELSE:
+            fprintf(file, "pop rax\n");
+            fprintf(file, "test rax, rax\n");
+            fprintf(file, "jz I%zu\n", op.data);
+            break;
+
+        case OP_HALT:
+            fprintf(file, "mov rax, 60\n");
+            fprintf(file, "xor rdi, rdi\n");
+            fprintf(file, "syscall\n");
+            break;
+
         case OP_PRINT:
             fprintf(file, "pop rdi\n");
             fprintf(file, "call PRINT\n");
@@ -919,10 +1022,6 @@ void generate(char *path)
         default: assert(0 && "unreachable");
         }
     }
-
-    fprintf(file, "mov rax, 60\n");
-    fprintf(file, "xor rdi, rdi\n");
-    fprintf(file, "syscall\n");
 
     fprintf(file, "PRINT:\n");
     fprintf(file, "mov r9, -3689348814741910323\n");
@@ -1008,6 +1107,7 @@ int main(int argc, char **argv)
         check_stmt(node);
         compile_stmt(node);
     }
+    ops_push(OP_HALT, 0);
 
     path_arena.size = 0;
     arena_push(&path_arena, "./", 2);
