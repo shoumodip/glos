@@ -6,3 +6,5 @@ print 17 * 2 + 35
 print 500 + -40 * 2
 print true
 print false
+print !true
+print !false

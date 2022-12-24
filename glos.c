@@ -130,11 +130,13 @@ enum {
     TOKEN_MUL,
     TOKEN_DIV,
 
+    TOKEN_LNOT,
+
     TOKEN_PRINT,
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 char *cstr_from_token_type(int type)
 {
     switch (type) {
@@ -161,6 +163,9 @@ char *cstr_from_token_type(int type)
 
     case TOKEN_DIV:
         return "'/'";
+
+    case TOKEN_LNOT:
+        return "'!'";
 
     case TOKEN_PRINT:
         return "keyword 'print'";
@@ -225,7 +230,7 @@ char lexer_consume(void)
     return lexer.str.data[-1];
 }
 
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -295,6 +300,10 @@ Token lexer_next(void)
 
         case '/':
             token.type = TOKEN_DIV;
+            break;
+
+        case '!':
+            token.type = TOKEN_LNOT;
             break;
 
         default:
@@ -378,7 +387,7 @@ enum {
     POWER_PRE
 };
 
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 int power_from_token_type(int type)
 {
     switch (type) {
@@ -401,7 +410,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -414,6 +423,7 @@ size_t parse_expr(int mbp)
         break;
 
     case TOKEN_SUB:
+    case TOKEN_LNOT:
         node = node_new(NODE_UNARY, token);
         nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE);
         break;
@@ -441,7 +451,7 @@ size_t parse_expr(int mbp)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -472,6 +482,8 @@ enum {
     OP_DIV,
     OP_NEG,
 
+    OP_LNOT,
+
     OP_PRINT,
     COUNT_OPS
 };
@@ -481,7 +493,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 8);
+static_assert(COUNT_OPS == 9);
 void print_op(FILE *file, Op op)
 {
     switch (op.type) {
@@ -511,6 +523,10 @@ void print_op(FILE *file, Op op)
 
     case OP_NEG:
         fprintf(file, "neg\n");
+        break;
+
+    case OP_LNOT:
+        fprintf(file, "lnot\n");
         break;
 
     case OP_PRINT:
@@ -598,7 +614,7 @@ size_t type_assert_arith(size_t node)
 }
 
 static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 void check_expr(size_t node)
 {
     switch (nodes[node].type) {
@@ -623,6 +639,11 @@ void check_expr(size_t node)
         case TOKEN_SUB:
             check_expr(value);
             nodes[node].kind = type_assert_arith(value);
+            break;
+
+        case TOKEN_LNOT:
+            check_expr(value);
+            nodes[node].kind = type_assert(value, TYPE_BOOL);
             break;
 
         default: assert(0 && "unreachable");
@@ -652,7 +673,7 @@ void check_expr(size_t node)
 }
 
 static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 void check_stmt(size_t node)
 {
     switch (nodes[node].type) {
@@ -685,7 +706,7 @@ size_t type_size(size_t type)
 }
 
 static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 void compile_expr(size_t node)
 {
     switch (nodes[node].type) {
@@ -707,6 +728,11 @@ void compile_expr(size_t node)
         case TOKEN_SUB:
             compile_expr(value);
             ops_push(OP_NEG, 0);
+            break;
+
+        case TOKEN_LNOT:
+            compile_expr(value);
+            ops_push(OP_LNOT, 0);
             break;
 
         default: assert(0 && "unreachable");
@@ -752,7 +778,7 @@ void compile_expr(size_t node)
 }
 
 static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 9);
+static_assert(COUNT_TOKENS == 10);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].type) {
@@ -768,7 +794,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 8);
+static_assert(COUNT_OPS == 9);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -823,6 +849,14 @@ void generate(char *path)
 
         case OP_NEG:
             fprintf(file, "neg qword [rsp]\n");
+            break;
+
+        case OP_LNOT:
+            fprintf(file, "pop rax\n");
+            fprintf(file, "xor rbx, rbx\n");
+            fprintf(file, "test rax, rax\n");
+            fprintf(file, "sete bl\n");
+            fprintf(file, "push rbx\n");
             break;
 
         case OP_PRINT:
