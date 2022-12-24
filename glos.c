@@ -125,6 +125,9 @@ enum {
     TOKEN_BOOL,
     TOKEN_IDENT,
 
+    TOKEN_LBRACE,
+    TOKEN_RBRACE,
+
     TOKEN_ADD,
     TOKEN_SUB,
     TOKEN_MUL,
@@ -136,7 +139,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_TOKENS == 12);
 char *cstr_from_token_type(int type)
 {
     switch (type) {
@@ -151,6 +154,12 @@ char *cstr_from_token_type(int type)
 
     case TOKEN_IDENT:
         return "identifier";
+
+    case TOKEN_LBRACE:
+        return "'{'";
+
+    case TOKEN_RBRACE:
+        return "'}'";
 
     case TOKEN_ADD:
         return "'+'";
@@ -230,7 +239,7 @@ char lexer_consume(void)
     return lexer.str.data[-1];
 }
 
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_TOKENS == 12);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -286,6 +295,14 @@ Token lexer_next(void)
         }
     } else {
         switch (lexer_consume()) {
+        case '{':
+            token.type = TOKEN_LBRACE;
+            break;
+
+        case '}':
+            token.type = TOKEN_RBRACE;
+            break;
+
         case '+':
             token.type = TOKEN_ADD;
             break;
@@ -348,6 +365,8 @@ enum {
     NODE_UNARY,
     NODE_BINARY,
 
+    NODE_BLOCK,
+
     NODE_PRINT,
     COUNT_NODES
 };
@@ -357,13 +376,17 @@ enum {
 #define NODE_BINARY_LHS 0
 #define NODE_BINARY_RHS 1
 
+#define NODE_BLOCK_START 0
+
 #define NODE_PRINT_VALUE 0
 
 typedef struct {
     int type;
-    Token token;
     size_t kind;
+    Token token;
+
     size_t nodes[2];
+    size_t next;
 } Node;
 
 #define NODES_CAP 1024
@@ -379,6 +402,16 @@ size_t node_new(int type, Token token)
     return nodes_count - 1;
 }
 
+size_t *node_list_push(size_t *list, size_t node)
+{
+    if (*list != 0) {
+        list = &nodes[*list].next;
+    }
+
+    *list = node;
+    return list;
+}
+
 // Parser
 enum {
     POWER_NIL,
@@ -387,7 +420,7 @@ enum {
     POWER_PRE
 };
 
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_TOKENS == 12);
 int power_from_token_type(int type)
 {
     switch (type) {
@@ -410,7 +443,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_TOKENS == 12);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -451,13 +484,20 @@ size_t parse_expr(int mbp)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_TOKENS == 12);
 size_t parse_stmt(void)
 {
     size_t node;
     Token token = lexer_next();
 
     switch (token.type) {
+    case TOKEN_LBRACE:
+        node = node_new(NODE_BLOCK, token);
+        for (size_t *list = &nodes[node].nodes[NODE_BLOCK_START]; !lexer_read(TOKEN_RBRACE); ) {
+            list = node_list_push(list, parse_stmt());
+        }
+        break;
+
     case TOKEN_PRINT:
         node = node_new(NODE_PRINT, token);
         nodes[node].nodes[NODE_PRINT_VALUE] = parse_expr(POWER_NIL);
@@ -613,8 +653,8 @@ size_t type_assert_arith(size_t node)
     return actual;
 }
 
-static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_NODES == 5);
+static_assert(COUNT_TOKENS == 12);
 void check_expr(size_t node)
 {
     switch (nodes[node].type) {
@@ -672,11 +712,17 @@ void check_expr(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_NODES == 5);
+static_assert(COUNT_TOKENS == 12);
 void check_stmt(size_t node)
 {
     switch (nodes[node].type) {
+    case NODE_BLOCK:
+        for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
+            check_stmt(node);
+        }
+        break;
+
     case NODE_PRINT:
         check_expr(nodes[node].nodes[NODE_PRINT_VALUE]);
         break;
@@ -705,8 +751,8 @@ size_t type_size(size_t type)
     }
 }
 
-static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_NODES == 5);
+static_assert(COUNT_TOKENS == 12);
 void compile_expr(size_t node)
 {
     switch (nodes[node].type) {
@@ -777,11 +823,17 @@ void compile_expr(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 4);
-static_assert(COUNT_TOKENS == 10);
+static_assert(COUNT_NODES == 5);
+static_assert(COUNT_TOKENS == 12);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].type) {
+    case NODE_BLOCK:
+        for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
+            compile_stmt(node);
+        }
+        break;
+
     case NODE_PRINT:
         compile_expr(nodes[node].nodes[NODE_PRINT_VALUE]);
         ops_push(OP_PRINT, 0);
