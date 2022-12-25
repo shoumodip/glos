@@ -606,7 +606,7 @@ void error_unexpected(Token token)
 }
 
 static_assert(COUNT_TOKENS == 26);
-size_t parse_expr(int mbp)
+size_t parse_expr(int mbp, bool ref)
 {
     size_t node;
     Token token = lexer_next();
@@ -614,15 +614,28 @@ size_t parse_expr(int mbp)
     switch (token.type) {
     case TOKEN_INT:
     case TOKEN_BOOL:
+        if (ref) {
+            error_unexpected(token);
+        }
+
+        node = node_new(NODE_ATOM, token);
+        break;
+
     case TOKEN_IDENT:
         node = node_new(NODE_ATOM, token);
         break;
 
     case TOKEN_SUB:
+    case TOKEN_MUL:
     case TOKEN_BNOT:
+    case TOKEN_BAND:
     case TOKEN_LNOT:
+        if (ref) {
+            error_unexpected(token);
+        }
+
         node = node_new(NODE_UNARY, token);
-        nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE);
+        nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE, token.type == TOKEN_BAND);
         break;
 
     default: error_unexpected(token);
@@ -643,15 +656,24 @@ size_t parse_expr(int mbp)
         nodes[binary].nodes[NODE_BINARY_LHS] = node;
         switch (token.type) {
         case TOKEN_SET:
-            if (nodes[node].type == NODE_ATOM && nodes[node].token.type == TOKEN_IDENT) {
-                nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp);
+            if (ref) {
+                error_unexpected(token);
+            }
+
+            if ((nodes[node].type == NODE_ATOM && nodes[node].token.type == TOKEN_IDENT) ||
+                (nodes[node].type == NODE_UNARY && nodes[node].token.type == TOKEN_MUL)) {
+                nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp, false);
             } else {
                 error_unexpected(token);
             }
             break;
 
         default:
-            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp);
+            if (ref) {
+                error_unexpected(token);
+            }
+
+            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp, false);
         }
         node = binary;
     }
@@ -675,7 +697,7 @@ size_t parse_stmt(void)
 
     case TOKEN_IF:
         node = node_new(NODE_IF, token);
-        nodes[node].nodes[NODE_IF_COND] = parse_expr(POWER_SET);
+        nodes[node].nodes[NODE_IF_COND] = parse_expr(POWER_SET, false);
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
         nodes[node].nodes[NODE_IF_THEN] = parse_stmt();
@@ -688,7 +710,7 @@ size_t parse_stmt(void)
 
     case TOKEN_FOR:
         node = node_new(NODE_FOR, token);
-        nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET);
+        nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET, false);
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
         nodes[node].nodes[NODE_FOR_BODY] = parse_stmt();
@@ -697,17 +719,17 @@ size_t parse_stmt(void)
     case TOKEN_LET:
         node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT));
         lexer_expect(TOKEN_SET);
-        nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET);
+        nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET, false);
         break;
 
     case TOKEN_PRINT:
         node = node_new(NODE_PRINT, token);
-        nodes[node].nodes[NODE_PRINT_VALUE] = parse_expr(POWER_SET);
+        nodes[node].nodes[NODE_PRINT_VALUE] = parse_expr(POWER_SET, false);
         break;
 
     default:
         lexer_buffer(token);
-        node = parse_expr(POWER_NIL);
+        node = parse_expr(POWER_NIL, false);
     }
 
     return node;
@@ -884,14 +906,41 @@ enum {
     COUNT_TYPES
 };
 
+// Type Representation:
+// | 0 - 3 | 3 - 6 | 6 - 64 |
+// | kind  | ref   | unused |
+
 bool type_eq(size_t a, size_t b)
 {
     return a == b;
 }
 
+size_t type_ref(size_t type)
+{
+    return type + 8;
+}
+
+size_t type_deref(size_t type)
+{
+    return type - 8;
+}
+
+size_t type_extract(size_t type, size_t *ref)
+{
+    *ref = (type & 56) >> 3;
+    return type & ~56;
+}
+
 static_assert(COUNT_TYPES == 3);
 void print_type(FILE *file, size_t type)
 {
+    size_t ref;
+    type = type_extract(type, &ref);
+
+    for (size_t i = 0; i < ref; ++i) {
+        fprintf(file, "*");
+    }
+
     switch (type) {
     case TYPE_NIL:
         fprintf(file, "nil");
@@ -970,10 +1019,29 @@ size_t type_assert(size_t node, size_t expected)
 
 size_t type_assert_arith(size_t node)
 {
+    size_t ref;
     size_t actual = nodes[node].kind;
-    if (!type_eq(actual, TYPE_INT)) {
+    type_extract(actual, &ref);
+
+    if (!type_eq(actual, TYPE_INT) && ref == 0) {
         print_pos(stderr, nodes[node].token.pos);
         fprintf(stderr, "error: expected arithmetic type, got '");
+        print_type(stderr, actual);
+        fprintf(stderr, "'\n");
+        exit(1);
+    }
+    return actual;
+}
+
+size_t type_assert_pointer(size_t node)
+{
+    size_t ref;
+    size_t actual = nodes[node].kind;
+    type_extract(actual, &ref);
+
+    if (ref == 0) {
+        print_pos(stderr, nodes[node].token.pos);
+        fprintf(stderr, "error: expected pointer type, got '");
         print_type(stderr, actual);
         fprintf(stderr, "'\n");
         exit(1);
@@ -1023,6 +1091,16 @@ void check_expr(size_t node)
         case TOKEN_LNOT:
             check_expr(value);
             nodes[node].kind = type_assert(value, TYPE_BOOL);
+            break;
+
+        case TOKEN_MUL:
+            check_expr(value);
+            nodes[node].kind = type_deref(type_assert_pointer(value));
+            break;
+
+        case TOKEN_BAND:
+            check_expr(value);
+            nodes[node].kind = type_ref(nodes[value].kind);
             break;
 
         default: assert(0 && "unreachable");
@@ -1134,6 +1212,13 @@ size_t align(size_t n)
 static_assert(COUNT_TYPES == 3);
 size_t type_size(size_t type)
 {
+    size_t ref;
+    type = type_extract(type, &ref);
+
+    if (ref > 0) {
+        return 8;
+    }
+
     switch (type) {
     case TYPE_NIL:
         return 0;
@@ -1187,6 +1272,17 @@ void compile_expr(size_t node, bool ref)
         case TOKEN_SUB:
             compile_expr(value, false);
             ops_push(OP_NEG, 0);
+            break;
+
+        case TOKEN_MUL:
+            compile_expr(value, false);
+            if (!ref) {
+                ops_push(OP_LOAD, type_size(nodes[node].kind));
+            }
+            break;
+
+        case TOKEN_BAND:
+            compile_expr(value, true);
             break;
 
         case TOKEN_BNOT:
