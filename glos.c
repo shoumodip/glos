@@ -146,13 +146,15 @@ enum {
 
     TOKEN_IF,
     TOKEN_ELSE,
+    TOKEN_FOR,
+
     TOKEN_LET,
 
     TOKEN_PRINT,
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_TOKENS == 23);
 char *cstr_from_token_type(int type)
 {
     switch (type) {
@@ -215,6 +217,9 @@ char *cstr_from_token_type(int type)
 
     case TOKEN_ELSE:
         return "keyword 'else'";
+
+    case TOKEN_FOR:
+        return "keyword 'for'";
 
     case TOKEN_LET:
         return "keyword 'let'";
@@ -291,7 +296,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_TOKENS == 23);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -344,6 +349,8 @@ Token lexer_next(void)
             token.type = TOKEN_IF;
         } else if (str_eq(token.str, str_from_cstr("else"))) {
             token.type = TOKEN_ELSE;
+        } else if (str_eq(token.str, str_from_cstr("for"))) {
+            token.type = TOKEN_FOR;
         } else if (str_eq(token.str, str_from_cstr("let"))) {
             token.type = TOKEN_LET;
         } else if (str_eq(token.str, str_from_cstr("print"))) {
@@ -466,6 +473,7 @@ enum {
 
     NODE_BLOCK,
     NODE_IF,
+    NODE_FOR,
 
     NODE_LET,
 
@@ -483,6 +491,9 @@ enum {
 #define NODE_IF_COND 0
 #define NODE_IF_THEN 1
 #define NODE_IF_ELSE 2
+
+#define NODE_FOR_COND 0
+#define NODE_FOR_BODY 1
 
 #define NODE_LET_EXPR 0
 
@@ -530,7 +541,7 @@ enum {
     POWER_PRE
 };
 
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_TOKENS == 23);
 int power_from_token_type(int type)
 {
     switch (type) {
@@ -564,7 +575,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_TOKENS == 23);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -617,7 +628,7 @@ size_t parse_expr(int mbp)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_TOKENS == 23);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -642,6 +653,14 @@ size_t parse_stmt(void)
             lexer_buffer(lexer_expect(TOKEN_LBRACE));
             nodes[node].nodes[NODE_IF_ELSE] = parse_stmt();
         }
+        break;
+
+    case TOKEN_FOR:
+        node = node_new(NODE_FOR, token);
+        nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET);
+
+        lexer_buffer(lexer_expect(TOKEN_LBRACE));
+        nodes[node].nodes[NODE_FOR_BODY] = parse_stmt();
         break;
 
     case TOKEN_LET:
@@ -916,8 +935,8 @@ size_t type_assert_arith(size_t node)
     return actual;
 }
 
-static_assert(COUNT_NODES == 7);
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_NODES == 8);
+static_assert(COUNT_TOKENS == 23);
 void check_expr(size_t node)
 {
     switch (nodes[node].type) {
@@ -1004,8 +1023,8 @@ void check_expr(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 7);
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_NODES == 8);
+static_assert(COUNT_TOKENS == 23);
 void check_stmt(size_t node)
 {
     switch (nodes[node].type) {
@@ -1016,13 +1035,24 @@ void check_stmt(size_t node)
         break;
 
     case NODE_IF: {
-        check_expr(nodes[node].nodes[NODE_IF_COND]);
+        size_t cond = nodes[node].nodes[NODE_IF_COND];
+        check_expr(cond);
+        type_assert(cond, TYPE_BOOL);
+
         check_stmt(nodes[node].nodes[NODE_IF_THEN]);
 
         size_t ante = nodes[node].nodes[NODE_IF_ELSE];
         if (ante != 0) {
             check_stmt(ante);
         }
+    } break;
+
+    case NODE_FOR: {
+        size_t cond = nodes[node].nodes[NODE_FOR_COND];
+        check_expr(cond);
+        type_assert(cond, TYPE_BOOL);
+
+        check_stmt(nodes[node].nodes[NODE_FOR_BODY]);
     } break;
 
     case NODE_LET: {
@@ -1076,8 +1106,8 @@ size_t global_alloc(size_t size)
     return global_size - size;
 }
 
-static_assert(COUNT_NODES == 7);
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_NODES == 8);
+static_assert(COUNT_TOKENS == 23);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].type) {
@@ -1199,8 +1229,8 @@ void compile_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 7);
-static_assert(COUNT_TOKENS == 22);
+static_assert(COUNT_NODES == 8);
+static_assert(COUNT_TOKENS == 23);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].type) {
@@ -1226,6 +1256,18 @@ void compile_stmt(size_t node)
         } else {
             ops[then_addr].data = ops_count;
         }
+    } break;
+
+    case NODE_FOR: {
+        size_t loop_addr = ops_count;
+        compile_expr(nodes[node].nodes[NODE_FOR_COND], false);
+
+        size_t body_addr = ops_count;
+        ops_push(OP_ELSE, 0);
+        compile_stmt(nodes[node].nodes[NODE_FOR_BODY]);
+
+        ops_push(OP_GOTO, loop_addr);
+        ops[body_addr].data = ops_count;
     } break;
 
     case NODE_LET: {
