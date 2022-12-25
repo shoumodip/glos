@@ -30,6 +30,11 @@ print 1260 / 3
 print 17 * 2 + 35
 print 500 + -40 * 2
 
+print ~-70
+print 160 | 260
+print 77 & 103
+print ~-419 + 10 & 3
+
 if true {
     print 69
 } else {
