@@ -125,6 +125,8 @@ enum {
     TOKEN_BOOL,
     TOKEN_IDENT,
 
+    TOKEN_LPAREN,
+    TOKEN_RPAREN,
     TOKEN_LBRACE,
     TOKEN_RBRACE,
     TOKEN_LBRACKET,
@@ -160,7 +162,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -175,6 +177,12 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_IDENT:
         return "identifier";
+
+    case TOKEN_LPAREN:
+        return "'('";
+
+    case TOKEN_RPAREN:
+        return "')'";
 
     case TOKEN_LBRACE:
         return "'{'";
@@ -317,7 +325,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -381,6 +389,14 @@ Token lexer_next(void)
         }
     } else {
         switch (lexer_consume()) {
+        case '(':
+            token.kind = TOKEN_LPAREN;
+            break;
+
+        case ')':
+            token.kind = TOKEN_RPAREN;
+            break;
+
         case '{':
             token.kind = TOKEN_LBRACE;
             break;
@@ -596,7 +612,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -637,13 +653,18 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 size_t parse_expr(int mbp)
 {
     size_t node;
     Token token = lexer_next();
 
     switch (token.kind) {
+    case TOKEN_LPAREN:
+        node = parse_expr(POWER_SET);
+        lexer_expect(TOKEN_RPAREN);
+        break;
+
     case TOKEN_INT:
     case TOKEN_BOOL:
         node = node_new(NODE_ATOM, token);
@@ -680,7 +701,7 @@ size_t parse_expr(int mbp)
         nodes[binary].nodes[NODE_BINARY_LHS] = node;
         switch (token.kind) {
         case TOKEN_LBRACKET:
-            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp);
+            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(POWER_SET);
             lexer_expect(TOKEN_RBRACKET);
             break;
 
@@ -693,7 +714,7 @@ size_t parse_expr(int mbp)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -893,7 +914,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 8);
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1009,7 +1030,7 @@ void check_expr(size_t node, bool ref)
 }
 
 static_assert(COUNT_NODES == 8);
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1265,7 +1286,7 @@ size_t global_alloc(size_t size)
 }
 
 static_assert(COUNT_NODES == 8);
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1422,7 +1443,7 @@ void compile_expr(size_t node, bool ref)
 }
 
 static_assert(COUNT_NODES == 8);
-static_assert(COUNT_TOKENS == 28);
+static_assert(COUNT_TOKENS == 30);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
