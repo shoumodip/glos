@@ -638,7 +638,7 @@ void error_unexpected(Token token)
 }
 
 static_assert(COUNT_TOKENS == 28);
-size_t parse_expr(int mbp, bool ref)
+size_t parse_expr(int mbp)
 {
     size_t node;
     Token token = lexer_next();
@@ -646,10 +646,6 @@ size_t parse_expr(int mbp, bool ref)
     switch (token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
-        if (ref) {
-            error_unexpected(token);
-        }
-
         node = node_new(NODE_ATOM, token);
         break;
 
@@ -662,12 +658,8 @@ size_t parse_expr(int mbp, bool ref)
     case TOKEN_BNOT:
     case TOKEN_BAND:
     case TOKEN_LNOT:
-        if (ref) {
-            error_unexpected(token);
-        }
-
         node = node_new(NODE_UNARY, token);
-        nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE, token.kind == TOKEN_BAND);
+        nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE);
         break;
 
     default: error_unexpected(token);
@@ -688,30 +680,12 @@ size_t parse_expr(int mbp, bool ref)
         nodes[binary].nodes[NODE_BINARY_LHS] = node;
         switch (token.kind) {
         case TOKEN_LBRACKET:
-            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp, false);
+            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp);
             lexer_expect(TOKEN_RBRACKET);
             break;
 
-        case TOKEN_SET:
-            if (ref) {
-                error_unexpected(token);
-            }
-
-            if ((nodes[node].kind == NODE_ATOM && nodes[node].token.kind == TOKEN_IDENT) ||
-                (nodes[node].kind == NODE_UNARY && nodes[node].token.kind == TOKEN_MUL) ||
-                (nodes[node].kind == NODE_BINARY && nodes[node].token.kind == TOKEN_LBRACKET)) {
-                nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp, false);
-            } else {
-                error_unexpected(token);
-            }
-            break;
-
         default:
-            if (ref) {
-                error_unexpected(token);
-            }
-
-            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp, false);
+            nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp);
         }
         node = binary;
     }
@@ -735,7 +709,7 @@ size_t parse_stmt(void)
 
     case TOKEN_IF:
         node = node_new(NODE_IF, token);
-        nodes[node].nodes[NODE_IF_COND] = parse_expr(POWER_SET, false);
+        nodes[node].nodes[NODE_IF_COND] = parse_expr(POWER_SET);
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
         nodes[node].nodes[NODE_IF_THEN] = parse_stmt();
@@ -748,7 +722,7 @@ size_t parse_stmt(void)
 
     case TOKEN_FOR:
         node = node_new(NODE_FOR, token);
-        nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET, false);
+        nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET);
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
         nodes[node].nodes[NODE_FOR_BODY] = parse_stmt();
@@ -757,17 +731,17 @@ size_t parse_stmt(void)
     case TOKEN_LET:
         node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT));
         lexer_expect(TOKEN_SET);
-        nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET, false);
+        nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET);
         break;
 
     case TOKEN_PRINT:
         node = node_new(NODE_PRINT, token);
-        nodes[node].nodes[NODE_PRINT_VALUE] = parse_expr(POWER_SET, false);
+        nodes[node].nodes[NODE_PRINT_VALUE] = parse_expr(POWER_SET);
         break;
 
     default:
         lexer_buffer(token);
-        node = parse_expr(POWER_NIL, false);
+        node = parse_expr(POWER_NIL);
     }
 
     return node;
@@ -868,6 +842,15 @@ void error_redefinition(size_t node, size_t prev, char *name)
     exit(1);
 }
 
+void ref_prevent(size_t node, bool ref)
+{
+    if (ref) {
+        print_pos(stderr, nodes[node].token.pos);
+        fprintf(stderr, "error: cannot take reference to value not in memory\n");
+        exit(1);
+    }
+}
+
 Type type_assert(size_t node, Type expected)
 {
     Type actual = nodes[node].type;
@@ -911,16 +894,18 @@ Type type_assert_pointer(size_t node)
 
 static_assert(COUNT_NODES == 8);
 static_assert(COUNT_TOKENS == 28);
-void check_expr(size_t node)
+void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
     case NODE_ATOM:
         switch (nodes[node].token.kind) {
         case TOKEN_INT:
+            ref_prevent(node, ref);
             nodes[node].type = type_new(TYPE_INT, 0);
             break;
 
         case TOKEN_BOOL:
+            ref_prevent(node, ref);
             nodes[node].type = type_new(TYPE_BOOL, 0);
             break;
 
@@ -944,22 +929,25 @@ void check_expr(size_t node)
         switch (nodes[node].token.kind) {
         case TOKEN_SUB:
         case TOKEN_BNOT:
-            check_expr(value);
+            ref_prevent(node, ref);
+            check_expr(value, false);
             nodes[node].type = type_assert_arith(value);
             break;
 
         case TOKEN_LNOT:
-            check_expr(value);
+            ref_prevent(node, ref);
+            check_expr(value, false);
             nodes[node].type = type_assert(value, type_new(TYPE_BOOL, 0));
             break;
 
         case TOKEN_MUL:
-            check_expr(value);
+            check_expr(value, false);
             nodes[node].type = type_deref(type_assert_pointer(value));
             break;
 
         case TOKEN_BAND:
-            check_expr(value);
+            ref_prevent(node, ref);
+            check_expr(value, true);
             nodes[node].type = type_ref(nodes[value].type);
             break;
 
@@ -973,8 +961,8 @@ void check_expr(size_t node)
 
         switch (nodes[node].token.kind) {
         case TOKEN_LBRACKET:
-            check_expr(lhs);
-            check_expr(rhs);
+            check_expr(lhs, false);
+            check_expr(rhs, false);
             nodes[node].type = type_deref(type_assert_pointer(lhs));
             type_assert(rhs, type_new(TYPE_INT, 0));
             break;
@@ -985,8 +973,9 @@ void check_expr(size_t node)
         case TOKEN_DIV:
         case TOKEN_BOR:
         case TOKEN_BAND:
-            check_expr(lhs);
-            check_expr(rhs);
+            ref_prevent(node, ref);
+            check_expr(lhs, false);
+            check_expr(rhs, false);
             nodes[node].type = type_assert(rhs, type_assert_arith(lhs));
             break;
 
@@ -996,15 +985,17 @@ void check_expr(size_t node)
         case TOKEN_LE:
         case TOKEN_EQ:
         case TOKEN_NE:
-            check_expr(lhs);
-            check_expr(rhs);
+            ref_prevent(node, ref);
+            check_expr(lhs, false);
+            check_expr(rhs, false);
             type_assert(rhs, type_assert_arith(lhs));
             nodes[node].type = type_new(TYPE_BOOL, 0);
             break;
 
         case TOKEN_SET:
-            check_expr(lhs);
-            check_expr(rhs);
+            ref_prevent(node, ref);
+            check_expr(lhs, true);
+            check_expr(rhs, false);
             type_assert(rhs, nodes[lhs].type);
             nodes[node].type = type_new(TYPE_NIL, 0);
             break;
@@ -1030,7 +1021,7 @@ void check_stmt(size_t node)
 
     case NODE_IF: {
         size_t cond = nodes[node].nodes[NODE_IF_COND];
-        check_expr(cond);
+        check_expr(cond, false);
         type_assert(cond, type_new(TYPE_BOOL, 0));
 
         check_stmt(nodes[node].nodes[NODE_IF_THEN]);
@@ -1043,7 +1034,7 @@ void check_stmt(size_t node)
 
     case NODE_FOR: {
         size_t cond = nodes[node].nodes[NODE_FOR_COND];
-        check_expr(cond);
+        check_expr(cond, false);
         type_assert(cond, type_new(TYPE_BOOL, 0));
 
         check_stmt(nodes[node].nodes[NODE_FOR_BODY]);
@@ -1056,17 +1047,17 @@ void check_stmt(size_t node)
         }
 
         size_t expr = nodes[node].nodes[NODE_LET_EXPR];
-        check_expr(expr);
+        check_expr(expr, false);
         nodes[node].type = nodes[expr].type;
 
         variables_push(node);
     } break;
 
     case NODE_PRINT:
-        check_expr(nodes[node].nodes[NODE_PRINT_VALUE]);
+        check_expr(nodes[node].nodes[NODE_PRINT_VALUE], false);
         break;
 
-    default: check_expr(node);
+    default: check_expr(node, false);
     }
 }
 
