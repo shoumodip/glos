@@ -161,9 +161,9 @@ enum {
 };
 
 static_assert(COUNT_TOKENS == 28);
-char *cstr_from_token_type(int type)
+char *cstr_from_token_kind(int kind)
 {
-    switch (type) {
+    switch (kind) {
     case TOKEN_EOF:
         return "end of file";
 
@@ -253,7 +253,7 @@ char *cstr_from_token_type(int type)
 }
 
 typedef struct {
-    int type;
+    int kind;
     size_t data;
 
     Pos pos;
@@ -343,9 +343,9 @@ Token lexer_next(void)
     token.str = lexer.str;
 
     if (lexer.str.size == 0) {
-        token.type = TOKEN_EOF;
+        token.kind = TOKEN_EOF;
     } else if (isdigit(*lexer.str.data)) {
-        token.type = TOKEN_INT;
+        token.kind = TOKEN_INT;
         token.data = 0;
 
         while (lexer.str.size > 0 && isdigit(*lexer.str.data)) {
@@ -361,99 +361,99 @@ Token lexer_next(void)
         token.str.size -= lexer.str.size;
 
         if (str_eq(token.str, str_from_cstr("true"))) {
-            token.type = TOKEN_BOOL;
+            token.kind = TOKEN_BOOL;
             token.data = 1;
         } else if (str_eq(token.str, str_from_cstr("false"))) {
-            token.type = TOKEN_BOOL;
+            token.kind = TOKEN_BOOL;
             token.data = 0;
         } else if (str_eq(token.str, str_from_cstr("if"))) {
-            token.type = TOKEN_IF;
+            token.kind = TOKEN_IF;
         } else if (str_eq(token.str, str_from_cstr("else"))) {
-            token.type = TOKEN_ELSE;
+            token.kind = TOKEN_ELSE;
         } else if (str_eq(token.str, str_from_cstr("for"))) {
-            token.type = TOKEN_FOR;
+            token.kind = TOKEN_FOR;
         } else if (str_eq(token.str, str_from_cstr("let"))) {
-            token.type = TOKEN_LET;
+            token.kind = TOKEN_LET;
         } else if (str_eq(token.str, str_from_cstr("print"))) {
-            token.type = TOKEN_PRINT;
+            token.kind = TOKEN_PRINT;
         } else {
-            token.type = TOKEN_IDENT;
+            token.kind = TOKEN_IDENT;
         }
     } else {
         switch (lexer_consume()) {
         case '{':
-            token.type = TOKEN_LBRACE;
+            token.kind = TOKEN_LBRACE;
             break;
 
         case '}':
-            token.type = TOKEN_RBRACE;
+            token.kind = TOKEN_RBRACE;
             break;
 
         case '[':
-            token.type = TOKEN_LBRACKET;
+            token.kind = TOKEN_LBRACKET;
             break;
 
         case ']':
-            token.type = TOKEN_RBRACKET;
+            token.kind = TOKEN_RBRACKET;
             break;
 
         case '+':
-            token.type = TOKEN_ADD;
+            token.kind = TOKEN_ADD;
             break;
 
         case '-':
-            token.type = TOKEN_SUB;
+            token.kind = TOKEN_SUB;
             break;
 
         case '*':
-            token.type = TOKEN_MUL;
+            token.kind = TOKEN_MUL;
             break;
 
         case '/':
-            token.type = TOKEN_DIV;
+            token.kind = TOKEN_DIV;
             break;
 
         case '|':
-            token.type = TOKEN_BOR;
+            token.kind = TOKEN_BOR;
             break;
 
         case '&':
-            token.type = TOKEN_BAND;
+            token.kind = TOKEN_BAND;
             break;
 
         case '~':
-            token.type = TOKEN_BNOT;
+            token.kind = TOKEN_BNOT;
             break;
 
         case '>':
             if (lexer_match('=')) {
-                token.type = TOKEN_GE;
+                token.kind = TOKEN_GE;
             } else {
-                token.type = TOKEN_GT;
+                token.kind = TOKEN_GT;
             }
             break;
 
         case '<':
             if (lexer_match('=')) {
-                token.type = TOKEN_LE;
+                token.kind = TOKEN_LE;
             } else {
-                token.type = TOKEN_LT;
+                token.kind = TOKEN_LT;
             }
             break;
 
         case '=':
             if (lexer_match('=')) {
-                token.type = TOKEN_EQ;
+                token.kind = TOKEN_EQ;
             } else {
-                token.type = TOKEN_SET;
+                token.kind = TOKEN_SET;
             }
             break;
 
         case '!':
             if (lexer_match('=')) {
-                token.type = TOKEN_NE;
+                token.kind = TOKEN_NE;
             } else {
-                token.type = TOKEN_LNOT;
+                token.kind = TOKEN_LNOT;
             }
             break;
 
@@ -480,21 +480,21 @@ Token lexer_peek(void)
     return lexer.buffer;
 }
 
-bool lexer_read(int type)
+bool lexer_read(int kind)
 {
     lexer_peek();
-    lexer.peeked = lexer.buffer.type != type;
+    lexer.peeked = lexer.buffer.kind != kind;
     return !lexer.peeked;
 }
 
-Token lexer_expect(int type)
+Token lexer_expect(int kind)
 {
     Token token = lexer_next();
-    if (token.type != type) {
+    if (token.kind != kind) {
         print_pos(stderr, token.pos);
         fprintf(stderr, "error: expected %s, got %s\n",
-                cstr_from_token_type(type),
-                cstr_from_token_type(token.type));
+                cstr_from_token_kind(kind),
+                cstr_from_token_kind(token.kind));
         exit(1);
     }
     return token;
@@ -507,6 +507,18 @@ bool lexer_peek_row(Token *token)
 }
 
 // AST
+enum {
+    TYPE_NIL,
+    TYPE_INT,
+    TYPE_BOOL,
+    COUNT_TYPES
+};
+
+typedef struct {
+    int kind;
+    size_t ref;
+} Type;
+
 enum {
     NODE_ATOM,
     NODE_UNARY,
@@ -541,8 +553,8 @@ enum {
 #define NODE_PRINT_VALUE 0
 
 typedef struct {
-    int type;
-    size_t kind;
+    int kind;
+    Type type;
     Token token;
 
     size_t nodes[3];
@@ -553,10 +565,10 @@ typedef struct {
 Node nodes[NODES_CAP];
 size_t nodes_count;
 
-size_t node_new(int type, Token token)
+size_t node_new(int kind, Token token)
 {
     assert(nodes_count < NODES_CAP);
-    nodes[nodes_count].type = type;
+    nodes[nodes_count].kind = kind;
     nodes[nodes_count].token = token;
     nodes_count += 1;
     return nodes_count - 1;
@@ -585,9 +597,9 @@ enum {
 };
 
 static_assert(COUNT_TOKENS == 28);
-int power_from_token_type(int type)
+int power_from_token_kind(int kind)
 {
-    switch (type) {
+    switch (kind) {
     case TOKEN_LBRACKET:
         return POWER_IDX;
 
@@ -621,7 +633,7 @@ int power_from_token_type(int type)
 void error_unexpected(Token token)
 {
     print_pos(stderr, token.pos);
-    fprintf(stderr, "error: unexpected %s\n", cstr_from_token_type(token.type));
+    fprintf(stderr, "error: unexpected %s\n", cstr_from_token_kind(token.kind));
     exit(1);
 }
 
@@ -631,7 +643,7 @@ size_t parse_expr(int mbp, bool ref)
     size_t node;
     Token token = lexer_next();
 
-    switch (token.type) {
+    switch (token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
         if (ref) {
@@ -655,7 +667,7 @@ size_t parse_expr(int mbp, bool ref)
         }
 
         node = node_new(NODE_UNARY, token);
-        nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE, token.type == TOKEN_BAND);
+        nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE, token.kind == TOKEN_BAND);
         break;
 
     default: error_unexpected(token);
@@ -666,7 +678,7 @@ size_t parse_expr(int mbp, bool ref)
             break;
         }
 
-        int lbp = power_from_token_type(token.type);
+        int lbp = power_from_token_kind(token.kind);
         if (lbp <= mbp) {
             break;
         }
@@ -674,7 +686,7 @@ size_t parse_expr(int mbp, bool ref)
 
         size_t binary = node_new(NODE_BINARY, token);
         nodes[binary].nodes[NODE_BINARY_LHS] = node;
-        switch (token.type) {
+        switch (token.kind) {
         case TOKEN_LBRACKET:
             nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp, false);
             lexer_expect(TOKEN_RBRACKET);
@@ -685,9 +697,9 @@ size_t parse_expr(int mbp, bool ref)
                 error_unexpected(token);
             }
 
-            if ((nodes[node].type == NODE_ATOM && nodes[node].token.type == TOKEN_IDENT) ||
-                (nodes[node].type == NODE_UNARY && nodes[node].token.type == TOKEN_MUL) ||
-                (nodes[node].type == NODE_BINARY && nodes[node].token.type == TOKEN_LBRACKET)) {
+            if ((nodes[node].kind == NODE_ATOM && nodes[node].token.kind == TOKEN_IDENT) ||
+                (nodes[node].kind == NODE_UNARY && nodes[node].token.kind == TOKEN_MUL) ||
+                (nodes[node].kind == NODE_BINARY && nodes[node].token.kind == TOKEN_LBRACKET)) {
                 nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp, false);
             } else {
                 error_unexpected(token);
@@ -713,7 +725,7 @@ size_t parse_stmt(void)
     size_t node;
     Token token = lexer_next();
 
-    switch (token.type) {
+    switch (token.kind) {
     case TOKEN_LBRACE:
         node = node_new(NODE_BLOCK, token);
         for (size_t *list = &nodes[node].nodes[NODE_BLOCK_START]; !lexer_read(TOKEN_RBRACE); ) {
@@ -761,6 +773,303 @@ size_t parse_stmt(void)
     return node;
 }
 
+// Type
+bool type_eq(Type a, Type b)
+{
+    return a.kind == b.kind && a.ref == b.ref;
+}
+
+Type type_new(int kind, size_t ref)
+{
+    Type type;
+    type.kind = kind;
+    type.ref = ref;
+    return type;
+}
+
+Type type_ref(Type type)
+{
+    type.ref += 1;
+    return type;
+}
+
+Type type_deref(Type type)
+{
+    assert(type.ref > 0);
+    type.ref -= 1;
+    return type;
+}
+
+static_assert(COUNT_TYPES == 3);
+void print_type(FILE *file, Type type)
+{
+    for (size_t i = 0; i < type.ref; ++i) {
+        fprintf(file, "*");
+    }
+
+    switch (type.kind) {
+    case TYPE_NIL:
+        fprintf(file, "nil");
+        break;
+
+    case TYPE_INT:
+        fprintf(file, "int");
+        break;
+
+    case TYPE_BOOL:
+        fprintf(file, "bool");
+        break;
+
+    default: assert(0 && "unreachable");
+    }
+}
+
+// Scope
+#define SCOPE_CAP 1024
+size_t variables[SCOPE_CAP];
+size_t variables_count;
+
+void variables_push(size_t node)
+{
+    assert(variables_count < SCOPE_CAP);
+    variables[variables_count] = node;
+    variables_count += 1;
+}
+
+bool variables_find(Str name, size_t *index)
+{
+    for (size_t i = 0; i < variables_count; i += 1) {
+        if (str_eq(nodes[variables[i]].token.str, name)) {
+            *index = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Checker
+void error_undefined(size_t node, char *name)
+{
+    print_pos(stderr, nodes[node].token.pos);
+    fprintf(stderr, "error: undefined %s '", name);
+    print_str(stderr, nodes[node].token.str);
+    fprintf(stderr, "'\n");
+    exit(1);
+}
+
+void error_redefinition(size_t node, size_t prev, char *name)
+{
+    print_pos(stderr, nodes[node].token.pos);
+    fprintf(stderr, "error: redefinition of %s '", name);
+    print_str(stderr, nodes[node].token.str);
+    fprintf(stderr, "'\n");
+    print_pos(stderr, nodes[prev].token.pos);
+    fprintf(stderr, "note: defined here\n");
+    exit(1);
+}
+
+Type type_assert(size_t node, Type expected)
+{
+    Type actual = nodes[node].type;
+    if (!type_eq(actual, expected)) {
+        print_pos(stderr, nodes[node].token.pos);
+        fprintf(stderr, "error: expected type '");
+        print_type(stderr, expected);
+        fprintf(stderr, "', got '");
+        print_type(stderr, actual);
+        fprintf(stderr, "'\n");
+        exit(1);
+    }
+    return actual;
+}
+
+Type type_assert_arith(size_t node)
+{
+    Type actual = nodes[node].type;
+    if (actual.kind != TYPE_INT && actual.ref == 0) {
+        print_pos(stderr, nodes[node].token.pos);
+        fprintf(stderr, "error: expected arithmetic type, got '");
+        print_type(stderr, actual);
+        fprintf(stderr, "'\n");
+        exit(1);
+    }
+    return actual;
+}
+
+Type type_assert_pointer(size_t node)
+{
+    Type actual = nodes[node].type;
+    if (actual.ref == 0) {
+        print_pos(stderr, nodes[node].token.pos);
+        fprintf(stderr, "error: expected pointer type, got '");
+        print_type(stderr, actual);
+        fprintf(stderr, "'\n");
+        exit(1);
+    }
+    return actual;
+}
+
+static_assert(COUNT_NODES == 8);
+static_assert(COUNT_TOKENS == 28);
+void check_expr(size_t node)
+{
+    switch (nodes[node].kind) {
+    case NODE_ATOM:
+        switch (nodes[node].token.kind) {
+        case TOKEN_INT:
+            nodes[node].type = type_new(TYPE_INT, 0);
+            break;
+
+        case TOKEN_BOOL:
+            nodes[node].type = type_new(TYPE_BOOL, 0);
+            break;
+
+        case TOKEN_IDENT: {
+            size_t index;
+            if (variables_find(nodes[node].token.str, &index)) {
+                nodes[node].token.data = variables[index];
+                nodes[node].type = nodes[variables[index]].type;
+            } else {
+                error_undefined(node, "identifier");
+            }
+        } break;
+
+        default: assert(0 && "unreachable");
+        }
+        break;
+
+    case NODE_UNARY: {
+        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+
+        switch (nodes[node].token.kind) {
+        case TOKEN_SUB:
+        case TOKEN_BNOT:
+            check_expr(value);
+            nodes[node].type = type_assert_arith(value);
+            break;
+
+        case TOKEN_LNOT:
+            check_expr(value);
+            nodes[node].type = type_assert(value, type_new(TYPE_BOOL, 0));
+            break;
+
+        case TOKEN_MUL:
+            check_expr(value);
+            nodes[node].type = type_deref(type_assert_pointer(value));
+            break;
+
+        case TOKEN_BAND:
+            check_expr(value);
+            nodes[node].type = type_ref(nodes[value].type);
+            break;
+
+        default: assert(0 && "unreachable");
+        }
+    } break;
+
+    case NODE_BINARY: {
+        size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
+        size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
+
+        switch (nodes[node].token.kind) {
+        case TOKEN_LBRACKET:
+            check_expr(lhs);
+            check_expr(rhs);
+            nodes[node].type = type_deref(type_assert_pointer(lhs));
+            type_assert(rhs, type_new(TYPE_INT, 0));
+            break;
+
+        case TOKEN_ADD:
+        case TOKEN_SUB:
+        case TOKEN_MUL:
+        case TOKEN_DIV:
+        case TOKEN_BOR:
+        case TOKEN_BAND:
+            check_expr(lhs);
+            check_expr(rhs);
+            nodes[node].type = type_assert(rhs, type_assert_arith(lhs));
+            break;
+
+        case TOKEN_GT:
+        case TOKEN_GE:
+        case TOKEN_LT:
+        case TOKEN_LE:
+        case TOKEN_EQ:
+        case TOKEN_NE:
+            check_expr(lhs);
+            check_expr(rhs);
+            type_assert(rhs, type_assert_arith(lhs));
+            nodes[node].type = type_new(TYPE_BOOL, 0);
+            break;
+
+        case TOKEN_SET:
+            check_expr(lhs);
+            check_expr(rhs);
+            type_assert(rhs, nodes[lhs].type);
+            nodes[node].type = type_new(TYPE_NIL, 0);
+            break;
+
+        default: assert(0 && "unreachable");
+        }
+    } break;
+
+    default: assert(0 && "unreachable");
+    }
+}
+
+static_assert(COUNT_NODES == 8);
+static_assert(COUNT_TOKENS == 28);
+void check_stmt(size_t node)
+{
+    switch (nodes[node].kind) {
+    case NODE_BLOCK:
+        for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
+            check_stmt(node);
+        }
+        break;
+
+    case NODE_IF: {
+        size_t cond = nodes[node].nodes[NODE_IF_COND];
+        check_expr(cond);
+        type_assert(cond, type_new(TYPE_BOOL, 0));
+
+        check_stmt(nodes[node].nodes[NODE_IF_THEN]);
+
+        size_t ante = nodes[node].nodes[NODE_IF_ELSE];
+        if (ante != 0) {
+            check_stmt(ante);
+        }
+    } break;
+
+    case NODE_FOR: {
+        size_t cond = nodes[node].nodes[NODE_FOR_COND];
+        check_expr(cond);
+        type_assert(cond, type_new(TYPE_BOOL, 0));
+
+        check_stmt(nodes[node].nodes[NODE_FOR_BODY]);
+    } break;
+
+    case NODE_LET: {
+        size_t prev;
+        if (variables_find(nodes[node].token.str, &prev)) {
+            error_redefinition(node, variables[prev], "variable");
+        }
+
+        size_t expr = nodes[node].nodes[NODE_LET_EXPR];
+        check_expr(expr);
+        nodes[node].type = nodes[expr].type;
+
+        variables_push(node);
+    } break;
+
+    case NODE_PRINT:
+        check_expr(nodes[node].nodes[NODE_PRINT_VALUE]);
+        break;
+
+    default: check_expr(node);
+    }
+}
+
 // Op
 enum {
     OP_PUSH,
@@ -799,14 +1108,14 @@ enum {
 };
 
 typedef struct {
-    int type;
+    int kind;
     size_t data;
 } Op;
 
 static_assert(COUNT_OPS == 25);
 void print_op(FILE *file, Op op)
 {
-    switch (op.type) {
+    switch (op.kind) {
     case OP_PUSH:
         fprintf(file, "push %zu\n", op.data);
         break;
@@ -915,10 +1224,10 @@ void print_op(FILE *file, Op op)
 Op ops[OPS_CAP];
 size_t ops_count;
 
-void ops_push(int type, size_t data)
+void ops_push(int kind, size_t data)
 {
     assert(ops_count < OPS_CAP);
-    ops[ops_count].type = type;
+    ops[ops_count].kind = kind;
     ops[ops_count].data = data;
     ops_count += 1;
 }
@@ -930,318 +1239,6 @@ void print_ops(FILE *file)
     }
 }
 
-// Type
-enum {
-    TYPE_NIL,
-    TYPE_INT,
-    TYPE_BOOL,
-    COUNT_TYPES
-};
-
-// Type Representation:
-// | 0 - 3 | 3 - 6 | 6 - 64 |
-// | kind  | ref   | unused |
-
-bool type_eq(size_t a, size_t b)
-{
-    return a == b;
-}
-
-size_t type_ref(size_t type)
-{
-    return type + 8;
-}
-
-size_t type_deref(size_t type)
-{
-    return type - 8;
-}
-
-size_t type_extract(size_t type, size_t *ref)
-{
-    *ref = (type & 56) >> 3;
-    return type & ~56;
-}
-
-static_assert(COUNT_TYPES == 3);
-void print_type(FILE *file, size_t type)
-{
-    size_t ref;
-    type = type_extract(type, &ref);
-
-    for (size_t i = 0; i < ref; ++i) {
-        fprintf(file, "*");
-    }
-
-    switch (type) {
-    case TYPE_NIL:
-        fprintf(file, "nil");
-        break;
-
-    case TYPE_INT:
-        fprintf(file, "int");
-        break;
-
-    case TYPE_BOOL:
-        fprintf(file, "bool");
-        break;
-
-    default: assert(0 && "unreachable");
-    }
-}
-
-// Scope
-#define SCOPE_CAP 1024
-size_t variables[SCOPE_CAP];
-size_t variables_count;
-
-void variables_push(size_t node)
-{
-    assert(variables_count < SCOPE_CAP);
-    variables[variables_count] = node;
-    variables_count += 1;
-}
-
-bool variables_find(Str name, size_t *index)
-{
-    for (size_t i = 0; i < variables_count; i += 1) {
-        if (str_eq(nodes[variables[i]].token.str, name)) {
-            *index = i;
-            return true;
-        }
-    }
-    return false;
-}
-
-// Checker
-void error_undefined(size_t node, char *name)
-{
-    print_pos(stderr, nodes[node].token.pos);
-    fprintf(stderr, "error: undefined %s '", name);
-    print_str(stderr, nodes[node].token.str);
-    fprintf(stderr, "'\n");
-    exit(1);
-}
-
-void error_redefinition(size_t node, size_t prev, char *name)
-{
-    print_pos(stderr, nodes[node].token.pos);
-    fprintf(stderr, "error: redefinition of %s '", name);
-    print_str(stderr, nodes[node].token.str);
-    fprintf(stderr, "'\n");
-    print_pos(stderr, nodes[prev].token.pos);
-    fprintf(stderr, "note: defined here\n");
-    exit(1);
-}
-
-size_t type_assert(size_t node, size_t expected)
-{
-    size_t actual = nodes[node].kind;
-    if (!type_eq(actual, expected)) {
-        print_pos(stderr, nodes[node].token.pos);
-        fprintf(stderr, "error: expected type '");
-        print_type(stderr, expected);
-        fprintf(stderr, "', got '");
-        print_type(stderr, actual);
-        fprintf(stderr, "'\n");
-        exit(1);
-    }
-    return actual;
-}
-
-size_t type_assert_arith(size_t node)
-{
-    size_t ref;
-    size_t actual = nodes[node].kind;
-    type_extract(actual, &ref);
-
-    if (!type_eq(actual, TYPE_INT) && ref == 0) {
-        print_pos(stderr, nodes[node].token.pos);
-        fprintf(stderr, "error: expected arithmetic type, got '");
-        print_type(stderr, actual);
-        fprintf(stderr, "'\n");
-        exit(1);
-    }
-    return actual;
-}
-
-size_t type_assert_pointer(size_t node)
-{
-    size_t ref;
-    size_t actual = nodes[node].kind;
-    type_extract(actual, &ref);
-
-    if (ref == 0) {
-        print_pos(stderr, nodes[node].token.pos);
-        fprintf(stderr, "error: expected pointer type, got '");
-        print_type(stderr, actual);
-        fprintf(stderr, "'\n");
-        exit(1);
-    }
-    return actual;
-}
-
-static_assert(COUNT_NODES == 8);
-static_assert(COUNT_TOKENS == 28);
-void check_expr(size_t node)
-{
-    switch (nodes[node].type) {
-    case NODE_ATOM:
-        switch (nodes[node].token.type) {
-        case TOKEN_INT:
-            nodes[node].kind = TYPE_INT;
-            break;
-
-        case TOKEN_BOOL:
-            nodes[node].kind = TYPE_BOOL;
-            break;
-
-        case TOKEN_IDENT: {
-            size_t index;
-            if (variables_find(nodes[node].token.str, &index)) {
-                nodes[node].token.data = variables[index];
-                nodes[node].kind = nodes[variables[index]].kind;
-            } else {
-                error_undefined(node, "identifier");
-            }
-        } break;
-
-        default: assert(0 && "unreachable");
-        }
-        break;
-
-    case NODE_UNARY: {
-        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
-
-        switch (nodes[node].token.type) {
-        case TOKEN_SUB:
-        case TOKEN_BNOT:
-            check_expr(value);
-            nodes[node].kind = type_assert_arith(value);
-            break;
-
-        case TOKEN_LNOT:
-            check_expr(value);
-            nodes[node].kind = type_assert(value, TYPE_BOOL);
-            break;
-
-        case TOKEN_MUL:
-            check_expr(value);
-            nodes[node].kind = type_deref(type_assert_pointer(value));
-            break;
-
-        case TOKEN_BAND:
-            check_expr(value);
-            nodes[node].kind = type_ref(nodes[value].kind);
-            break;
-
-        default: assert(0 && "unreachable");
-        }
-    } break;
-
-    case NODE_BINARY: {
-        size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
-        size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
-
-        switch (nodes[node].token.type) {
-        case TOKEN_LBRACKET:
-            check_expr(lhs);
-            check_expr(rhs);
-            nodes[node].kind = type_deref(type_assert_pointer(lhs));
-            type_assert(rhs, TYPE_INT);
-            break;
-
-        case TOKEN_ADD:
-        case TOKEN_SUB:
-        case TOKEN_MUL:
-        case TOKEN_DIV:
-        case TOKEN_BOR:
-        case TOKEN_BAND:
-            check_expr(lhs);
-            check_expr(rhs);
-            nodes[node].kind = type_assert(rhs, type_assert_arith(lhs));
-            break;
-
-        case TOKEN_GT:
-        case TOKEN_GE:
-        case TOKEN_LT:
-        case TOKEN_LE:
-        case TOKEN_EQ:
-        case TOKEN_NE:
-            check_expr(lhs);
-            check_expr(rhs);
-            type_assert(rhs, type_assert_arith(lhs));
-            nodes[node].kind = TYPE_BOOL;
-            break;
-
-        case TOKEN_SET:
-            check_expr(lhs);
-            check_expr(rhs);
-            type_assert(rhs, nodes[lhs].kind);
-            nodes[node].kind = TYPE_NIL;
-            break;
-
-        default: assert(0 && "unreachable");
-        }
-    } break;
-
-    default: assert(0 && "unreachable");
-    }
-}
-
-static_assert(COUNT_NODES == 8);
-static_assert(COUNT_TOKENS == 28);
-void check_stmt(size_t node)
-{
-    switch (nodes[node].type) {
-    case NODE_BLOCK:
-        for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
-            check_stmt(node);
-        }
-        break;
-
-    case NODE_IF: {
-        size_t cond = nodes[node].nodes[NODE_IF_COND];
-        check_expr(cond);
-        type_assert(cond, TYPE_BOOL);
-
-        check_stmt(nodes[node].nodes[NODE_IF_THEN]);
-
-        size_t ante = nodes[node].nodes[NODE_IF_ELSE];
-        if (ante != 0) {
-            check_stmt(ante);
-        }
-    } break;
-
-    case NODE_FOR: {
-        size_t cond = nodes[node].nodes[NODE_FOR_COND];
-        check_expr(cond);
-        type_assert(cond, TYPE_BOOL);
-
-        check_stmt(nodes[node].nodes[NODE_FOR_BODY]);
-    } break;
-
-    case NODE_LET: {
-        size_t prev;
-        if (variables_find(nodes[node].token.str, &prev)) {
-            error_redefinition(node, variables[prev], "variable");
-        }
-
-        size_t expr = nodes[node].nodes[NODE_LET_EXPR];
-        check_expr(expr);
-        nodes[node].kind = nodes[expr].kind;
-
-        variables_push(node);
-    } break;
-
-    case NODE_PRINT:
-        check_expr(nodes[node].nodes[NODE_PRINT_VALUE]);
-        break;
-
-    default: check_expr(node);
-    }
-}
-
 // Compiler
 size_t align(size_t n)
 {
@@ -1249,16 +1246,13 @@ size_t align(size_t n)
 }
 
 static_assert(COUNT_TYPES == 3);
-size_t type_size(size_t type)
+size_t type_size(Type type)
 {
-    size_t ref;
-    type = type_extract(type, &ref);
-
-    if (ref > 0) {
+    if (type.ref > 0) {
         return 8;
     }
 
-    switch (type) {
+    switch (type.kind) {
     case TYPE_NIL:
         return 0;
 
@@ -1283,9 +1277,9 @@ static_assert(COUNT_NODES == 8);
 static_assert(COUNT_TOKENS == 28);
 void compile_expr(size_t node, bool ref)
 {
-    switch (nodes[node].type) {
+    switch (nodes[node].kind) {
     case NODE_ATOM:
-        switch (nodes[node].token.type) {
+        switch (nodes[node].token.kind) {
         case TOKEN_INT:
         case TOKEN_BOOL:
             ops_push(OP_PUSH, nodes[node].token.data);
@@ -1296,7 +1290,7 @@ void compile_expr(size_t node, bool ref)
             ops_push(OP_GPTR, nodes[real].token.data);
 
             if (!ref) {
-                ops_push(OP_LOAD, type_size(nodes[real].kind));
+                ops_push(OP_LOAD, type_size(nodes[real].type));
             }
         } break;
 
@@ -1307,7 +1301,7 @@ void compile_expr(size_t node, bool ref)
     case NODE_UNARY: {
         size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
 
-        switch (nodes[node].token.type) {
+        switch (nodes[node].token.kind) {
         case TOKEN_SUB:
             compile_expr(value, false);
             ops_push(OP_NEG, 0);
@@ -1316,7 +1310,7 @@ void compile_expr(size_t node, bool ref)
         case TOKEN_MUL:
             compile_expr(value, false);
             if (!ref) {
-                ops_push(OP_LOAD, type_size(nodes[node].kind));
+                ops_push(OP_LOAD, type_size(nodes[node].type));
             }
             break;
 
@@ -1342,11 +1336,11 @@ void compile_expr(size_t node, bool ref)
         size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
         size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
 
-        switch (nodes[node].token.type) {
+        switch (nodes[node].token.kind) {
         case TOKEN_LBRACKET:
             compile_expr(lhs, false);
             compile_expr(rhs, false);
-            ops_push(OP_INDEX, type_size(nodes[node].kind));
+            ops_push(OP_INDEX, type_size(nodes[node].type));
             break;
 
         case TOKEN_ADD:
@@ -1388,7 +1382,7 @@ void compile_expr(size_t node, bool ref)
         case TOKEN_SET:
             compile_expr(lhs, true);
             compile_expr(rhs, false);
-            ops_push(OP_STORE, type_size(nodes[rhs].kind));
+            ops_push(OP_STORE, type_size(nodes[rhs].type));
             break;
 
         case TOKEN_GT:
@@ -1440,7 +1434,7 @@ static_assert(COUNT_NODES == 8);
 static_assert(COUNT_TOKENS == 28);
 void compile_stmt(size_t node)
 {
-    switch (nodes[node].type) {
+    switch (nodes[node].kind) {
     case NODE_BLOCK:
         for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
             compile_stmt(node);
@@ -1478,7 +1472,7 @@ void compile_stmt(size_t node)
     } break;
 
     case NODE_LET: {
-        size_t size = type_size(nodes[node].kind);
+        size_t size = type_size(nodes[node].type);
         nodes[node].token.data = global_alloc(align(size));
 
         ops_push(OP_GPTR, nodes[node].token.data);
@@ -1493,7 +1487,7 @@ void compile_stmt(size_t node)
 
     default:
         compile_expr(node, false);
-        ops_push(OP_DROP, align(type_size(nodes[node].kind)));
+        ops_push(OP_DROP, align(type_size(nodes[node].type)));
     }
 }
 
@@ -1516,7 +1510,7 @@ void generate(char *path)
         fprintf(file, "I%zu: ; ", i);
         print_op(file, op);
 
-        switch (op.type) {
+        switch (op.kind) {
         case OP_PUSH:
             fprintf(file, "mov rax, %zu\n", op.data);
             fprintf(file, "push rax\n");
