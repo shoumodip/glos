@@ -26,37 +26,39 @@ stdout: 63
 420
 ##
 
-# Arithmetic Operations
-print 34 + 35
-print 500 - 80
-print 23 * 3
-print 1260 / 3
-print 17 * 2 + 35
-print 500 + -40 * 2
+fn main() {
+    # Arithmetic Operations
+    print 34 + 35
+    print 500 - 80
+    print 23 * 3
+    print 1260 / 3
+    print 17 * 2 + 35
+    print 500 + -40 * 2
 
-# Arithmetic Comparisons
-print 2 > 1
-print 1 > 1
+    # Arithmetic Comparisons
+    print 2 > 1
+    print 1 > 1
 
-print 2 >= 1
-print 1 >= 1
-print 0 >= 1
+    print 2 >= 1
+    print 1 >= 1
+    print 0 >= 1
 
-print 1 < 2
-print 1 < 1
+    print 1 < 2
+    print 1 < 1
 
-print 1 <= 2
-print 1 <= 1
-print 1 <= 0
+    print 1 <= 2
+    print 1 <= 1
+    print 1 <= 0
 
-print 1 == 1
-print 1 == 2
+    print 1 == 1
+    print 1 == 2
 
-print 1 != 2
-print 1 != 1
+    print 1 != 2
+    print 1 != 1
 
-# Bitwise Operations
-print ~-70
-print 160 | 260
-print 77 & 103
-print ~-419 + 10 & 3
+    # Bitwise Operations
+    print ~-70
+    print 160 | 260
+    print 77 & 103
+    print ~-419 + 10 & 3
+}

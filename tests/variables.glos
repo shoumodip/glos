@@ -1,15 +1,13 @@
 ##
-stdout: 13
+stdout: 5
 69
 0
-4198783
 ##
 
-let x = 69
-print x
+fn main() {
+    let x = 69
+    print x
 
-let y *int
-print y
-
-y = &x
-print y
+    let y *int
+    print y
+}
