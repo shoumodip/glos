@@ -1,0 +1,16 @@
+##
+stdout: 10
+69
+420
+69
+##
+
+let x = 69
+print x
+
+let p = &x
+*p = 420
+print x
+
+p[0] = 69
+print x

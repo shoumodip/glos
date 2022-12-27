@@ -1,0 +1,12 @@
+##
+stdout: 8
+1
+0
+0
+1
+##
+
+print true
+print false
+print !true
+print !false

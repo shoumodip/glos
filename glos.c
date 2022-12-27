@@ -9,8 +9,14 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 
 // Misc
+size_t min(size_t a, size_t b)
+{
+    return a < b ? a : b;
+}
+
 bool isident(char ch)
 {
     return isalpha(ch) || ch == '_';
@@ -46,12 +52,67 @@ bool str_eq(Str a, Str b)
     return a.size == b.size && memcmp(a.data, b.data, b.size) == 0;
 }
 
+bool str_starts_with(Str a, Str b)
+{
+    return a.size >= b.size && memcmp(a.data, b.data, b.size) == 0;
+}
+
+Str str_drop_left(Str str, int n)
+{
+    n = min(n, str.size);
+	str.data += n;
+	str.size -= n;
+	return str;
+}
+
+Str str_trim_left(Str str, char ch)
+{
+    size_t n = 0;
+    while (n < str.size && str.data[n] == ch) {
+        n += 1;
+    }
+	return str_drop_left(str, n);
+}
+
+Str str_split_at(Str *str, size_t n)
+{
+    n = min(n, str->size);
+    Str head = *str;
+    head.size = n;
+    *str = str_drop_left(*str, n + 1);
+    return head;
+}
+
+Str str_split_by(Str *str, char ch)
+{
+    size_t i = 0;
+    while (i < str->size && str->data[i] != ch) {
+        i += 1;
+    }
+    return str_split_at(str, i);
+}
+
 Str str_from_cstr(char *data)
 {
     Str str;
     str.data = data;
     str.size = strlen(data);
     return str;
+}
+
+bool int_from_str(Str str, size_t *out)
+{
+    size_t n = 0;
+    for (size_t i = 0; i < str.size; ++i) {
+        if (isdigit(str.data[i])) {
+            n = n * 10 + str.data[i] - '0';
+        } else {
+            return false;
+        }
+    }
+
+    *out = n;
+    return true;
 }
 
 // OS
@@ -78,7 +139,7 @@ bool read_file(Str *out, char *path)
 int execute_command(char **args, bool silent)
 {
     pid_t pid = fork();
-    if (pid == -1) {
+    if (pid < 0) {
         fprintf(stderr, "error: could not fork child\n");
         exit(1);
     }
@@ -92,18 +153,90 @@ int execute_command(char **args, bool silent)
             }
         }
 
-        if (execvp(*args, args) == -1) {
+        if (execvp(*args, args) < 0) {
             fprintf(stderr, "error: could not execute child\n");
             exit(1);
         }
     }
 
     int wstatus;
-    if (wait(&wstatus) == -1) {
+    if (wait(&wstatus) < 0) {
         fprintf(stderr, "error: could not wait for child\n");
         exit(1);
     }
     return WEXITSTATUS(wstatus);
+}
+
+#define MAP_ANONYMOUS 32
+
+int capture_command(char **args, Str *out, Str *err)
+{
+    int pipe_stdout[2];
+    int pipe_stderr[2];
+
+    if (pipe(pipe_stdout) < 0 || pipe(pipe_stderr) < 0) {
+        fprintf(stderr, "error: could not create pipe\n");
+        exit(1);
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        fprintf(stderr, "error: could not fork child\n");
+        exit(1);
+    }
+
+    if (pid == 0) {
+        if (dup2(pipe_stdout[1], STDOUT_FILENO) < 0 || dup2(pipe_stderr[1], STDERR_FILENO) < 0) {
+            fprintf(stderr, "error: could not create pipe\n");
+            exit(1);
+        }
+
+        close(pipe_stdout[1]);
+        close(pipe_stderr[1]);
+
+        close(pipe_stdout[0]);
+        close(pipe_stderr[0]);
+
+        if (execvp(*args, args) < 0) {
+            fprintf(stderr, "error: could not execute child\n");
+            exit(1);
+        }
+    }
+
+    close(pipe_stdout[1]);
+    close(pipe_stderr[1]);
+
+    int wstatus;
+    if (wait(&wstatus) < 0) {
+        fprintf(stderr, "error: could not wait for child\n");
+        exit(1);
+    }
+    int code = WEXITSTATUS(wstatus);
+
+    if (ioctl(pipe_stdout[0], FIONREAD, &out->size) < 0 || ioctl(pipe_stderr[0], FIONREAD, &err->size) < 0) {
+        fprintf(stderr, "error: could not capture query pipe size\n");
+        exit(1);
+    }
+
+    if (out->size != 0) {
+        out->data = mmap(NULL, out->size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+        if (out->data == MAP_FAILED || read(pipe_stdout[0], out->data, out->size) < 0) {
+            fprintf(stderr, "error: could not capture child stdout\n");
+            exit(1);
+        }
+    }
+
+    if (err->size != 0) {
+        err->data = mmap(NULL, err->size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+        if (err->data == MAP_FAILED || read(pipe_stderr[0], err->data, err->size) < 0) {
+            fprintf(stderr, "error: could not capture child stderr\n");
+            exit(1);
+        }
+    }
+
+    close(pipe_stdout[0]);
+    close(pipe_stderr[0]);
+    return code;
 }
 
 // Pos
@@ -337,9 +470,19 @@ Token lexer_next(void)
     while (lexer.str.size > 0) {
         if (isspace(*lexer.str.data)) {
             lexer_advance();
-        } else if (*lexer.str.data == '#') {
-            while (lexer.str.size > 0 && *lexer.str.data != '\n') {
-                lexer_advance();
+        } else if (lexer_match('#')) {
+            if (lexer_match('#')) {
+                while (lexer.str.size > 0) {
+                    if (lexer_match('#') && lexer_match('#')) {
+                        break;
+                    }
+
+                    lexer_advance();
+                }
+            } else {
+                while (lexer.str.size > 0 && *lexer.str.data != '\n') {
+                    lexer_advance();
+                }
             }
         } else {
             break;
@@ -1763,6 +1906,115 @@ void generate(char *path)
     }
 }
 
+// Tester
+typedef struct {
+    Str out;
+    Str err;
+    int exit;
+    bool debug;
+} Test;
+
+void print_test(FILE *file, Test test)
+{
+    if (test.out.size != 0) {
+        if (test.debug) {
+            fprintf(file, "stdout: %zu\n", test.out.size);
+        } else {
+            fprintf(file, "stdout:\n");
+        }
+        print_str(file, test.out);
+        fprintf(file, "\n");
+    }
+
+    if (test.err.size != 0) {
+        if (test.debug) {
+            fprintf(file, "stderr: %zu\n", test.err.size);
+        } else {
+            fprintf(file, "stderr:\n");
+        }
+        print_str(file, test.err);
+        fprintf(file, "\n");
+    }
+
+    if (test.exit != 0) {
+        fprintf(file, "exit: %d\n", test.exit);
+    }
+}
+
+void test_parse_data(char *path, Str *contents, Str *out)
+{
+    Str value = str_split_by(contents, '\n');
+    if (!int_from_str(value, &out->size)) {
+        fprintf(stderr, "%s: error: invalid number '", path);
+        print_str(stderr, value);
+        fprintf(stderr, "'\n");
+        exit(1);
+    }
+
+    if (contents->size <= out->size) {
+        fprintf(stderr, "%s: error: not enough bytes in file\n", path);
+        exit(1);
+    }
+
+    out->data = contents->data;
+    *contents = str_drop_left(*contents, out->size);
+}
+
+bool test_file(char *program, char *path)
+{
+    Test expected = {0};
+
+    Str contents;
+    if (!read_file(&contents, path)) {
+        fprintf(stderr, "error: could not read file '%s'\n", path);
+        exit(1);
+    }
+
+    if (!str_starts_with(contents, str_from_cstr("##\n"))) {
+        fprintf(stderr, "%s: note: testing information not found\n", path);
+        exit(1);
+    }
+    contents = str_drop_left(contents, 3);
+
+    Str key = str_split_by(&contents, ' ');
+    if (str_eq(key, str_from_cstr("stdout:"))) {
+        test_parse_data(path, &contents, &expected.out);
+        contents = str_trim_left(contents, '\n');
+        key = str_split_by(&contents, ' ');
+    }
+
+    if (str_eq(key, str_from_cstr("stderr:"))) {
+        test_parse_data(path, &contents, &expected.err);
+        contents = str_trim_left(contents, '\n');
+        key = str_split_by(&contents, ' ');
+    }
+
+    if (str_eq(key, str_from_cstr("exit:"))) {
+        size_t value;
+        if (!int_from_str(str_split_by(&contents, '\n'), &value)) {
+            fprintf(stderr, "error: expected number of bytes of stdout\n");
+            exit(1);
+        }
+        expected.exit = value;
+    }
+
+    char *args[] = {program, "-r", path, NULL};
+    Test actual = {0};
+    actual.exit = capture_command(args, &actual.out, &actual.err);
+
+    if (actual.exit != expected.exit || !str_eq(actual.out, expected.out) || !str_eq(actual.err, expected.err)) {
+        fprintf(stderr, "%s: fail\n", path);
+        fprintf(stderr, "\n----------- Actual -----------\n");
+        print_test(stderr, actual);
+        fprintf(stderr, "------------------------------\n");
+        fprintf(stderr, "\n---------- Expected ----------\n");
+        print_test(stderr, expected);
+        fprintf(stderr, "------------------------------\n");
+        return false;
+    }
+    return true;
+}
+
 // Main
 Arena path_arena;
 
@@ -1773,54 +2025,104 @@ void usage(FILE *file)
     fprintf(file, "flags:\n");
     fprintf(file, "  -h    Print this help and exit\n");
     fprintf(file, "  -r    Run the program after compilation\n");
+    fprintf(file, "  -t    Run the test for the program\n");
+    fprintf(file, "  -T    Run the program and print test information\n");
 }
+
+enum {
+    MODE_COM,
+    MODE_RUN,
+    MODE_TEST_RUN,
+    MODE_TEST_CHECK,
+};
 
 int main(int argc, char **argv)
 {
-    (void) argc;
-
-    bool run = false;
+    int mode = MODE_COM;
     char *path = argv[1];
     if (path != NULL) {
         if (strcmp(path, "-h") == 0) {
             usage(stdout);
             exit(0);
         } else if (strcmp(path, "-r") == 0) {
-            run = true;
+            mode = MODE_RUN;
+            path = argv[2];
+        } else if (strcmp(path, "-T") == 0) {
+            mode = MODE_TEST_RUN;
+            path = argv[2];
+        } else if (strcmp(path, "-t") == 0) {
+            mode = MODE_TEST_CHECK;
             path = argv[2];
         }
     }
 
-    if (path == NULL) {
-        usage(stderr);
-        fprintf(stderr, "\nerror: file path not provided\n");
-        exit(1);
-    }
+    switch (mode) {
+    case MODE_TEST_RUN: {
+        if (path == NULL) {
+            usage(stderr);
+            fprintf(stderr, "\nerror: file path not provided\n");
+            exit(1);
+        }
 
-    lexer_open(path);
-    while (!lexer_read(TOKEN_EOF)) {
-        size_t node = parse_stmt();
-        check_stmt(node);
-        compile_stmt(node);
-    }
-    ops_push(OP_HALT, 0);
+        char *args[] = {*argv, "-r", path, NULL};
+        Test test = {0};
+        test.exit = capture_command(args, &test.out, &test.err);
+        test.debug = true;
 
-    path_arena.size = 0;
-    arena_push(&path_arena, "./", 2);
-    arena_push(&path_arena, path, strlen(path));
+        fprintf(stderr, "----------- Result -----------\n");
+        print_test(stderr, test);
+        fprintf(stderr, "------------------------------\n");
+    } break;
 
-    path_arena.size -= 5;
-    path_arena.data[path_arena.size] = '\0';
-    unlink(path_arena.data);
+    case MODE_TEST_CHECK: {
+        size_t failed = 0;
+        for (int i = 2; i < argc; ++i) {
+            if (!test_file(*argv, argv[i])) {
+                failed += 1;
+            }
+        }
 
-    arena_push(&path_arena, ".fasm", 6);
-    generate(path_arena.data);
+        size_t total = argc - 2;
 
-    if (run) {
-        path_arena.size -= 6;
+        if (failed > 0) {
+            fprintf(stderr, "\n");
+        }
+
+        fprintf(stderr, "Total: %zu, Passed: %zu, Failed: %zu\n", total, total - failed, failed);
+    } break;
+
+    default:
+        if (path == NULL) {
+            usage(stderr);
+            fprintf(stderr, "\nerror: file path not provided\n");
+            exit(1);
+        }
+
+        lexer_open(path);
+        while (!lexer_read(TOKEN_EOF)) {
+            size_t node = parse_stmt();
+            check_stmt(node);
+            compile_stmt(node);
+        }
+        ops_push(OP_HALT, 0);
+
+        path_arena.size = 0;
+        arena_push(&path_arena, "./", 2);
+        arena_push(&path_arena, path, strlen(path));
+
+        path_arena.size -= 5;
         path_arena.data[path_arena.size] = '\0';
+        unlink(path_arena.data);
 
-        argv[2] = path_arena.data;
-        exit(execute_command(argv + 2, false));
+        arena_push(&path_arena, ".fasm", 6);
+        generate(path_arena.data);
+
+        if (mode == MODE_RUN) {
+            path_arena.size -= 6;
+            path_arena.data[path_arena.size] = '\0';
+
+            argv[2] = path_arena.data;
+            exit(execute_command(argv + 2, false));
+        }
     }
 }

@@ -1,0 +1,28 @@
+##
+stdout: 14
+69
+420
+69
+420
+##
+
+if true {
+    print 69
+} else {
+    print 420
+}
+
+if false {
+    print 69
+} else {
+    print 420
+}
+
+if true {
+    print 69
+    print 420
+}
+
+if false {
+    print 420
+}
