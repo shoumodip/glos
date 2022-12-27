@@ -52,6 +52,11 @@ bool str_eq(Str a, Str b)
     return a.size == b.size && memcmp(a.data, b.data, b.size) == 0;
 }
 
+bool str_ends_with(Str a, Str b)
+{
+    return a.size >= b.size && memcmp(a.data + a.size - b.size, b.data, b.size) == 0;
+}
+
 bool str_starts_with(Str a, Str b)
 {
     return a.size >= b.size && memcmp(a.data, b.data, b.size) == 0;
@@ -708,6 +713,7 @@ enum {
 #define NODE_FOR_BODY 1
 
 #define NODE_LET_EXPR 0
+#define NODE_LET_TYPE 1
 
 #define NODE_PRINT_VALUE 0
 
@@ -794,6 +800,26 @@ void error_unexpected(Token token)
     print_pos(stderr, token.pos);
     fprintf(stderr, "error: unexpected %s\n", cstr_from_token_kind(token.kind));
     exit(1);
+}
+
+size_t parse_type(void)
+{
+    size_t node;
+    Token token = lexer_next();
+    switch (token.kind) {
+    case TOKEN_IDENT:
+        node = node_new(NODE_ATOM, token);
+        break;
+
+    case TOKEN_MUL:
+        node = node_new(NODE_UNARY, token);
+        nodes[node].nodes[NODE_UNARY_VALUE] = parse_type();
+        break;
+
+    default: error_unexpected(token);
+    }
+
+    return node;
 }
 
 static_assert(COUNT_TOKENS == 30);
@@ -894,8 +920,12 @@ size_t parse_stmt(void)
 
     case TOKEN_LET:
         node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT));
-        lexer_expect(TOKEN_SET);
-        nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET);
+
+        if (lexer_read(TOKEN_SET)) {
+            nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET);
+        } else {
+            nodes[node].nodes[NODE_LET_TYPE] = parse_type();
+        }
         break;
 
     case TOKEN_PRINT:
@@ -1056,6 +1086,29 @@ Type type_assert_pointer(size_t node)
     return actual;
 }
 
+void check_type(size_t node)
+{
+    switch (nodes[node].kind) {
+    case NODE_ATOM:
+        if (str_eq(nodes[node].token.str, str_from_cstr("int"))) {
+            nodes[node].type = type_new(TYPE_INT, 0);
+        } else if (str_eq(nodes[node].token.str, str_from_cstr("bool"))) {
+            nodes[node].type = type_new(TYPE_BOOL, 0);
+        } else {
+            error_undefined(node, "type");
+        }
+        break;
+
+    case NODE_UNARY: {
+        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+        check_type(value);
+        nodes[node].type = type_ref(nodes[value].type);
+    } break;
+
+    default: assert(0 && "unreachable");
+    }
+}
+
 static_assert(COUNT_NODES == 8);
 static_assert(COUNT_TOKENS == 30);
 void check_expr(size_t node, bool ref)
@@ -1211,8 +1264,14 @@ void check_stmt(size_t node)
         }
 
         size_t expr = nodes[node].nodes[NODE_LET_EXPR];
-        check_expr(expr, false);
-        nodes[node].type = nodes[expr].type;
+        if (expr != 0) {
+            check_expr(expr, false);
+            nodes[node].type = nodes[expr].type;
+        } else {
+            expr = nodes[node].nodes[NODE_LET_TYPE];
+            check_type(expr);
+            nodes[node].type = nodes[expr].type;
+        }
 
         variables_push(node);
     } break;
@@ -1630,9 +1689,12 @@ void compile_stmt(size_t node)
         size_t size = type_size(nodes[node].type);
         nodes[node].token.data = global_alloc(align(size));
 
-        ops_push(OP_GPTR, nodes[node].token.data);
-        compile_expr(nodes[node].nodes[NODE_LET_EXPR], false);
-        ops_push(OP_STORE, size);
+        size_t expr = nodes[node].nodes[NODE_LET_EXPR];
+        if (expr != 0) {
+            ops_push(OP_GPTR, nodes[node].token.data);
+            compile_expr(expr, false);
+            ops_push(OP_STORE, size);
+        }
     } break;
 
     case NODE_PRINT:
@@ -2075,14 +2137,16 @@ int main(int argc, char **argv)
     } break;
 
     case MODE_TEST_CHECK: {
+        size_t total = 0;
         size_t failed = 0;
         for (int i = 2; i < argc; ++i) {
-            if (!test_file(*argv, argv[i])) {
-                failed += 1;
+            if (str_ends_with(str_from_cstr(argv[i]), str_from_cstr(".glos"))) {
+                total += 1;
+                if (!test_file(*argv, argv[i])) {
+                    failed += 1;
+                }
             }
         }
-
-        size_t total = argc - 2;
 
         if (failed > 0) {
             fprintf(stderr, "\n");
