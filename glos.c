@@ -2381,6 +2381,17 @@ typedef struct {
     bool debug;
 } Test;
 
+void test_free(Test *test)
+{
+    if (test->out.size != 0) {
+        munmap(test->out.data, test->out.size);
+    }
+
+    if (test->err.size != 0) {
+        munmap(test->err.data, test->err.size);
+    }
+}
+
 void print_test(FILE *file, Test test)
 {
     if (test.out.size != 0) {
@@ -2441,6 +2452,8 @@ bool test_file(char *program, char *path)
         fprintf(stderr, "%s: note: testing information not found\n", path);
         exit(1);
     }
+
+    Str contents_save = contents;
     contents = str_drop_left(contents, 3);
 
     Str key = str_split_by(&contents, ' ');
@@ -2469,17 +2482,20 @@ bool test_file(char *program, char *path)
     Test actual = {0};
     actual.exit = capture_command(args, &actual.out, &actual.err);
 
-    if (actual.exit != expected.exit || !str_eq(actual.out, expected.out) || !str_eq(actual.err, expected.err)) {
-        fprintf(stderr, "%s: fail\n", path);
-        fprintf(stderr, "\n----------- Actual -----------\n");
+    bool failed = actual.exit != expected.exit || !str_eq(actual.out, expected.out) || !str_eq(actual.err, expected.err);
+    if (failed) {
+        fprintf(stderr, "%s: fail\n\n", path);
+        fprintf(stderr, "----------- Actual -----------\n");
         print_test(stderr, actual);
-        fprintf(stderr, "------------------------------\n");
-        fprintf(stderr, "\n---------- Expected ----------\n");
+        fprintf(stderr, "------------------------------\n\n");
+        fprintf(stderr, "---------- Expected ----------\n");
         print_test(stderr, expected);
-        fprintf(stderr, "------------------------------\n");
-        return false;
+        fprintf(stderr, "------------------------------\n\n");
     }
-    return true;
+
+    munmap(contents_save.data, contents_save.size);
+    test_free(&actual);
+    return failed;
 }
 
 // Main
@@ -2525,20 +2541,28 @@ int main(int argc, char **argv)
 
     switch (mode) {
     case MODE_TEST_RUN: {
-        if (path == NULL) {
-            usage(stderr);
-            fprintf(stderr, "\nerror: file path not provided\n");
-            exit(1);
+        bool first = true;
+        for (int i = 2; i < argc; ++i) {
+            if (str_ends_with(str_from_cstr(argv[i]), str_from_cstr(".glos"))) {
+                if (first) {
+                    first = false;
+                } else {
+                    fprintf(stderr, "\n");
+                }
+
+                path = argv[i];
+                char *args[] = {*argv, "-r", path, NULL};
+                Test test = {0};
+                test.exit = capture_command(args, &test.out, &test.err);
+                test.debug = true;
+
+                fprintf(stderr, "%s: test\n\n", path);
+                fprintf(stderr, "----------- Result -----------\n");
+                print_test(stderr, test);
+                fprintf(stderr, "------------------------------\n");
+                test_free(&test);
+            }
         }
-
-        char *args[] = {*argv, "-r", path, NULL};
-        Test test = {0};
-        test.exit = capture_command(args, &test.out, &test.err);
-        test.debug = true;
-
-        fprintf(stderr, "----------- Result -----------\n");
-        print_test(stderr, test);
-        fprintf(stderr, "------------------------------\n");
     } break;
 
     case MODE_TEST_CHECK: {
@@ -2551,10 +2575,6 @@ int main(int argc, char **argv)
                     failed += 1;
                 }
             }
-        }
-
-        if (failed > 0) {
-            fprintf(stderr, "\n");
         }
 
         fprintf(stderr, "Total: %zu, Passed: %zu, Failed: %zu\n", total, total - failed, failed);
