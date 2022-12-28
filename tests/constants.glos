@@ -1,0 +1,89 @@
+##
+stdout: 63
+69
+420
+69
+420
+69
+420
+69
+420
+69
+420
+1
+0
+1
+1
+0
+1
+0
+1
+1
+0
+1
+0
+1
+0
+##
+
+const A0 = 34 + 35
+const A1 = 500 - 80
+const A2 = 23 * 3
+const A3 = 1260 / 3
+
+const A4 = 17 * 2 + 35
+const A5 = 500 + 20 * -4
+
+const A6 = 3 * (20 + 3)
+const A7 = 210 * (-3 + 5)
+
+const A8 = 77 & 103
+const A9 = 160 | 260
+
+const C0 = 2 > 1
+const C1 = 1 > 1
+
+const C2 = 2 >= 1
+const C3 = 1 >= 1
+const C4 = 0 >= 1
+
+const C5 = 1 < 2
+const C6 = 1 < 1
+
+const C7 = 1 <= 2
+const C8 = 1 <= 1
+const C9 = 1 <= 0
+
+const C10 = 1 == 1
+const C11 = 1 == 2
+
+const C12 = 1 != 2
+const C13 = 1 != 1
+
+fn main() {
+    print A0
+    print A1
+    print A2
+    print A3
+    print A4
+    print A5
+    print A6
+    print A7
+    print A8
+    print A9
+
+    print C0
+    print C1
+    print C2
+    print C3
+    print C4
+    print C5
+    print C6
+    print C7
+    print C8
+    print C9
+    print C10
+    print C11
+    print C12
+    print C13
+}

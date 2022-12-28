@@ -17,11 +17,6 @@ size_t min(size_t a, size_t b)
     return a < b ? a : b;
 }
 
-bool isident(char ch)
-{
-    return isalpha(ch) || ch == '_';
-}
-
 // Arena
 #define ARENA_CAP 1024
 typedef struct {
@@ -296,12 +291,13 @@ enum {
 
     TOKEN_FN,
     TOKEN_LET,
+    TOKEN_CONST,
 
     TOKEN_PRINT,
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_TOKENS == 32);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -395,6 +391,9 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_LET:
         return "keyword 'let'";
 
+    case TOKEN_CONST:
+        return "keyword 'const'";
+
     case TOKEN_PRINT:
         return "keyword 'print'";
 
@@ -467,7 +466,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_TOKENS == 32);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -513,8 +512,8 @@ Token lexer_next(void)
         }
 
         token.str.size -= lexer.str.size;
-    } else if (isident(*lexer.str.data)) {
-        while (lexer.str.size > 0 && isident(*lexer.str.data)) {
+    } else if (isalpha(*lexer.str.data) || *lexer.str.data == '_') {
+        while (lexer.str.size > 0 && (isalnum(*lexer.str.data) || *lexer.str.data == '_')) {
             lexer_advance();
         }
 
@@ -536,6 +535,8 @@ Token lexer_next(void)
             token.kind = TOKEN_FN;
         } else if (str_eq(token.str, str_from_cstr("let"))) {
             token.kind = TOKEN_LET;
+        } else if (str_eq(token.str, str_from_cstr("const"))) {
+            token.kind = TOKEN_CONST;
         } else if (str_eq(token.str, str_from_cstr("print"))) {
             token.kind = TOKEN_PRINT;
         } else {
@@ -701,6 +702,7 @@ enum {
 
     NODE_FN,
     NODE_LET,
+    NODE_CONST,
 
     NODE_PRINT,
     COUNT_NODES
@@ -724,6 +726,8 @@ enum {
 
 #define NODE_LET_EXPR 0
 #define NODE_LET_TYPE 1
+
+#define NODE_CONST_EXPR 0
 
 #define NODE_PRINT_VALUE 0
 
@@ -771,7 +775,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_TOKENS == 32);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -832,7 +836,62 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_TOKENS == 32);
+size_t parse_const(int mbp)
+{
+    size_t node;
+    Token token = lexer_next();
+
+    switch (token.kind) {
+    case TOKEN_LPAREN:
+        node = parse_const(POWER_SET);
+        lexer_expect(TOKEN_RPAREN);
+        break;
+
+    case TOKEN_INT:
+    case TOKEN_BOOL:
+    case TOKEN_IDENT:
+        node = node_new(NODE_ATOM, token);
+        break;
+
+    case TOKEN_SUB:
+    case TOKEN_BNOT:
+    case TOKEN_LNOT:
+        node = node_new(NODE_UNARY, token);
+        nodes[node].nodes[NODE_UNARY_VALUE] = parse_const(POWER_PRE);
+        break;
+
+    default: error_unexpected(token);
+    }
+
+    while (true) {
+        if (!lexer_peek_row(&token)) {
+            break;
+        }
+
+        int lbp = power_from_token_kind(token.kind);
+        if (lbp <= mbp) {
+            break;
+        }
+        lexer.peeked = false;
+
+        size_t binary = node_new(NODE_BINARY, token);
+        nodes[binary].nodes[NODE_BINARY_LHS] = node;
+        switch (token.kind) {
+        case TOKEN_LBRACKET:
+            error_unexpected(token);
+            break;
+
+        default:
+            nodes[binary].nodes[NODE_BINARY_RHS] = parse_const(lbp);
+        }
+        node = binary;
+    }
+
+    return node;
+}
+
+static_assert(COUNT_TOKENS == 32);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -911,7 +970,7 @@ void local_assert(Token token, bool expected)
     }
 }
 
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_TOKENS == 32);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -963,12 +1022,17 @@ size_t parse_stmt(void)
 
     case TOKEN_LET:
         node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT));
-
         if (lexer_read(TOKEN_SET)) {
             nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET);
         } else {
             nodes[node].nodes[NODE_LET_TYPE] = parse_type();
         }
+        break;
+
+    case TOKEN_CONST:
+        node = node_new(NODE_CONST, lexer_expect(TOKEN_IDENT));
+        lexer_expect(TOKEN_SET);
+        nodes[node].nodes[NODE_CONST_EXPR] = parse_const(POWER_SET);
         break;
 
     case TOKEN_PRINT:
@@ -984,6 +1048,88 @@ size_t parse_stmt(void)
     }
 
     return node;
+}
+
+// Constant Evaluator
+static_assert(COUNT_NODES == 11);
+static_assert(COUNT_TOKENS == 32);
+void eval_const_unary(size_t node)
+{
+    size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+
+    switch (nodes[node].token.kind) {
+    case TOKEN_SUB:
+        nodes[node].token.data = -nodes[value].token.data;
+        break;
+
+    case TOKEN_BNOT:
+        nodes[node].token.data = ~nodes[value].token.data;
+        break;
+
+    case TOKEN_LNOT:
+        nodes[node].token.data = !nodes[value].token.data;
+        break;
+
+    default: assert(0 && "unreachable");
+    }
+}
+
+void eval_const_binary(size_t node)
+{
+    size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
+    size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
+
+    switch (nodes[node].token.kind) {
+    case TOKEN_ADD:
+        nodes[node].token.data = nodes[lhs].token.data + nodes[rhs].token.data;
+        break;
+
+    case TOKEN_SUB:
+        nodes[node].token.data = nodes[lhs].token.data - nodes[rhs].token.data;
+        break;
+
+    case TOKEN_MUL:
+        nodes[node].token.data = nodes[lhs].token.data * nodes[rhs].token.data;
+        break;
+
+    case TOKEN_DIV:
+        nodes[node].token.data = nodes[lhs].token.data / nodes[rhs].token.data;
+        break;
+
+    case TOKEN_BOR:
+        nodes[node].token.data = nodes[lhs].token.data | nodes[rhs].token.data;
+        break;
+
+    case TOKEN_BAND:
+        nodes[node].token.data = nodes[lhs].token.data & nodes[rhs].token.data;
+        break;
+
+    case TOKEN_GT:
+        nodes[node].token.data = nodes[lhs].token.data > nodes[rhs].token.data;
+        break;
+
+    case TOKEN_GE:
+        nodes[node].token.data = nodes[lhs].token.data >= nodes[rhs].token.data;
+        break;
+
+    case TOKEN_LT:
+        nodes[node].token.data = nodes[lhs].token.data < nodes[rhs].token.data;
+        break;
+
+    case TOKEN_LE:
+        nodes[node].token.data = nodes[lhs].token.data <= nodes[rhs].token.data;
+        break;
+
+    case TOKEN_EQ:
+        nodes[node].token.data = nodes[lhs].token.data == nodes[rhs].token.data;
+        break;
+
+    case TOKEN_NE:
+        nodes[node].token.data = nodes[lhs].token.data != nodes[rhs].token.data;
+        break;
+
+    default: assert(0 && "unreachable");
+    }
 }
 
 // Type
@@ -1039,6 +1185,27 @@ void print_type(FILE *file, Type type)
 
 // Scope
 #define SCOPE_CAP 1024
+
+size_t constants[SCOPE_CAP];
+size_t constants_count;
+
+void constants_push(size_t node)
+{
+    assert(constants_count < SCOPE_CAP);
+    constants[constants_count] = node;
+    constants_count += 1;
+}
+
+bool constants_find(Str name, size_t *index)
+{
+    for (size_t i = 0; i < constants_count; i += 1) {
+        if (str_eq(nodes[constants[i]].token.str, name)) {
+            *index = i;
+            return true;
+        }
+    }
+    return false;
+}
 
 size_t variables[SCOPE_CAP];
 size_t variables_count;
@@ -1101,6 +1268,18 @@ void error_redefinition(size_t node, size_t prev, char *name)
     print_pos(stderr, nodes[prev].token.pos);
     fprintf(stderr, "note: defined here\n");
     exit(1);
+}
+
+void check_identifier_redefinition(size_t node)
+{
+    size_t prev;
+    if (constants_find(nodes[node].token.str, &prev)) {
+        error_redefinition(node, constants[prev], "constant");
+    }
+
+    if (variables_find(nodes[node].token.str, &prev)) {
+        error_redefinition(node, variables[prev], "variable");
+    }
 }
 
 void ref_prevent(size_t node, bool ref)
@@ -1176,8 +1355,96 @@ void check_type(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 10);
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_NODES == 11);
+static_assert(COUNT_TOKENS == 32);
+void check_const(size_t node)
+{
+    switch (nodes[node].kind) {
+    case NODE_ATOM:
+        switch (nodes[node].token.kind) {
+        case TOKEN_INT:
+            nodes[node].type = type_new(TYPE_INT, 0);
+            break;
+
+        case TOKEN_BOOL:
+            nodes[node].type = type_new(TYPE_BOOL, 0);
+            break;
+
+        case TOKEN_IDENT: {
+            size_t index;
+            if (constants_find(nodes[node].token.str, &index)) {
+                nodes[node].type = nodes[variables[index]].type;
+                nodes[node].token.data = nodes[constants[index]].token.data;
+            } else {
+                error_undefined(node, "constant");
+            }
+        } break;
+
+        default: assert(0 && "unreachable");
+        }
+        break;
+
+    case NODE_UNARY: {
+        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+
+        switch (nodes[node].token.kind) {
+        case TOKEN_SUB:
+        case TOKEN_BNOT:
+            check_const(value);
+            nodes[node].type = type_assert_arith(value);
+            break;
+
+        case TOKEN_LNOT:
+            check_const(value);
+            nodes[node].type = type_assert(value, type_new(TYPE_BOOL, 0));
+            break;
+
+        default: assert(0 && "unreachable");
+        }
+
+        eval_const_unary(node);
+    } break;
+
+    case NODE_BINARY: {
+        size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
+        size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
+
+        switch (nodes[node].token.kind) {
+        case TOKEN_ADD:
+        case TOKEN_SUB:
+        case TOKEN_MUL:
+        case TOKEN_DIV:
+        case TOKEN_BOR:
+        case TOKEN_BAND:
+            check_const(lhs);
+            check_const(rhs);
+            nodes[node].type = type_assert(rhs, type_assert_arith(lhs));
+            break;
+
+        case TOKEN_GT:
+        case TOKEN_GE:
+        case TOKEN_LT:
+        case TOKEN_LE:
+        case TOKEN_EQ:
+        case TOKEN_NE:
+            check_const(lhs);
+            check_const(rhs);
+            type_assert(rhs, type_assert_arith(lhs));
+            nodes[node].type = type_new(TYPE_BOOL, 0);
+            break;
+
+        default: assert(0 && "unreachable");
+        }
+
+        eval_const_binary(node);
+    } break;
+
+    default: assert(0 && "unreachable");
+    }
+}
+
+static_assert(COUNT_NODES == 11);
+static_assert(COUNT_TOKENS == 32);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1196,8 +1463,12 @@ void check_expr(size_t node, bool ref)
         case TOKEN_IDENT: {
             size_t index;
             if (variables_find(nodes[node].token.str, &index)) {
-                nodes[node].token.data = variables[index];
                 nodes[node].type = nodes[variables[index]].type;
+                nodes[node].token.data = variables[index];
+            } else if (constants_find(nodes[node].token.str, &index)) {
+                nodes[node].type = nodes[constants[index]].type;
+                nodes[node].token.kind = TOKEN_INT;
+                nodes[node].token.data = nodes[constants[index]].token.data;
             } else {
                 error_undefined(node, "identifier");
             }
@@ -1308,8 +1579,8 @@ void check_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 10);
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_NODES == 11);
+static_assert(COUNT_TOKENS == 32);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1353,10 +1624,7 @@ void check_stmt(size_t node)
     } break;
 
     case NODE_LET: {
-        size_t prev;
-        if (variables_find(nodes[node].token.str, &prev)) {
-            error_redefinition(node, variables[prev], "variable");
-        }
+        check_identifier_redefinition(node);
 
         size_t expr = nodes[node].nodes[NODE_LET_EXPR];
         if (expr != 0) {
@@ -1369,6 +1637,17 @@ void check_stmt(size_t node)
         }
 
         variables_push(node);
+    } break;
+
+    case NODE_CONST: {
+        check_identifier_redefinition(node);
+
+        size_t expr = nodes[node].nodes[NODE_CONST_EXPR];
+        check_const(expr);
+        nodes[node].type = nodes[expr].type;
+        nodes[node].token.data = nodes[expr].token.data;
+
+        constants_push(node);
     } break;
 
     case NODE_PRINT:
@@ -1593,8 +1872,8 @@ size_t global_alloc(size_t size)
     return global_size - size;
 }
 
-static_assert(COUNT_NODES == 10);
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_NODES == 11);
+static_assert(COUNT_TOKENS == 32);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1754,8 +2033,8 @@ void compile_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 10);
-static_assert(COUNT_TOKENS == 31);
+static_assert(COUNT_NODES == 11);
+static_assert(COUNT_TOKENS == 32);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1812,6 +2091,8 @@ void compile_stmt(size_t node)
             ops_push(OP_STORE, size);
         }
     } break;
+
+    case NODE_CONST: break;
 
     case NODE_PRINT:
         compile_expr(nodes[node].nodes[NODE_PRINT_VALUE], false);
