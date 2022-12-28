@@ -1,0 +1,13 @@
+##
+stdout: 3
+69
+##
+
+fn main() {
+    let x = 1
+    if %bool x {
+        print 69
+    } else {
+        print 420
+    }
+}

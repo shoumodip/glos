@@ -33,7 +33,7 @@ fn main() {
     print 23 * 3
     print 1260 / 3
     print 17 * 2 + 35
-    print 500 + -40 * 2
+    print 500 + -40 * (5 % 3)
 
     # Arithmetic Comparisons
     print 2 > 1

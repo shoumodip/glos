@@ -274,6 +274,7 @@ enum {
     TOKEN_SUB,
     TOKEN_MUL,
     TOKEN_DIV,
+    TOKEN_MOD,
 
     TOKEN_BOR,
     TOKEN_BAND,
@@ -303,7 +304,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_TOKENS == 34);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -348,6 +349,9 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_DIV:
         return "'/'";
+
+    case TOKEN_MOD:
+        return "'%'";
 
     case TOKEN_BOR:
         return "'|'";
@@ -475,7 +479,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_TOKENS == 34);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -595,6 +599,10 @@ Token lexer_next(void)
             token.kind = TOKEN_DIV;
             break;
 
+        case '%':
+            token.kind = TOKEN_MOD;
+            break;
+
         case '|':
             token.kind = TOKEN_BOR;
             break;
@@ -704,6 +712,7 @@ typedef struct {
 enum {
     NODE_ATOM,
     NODE_CALL,
+    NODE_CAST,
     NODE_UNARY,
     NODE_BINARY,
 
@@ -719,6 +728,9 @@ enum {
     NODE_PRINT,
     COUNT_NODES
 };
+
+#define NODE_CAST_TYPE 0
+#define NODE_CAST_EXPR 1
 
 #define NODE_UNARY_EXPR 0
 
@@ -789,7 +801,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_TOKENS == 34);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -802,6 +814,7 @@ int power_from_token_kind(int kind)
 
     case TOKEN_MUL:
     case TOKEN_DIV:
+    case TOKEN_MOD:
         return POWER_MUL;
 
     case TOKEN_BOR:
@@ -850,7 +863,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_TOKENS == 34);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -905,7 +918,7 @@ size_t parse_const(int mbp)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_TOKENS == 34);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -939,6 +952,16 @@ size_t parse_expr(int mbp)
         node = node_new(NODE_UNARY, token);
         nodes[node].nodes[NODE_UNARY_EXPR] = parse_expr(POWER_PRE);
         break;
+
+    case TOKEN_MOD: {
+        node = node_new(NODE_CAST, token);
+        bool grouped_type = lexer_read(TOKEN_LPAREN);
+        nodes[node].nodes[NODE_CAST_TYPE] = parse_type();
+        if (grouped_type) {
+            lexer_expect(TOKEN_RPAREN);
+        }
+        nodes[node].nodes[NODE_CAST_EXPR] = parse_expr(POWER_PRE);
+    } break;
 
     default: error_unexpected(token);
     }
@@ -984,7 +1007,7 @@ void local_assert(Token token, bool expected)
     }
 }
 
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_TOKENS == 34);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1073,8 +1096,8 @@ size_t parse_stmt(void)
 }
 
 // Constant Evaluator
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 34);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1096,6 +1119,8 @@ void eval_const_unary(size_t node)
     }
 }
 
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 34);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1116,6 +1141,10 @@ void eval_const_binary(size_t node)
 
     case TOKEN_DIV:
         nodes[node].token.data = nodes[lhs].token.data / nodes[rhs].token.data;
+        break;
+
+    case TOKEN_MOD:
+        nodes[node].token.data = nodes[lhs].token.data % nodes[rhs].token.data;
         break;
 
     case TOKEN_BOR:
@@ -1382,8 +1411,8 @@ void check_type(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 34);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1441,6 +1470,7 @@ void check_const(size_t node)
         case TOKEN_SUB:
         case TOKEN_MUL:
         case TOKEN_DIV:
+        case TOKEN_MOD:
         case TOKEN_BOR:
         case TOKEN_BAND:
             check_const(lhs);
@@ -1470,8 +1500,8 @@ void check_const(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 34);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1506,6 +1536,8 @@ void check_expr(size_t node, bool ref)
         break;
 
     case NODE_CALL: {
+        ref_prevent(node, ref);
+
         if (str_eq(nodes[node].token.str, str_from_cstr("main"))) {
             print_pos(stderr, nodes[node].token.pos);
             fprintf(stderr, "error: function 'main' cannot be called\n");
@@ -1519,6 +1551,18 @@ void check_expr(size_t node, bool ref)
 
         nodes[node].token.data = index;
         nodes[node].type = nodes[functions[index].node].type;
+    } break;
+
+    case NODE_CAST: {
+        ref_prevent(node, ref);
+
+        size_t type = nodes[node].nodes[NODE_CAST_TYPE];
+        check_type(type);
+
+        size_t expr = nodes[node].nodes[NODE_CAST_EXPR];
+        check_expr(expr, false);
+
+        nodes[node].type = nodes[type].type;
     } break;
 
     case NODE_UNARY: {
@@ -1569,6 +1613,7 @@ void check_expr(size_t node, bool ref)
         case TOKEN_SUB:
         case TOKEN_MUL:
         case TOKEN_DIV:
+        case TOKEN_MOD:
         case TOKEN_BOR:
         case TOKEN_BAND:
             ref_prevent(node, ref);
@@ -1606,8 +1651,8 @@ void check_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 34);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1710,6 +1755,7 @@ enum {
     OP_SUB,
     OP_MUL,
     OP_DIV,
+    OP_MOD,
     OP_NEG,
 
     OP_BOR,
@@ -1747,7 +1793,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 28);
+static_assert(COUNT_OPS == 29);
 void print_op(FILE *file, Op op)
 {
     switch (op.kind) {
@@ -1773,6 +1819,10 @@ void print_op(FILE *file, Op op)
 
     case OP_DIV:
         fprintf(file, "div\n");
+        break;
+
+    case OP_MOD:
+        fprintf(file, "mod\n");
         break;
 
     case OP_NEG:
@@ -1939,8 +1989,8 @@ void compile_ref(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 34);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1966,6 +2016,10 @@ void compile_expr(size_t node, bool ref)
 
     case NODE_CALL:
         ops_push(OP_CALL, nodes[node].token.data);
+        break;
+
+    case NODE_CAST:
+        compile_expr(nodes[node].nodes[NODE_CAST_EXPR], false);
         break;
 
     case NODE_UNARY: {
@@ -2037,6 +2091,12 @@ void compile_expr(size_t node, bool ref)
             ops_push(OP_DIV, 0);
             break;
 
+        case TOKEN_MOD:
+            compile_expr(lhs, false);
+            compile_expr(rhs, false);
+            ops_push(OP_MOD, 0);
+            break;
+
         case TOKEN_BOR:
             compile_expr(lhs, false);
             compile_expr(rhs, false);
@@ -2100,8 +2160,8 @@ void compile_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 33);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 34);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2189,7 +2249,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 28);
+static_assert(COUNT_OPS == 29);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -2240,6 +2300,14 @@ void generate(char *path)
             fprintf(file, "cqo\n");
             fprintf(file, "idiv rbx\n");
             fprintf(file, "push rax\n");
+            break;
+
+        case OP_MOD:
+            fprintf(file, "pop rbx\n");
+            fprintf(file, "pop rax\n");
+            fprintf(file, "cqo\n");
+            fprintf(file, "idiv rbx\n");
+            fprintf(file, "push rdx\n");
             break;
 
         case OP_NEG:
