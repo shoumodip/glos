@@ -1612,10 +1612,12 @@ void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
     case NODE_BLOCK: {
+        size_t constants_count_save = constants_count;
         size_t variables_count_save = variables_count;
         for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
             check_stmt(node);
         }
+        constants_count = constants_count_save;
         variables_count = variables_count_save;
     } break;
 
