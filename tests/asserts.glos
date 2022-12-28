@@ -1,0 +1,8 @@
+##
+stderr: 41
+tests/asserts.glos:8:1: assertion failed
+
+exit: 1
+##
+
+assert(69 == 420)

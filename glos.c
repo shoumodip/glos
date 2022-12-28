@@ -298,11 +298,12 @@ enum {
     TOKEN_LET,
     TOKEN_CONST,
 
+    TOKEN_ASSERT,
     TOKEN_PRINT,
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_TOKENS == 33);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -399,6 +400,9 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_CONST:
         return "keyword 'const'";
 
+    case TOKEN_ASSERT:
+        return "keyword 'assert'";
+
     case TOKEN_PRINT:
         return "keyword 'print'";
 
@@ -471,7 +475,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_TOKENS == 33);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -542,6 +546,8 @@ Token lexer_next(void)
             token.kind = TOKEN_LET;
         } else if (str_eq(token.str, str_from_cstr("const"))) {
             token.kind = TOKEN_CONST;
+        } else if (str_eq(token.str, str_from_cstr("assert"))) {
+            token.kind = TOKEN_ASSERT;
         } else if (str_eq(token.str, str_from_cstr("print"))) {
             token.kind = TOKEN_PRINT;
         } else {
@@ -709,11 +715,12 @@ enum {
     NODE_LET,
     NODE_CONST,
 
+    NODE_ASSERT,
     NODE_PRINT,
     COUNT_NODES
 };
 
-#define NODE_UNARY_VALUE 0
+#define NODE_UNARY_EXPR 0
 
 #define NODE_BINARY_LHS 0
 #define NODE_BINARY_RHS 1
@@ -734,7 +741,9 @@ enum {
 
 #define NODE_CONST_EXPR 0
 
-#define NODE_PRINT_VALUE 0
+#define NODE_ASSERT_EXPR 0
+
+#define NODE_PRINT_EXPR 0
 
 typedef struct {
     int kind;
@@ -780,7 +789,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_TOKENS == 33);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -832,7 +841,7 @@ size_t parse_type(void)
 
     case TOKEN_MUL:
         node = node_new(NODE_UNARY, token);
-        nodes[node].nodes[NODE_UNARY_VALUE] = parse_type();
+        nodes[node].nodes[NODE_UNARY_EXPR] = parse_type();
         break;
 
     default: error_unexpected(token);
@@ -841,7 +850,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_TOKENS == 33);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -863,7 +872,7 @@ size_t parse_const(int mbp)
     case TOKEN_BNOT:
     case TOKEN_LNOT:
         node = node_new(NODE_UNARY, token);
-        nodes[node].nodes[NODE_UNARY_VALUE] = parse_const(POWER_PRE);
+        nodes[node].nodes[NODE_UNARY_EXPR] = parse_const(POWER_PRE);
         break;
 
     default: error_unexpected(token);
@@ -896,7 +905,7 @@ size_t parse_const(int mbp)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_TOKENS == 33);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -928,7 +937,7 @@ size_t parse_expr(int mbp)
     case TOKEN_BAND:
     case TOKEN_LNOT:
         node = node_new(NODE_UNARY, token);
-        nodes[node].nodes[NODE_UNARY_VALUE] = parse_expr(POWER_PRE);
+        nodes[node].nodes[NODE_UNARY_EXPR] = parse_expr(POWER_PRE);
         break;
 
     default: error_unexpected(token);
@@ -975,7 +984,7 @@ void local_assert(Token token, bool expected)
     }
 }
 
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_TOKENS == 33);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1041,10 +1050,17 @@ size_t parse_stmt(void)
         nodes[node].nodes[NODE_CONST_EXPR] = parse_const(POWER_SET);
         break;
 
+    case TOKEN_ASSERT:
+        node = node_new(NODE_ASSERT, token);
+        lexer_expect(TOKEN_LPAREN);
+        nodes[node].nodes[NODE_ASSERT_EXPR] = parse_const(POWER_SET);
+        lexer_expect(TOKEN_RPAREN);
+        break;
+
     case TOKEN_PRINT:
         local_assert(token, true);
         node = node_new(NODE_PRINT, token);
-        nodes[node].nodes[NODE_PRINT_VALUE] = parse_expr(POWER_SET);
+        nodes[node].nodes[NODE_PRINT_EXPR] = parse_expr(POWER_SET);
         break;
 
     default:
@@ -1057,23 +1073,23 @@ size_t parse_stmt(void)
 }
 
 // Constant Evaluator
-static_assert(COUNT_NODES == 11);
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_NODES == 12);
+static_assert(COUNT_TOKENS == 33);
 void eval_const_unary(size_t node)
 {
-    size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+    size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
 
     switch (nodes[node].token.kind) {
     case TOKEN_SUB:
-        nodes[node].token.data = -nodes[value].token.data;
+        nodes[node].token.data = -nodes[expr].token.data;
         break;
 
     case TOKEN_BNOT:
-        nodes[node].token.data = ~nodes[value].token.data;
+        nodes[node].token.data = ~nodes[expr].token.data;
         break;
 
     case TOKEN_LNOT:
-        nodes[node].token.data = !nodes[value].token.data;
+        nodes[node].token.data = !nodes[expr].token.data;
         break;
 
     default: assert(0 && "unreachable");
@@ -1357,17 +1373,17 @@ void check_type(size_t node)
         break;
 
     case NODE_UNARY: {
-        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
-        check_type(value);
-        nodes[node].type = type_ref(nodes[value].type);
+        size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
+        check_type(expr);
+        nodes[node].type = type_ref(nodes[expr].type);
     } break;
 
     default: assert(0 && "unreachable");
     }
 }
 
-static_assert(COUNT_NODES == 11);
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_NODES == 12);
+static_assert(COUNT_TOKENS == 33);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1396,18 +1412,18 @@ void check_const(size_t node)
         break;
 
     case NODE_UNARY: {
-        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+        size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
 
         switch (nodes[node].token.kind) {
         case TOKEN_SUB:
         case TOKEN_BNOT:
-            check_const(value);
-            nodes[node].type = type_assert_arith(value);
+            check_const(expr);
+            nodes[node].type = type_assert_arith(expr);
             break;
 
         case TOKEN_LNOT:
-            check_const(value);
-            nodes[node].type = type_assert(value, type_new(TYPE_BOOL, 0));
+            check_const(expr);
+            nodes[node].type = type_assert(expr, type_new(TYPE_BOOL, 0));
             break;
 
         default: assert(0 && "unreachable");
@@ -1454,8 +1470,8 @@ void check_const(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 11);
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_NODES == 12);
+static_assert(COUNT_TOKENS == 33);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1506,31 +1522,31 @@ void check_expr(size_t node, bool ref)
     } break;
 
     case NODE_UNARY: {
-        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+        size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
 
         switch (nodes[node].token.kind) {
         case TOKEN_SUB:
         case TOKEN_BNOT:
             ref_prevent(node, ref);
-            check_expr(value, false);
-            nodes[node].type = type_assert_arith(value);
+            check_expr(expr, false);
+            nodes[node].type = type_assert_arith(expr);
             break;
 
         case TOKEN_LNOT:
             ref_prevent(node, ref);
-            check_expr(value, false);
-            nodes[node].type = type_assert(value, type_new(TYPE_BOOL, 0));
+            check_expr(expr, false);
+            nodes[node].type = type_assert(expr, type_new(TYPE_BOOL, 0));
             break;
 
         case TOKEN_MUL:
-            check_expr(value, false);
-            nodes[node].type = type_deref(type_assert_pointer(value));
+            check_expr(expr, false);
+            nodes[node].type = type_deref(type_assert_pointer(expr));
             break;
 
         case TOKEN_BAND:
             ref_prevent(node, ref);
-            check_expr(value, true);
-            nodes[node].type = type_ref(nodes[value].type);
+            check_expr(expr, true);
+            nodes[node].type = type_ref(nodes[expr].type);
             break;
 
         default: assert(0 && "unreachable");
@@ -1590,8 +1606,8 @@ void check_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 11);
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_NODES == 12);
+static_assert(COUNT_TOKENS == 33);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1664,8 +1680,19 @@ void check_stmt(size_t node)
         constants_push(node);
     } break;
 
+    case NODE_ASSERT: {
+        size_t expr = nodes[node].nodes[NODE_ASSERT_EXPR];
+        check_const(expr);
+        type_assert(expr, type_new(TYPE_BOOL, 0));
+        if (nodes[expr].token.data == 0) {
+            print_pos(stderr, nodes[node].token.pos);
+            fprintf(stderr, "assertion failed\n");
+            exit(1);
+        }
+    } break;
+
     case NODE_PRINT:
-        check_expr(nodes[node].nodes[NODE_PRINT_VALUE], false);
+        check_expr(nodes[node].nodes[NODE_PRINT_EXPR], false);
         break;
 
     default: check_expr(node, false);
@@ -1910,8 +1937,8 @@ void compile_ref(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 11);
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_NODES == 12);
+static_assert(COUNT_TOKENS == 33);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1940,32 +1967,32 @@ void compile_expr(size_t node, bool ref)
         break;
 
     case NODE_UNARY: {
-        size_t value = nodes[node].nodes[NODE_UNARY_VALUE];
+        size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
 
         switch (nodes[node].token.kind) {
         case TOKEN_SUB:
-            compile_expr(value, false);
+            compile_expr(expr, false);
             ops_push(OP_NEG, 0);
             break;
 
         case TOKEN_MUL:
-            compile_expr(value, false);
+            compile_expr(expr, false);
             if (!ref) {
                 ops_push(OP_LOAD, type_size(nodes[node].type));
             }
             break;
 
         case TOKEN_BAND:
-            compile_expr(value, true);
+            compile_expr(expr, true);
             break;
 
         case TOKEN_BNOT:
-            compile_expr(value, false);
+            compile_expr(expr, false);
             ops_push(OP_BNOT, 0);
             break;
 
         case TOKEN_LNOT:
-            compile_expr(value, false);
+            compile_expr(expr, false);
             ops_push(OP_LNOT, 0);
             break;
 
@@ -2071,8 +2098,8 @@ void compile_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 11);
-static_assert(COUNT_TOKENS == 32);
+static_assert(COUNT_NODES == 12);
+static_assert(COUNT_TOKENS == 33);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2144,10 +2171,12 @@ void compile_stmt(size_t node)
         }
     } break;
 
-    case NODE_CONST: break;
+    case NODE_CONST:
+    case NODE_ASSERT:
+        break;
 
     case NODE_PRINT:
-        compile_expr(nodes[node].nodes[NODE_PRINT_VALUE], false);
+        compile_expr(nodes[node].nodes[NODE_PRINT_EXPR], false);
         ops_push(OP_PRINT, 0);
         break;
 
@@ -2444,6 +2473,12 @@ typedef struct {
     bool debug;
 } Test;
 
+typedef enum {
+    RESULT_FAIL,
+    RESULT_PASS,
+    RESULT_SKIP,
+} Result;
+
 void test_free(Test *test)
 {
     if (test->out.size != 0) {
@@ -2503,22 +2538,9 @@ void test_parse_data(char *path, Str *contents, Str *out)
     *contents = str_drop_left(*contents, out->size);
 }
 
-bool test_file(char *program, char *path)
+bool test_file(char *program, char *path, Str contents)
 {
     Test expected = {0};
-
-    Str contents;
-    if (!read_file(&contents, path)) {
-        fprintf(stderr, "error: could not read file '%s'\n", path);
-        exit(1);
-    }
-
-    if (!str_starts_with(contents, str_from_cstr("##\n"))) {
-        fprintf(stderr, "%s: note: testing information not found\n", path);
-        exit(1);
-    }
-
-    Str contents_save = contents;
     contents = str_drop_left(contents, 3);
 
     Str key = str_split_by(&contents, ' ');
@@ -2537,7 +2559,7 @@ bool test_file(char *program, char *path)
     if (str_eq(key, str_from_cstr("exit:"))) {
         size_t value;
         if (!int_from_str(str_split_by(&contents, '\n'), &value)) {
-            fprintf(stderr, "error: expected number of bytes of stdout\n");
+            fprintf(stderr, "%s: error: expected number of bytes of stdout\n", path);
             exit(1);
         }
         expected.exit = value;
@@ -2558,7 +2580,6 @@ bool test_file(char *program, char *path)
         fprintf(stderr, "------------------------------\n\n");
     }
 
-    munmap(contents_save.data, contents_save.size);
     test_free(&actual);
     return !failed;
 }
@@ -2633,16 +2654,30 @@ int main(int argc, char **argv)
     case MODE_TEST_CHECK: {
         size_t total = 0;
         size_t failed = 0;
+        size_t skipped = 0;
         for (int i = 2; i < argc; ++i) {
             if (str_ends_with(str_from_cstr(argv[i]), str_from_cstr(".glos"))) {
-                total += 1;
-                if (!test_file(*argv, argv[i])) {
-                    failed += 1;
+                char *path = argv[i];
+                Str contents;
+                if (!read_file(&contents, path)) {
+                    fprintf(stderr, "error: could not read file '%s'\n", path);
+                    exit(1);
                 }
+
+                if (str_starts_with(contents, str_from_cstr("##\n"))) {
+                    total += 1;
+                    if (!test_file(*argv, argv[i], contents)) {
+                        failed += 1;
+                    }
+                } else {
+                    skipped += 1;
+                    fprintf(stderr, "%s: note: testing information not found\n\n", path);
+                }
+                munmap(contents.data, contents.size);
             }
         }
 
-        fprintf(stderr, "Total: %zu, Passed: %zu, Failed: %zu\n", total, total - failed, failed);
+        fprintf(stderr, "Total: %zu, Passed: %zu, Failed: %zu, Skipped: %zu\n", total, total - failed, failed, skipped);
     } break;
 
     default:
