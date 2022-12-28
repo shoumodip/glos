@@ -17,6 +17,11 @@ size_t min(size_t a, size_t b)
     return a < b ? a : b;
 }
 
+size_t max(size_t a, size_t b)
+{
+    return a > b ? a : b;
+}
+
 // Arena
 #define ARENA_CAP 1024
 typedef struct {
@@ -1027,6 +1032,7 @@ size_t parse_stmt(void)
         } else {
             nodes[node].nodes[NODE_LET_TYPE] = parse_type();
         }
+        nodes[node].token.data = parser_local;
         break;
 
     case TOKEN_CONST:
@@ -1228,20 +1234,25 @@ bool variables_find(Str name, size_t *index)
     return false;
 }
 
-size_t functions[SCOPE_CAP];
+typedef struct {
+    size_t node;
+    size_t vars;
+} Function;
+
+Function functions[SCOPE_CAP];
 size_t functions_count;
 
 void functions_push(size_t node)
 {
     assert(functions_count < SCOPE_CAP);
-    functions[functions_count] = node;
+    functions[functions_count].node = node;
     functions_count += 1;
 }
 
 bool functions_find(Str name, size_t *index)
 {
     for (size_t i = 0; i < functions_count; i += 1) {
-        if (str_eq(nodes[functions[i]].token.str, name)) {
+        if (str_eq(nodes[functions[i].node].token.str, name)) {
             *index = i;
             return true;
         }
@@ -1491,7 +1502,7 @@ void check_expr(size_t node, bool ref)
         }
 
         nodes[node].token.data = index;
-        nodes[node].type = nodes[functions[index]].type;
+        nodes[node].type = nodes[functions[index].node].type;
     } break;
 
     case NODE_UNARY: {
@@ -1584,11 +1595,13 @@ static_assert(COUNT_TOKENS == 32);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
-    case NODE_BLOCK:
+    case NODE_BLOCK: {
+        size_t variables_count_save = variables_count;
         for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
             check_stmt(node);
         }
-        break;
+        variables_count = variables_count_save;
+    } break;
 
     case NODE_IF: {
         size_t cond = nodes[node].nodes[NODE_IF_COND];
@@ -1614,10 +1627,11 @@ void check_stmt(size_t node)
     case NODE_FN: {
         size_t prev;
         if (functions_find(nodes[node].token.str, &prev)) {
-            error_redefinition(node, functions[prev], "function");
+            error_redefinition(node, functions[prev].node, "function");
         }
 
         nodes[node].type = type_new(TYPE_NIL, 0);
+        nodes[node].token.data = functions_count;
         functions_push(node);
 
         check_stmt(nodes[node].nodes[NODE_FN_BODY]);
@@ -1682,6 +1696,7 @@ enum {
     OP_NE,
 
     OP_GPTR,
+    OP_LPTR,
     OP_LOAD,
     OP_STORE,
 
@@ -1703,7 +1718,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 27);
+static_assert(COUNT_OPS == 28);
 void print_op(FILE *file, Op op)
 {
     switch (op.kind) {
@@ -1779,6 +1794,10 @@ void print_op(FILE *file, Op op)
         fprintf(file, "gptr %zu\n", op.data);
         break;
 
+    case OP_LPTR:
+        fprintf(file, "lptr %zu\n", op.data);
+        break;
+
     case OP_LOAD:
         fprintf(file, "load %zu\n", op.data);
         break;
@@ -1799,9 +1818,10 @@ void print_op(FILE *file, Op op)
         fprintf(file, "else %zu\n", op.data);
         break;
 
-    case OP_CALL:
-        fprintf(file, "call %zu\n", op.data);
-        break;
+    case OP_CALL: {
+        Function *function = &functions[op.data];
+        fprintf(file, "call addr=%zu, vars=%zu\n", nodes[function->node].token.data, function->vars);
+    } break;
 
     case OP_RET:
         fprintf(file, "ret %zu\n", op.data);
@@ -1834,6 +1854,7 @@ void ops_push(int kind, size_t data)
 void print_ops(FILE *file)
 {
     for (size_t i = 0; i < ops_count; i += 1) {
+        fprintf(file, "%04zu ", i);
         print_op(file, ops[i]);
     }
 }
@@ -1865,11 +1886,28 @@ size_t type_size(Type type)
     }
 }
 
+size_t local_max;
+size_t local_size;
+size_t local_alloc(size_t size)
+{
+    local_size += size;
+    return local_size;
+}
+
 size_t global_size;
 size_t global_alloc(size_t size)
 {
     global_size += size;
     return global_size - size;
+}
+
+void compile_ref(size_t node)
+{
+    if (nodes[node].token.data | 1) {
+        ops_push(OP_LPTR, nodes[node].token.data & ~1);
+    } else {
+        ops_push(OP_GPTR, nodes[node].token.data);
+    }
 }
 
 static_assert(COUNT_NODES == 11);
@@ -1886,7 +1924,7 @@ void compile_expr(size_t node, bool ref)
 
         case TOKEN_IDENT: {
             size_t real = nodes[node].token.data;
-            ops_push(OP_GPTR, nodes[real].token.data);
+            compile_ref(real);
 
             if (!ref) {
                 ops_push(OP_LOAD, type_size(nodes[real].type));
@@ -2038,11 +2076,14 @@ static_assert(COUNT_TOKENS == 32);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
-    case NODE_BLOCK:
+    case NODE_BLOCK: {
+        size_t local_size_save = local_size;
         for (node = nodes[node].nodes[NODE_BLOCK_START]; node != 0; node = nodes[node].next) {
             compile_stmt(node);
         }
-        break;
+        local_max = max(local_max, local_size);
+        local_size = local_size_save;
+    } break;
 
     case NODE_IF: {
         compile_expr(nodes[node].nodes[NODE_IF_COND], false);
@@ -2075,18 +2116,29 @@ void compile_stmt(size_t node)
     } break;
 
     case NODE_FN: {
+        local_max = 0;
+        local_size = 0;
+
+        size_t function = nodes[node].token.data;
         nodes[node].token.data = ops_count;
+
         compile_stmt(nodes[node].nodes[NODE_FN_BODY]);
-        ops_push(OP_RET, 0);
+        ops_push(OP_RET, function);
+
+        functions[function].vars = local_max;
     } break;
 
     case NODE_LET: {
         size_t size = type_size(nodes[node].type);
-        nodes[node].token.data = global_alloc(align(size));
+        if (nodes[node].token.data) {
+            nodes[node].token.data = local_alloc(align(size)) | 1;
+        } else {
+            nodes[node].token.data = global_alloc(align(size));
+        }
 
         size_t expr = nodes[node].nodes[NODE_LET_EXPR];
         if (expr != 0) {
-            ops_push(OP_GPTR, nodes[node].token.data);
+            compile_ref(node);
             compile_expr(expr, false);
             ops_push(OP_STORE, size);
         }
@@ -2106,7 +2158,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 27);
+static_assert(COUNT_OPS == 28);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -2237,6 +2289,11 @@ void generate(char *path)
             fprintf(file, "push memory+%zu\n", op.data);
             break;
 
+        case OP_LPTR:
+            fprintf(file, "lea rax, [rbp-%zu]\n", op.data);
+            fprintf(file, "push rax\n");
+            break;
+
         case OP_LOAD:
             fprintf(file, "pop rax\n");
             switch (op.data) {
@@ -2300,12 +2357,18 @@ void generate(char *path)
             fprintf(file, "jz I%zu\n", op.data);
             break;
 
-        case OP_CALL:
-            fprintf(file, "call I%zu\n", nodes[functions[op.data]].token.data);
-            break;
+        case OP_CALL: {
+            Function *function = &functions[op.data];
+            fprintf(file, "sub rsp, %zu\n", function->vars);
+            fprintf(file, "push rbp\n");
+            fprintf(file, "lea rbp, [rsp+%zu]\n", function->vars + 8);
+            fprintf(file, "call I%zu\n", nodes[function->node].token.data);
+        } break;
 
         case OP_RET:
-            fprintf(file, "ret\n");
+            fprintf(file, "pop rax\n");
+            fprintf(file, "add rsp, %zu\n", functions[op.data].vars);
+            fprintf(file, "jmp rax\n");
             break;
 
         case OP_HALT:
@@ -2385,10 +2448,12 @@ void test_free(Test *test)
 {
     if (test->out.size != 0) {
         munmap(test->out.data, test->out.size);
+        test->out.size = 0;
     }
 
     if (test->err.size != 0) {
         munmap(test->err.data, test->err.size);
+        test->err.size = 0;
     }
 }
 
@@ -2495,7 +2560,7 @@ bool test_file(char *program, char *path)
 
     munmap(contents_save.data, contents_save.size);
     test_free(&actual);
-    return failed;
+    return !failed;
 }
 
 // Main
