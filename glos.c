@@ -263,6 +263,7 @@ enum {
     TOKEN_BOOL,
     TOKEN_IDENT,
 
+    TOKEN_COMMA,
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_LBRACE,
@@ -304,7 +305,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -319,6 +320,9 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_IDENT:
         return "identifier";
+
+    case TOKEN_COMMA:
+        return "','";
 
     case TOKEN_LPAREN:
         return "'('";
@@ -479,7 +483,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -559,6 +563,10 @@ Token lexer_next(void)
         }
     } else {
         switch (lexer_consume()) {
+        case ',':
+            token.kind = TOKEN_COMMA;
+            break;
+
         case '(':
             token.kind = TOKEN_LPAREN;
             break;
@@ -690,6 +698,20 @@ Token lexer_expect(int kind)
     return token;
 }
 
+Token lexer_either(int a, int b)
+{
+    Token token = lexer_next();
+    if (token.kind != a && token.kind != b) {
+        print_pos(stderr, token.pos);
+        fprintf(stderr, "error: expected %s or %s, got %s\n",
+                cstr_from_token_kind(a),
+                cstr_from_token_kind(b),
+                cstr_from_token_kind(token.kind));
+        exit(1);
+    }
+    return token;
+}
+
 bool lexer_peek_row(Token *token)
 {
     *token = lexer_peek();
@@ -731,6 +753,8 @@ enum {
     COUNT_NODES
 };
 
+#define NODE_CALL_ARGS 0
+
 #define NODE_CAST_TYPE 0
 #define NODE_CAST_EXPR 1
 
@@ -748,7 +772,8 @@ enum {
 #define NODE_FOR_COND 0
 #define NODE_FOR_BODY 1
 
-#define NODE_FN_BODY 0
+#define NODE_FN_ARGS 0
+#define NODE_FN_BODY 1
 
 #define NODE_LET_EXPR 0
 #define NODE_LET_TYPE 1
@@ -803,7 +828,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -845,7 +870,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -927,7 +952,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -948,7 +973,19 @@ size_t parse_expr(int mbp)
         if (lexer_peek_row(&lexer.buffer) && lexer.buffer.kind == TOKEN_LPAREN) {
             lexer.peeked = false;
             node = node_new(NODE_CALL, token);
-            lexer_expect(TOKEN_RPAREN);
+
+            nodes[node].token.data = 0;
+            if (!lexer_read(TOKEN_RPAREN)) {
+                size_t *args = &nodes[node].nodes[NODE_CALL_ARGS];
+                while (true) {
+                    args = node_list_push(args, parse_expr(POWER_SET));
+                    token = lexer_either(TOKEN_COMMA, TOKEN_RPAREN);
+                    nodes[node].token.data += 1;
+                    if (token.kind == TOKEN_RPAREN) {
+                        break;
+                    }
+                }
+            }
         } else {
             node = node_new(NODE_ATOM, token);
         }
@@ -1017,7 +1054,15 @@ void local_assert(Token token, bool expected)
     }
 }
 
-static_assert(COUNT_TOKENS == 34);
+size_t parse_decl(void)
+{
+    size_t node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT));
+    nodes[node].token.data = parser_local;
+    nodes[node].nodes[NODE_LET_TYPE] = parse_type();
+    return node;
+}
+
+static_assert(COUNT_TOKENS == 35);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1059,10 +1104,20 @@ size_t parse_stmt(void)
         local_assert(token, false);
         node = node_new(NODE_FN, lexer_expect(TOKEN_IDENT));
         lexer_expect(TOKEN_LPAREN);
-        lexer_expect(TOKEN_RPAREN);
+        parser_local = true;
+
+        if (!lexer_read(TOKEN_RPAREN)) {
+            size_t *args = &nodes[node].nodes[NODE_FN_ARGS];
+            while (true) {
+                args = node_list_push(args, parse_decl());
+                token = lexer_either(TOKEN_COMMA, TOKEN_RPAREN);
+                if (token.kind == TOKEN_RPAREN) {
+                    break;
+                }
+            }
+        }
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
-        parser_local = true;
         nodes[node].nodes[NODE_FN_BODY] = parse_stmt();
         parser_local = false;
         break;
@@ -1107,7 +1162,7 @@ size_t parse_stmt(void)
 
 // Constant Evaluator
 static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1130,7 +1185,7 @@ void eval_const_unary(size_t node)
 }
 
 static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1306,16 +1361,19 @@ bool variables_find(Str name, size_t *index)
 
 typedef struct {
     size_t node;
+    size_t args;
     size_t vars;
+    size_t arity;
 } Function;
 
 Function functions[SCOPE_CAP];
 size_t functions_count;
 
-void functions_push(size_t node)
+void functions_push(size_t node, size_t arity)
 {
     assert(functions_count < SCOPE_CAP);
     functions[functions_count].node = node;
+    functions[functions_count].arity = arity;
     functions_count += 1;
 }
 
@@ -1427,7 +1485,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1555,7 +1613,7 @@ void check_type(size_t node)
 }
 
 static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1601,6 +1659,23 @@ void check_expr(size_t node, bool ref)
         size_t index;
         if (!functions_find(nodes[node].token.str, &index)) {
             error_undefined(node, "function");
+        }
+
+        if (nodes[node].token.data != functions[index].arity) {
+            print_pos(stderr, nodes[node].token.pos);
+            fprintf(stderr, "error: expected %zu arguments, got %zu\n",
+                    functions[index].arity, nodes[node].token.data);
+            exit(1);
+        }
+
+        size_t call = nodes[node].nodes[NODE_CALL_ARGS];
+        size_t real = nodes[functions[index].node].nodes[NODE_FN_ARGS];
+        while (real != 0) {
+            check_expr(call, false);
+            type_assert(call, nodes[real].type);
+
+            call = nodes[call].next;
+            real = nodes[real].next;
         }
 
         nodes[node].token.data = index;
@@ -1713,7 +1788,7 @@ void check_expr(size_t node, bool ref)
 }
 
 static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1754,11 +1829,27 @@ void check_stmt(size_t node)
             error_redefinition(node, functions[prev].node, "function");
         }
 
+        size_t arity = 0;
+        size_t variables_count_save = variables_count;
+        for (size_t arg = nodes[node].nodes[NODE_FN_ARGS]; arg != 0; arg = nodes[arg].next) {
+            check_stmt(arg);
+            arity += 1;
+        }
+
+        if (str_eq(nodes[node].token.str, str_from_cstr("main"))) {
+            if (arity != 0) {
+                print_pos(stderr, nodes[nodes[node].nodes[NODE_FN_ARGS]].token.pos);
+                fprintf(stderr, "error: function 'main' cannot take arguments\n");
+                exit(1);
+            }
+        }
+
         nodes[node].type = type_new(TYPE_NIL, 0, 0);
         nodes[node].token.data = functions_count;
-        functions_push(node);
+        functions_push(node, arity);
 
         check_stmt(nodes[node].nodes[NODE_FN_BODY]);
+        variables_count = variables_count_save;
     } break;
 
     case NODE_LET: {
@@ -1767,6 +1858,11 @@ void check_stmt(size_t node)
         size_t expr = nodes[node].nodes[NODE_LET_EXPR];
         if (expr != 0) {
             check_expr(expr, false);
+            if (type_eq(nodes[expr].type, type_new(TYPE_NIL, 0, 0))) {
+                print_pos(stderr, nodes[expr].token.pos);
+                fprintf(stderr, "error: cannot declare variable with type 'nil'\n");
+                exit(1);
+            }
             nodes[node].type = nodes[expr].type;
         } else {
             expr = nodes[node].nodes[NODE_LET_TYPE];
@@ -1961,12 +2057,13 @@ void print_op(FILE *file, Op op)
 
     case OP_CALL: {
         Function *function = &functions[op.data];
-        fprintf(file, "call addr=%zu, vars=%zu\n", nodes[function->node].token.data, function->vars);
+        fprintf(file, "call addr=%zu, args=%zu, vars=%zu\n", nodes[function->node].token.data, function->args, function->vars);
     } break;
 
-    case OP_RET:
-        fprintf(file, "ret %zu\n", op.data);
-        break;
+    case OP_RET: {
+        Function *function = &functions[op.data];
+        fprintf(file, "ret args=%zu, vars=%zu\n", function->args, function->vars);
+    } break;
 
     case OP_HALT:
         fprintf(file, "halt\n");
@@ -2058,7 +2155,7 @@ void compile_ref(size_t node)
 }
 
 static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2083,6 +2180,9 @@ void compile_expr(size_t node, bool ref)
         break;
 
     case NODE_CALL:
+        for (size_t arg = nodes[node].nodes[NODE_CALL_ARGS]; arg != 0; arg = nodes[arg].next) {
+            compile_expr(arg, false);
+        }
         ops_push(OP_CALL, nodes[node].token.data);
         break;
 
@@ -2237,7 +2337,7 @@ void compile_expr(size_t node, bool ref)
 }
 
 static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 34);
+static_assert(COUNT_TOKENS == 35);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2287,10 +2387,17 @@ void compile_stmt(size_t node)
         size_t function = nodes[node].token.data;
         nodes[node].token.data = ops_count;
 
+        size_t local_size_save = local_size;
+        for (size_t arg = nodes[node].nodes[NODE_FN_ARGS]; arg != 0; arg = nodes[arg].next) {
+            compile_stmt(arg);
+        }
+        functions[function].args = local_size;
+
         compile_stmt(nodes[node].nodes[NODE_FN_BODY]);
         ops_push(OP_RET, function);
 
-        functions[function].vars = local_max;
+        functions[function].vars = local_max - functions[function].args;
+        local_size = local_size_save;
     } break;
 
     case NODE_LET: {
@@ -2536,15 +2643,16 @@ void generate(char *path)
             Function *function = &functions[op.data];
             fprintf(file, "sub rsp, %zu\n", function->vars);
             fprintf(file, "push rbp\n");
-            fprintf(file, "lea rbp, [rsp+%zu]\n", function->vars + 8);
+            fprintf(file, "lea rbp, [rsp+%zu]\n", function->args + function->vars + 8);
             fprintf(file, "call I%zu\n", nodes[function->node].token.data);
         } break;
 
-        case OP_RET:
+        case OP_RET: {
+            Function *function = &functions[op.data];
             fprintf(file, "pop rax\n");
-            fprintf(file, "add rsp, %zu\n", functions[op.data].vars);
+            fprintf(file, "add rsp, %zu\n", function->args + function->vars);
             fprintf(file, "jmp rax\n");
-            break;
+        } break;
 
         case OP_HALT:
             fprintf(file, "mov rax, 60\n");
