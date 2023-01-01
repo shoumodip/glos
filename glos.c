@@ -1358,9 +1358,9 @@ void constants_push(size_t node)
 
 bool constants_find(Str name, size_t *index)
 {
-    for (size_t i = 0; i < constants_count; i += 1) {
-        if (str_eq(nodes[constants[i]].token.str, name)) {
-            *index = i;
+    for (size_t i = constants_count; i > 0; i -= 1) {
+        if (str_eq(nodes[constants[i - 1]].token.str, name)) {
+            *index = i - 1;
             return true;
         }
     }
@@ -1379,9 +1379,9 @@ void variables_push(size_t node)
 
 bool variables_find(Str name, size_t *index)
 {
-    for (size_t i = 0; i < variables_count; i += 1) {
-        if (str_eq(nodes[variables[i]].token.str, name)) {
-            *index = i;
+    for (size_t i = variables_count; i > 0; i -= 1) {
+        if (str_eq(nodes[variables[i - 1]].token.str, name)) {
+            *index = i - 1;
             return true;
         }
     }
@@ -1441,15 +1441,13 @@ void error_redefinition(size_t node, size_t prev, char *name)
     exit(1);
 }
 
-void check_identifier_redefinition(size_t node)
+void check_redefinition(size_t node, size_t list, char *name)
 {
-    size_t prev;
-    if (constants_find(nodes[node].token.str, &prev)) {
-        error_redefinition(node, constants[prev], "constant");
-    }
-
-    if (variables_find(nodes[node].token.str, &prev)) {
-        error_redefinition(node, variables[prev], "variable");
+    while (list != 0 && list != node) {
+        if (str_eq(nodes[list].token.str, nodes[node].token.str)) {
+            error_redefinition(node, list, name);
+        }
+        list = nodes[list].next;
     }
 }
 
@@ -1861,7 +1859,9 @@ void check_stmt(size_t node)
 
         size_t arity = 0;
         size_t variables_count_save = variables_count;
-        for (size_t arg = nodes[node].nodes[NODE_FN_ARGS]; arg != 0; arg = nodes[arg].next) {
+        size_t args = nodes[node].nodes[NODE_FN_ARGS];
+        for (size_t arg = args; arg != 0; arg = nodes[arg].next) {
+            check_redefinition(arg, args, "argument");
             check_stmt(arg);
             arity += 1;
         }
@@ -1892,8 +1892,6 @@ void check_stmt(size_t node)
     } break;
 
     case NODE_LET: {
-        check_identifier_redefinition(node);
-
         size_t expr = nodes[node].nodes[NODE_LET_EXPR];
         if (expr != 0) {
             check_expr(expr, false);
@@ -1913,8 +1911,6 @@ void check_stmt(size_t node)
     } break;
 
     case NODE_CONST: {
-        check_identifier_redefinition(node);
-
         size_t expr = nodes[node].nodes[NODE_CONST_EXPR];
         check_const(expr);
         nodes[node].type = nodes[expr].type;
