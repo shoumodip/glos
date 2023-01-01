@@ -302,11 +302,13 @@ enum {
     TOKEN_CONST,
 
     TOKEN_ASSERT,
+    TOKEN_RETURN,
+
     TOKEN_PRINT,
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_TOKENS == 37);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -415,6 +417,9 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_ASSERT:
         return "keyword 'assert'";
 
+    case TOKEN_RETURN:
+        return "keyword 'return'";
+
     case TOKEN_PRINT:
         return "keyword 'print'";
 
@@ -487,7 +492,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_TOKENS == 37);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -562,6 +567,8 @@ Token lexer_next(void)
             token.kind = TOKEN_CONST;
         } else if (str_eq(token.str, str_from_cstr("assert"))) {
             token.kind = TOKEN_ASSERT;
+        } else if (str_eq(token.str, str_from_cstr("return"))) {
+            token.kind = TOKEN_RETURN;
         } else if (str_eq(token.str, str_from_cstr("print"))) {
             token.kind = TOKEN_PRINT;
         } else {
@@ -754,6 +761,8 @@ enum {
     NODE_CONST,
 
     NODE_ASSERT,
+    NODE_RETURN,
+
     NODE_PRINT,
     COUNT_NODES
 };
@@ -778,7 +787,8 @@ enum {
 #define NODE_FOR_BODY 1
 
 #define NODE_FN_ARGS 0
-#define NODE_FN_BODY 1
+#define NODE_FN_TYPE 1
+#define NODE_FN_BODY 2
 
 #define NODE_LET_EXPR 0
 #define NODE_LET_TYPE 1
@@ -786,6 +796,8 @@ enum {
 #define NODE_CONST_EXPR 0
 
 #define NODE_ASSERT_EXPR 0
+
+#define NODE_RETURN_EXPR 0
 
 #define NODE_PRINT_EXPR 0
 
@@ -834,7 +846,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_TOKENS == 37);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -879,7 +891,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_TOKENS == 37);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -962,7 +974,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_TOKENS == 37);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1066,7 +1078,7 @@ size_t parse_decl(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_TOKENS == 37);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1121,6 +1133,11 @@ size_t parse_stmt(void)
             }
         }
 
+        token = lexer_peek();
+        if (token.kind != TOKEN_LBRACE) {
+            nodes[node].nodes[NODE_FN_TYPE] = parse_type();
+        }
+
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
         nodes[node].nodes[NODE_FN_BODY] = parse_stmt();
         parser_local = false;
@@ -1149,6 +1166,14 @@ size_t parse_stmt(void)
         lexer_expect(TOKEN_RPAREN);
         break;
 
+    case TOKEN_RETURN:
+        local_assert(token, true);
+        node = node_new(NODE_RETURN, token);
+        if (lexer_peek_row(&token)) {
+            nodes[node].nodes[NODE_RETURN_EXPR] = parse_expr(POWER_SET);
+        }
+        break;
+
     case TOKEN_PRINT:
         local_assert(token, true);
         node = node_new(NODE_PRINT, token);
@@ -1165,8 +1190,8 @@ size_t parse_stmt(void)
 }
 
 // Constant Evaluator
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 37);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1188,8 +1213,8 @@ void eval_const_unary(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 37);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1367,11 +1392,14 @@ typedef struct {
     size_t node;
     size_t args;
     size_t vars;
+
+    size_t ret;
     size_t arity;
 } Function;
 
 Function functions[SCOPE_CAP];
 size_t functions_count;
+size_t functions_current;
 
 void functions_push(size_t node, size_t arity)
 {
@@ -1488,8 +1516,8 @@ Type type_assert_pointer(size_t node)
     return actual;
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 37);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1616,8 +1644,8 @@ void check_type(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 37);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1789,8 +1817,8 @@ void check_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 37);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1846,8 +1874,17 @@ void check_stmt(size_t node)
             }
         }
 
-        nodes[node].type = type_new(TYPE_NIL, 0, 0);
+        size_t ret = nodes[node].nodes[NODE_FN_TYPE];
+        if (ret != 0) {
+            check_type(ret);
+            nodes[node].type = nodes[ret].type;
+        } else {
+            nodes[node].type = type_new(TYPE_NIL, 0, 0);
+        }
+
         nodes[node].token.data = functions_count;
+
+        functions_current = functions_count;
         functions_push(node, arity);
 
         check_stmt(nodes[node].nodes[NODE_FN_BODY]);
@@ -1894,6 +1931,17 @@ void check_stmt(size_t node)
             fprintf(stderr, "assertion failed\n");
             exit(1);
         }
+    } break;
+
+    case NODE_RETURN: {
+        size_t expr = nodes[node].nodes[NODE_RETURN_EXPR];
+        if (expr != 0) {
+            check_expr(expr, false);
+            nodes[node].type = nodes[expr].type;
+        } else {
+            nodes[node].type = type_new(TYPE_NIL, 0, 0);
+        }
+        type_assert(node, nodes[functions[functions_current].node].type);
     } break;
 
     case NODE_PRINT: {
@@ -2064,7 +2112,7 @@ void print_op(FILE *file, Op op)
 
     case OP_RET: {
         Function *function = &functions[op.data];
-        fprintf(file, "ret args=%zu, vars=%zu\n", function->args, function->vars);
+        fprintf(file, "ret args=%zu, vars=%zu size=%zu\n", function->args, function->vars, function->ret);
     } break;
 
     case OP_HALT:
@@ -2156,8 +2204,8 @@ void compile_ref(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 37);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2338,8 +2386,8 @@ void compile_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 12);
-static_assert(COUNT_TOKENS == 36);
+static_assert(COUNT_NODES == 13);
+static_assert(COUNT_TOKENS == 37);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2386,19 +2434,24 @@ void compile_stmt(size_t node)
         local_max = 0;
         local_size = 0;
 
-        size_t function = nodes[node].token.data;
+        functions_current = nodes[node].token.data;
+        Function *function = &functions[functions_current];
+
         nodes[node].token.data = ops_count;
 
         size_t local_size_save = local_size;
         for (size_t arg = nodes[node].nodes[NODE_FN_ARGS]; arg != 0; arg = nodes[arg].next) {
             compile_stmt(arg);
         }
-        functions[function].args = local_size;
+        function->args = local_size;
+        function->ret = type_size(nodes[node].type);
 
         compile_stmt(nodes[node].nodes[NODE_FN_BODY]);
-        ops_push(OP_RET, function);
+        if (function->ret == 0) {
+            ops_push(OP_RET, functions_current);
+        }
 
-        functions[function].vars = local_max - functions[function].args;
+        function->vars = max(local_max, function->ret) - function->args;
         local_size = local_size_save;
     } break;
 
@@ -2421,6 +2474,17 @@ void compile_stmt(size_t node)
     case NODE_CONST:
     case NODE_ASSERT:
         break;
+
+    case NODE_RETURN: {
+        size_t expr = nodes[node].nodes[NODE_RETURN_EXPR];
+        if (expr != 0) {
+            size_t size = functions[functions_current].ret;
+            ops_push(OP_LPTR, align(size));
+            compile_expr(expr, false);
+            ops_push(OP_STORE, size);
+        }
+        ops_push(OP_RET, functions_current);
+    } break;
 
     case NODE_PRINT:
         compile_expr(nodes[node].nodes[NODE_PRINT_EXPR], false);
@@ -2652,7 +2716,8 @@ void generate(char *path)
         case OP_RET: {
             Function *function = &functions[op.data];
             fprintf(file, "pop rax\n");
-            fprintf(file, "add rsp, %zu\n", function->args + function->vars);
+            fprintf(file, "pop rbp\n");
+            fprintf(file, "add rsp, %zu\n", function->args + function->vars - function->ret);
             fprintf(file, "jmp rax\n");
         } break;
 

@@ -1,5 +1,5 @@
 ##
-stdout: 20
+stdout: 27
 0
 1
 2
@@ -10,6 +10,8 @@ stdout: 20
 3
 4
 5
+69
+420
 ##
 
 fn list(i int, n int) {
@@ -19,7 +21,17 @@ fn list(i int, n int) {
     }
 }
 
+fn add(a int, b int) int {
+    return a + b
+}
+
+fn nice() int {
+    return 420
+}
+
 fn main() {
     list(0, 5)
     list(1, 6)
+    print add(34, 35)
+    print nice()
 }
