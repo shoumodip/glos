@@ -108,7 +108,7 @@ Str str_from_cstr(char *data)
 bool int_from_str(Str str, size_t *out)
 {
     size_t n = 0;
-    for (size_t i = 0; i < str.size; ++i) {
+    for (size_t i = 0; i < str.size; i += 1) {
         if (isdigit(str.data[i])) {
             n = n * 10 + str.data[i] - '0';
         } else {
@@ -263,6 +263,7 @@ enum {
     TOKEN_BOOL,
     TOKEN_IDENT,
 
+    TOKEN_DOT,
     TOKEN_COMMA,
     TOKEN_LPAREN,
     TOKEN_RPAREN,
@@ -300,6 +301,7 @@ enum {
     TOKEN_FN,
     TOKEN_LET,
     TOKEN_CONST,
+    TOKEN_STRUCT,
 
     TOKEN_ASSERT,
     TOKEN_RETURN,
@@ -308,7 +310,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_TOKENS == 39);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -323,6 +325,9 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_IDENT:
         return "identifier";
+
+    case TOKEN_DOT:
+        return "'.'";
 
     case TOKEN_COMMA:
         return "','";
@@ -414,6 +419,9 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_CONST:
         return "keyword 'const'";
 
+    case TOKEN_STRUCT:
+        return "keyword 'struct'";
+
     case TOKEN_ASSERT:
         return "keyword 'assert'";
 
@@ -492,7 +500,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_TOKENS == 39);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -565,6 +573,8 @@ Token lexer_next(void)
             token.kind = TOKEN_LET;
         } else if (str_eq(token.str, str_from_cstr("const"))) {
             token.kind = TOKEN_CONST;
+        } else if (str_eq(token.str, str_from_cstr("struct"))) {
+            token.kind = TOKEN_STRUCT;
         } else if (str_eq(token.str, str_from_cstr("assert"))) {
             token.kind = TOKEN_ASSERT;
         } else if (str_eq(token.str, str_from_cstr("return"))) {
@@ -576,6 +586,10 @@ Token lexer_next(void)
         }
     } else {
         switch (lexer_consume()) {
+        case '.':
+            token.kind = TOKEN_DOT;
+            break;
+
         case ',':
             token.kind = TOKEN_COMMA;
             break;
@@ -737,6 +751,7 @@ enum {
     TYPE_INT,
     TYPE_BOOL,
     TYPE_ARRAY,
+    TYPE_STRUCT,
     COUNT_TYPES
 };
 
@@ -759,6 +774,7 @@ enum {
     NODE_FN,
     NODE_LET,
     NODE_CONST,
+    NODE_STRUCT,
 
     NODE_ASSERT,
     NODE_RETURN,
@@ -794,6 +810,8 @@ enum {
 #define NODE_LET_TYPE 1
 
 #define NODE_CONST_EXPR 0
+
+#define NODE_STRUCT_FIELDS 0
 
 #define NODE_ASSERT_EXPR 0
 
@@ -833,6 +851,18 @@ size_t *node_list_push(size_t *list, size_t node)
     return list;
 }
 
+bool node_list_find(size_t list, size_t node)
+{
+    while (list != 0) {
+        if (str_eq(nodes[list].token.str, nodes[node].token.str)) {
+            nodes[node].token.data = list;
+            return true;
+        }
+        list = nodes[list].next;
+    }
+    return false;
+}
+
 // Parser
 enum {
     POWER_NIL,
@@ -843,13 +873,17 @@ enum {
     POWER_MUL,
     POWER_AS,
     POWER_PRE,
+    POWER_DOT,
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_TOKENS == 39);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
+    case TOKEN_DOT:
+        return POWER_DOT;
+
     case TOKEN_LBRACKET:
         return POWER_IDX;
 
@@ -891,7 +925,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_TOKENS == 39);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -934,6 +968,7 @@ size_t parse_const(int mbp)
         nodes[binary].nodes[NODE_BINARY_LHS] = node;
         switch (token.kind) {
         case TOKEN_AS:
+        case TOKEN_DOT:
         case TOKEN_LBRACKET:
             error_unexpected(token);
             break;
@@ -974,7 +1009,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_TOKENS == 39);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1039,6 +1074,10 @@ size_t parse_expr(int mbp)
         size_t binary = node_new(NODE_BINARY, token);
         nodes[binary].nodes[NODE_BINARY_LHS] = node;
         switch (token.kind) {
+        case TOKEN_DOT:
+            nodes[binary].nodes[NODE_BINARY_RHS] = node_new(NODE_ATOM, lexer_expect(TOKEN_IDENT));
+            break;
+
         case TOKEN_LBRACKET:
             nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(POWER_SET);
             lexer_expect(TOKEN_RBRACKET);
@@ -1078,7 +1117,7 @@ size_t parse_decl(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_TOKENS == 39);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1138,8 +1177,19 @@ size_t parse_stmt(void)
             nodes[node].nodes[NODE_FN_TYPE] = parse_type();
         }
 
-        lexer_buffer(lexer_expect(TOKEN_LBRACE));
-        nodes[node].nodes[NODE_FN_BODY] = parse_stmt();
+        lexer_expect(TOKEN_LBRACE);
+        nodes[node].nodes[NODE_FN_BODY] = node_new(NODE_BLOCK, token);
+        for (size_t *list = &nodes[nodes[node].nodes[NODE_FN_BODY]].nodes[NODE_BLOCK_START]; !lexer_read(TOKEN_RBRACE); ) {
+            token = lexer_peek();
+            list = node_list_push(list, parse_stmt());
+        }
+
+        if (nodes[node].nodes[NODE_FN_TYPE] != 0 && token.kind != TOKEN_RETURN) {
+            print_pos(stderr, lexer.buffer.pos);
+            fprintf(stderr, "error: expected keyword 'return' before '}'\n");
+            exit(1);
+        }
+
         parser_local = false;
         break;
 
@@ -1158,6 +1208,16 @@ size_t parse_stmt(void)
         lexer_expect(TOKEN_SET);
         nodes[node].nodes[NODE_CONST_EXPR] = parse_const(POWER_SET);
         break;
+
+    case TOKEN_STRUCT: {
+        node = node_new(NODE_STRUCT, lexer_expect(TOKEN_IDENT));
+        lexer_expect(TOKEN_LBRACE);
+
+        size_t *fields = &nodes[node].nodes[NODE_STRUCT_FIELDS];
+        while (!lexer_read(TOKEN_RBRACE)) {
+            fields = node_list_push(fields, parse_decl());
+        }
+    } break;
 
     case TOKEN_ASSERT:
         node = node_new(NODE_ASSERT, token);
@@ -1190,8 +1250,8 @@ size_t parse_stmt(void)
 }
 
 // Constant Evaluator
-static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_NODES == 14);
+static_assert(COUNT_TOKENS == 39);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1213,8 +1273,8 @@ void eval_const_unary(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_NODES == 14);
+static_assert(COUNT_TOKENS == 39);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1314,10 +1374,10 @@ Type type_deref(Type type)
     return type;
 }
 
-static_assert(COUNT_TYPES == 4);
+static_assert(COUNT_TYPES == 5);
 void print_type(FILE *file, Type type)
 {
-    for (size_t i = 0; i < type.ref; ++i) {
+    for (size_t i = 0; i < type.ref; i += 1) {
         fprintf(file, "*");
     }
 
@@ -1337,6 +1397,10 @@ void print_type(FILE *file, Type type)
     case TYPE_ARRAY:
         fprintf(file, "[%zu]", nodes[nodes[type.data].nodes[NODE_BINARY_LHS]].token.data);
         print_type(file, nodes[nodes[type.data].nodes[NODE_BINARY_RHS]].type);
+        break;
+
+    case TYPE_STRUCT:
+        print_str(file, nodes[type.data].token.str);
         break;
 
     default: assert(0 && "unreachable");
@@ -1414,6 +1478,27 @@ bool functions_find(Str name, size_t *index)
     for (size_t i = 0; i < functions_count; i += 1) {
         if (str_eq(nodes[functions[i].node].token.str, name)) {
             *index = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+size_t structures[SCOPE_CAP];
+size_t structures_count;
+
+void structures_push(size_t node)
+{
+    assert(structures_count < SCOPE_CAP);
+    structures[structures_count] = node;
+    structures_count += 1;
+}
+
+bool structures_find(Str name, size_t *index)
+{
+    for (size_t i = structures_count; i > 0; i -= 1) {
+        if (str_eq(nodes[structures[i - 1]].token.str, name)) {
+            *index = i - 1;
             return true;
         }
     }
@@ -1514,8 +1599,8 @@ Type type_assert_pointer(size_t node)
     return actual;
 }
 
-static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_NODES == 14);
+static_assert(COUNT_TOKENS == 39);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1611,6 +1696,8 @@ void check_type(size_t node)
             nodes[node].type = type_new(TYPE_INT, 0, 0);
         } else if (str_eq(nodes[node].token.str, str_from_cstr("bool"))) {
             nodes[node].type = type_new(TYPE_BOOL, 0, 0);
+        } else if (structures_find(nodes[node].token.str, &nodes[node].token.data)) {
+            nodes[node].type = type_new(TYPE_STRUCT, 0, nodes[node].token.data);
         } else {
             error_undefined(node, "type");
         }
@@ -1642,8 +1729,8 @@ void check_type(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_NODES == 14);
+static_assert(COUNT_TOKENS == 39);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1754,8 +1841,36 @@ void check_expr(size_t node, bool ref)
         size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
 
         switch (nodes[node].token.kind) {
+        case TOKEN_DOT:
+            check_expr(lhs, false);
+            if (nodes[lhs].type.kind != TYPE_STRUCT) {
+                print_pos(stderr, nodes[lhs].token.pos);
+                fprintf(stderr, "error: expected structure value, got '");
+                print_type(stderr, nodes[lhs].type);
+                fprintf(stderr, "'\n");
+                exit(1);
+            }
+
+            size_t real = nodes[lhs].type.data;
+            if (!node_list_find(nodes[real].nodes[NODE_STRUCT_FIELDS], rhs)) {
+                print_pos(stderr, nodes[rhs].token.pos);
+                fprintf(stderr, "error: undefined field '");
+                print_str(stderr, nodes[rhs].token.str);
+                fprintf(stderr, "' in structure '");
+                print_str(stderr, nodes[real].token.str);
+                fprintf(stderr, "'\n");
+
+                print_pos(stderr, nodes[real].token.pos);
+                fprintf(stderr, "note: defined here\n");
+                exit(1);
+            }
+
+            nodes[node].type = nodes[nodes[rhs].token.data].type;
+            break;
+
         case TOKEN_LBRACKET:
             check_expr(lhs, false);
+            ref_prevent(lhs, nodes[lhs].kind == NODE_CALL && type_isarray(nodes[lhs].type));
             check_expr(rhs, false);
             nodes[node].type = type_deref(type_assert_pointer(lhs));
             type_assert(rhs, type_new(TYPE_INT, 0, 0));
@@ -1815,8 +1930,8 @@ void check_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_NODES == 14);
+static_assert(COUNT_TOKENS == 39);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1918,6 +2033,34 @@ void check_stmt(size_t node)
         constants_push(node);
     } break;
 
+    case NODE_STRUCT: {
+        size_t prev;
+        if (structures_find(nodes[node].token.str, &prev)) {
+            error_redefinition(node, structures[prev], "structure");
+        }
+
+        if (str_eq(nodes[node].token.str, str_from_cstr("nil")) ||
+            str_eq(nodes[node].token.str, str_from_cstr("int")) ||
+            str_eq(nodes[node].token.str, str_from_cstr("bool")))
+        {
+            print_pos(stderr, nodes[node].token.pos);
+            fprintf(stderr, "error: redefinition of builtin type '");
+            print_str(stderr, nodes[node].token.str);
+            fprintf(stderr, "'\n");
+            exit(1);
+        }
+
+        size_t fields = nodes[node].nodes[NODE_FN_ARGS];
+        for (size_t field = fields; field != 0; field = nodes[field].next) {
+            check_redefinition(field, fields, "field");
+            size_t type = nodes[field].nodes[NODE_LET_TYPE];
+            check_type(type);
+            nodes[field].type = nodes[type].type;
+        }
+
+        structures_push(node);
+    } break;
+
     case NODE_ASSERT: {
         size_t expr = nodes[node].nodes[NODE_ASSERT_EXPR];
         check_const(expr);
@@ -1979,6 +2122,7 @@ enum {
     OP_LOAD,
     OP_STORE,
 
+    OP_FIELD,
     OP_INDEX,
 
     OP_GOTO,
@@ -1997,7 +2141,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 29);
+static_assert(COUNT_OPS == 30);
 void print_op(FILE *file, Op op)
 {
     switch (op.kind) {
@@ -2089,6 +2233,10 @@ void print_op(FILE *file, Op op)
         fprintf(file, "store %zu\n", op.data);
         break;
 
+    case OP_FIELD:
+        fprintf(file, "field %zu\n", op.data);
+        break;
+
     case OP_INDEX:
         fprintf(file, "index %zu\n", op.data);
         break;
@@ -2149,7 +2297,7 @@ size_t align(size_t n)
     return (n + 7) & -8;
 }
 
-static_assert(COUNT_TYPES == 4);
+static_assert(COUNT_TYPES == 5);
 size_t type_size(Type type)
 {
     if (type.ref > 0) {
@@ -2171,6 +2319,9 @@ size_t type_size(Type type)
         size_t count = nodes[nodes[type.data].nodes[NODE_BINARY_LHS]].token.data;
         return base * count;
     }
+
+    case TYPE_STRUCT:
+        return nodes[type.data].token.data;
 
     default: assert(0 && "unreachable");
     }
@@ -2200,8 +2351,8 @@ void compile_ref(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_NODES == 14);
+static_assert(COUNT_TOKENS == 39);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2271,6 +2422,18 @@ void compile_expr(size_t node, bool ref)
         size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
 
         switch (nodes[node].token.kind) {
+        case TOKEN_DOT:
+            compile_expr(lhs, true);
+            for (size_t i = 0; i < nodes[lhs].type.ref; i += 1) {
+                ops_push(OP_LOAD, 8);
+            }
+
+            ops_push(OP_FIELD, nodes[nodes[rhs].token.data].token.data);
+            if (!ref) {
+                ops_push(OP_LOAD, type_size(nodes[node].type));
+            }
+            break;
+
         case TOKEN_LBRACKET: {
             bool array = type_isarray(nodes[lhs].type);
             compile_expr(lhs, array);
@@ -2382,8 +2545,8 @@ void compile_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 13);
-static_assert(COUNT_TOKENS == 37);
+static_assert(COUNT_NODES == 14);
+static_assert(COUNT_TOKENS == 39);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2471,6 +2634,14 @@ void compile_stmt(size_t node)
     case NODE_ASSERT:
         break;
 
+    case NODE_STRUCT:
+        nodes[node].token.data = 0;
+        for (size_t field = nodes[node].nodes[NODE_STRUCT_FIELDS]; field != 0; field = nodes[field].next) {
+            nodes[field].token.data = nodes[node].token.data;
+            nodes[node].token.data += align(type_size(nodes[field].type));
+        }
+        break;
+
     case NODE_RETURN: {
         size_t expr = nodes[node].nodes[NODE_RETURN_EXPR];
         if (expr != 0) {
@@ -2494,7 +2665,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 29);
+static_assert(COUNT_OPS == 30);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -2506,7 +2677,7 @@ void generate(char *path)
     fprintf(file, "format elf64 executable\n");
     fprintf(file, "segment readable executable\n");
 
-    for (size_t i = 0; i < ops_count; ++i) {
+    for (size_t i = 0; i < ops_count; i += 1) {
         Op op = ops[i];
 
         fprintf(file, "I%zu: ; ", i);
@@ -2682,6 +2853,10 @@ void generate(char *path)
                 }
                 fprintf(file, "add rsp, %zu\n", op.data + 8);
             }
+            break;
+
+        case OP_FIELD:
+            fprintf(file, "add qword [rsp], %zu\n", op.data);
             break;
 
         case OP_INDEX:
@@ -2945,7 +3120,7 @@ int main(int argc, char **argv)
     switch (mode) {
     case MODE_TEST_RUN: {
         bool first = true;
-        for (int i = 2; i < argc; ++i) {
+        for (int i = 2; i < argc; i += 1) {
             if (str_ends_with(str_from_cstr(argv[i]), str_from_cstr(".glos"))) {
                 if (first) {
                     first = false;
@@ -2972,7 +3147,7 @@ int main(int argc, char **argv)
         size_t total = 0;
         size_t failed = 0;
         size_t skipped = 0;
-        for (int i = 2; i < argc; ++i) {
+        for (int i = 2; i < argc; i += 1) {
             if (str_ends_with(str_from_cstr(argv[i]), str_from_cstr(".glos"))) {
                 char *path = argv[i];
                 Str contents;
