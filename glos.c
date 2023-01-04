@@ -261,6 +261,7 @@ enum {
     TOKEN_EOF,
     TOKEN_INT,
     TOKEN_BOOL,
+    TOKEN_CHAR,
     TOKEN_IDENT,
 
     TOKEN_DOT,
@@ -313,7 +314,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -325,6 +326,9 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_BOOL:
         return "boolean";
+
+    case TOKEN_CHAR:
+        return "character";
 
     case TOKEN_IDENT:
         return "identifier";
@@ -517,7 +521,68 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 42);
+void error_invalid(char *name)
+{
+    print_pos(stderr, lexer.pos);
+    fprintf(stderr, "error: invalid %s '%c'\n", name, lexer.str.data[-1]);
+    exit(1);
+}
+
+void error_unterminated(char *name)
+{
+    print_pos(stderr, lexer.pos);
+    fprintf(stderr, "error: unterminated %s\n", name);
+    exit(1);
+}
+
+char lexer_char(char *name)
+{
+    if (lexer.str.size == 0) {
+        error_unterminated(name);
+    }
+
+    char ch = lexer_consume();
+    if (ch == '\\') {
+        if (lexer.str.size == 0) {
+            error_unterminated("escape character");
+        }
+
+        Pos pos = lexer.pos;
+        switch (lexer_consume()) {
+            case 'n':
+                ch = '\n';
+                break;
+
+            case 't':
+                ch = '\t';
+                break;
+
+            case '0':
+                ch = '\0';
+                break;
+
+            case '"':
+                ch = '"';
+                break;
+
+            case '\'':
+                ch = '\'';
+                break;
+
+            case '\\':
+                ch = '\\';
+                break;
+
+            default:
+                lexer.pos = pos;
+                error_invalid("escape character");
+        }
+    }
+
+    return ch;
+}
+
+static_assert(COUNT_TOKENS == 43);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -607,6 +672,14 @@ Token lexer_next(void)
         }
     } else {
         switch (lexer_consume()) {
+        case '\'':
+            token.kind = TOKEN_CHAR;
+            token.data = lexer_char("character");
+            if (!lexer_match('\'')) {
+                error_unterminated("character");
+            }
+            break;
+
         case '.':
             token.kind = TOKEN_DOT;
             break;
@@ -706,9 +779,8 @@ Token lexer_next(void)
             break;
 
         default:
-            print_pos(stderr, token.pos);
-            fprintf(stderr, "error: invalid character '%c'\n", *token.str.data);
-            exit(1);
+            lexer.pos = token.pos;
+            error_invalid("character");
         }
 
         token.str.size -= lexer.str.size;
@@ -773,6 +845,7 @@ enum {
     TYPE_NIL,
     TYPE_INT,
     TYPE_BOOL,
+    TYPE_CHAR,
     TYPE_ARRAY,
     TYPE_STRUCT,
     COUNT_TYPES
@@ -910,7 +983,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -958,7 +1031,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -972,6 +1045,7 @@ size_t parse_const(int mbp)
 
     case TOKEN_INT:
     case TOKEN_BOOL:
+    case TOKEN_CHAR:
     case TOKEN_IDENT:
         node = node_new(NODE_ATOM, token);
         break;
@@ -1042,7 +1116,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1056,6 +1130,7 @@ size_t parse_expr(int mbp)
 
     case TOKEN_INT:
     case TOKEN_BOOL:
+    case TOKEN_CHAR:
         node = node_new(NODE_ATOM, token);
         break;
 
@@ -1175,7 +1250,7 @@ bool imports_find(Str path)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1388,7 +1463,7 @@ size_t parse_stmt(void)
 
 // Constant Evaluator
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1411,7 +1486,7 @@ void eval_const_unary(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1511,7 +1586,7 @@ Type type_deref(Type type)
     return type;
 }
 
-static_assert(COUNT_TYPES == 5);
+static_assert(COUNT_TYPES == 6);
 void print_type(FILE *file, Type type)
 {
     for (size_t i = 0; i < type.ref; i += 1) {
@@ -1529,6 +1604,10 @@ void print_type(FILE *file, Type type)
 
     case TYPE_BOOL:
         fprintf(file, "bool");
+        break;
+
+    case TYPE_CHAR:
+        fprintf(file, "char");
         break;
 
     case TYPE_ARRAY:
@@ -1700,7 +1779,7 @@ Type type_assert(size_t node, Type expected)
 Type type_assert_arith(size_t node)
 {
     Type actual = nodes[node].type;
-    if (actual.kind != TYPE_INT && actual.ref == 0) {
+    if (actual.kind != TYPE_INT && actual.kind != TYPE_CHAR && actual.ref == 0) {
         print_pos(stderr, nodes[node].token.pos);
         fprintf(stderr, "error: expected arithmetic type, got '");
         print_type(stderr, actual);
@@ -1713,7 +1792,7 @@ Type type_assert_arith(size_t node)
 Type type_assert_scalar(size_t node)
 {
     Type actual = nodes[node].type;
-    if (actual.kind != TYPE_INT && actual.kind != TYPE_BOOL && actual.ref == 0) {
+    if (actual.kind != TYPE_INT && actual.kind != TYPE_BOOL && actual.kind != TYPE_CHAR && actual.ref == 0) {
         print_pos(stderr, nodes[node].token.pos);
         fprintf(stderr, "error: expected scalar type, got '");
         print_type(stderr, actual);
@@ -1737,7 +1816,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1749,6 +1828,10 @@ void check_const(size_t node)
 
         case TOKEN_BOOL:
             nodes[node].type = type_new(TYPE_BOOL, 0, 0);
+            break;
+
+        case TOKEN_CHAR:
+            nodes[node].type = type_new(TYPE_CHAR, 0, 0);
             break;
 
         case TOKEN_IDENT: {
@@ -1825,6 +1908,7 @@ void check_const(size_t node)
     }
 }
 
+static_assert(COUNT_TYPES == 6);
 void check_type(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1833,6 +1917,8 @@ void check_type(size_t node)
             nodes[node].type = type_new(TYPE_INT, 0, 0);
         } else if (str_eq(nodes[node].token.str, str_from_cstr("bool"))) {
             nodes[node].type = type_new(TYPE_BOOL, 0, 0);
+        } else if (str_eq(nodes[node].token.str, str_from_cstr("char"))) {
+            nodes[node].type = type_new(TYPE_CHAR, 0, 0);
         } else if (structures_find(nodes[node].token.str, &nodes[node].token.data)) {
             nodes[node].token.data = structures[nodes[node].token.data];
             nodes[node].type = type_new(TYPE_STRUCT, 0, nodes[node].token.data);
@@ -1868,7 +1954,7 @@ void check_type(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1882,6 +1968,11 @@ void check_expr(size_t node, bool ref)
         case TOKEN_BOOL:
             ref_prevent(node, ref);
             nodes[node].type = type_new(TYPE_BOOL, 0, 0);
+            break;
+
+        case TOKEN_CHAR:
+            ref_prevent(node, ref);
+            nodes[node].type = type_new(TYPE_CHAR, 0, 0);
             break;
 
         case TOKEN_IDENT: {
@@ -2096,7 +2187,7 @@ bool preds_find(size_t value, size_t start, size_t *index)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2519,7 +2610,7 @@ size_t align(size_t n)
     return (n + 7) & -8;
 }
 
-static_assert(COUNT_TYPES == 5);
+static_assert(COUNT_TYPES == 6);
 size_t type_size(Type type)
 {
     if (type.ref > 0) {
@@ -2534,6 +2625,7 @@ size_t type_size(Type type)
         return 8;
 
     case TYPE_BOOL:
+    case TYPE_CHAR:
         return 1;
 
     case TYPE_ARRAY: {
@@ -2574,7 +2666,7 @@ void compile_ref(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2582,6 +2674,7 @@ void compile_expr(size_t node, bool ref)
         switch (nodes[node].token.kind) {
         case TOKEN_INT:
         case TOKEN_BOOL:
+        case TOKEN_CHAR:
             ops_push(OP_PUSH, nodes[node].token.data);
             break;
 
@@ -2792,7 +2885,7 @@ Jumps pred_jumps;
 Jumps branch_jumps;
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 42);
+static_assert(COUNT_TOKENS == 43);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
