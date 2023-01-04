@@ -1,0 +1,12 @@
+##
+stdout: 7
+69
+420
+##
+
+use std.math
+
+fn main() {
+    print min(69, 420)
+    print max(69, 420)
+}

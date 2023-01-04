@@ -303,6 +303,7 @@ enum {
     TOKEN_CONST,
     TOKEN_STRUCT,
 
+    TOKEN_USE,
     TOKEN_ASSERT,
     TOKEN_RETURN,
 
@@ -310,7 +311,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -422,6 +423,9 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_STRUCT:
         return "keyword 'struct'";
 
+    case TOKEN_USE:
+        return "keyword 'use'";
+
     case TOKEN_ASSERT:
         return "keyword 'assert'";
 
@@ -457,6 +461,10 @@ Lexer lexer;
 void lexer_open(char *path)
 {
     if (!read_file(&lexer.str, path)) {
+        if (lexer.peeked) {
+            print_pos(stderr, lexer.buffer.pos);
+        }
+
         fprintf(stderr, "error: could not read file '%s'\n", path);
         exit(1);
     }
@@ -464,6 +472,7 @@ void lexer_open(char *path)
     lexer.pos.path = path;
     lexer.pos.row = 1;
     lexer.pos.col = 1;
+    lexer.peeked = false;
 }
 
 void lexer_buffer(Token token)
@@ -500,7 +509,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -575,6 +584,8 @@ Token lexer_next(void)
             token.kind = TOKEN_CONST;
         } else if (str_eq(token.str, str_from_cstr("struct"))) {
             token.kind = TOKEN_STRUCT;
+        } else if (str_eq(token.str, str_from_cstr("use"))) {
+            token.kind = TOKEN_USE;
         } else if (str_eq(token.str, str_from_cstr("assert"))) {
             token.kind = TOKEN_ASSERT;
         } else if (str_eq(token.str, str_from_cstr("return"))) {
@@ -878,7 +889,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -926,7 +937,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -1010,7 +1021,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1118,7 +1129,32 @@ size_t parse_decl(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 39);
+size_t tops_base;
+size_t *tops_iter;
+Arena path_arena;
+
+#define IMPORTS_CAP 1024
+Str imports[IMPORTS_CAP];
+size_t imports_count;
+
+void imports_push(Str path)
+{
+    assert(imports_count < IMPORTS_CAP);
+    imports[imports_count] = path;
+    imports_count += 1;
+}
+
+bool imports_find(Str path)
+{
+    for (size_t i = imports_count; i > 0; i -= 1) {
+        if (str_eq(imports[i - 1], path)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static_assert(COUNT_TOKENS == 40);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1229,6 +1265,45 @@ size_t parse_stmt(void)
         }
     } break;
 
+    case TOKEN_USE: {
+        local_assert(token, false);
+
+        Str path;
+        path.data = path_arena.data + path_arena.size;
+        while (true) {
+            Token step = lexer_expect(TOKEN_IDENT);
+            arena_push(&path_arena, step.str.data, step.str.size);
+
+            if (lexer_read(TOKEN_DOT)) {
+                arena_push(&path_arena, "/", 1);
+            } else {
+                break;
+            }
+        }
+        arena_push(&path_arena, ".glos", 6);
+        path.size = path_arena.data + path_arena.size - path.data;
+
+        if (imports_find(path)) {
+            path_arena.size -= path.size;
+            return 0;
+        }
+        imports_push(path);
+
+        Lexer lexer_save = lexer;
+
+        lexer_buffer(token);
+        lexer_open(path.data);
+        for (tops_iter = &tops_base; !lexer_read(TOKEN_EOF); ) {
+            size_t stmt = parse_stmt();
+            if (stmt != 0) {
+                tops_iter = node_list_push(tops_iter, stmt);
+            }
+        }
+
+        lexer = lexer_save;
+        return 0;
+    };
+
     case TOKEN_ASSERT:
         node = node_new(NODE_ASSERT, token);
         lexer_expect(TOKEN_LPAREN);
@@ -1261,7 +1336,7 @@ size_t parse_stmt(void)
 
 // Constant Evaluator
 static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1284,7 +1359,7 @@ void eval_const_unary(size_t node)
 }
 
 static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1610,7 +1685,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1707,6 +1782,7 @@ void check_type(size_t node)
         } else if (str_eq(nodes[node].token.str, str_from_cstr("bool"))) {
             nodes[node].type = type_new(TYPE_BOOL, 0, 0);
         } else if (structures_find(nodes[node].token.str, &nodes[node].token.data)) {
+            nodes[node].token.data = structures[nodes[node].token.data];
             nodes[node].type = type_new(TYPE_STRUCT, 0, nodes[node].token.data);
         } else {
             error_undefined(node, "type");
@@ -1740,7 +1816,7 @@ void check_type(size_t node)
 }
 
 static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1941,7 +2017,7 @@ void check_expr(size_t node, bool ref)
 }
 
 static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2372,7 +2448,7 @@ void compile_ref(size_t node)
 }
 
 static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2566,7 +2642,7 @@ void compile_expr(size_t node, bool ref)
 }
 
 static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 39);
+static_assert(COUNT_TOKENS == 40);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -3097,8 +3173,6 @@ bool test_file(char *program, char *path, Str contents)
 }
 
 // Main
-Arena path_arena;
-
 void usage(FILE *file)
 {
     fprintf(file, "usage:\n");
@@ -3199,20 +3273,31 @@ int main(int argc, char **argv)
             exit(1);
         }
 
-        ops_push(OP_CALL, 0);
-        ops_push(OP_HALT, 0);
+        nodes_count = 1;
 
         lexer_open(path);
-        while (!lexer_read(TOKEN_EOF)) {
-            size_t node = parse_stmt();
-            check_stmt(node);
-            compile_stmt(node);
+        for (tops_iter = &tops_base; !lexer_read(TOKEN_EOF); ) {
+            size_t stmt = parse_stmt();
+            if (stmt != 0) {
+                tops_iter = node_list_push(tops_iter, stmt);
+            }
         }
+
+        for (size_t iter = tops_base; iter != 0; iter = nodes[iter].next) {
+            check_stmt(iter);
+        }
+
+        ops_push(OP_CALL, 0);
+        ops_push(OP_HALT, 0);
 
         if (!functions_find(str_from_cstr("main"), &ops[0].data)) {
             print_pos(stderr, lexer.pos);
             fprintf(stderr, "error: function 'main' is not defined\n");
             exit(1);
+        }
+
+        for (size_t iter = tops_base; iter != 0; iter = nodes[iter].next) {
+            compile_stmt(iter);
         }
 
         path_arena.size = 0;
