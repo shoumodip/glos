@@ -1,0 +1,12 @@
+##
+stdout: 14
+Hello, world!
+##
+
+fn main() {
+    let str = "Hello, "
+    syscall(1, 1, str.data, str.size)
+
+    let cstr = "world!\n"c
+    syscall(1, 1, cstr, 7)
+}

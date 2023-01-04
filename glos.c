@@ -36,6 +36,11 @@ void arena_push(Arena *arena, char *data, size_t size)
     arena->size += size;
 }
 
+void arena_push_char(Arena *arena, char ch)
+{
+    arena_push(arena, &ch, 1);
+}
+
 // Str
 typedef struct {
     char *data;
@@ -260,8 +265,10 @@ void print_pos(FILE *file, Pos pos)
 enum {
     TOKEN_EOF,
     TOKEN_INT,
+    TOKEN_STR,
     TOKEN_BOOL,
     TOKEN_CHAR,
+    TOKEN_CSTR,
     TOKEN_IDENT,
 
     TOKEN_DOT,
@@ -314,7 +321,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -324,11 +331,17 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_INT:
         return "integer";
 
+    case TOKEN_STR:
+        return "string";
+
     case TOKEN_BOOL:
         return "boolean";
 
     case TOKEN_CHAR:
         return "character";
+
+    case TOKEN_CSTR:
+        return "C-string";
 
     case TOKEN_IDENT:
         return "identifier";
@@ -549,40 +562,40 @@ char lexer_char(char *name)
 
         Pos pos = lexer.pos;
         switch (lexer_consume()) {
-            case 'n':
-                ch = '\n';
-                break;
+        case 'n':
+            ch = '\n';
+            break;
 
-            case 't':
-                ch = '\t';
-                break;
+        case 't':
+            ch = '\t';
+            break;
 
-            case '0':
-                ch = '\0';
-                break;
+        case '0':
+            ch = '\0';
+            break;
 
-            case '"':
-                ch = '"';
-                break;
+        case '"':
+            ch = '"';
+            break;
 
-            case '\'':
-                ch = '\'';
-                break;
+        case '\'':
+            ch = '\'';
+            break;
 
-            case '\\':
-                ch = '\\';
-                break;
+        case '\\':
+            ch = '\\';
+            break;
 
-            default:
-                lexer.pos = pos;
-                error_invalid("escape character");
+        default:
+            lexer.pos = pos;
+            error_invalid("escape character");
         }
     }
 
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -677,6 +690,21 @@ Token lexer_next(void)
             token.data = lexer_char("character");
             if (!lexer_match('\'')) {
                 error_unterminated("character");
+            }
+            break;
+
+        case '"':
+            while (true) {
+                char ch = lexer_char("string");
+                if (ch == '"' && lexer.str.data[-2] != '\\') {
+                    break;
+                }
+            }
+
+            if (lexer_match('c')) {
+                token.kind = TOKEN_CSTR;
+            } else {
+                token.kind = TOKEN_STR;
             }
             break;
 
@@ -983,7 +1011,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -1031,7 +1059,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -1116,7 +1144,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1129,8 +1157,10 @@ size_t parse_expr(int mbp)
         break;
 
     case TOKEN_INT:
+    case TOKEN_STR:
     case TOKEN_BOOL:
     case TOKEN_CHAR:
+    case TOKEN_CSTR:
         node = node_new(NODE_ATOM, token);
         break;
 
@@ -1250,7 +1280,7 @@ bool imports_find(Str path)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1463,7 +1493,7 @@ size_t parse_stmt(void)
 
 // Constant Evaluator
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1486,7 +1516,7 @@ void eval_const_unary(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1816,7 +1846,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1954,7 +1984,7 @@ void check_type(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1965,6 +1995,11 @@ void check_expr(size_t node, bool ref)
             nodes[node].type = type_new(TYPE_INT, 0, 0);
             break;
 
+        case TOKEN_STR:
+            ref_prevent(node, ref);
+            nodes[node].type = type_new(TYPE_STRUCT, 0, 0);
+            break;
+
         case TOKEN_BOOL:
             ref_prevent(node, ref);
             nodes[node].type = type_new(TYPE_BOOL, 0, 0);
@@ -1973,6 +2008,11 @@ void check_expr(size_t node, bool ref)
         case TOKEN_CHAR:
             ref_prevent(node, ref);
             nodes[node].type = type_new(TYPE_CHAR, 0, 0);
+            break;
+
+        case TOKEN_CSTR:
+            ref_prevent(node, ref);
+            nodes[node].type = type_new(TYPE_CHAR, 1, 0);
             break;
 
         case TOKEN_IDENT: {
@@ -2104,9 +2144,11 @@ void check_expr(size_t node, bool ref)
                 print_str(stderr, nodes[real].token.str);
                 fprintf(stderr, "'\n");
 
-                print_pos(stderr, nodes[real].token.pos);
-                fprintf(stderr, "note: defined here\n");
-                exit(1);
+                if (nodes[real].token.pos.path != NULL) {
+                    print_pos(stderr, nodes[real].token.pos);
+                    fprintf(stderr, "note: defined here\n");
+                    exit(1);
+                }
             }
 
             nodes[node].type = nodes[nodes[rhs].token.data].type;
@@ -2202,7 +2244,7 @@ bool preds_find(size_t value, size_t start, size_t *index)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2416,6 +2458,8 @@ enum {
     OP_PUSH,
     OP_DROP,
     OP_DUP,
+    OP_STR,
+    OP_CSTR,
 
     OP_ADD,
     OP_SUB,
@@ -2463,7 +2507,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 33);
+static_assert(COUNT_OPS == 35);
 void print_op(FILE *file, Op op)
 {
     switch (op.kind) {
@@ -2477,6 +2521,14 @@ void print_op(FILE *file, Op op)
 
     case OP_DUP:
         fprintf(file, "dup\n");
+        break;
+
+    case OP_STR:
+        fprintf(file, "str %zu\n", op.data);
+        break;
+
+    case OP_CSTR:
+        fprintf(file, "cstr %zu\n", op.data);
         break;
 
     case OP_ADD:
@@ -2625,6 +2677,78 @@ void print_ops(FILE *file)
     }
 }
 
+// String Literals
+#define STRS_CAP 1024
+
+Str strs[STRS_CAP];
+size_t strs_count;
+Arena strs_arena;
+
+size_t str_push(Str str)
+{
+    assert(strs_count < STRS_CAP);
+    strs[strs_count] = str;
+    strs_count += 1;
+    return strs_count - 1;
+}
+
+Str token_str_encode(Token token, Arena *arena, bool cstr)
+{
+    if (token.kind == TOKEN_STR) {
+        token.str.size -= 1;
+    } else {
+        token.str.size -= 2;
+    }
+
+    Str str;
+    str.data = arena->data + arena->size;
+    str.size = 0;
+
+    for (size_t i = 1; i < token.str.size; i += 1) {
+        char ch = token.str.data[i];
+        if (ch == '\\') {
+            i += 1;
+            switch (token.str.data[i]) {
+            case 'n':
+                ch = '\n';
+                break;
+
+            case 't':
+                ch = '\t';
+                break;
+
+            case '0':
+                ch = '\0';
+                break;
+
+            case '"':
+                ch = '"';
+                break;
+
+            case '\'':
+                ch = '\'';
+                break;
+
+            case '\\':
+                ch = '\\';
+                break;
+
+            default: assert(0 && "unreachable");
+            }
+        }
+
+        arena_push_char(arena, ch);
+        str.size += 1;
+    }
+
+    if (cstr) {
+        arena_push_char(arena, '\0');
+    }
+
+    return str;
+}
+
+
 // Compiler
 size_t align(size_t n)
 {
@@ -2687,7 +2811,7 @@ void compile_ref(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2697,6 +2821,14 @@ void compile_expr(size_t node, bool ref)
         case TOKEN_BOOL:
         case TOKEN_CHAR:
             ops_push(OP_PUSH, nodes[node].token.data);
+            break;
+
+        case TOKEN_STR:
+            ops_push(OP_STR, str_push(token_str_encode(nodes[node].token, &strs_arena, false)));
+            break;
+
+        case TOKEN_CSTR:
+            ops_push(OP_CSTR, str_push(token_str_encode(nodes[node].token, &strs_arena, true)));
             break;
 
         case TOKEN_IDENT: {
@@ -2783,7 +2915,7 @@ void compile_expr(size_t node, bool ref)
             size_t size = type_size(nodes[node].type);
             ops_push(OP_INDEX, size);
 
-            if (array && !ref) {
+            if (!ref) {
                 ops_push(OP_LOAD, size);
             }
             break;
@@ -2911,7 +3043,7 @@ Jumps pred_jumps;
 Jumps branch_jumps;
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 43);
+static_assert(COUNT_TOKENS == 45);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -3077,7 +3209,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 33);
+static_assert(COUNT_OPS == 35);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -3107,6 +3239,15 @@ void generate(char *path)
 
         case OP_DUP:
             fprintf(file, "push qword [rsp]\n");
+            break;
+
+        case OP_STR:
+            fprintf(file, "push strings+%zu\n", strs[op.data].data - strs_arena.data);
+            fprintf(file, "push %zu\n", strs[op.data].size);
+            break;
+
+        case OP_CSTR:
+            fprintf(file, "push strings+%zu\n", strs[op.data].data - strs_arena.data);
             break;
 
         case OP_ADD:
@@ -3375,9 +3516,19 @@ void generate(char *path)
     fprintf(file, "add rsp, 40\n");
     fprintf(file, "ret\n");
 
-    if (global_size) {
-        fprintf(file, "segment readable writeable\n");
+    fprintf(file, "segment readable writeable\n");
+    if (global_size != 0) {
         fprintf(file, "memory: rb %zu\n", global_size);
+    }
+
+    if (strs_arena.size != 0) {
+        fprintf(file, "strings: db %d", *strs_arena.data);
+
+        for (size_t i = 1; i < strs_arena.size; i += 1) {
+            fprintf(file, ",%d", strs_arena.data[i]);
+        }
+
+        fprintf(file, "\n");
     }
 
     fclose(file);
@@ -3611,7 +3762,28 @@ int main(int argc, char **argv)
             exit(1);
         }
 
-        nodes_count = 1;
+        {
+            Token token = {0};
+            token.str = str_from_cstr("Str");
+            token.data = 16;
+
+            size_t str_struct = node_new(NODE_STRUCT, token);
+            size_t *str_fields = &nodes[str_struct].nodes[NODE_STRUCT_FIELDS];
+
+            token.str = str_from_cstr("size");
+            token.data = 0;
+            size_t str_size = node_new(NODE_LET, token);
+            nodes[str_size].type = type_new(TYPE_INT, 0, 0);
+            str_fields = node_list_push(str_fields, str_size);
+
+            token.str = str_from_cstr("data");
+            token.data = 8;
+            size_t str_data = node_new(NODE_LET, token);
+            nodes[str_data].type = type_new(TYPE_CHAR, 1, 0);
+            str_fields = node_list_push(str_fields, str_data);
+
+            structures_push(str_struct);
+        }
 
         lexer_open(path);
         for (tops_iter = &tops_base; !lexer_read(TOKEN_EOF); ) {
