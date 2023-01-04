@@ -264,6 +264,7 @@ enum {
     TOKEN_IDENT,
 
     TOKEN_DOT,
+    TOKEN_ARROW,
     TOKEN_COMMA,
     TOKEN_LPAREN,
     TOKEN_RPAREN,
@@ -297,6 +298,7 @@ enum {
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_FOR,
+    TOKEN_MATCH,
 
     TOKEN_FN,
     TOKEN_LET,
@@ -311,7 +313,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_TOKENS == 42);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -329,6 +331,9 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_DOT:
         return "'.'";
+
+    case TOKEN_ARROW:
+        return "'=>'";
 
     case TOKEN_COMMA:
         return "','";
@@ -410,6 +415,9 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_FOR:
         return "keyword 'for'";
+
+    case TOKEN_MATCH:
+        return "keyword 'match'";
 
     case TOKEN_FN:
         return "keyword 'fn'";
@@ -509,7 +517,7 @@ bool lexer_match(char ch)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_TOKENS == 42);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -576,6 +584,8 @@ Token lexer_next(void)
             token.kind = TOKEN_ELSE;
         } else if (str_eq(token.str, str_from_cstr("for"))) {
             token.kind = TOKEN_FOR;
+        } else if (str_eq(token.str, str_from_cstr("match"))) {
+            token.kind = TOKEN_MATCH;
         } else if (str_eq(token.str, str_from_cstr("fn"))) {
             token.kind = TOKEN_FN;
         } else if (str_eq(token.str, str_from_cstr("let"))) {
@@ -678,7 +688,9 @@ Token lexer_next(void)
             break;
 
         case '=':
-            if (lexer_match('=')) {
+            if (lexer_match('>')) {
+                token.kind = TOKEN_ARROW;
+            } else if (lexer_match('=')) {
                 token.kind = TOKEN_EQ;
             } else {
                 token.kind = TOKEN_SET;
@@ -781,6 +793,8 @@ enum {
     NODE_BLOCK,
     NODE_IF,
     NODE_FOR,
+    NODE_MATCH,
+    NODE_BRANCH,
 
     NODE_FN,
     NODE_LET,
@@ -812,6 +826,13 @@ enum {
 
 #define NODE_FOR_COND 0
 #define NODE_FOR_BODY 1
+
+#define NODE_MATCH_EXPR 0
+#define NODE_MATCH_LIST 1
+#define NODE_MATCH_ELSE 2
+
+#define NODE_BRANCH_LIST 0
+#define NODE_BRANCH_BODY 1
 
 #define NODE_FN_ARGS 0
 #define NODE_FN_TYPE 1
@@ -889,7 +910,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_TOKENS == 42);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -937,7 +958,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_TOKENS == 42);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -1021,7 +1042,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_TOKENS == 42);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1154,7 +1175,7 @@ bool imports_find(Str path)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_TOKENS == 42);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1191,6 +1212,37 @@ size_t parse_stmt(void)
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
         nodes[node].nodes[NODE_FOR_BODY] = parse_stmt();
         break;
+
+    case TOKEN_MATCH: {
+        local_assert(token, true);
+        node = node_new(NODE_MATCH, token);
+
+        nodes[node].nodes[NODE_MATCH_EXPR] = parse_expr(POWER_SET);
+        size_t *branches = &nodes[node].nodes[NODE_MATCH_LIST];
+
+        lexer_expect(TOKEN_LBRACE);
+        while (!lexer_read(TOKEN_RBRACE)) {
+            if (lexer_read(TOKEN_ELSE)) {
+                lexer_expect(TOKEN_ARROW);
+                nodes[node].nodes[NODE_MATCH_ELSE] = parse_stmt();
+                lexer_expect(TOKEN_RBRACE);
+                break;
+            } else {
+                size_t branch = node_new(NODE_BRANCH, token);
+                size_t *preds = &nodes[branch].nodes[NODE_BRANCH_LIST];
+                while (true) {
+                    preds = node_list_push(preds, parse_const(POWER_SET));
+                    token = lexer_either(TOKEN_COMMA, TOKEN_ARROW);
+                    if (token.kind == TOKEN_ARROW) {
+                        break;
+                    }
+                }
+
+                nodes[branch].nodes[NODE_BRANCH_BODY] = parse_stmt();
+                branches = node_list_push(branches, branch);
+            }
+        }
+    } break;
 
     case TOKEN_FN:
         local_assert(token, false);
@@ -1335,8 +1387,8 @@ size_t parse_stmt(void)
 }
 
 // Constant Evaluator
-static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_NODES == 16);
+static_assert(COUNT_TOKENS == 42);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1358,8 +1410,8 @@ void eval_const_unary(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_NODES == 16);
+static_assert(COUNT_TOKENS == 42);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1684,8 +1736,8 @@ Type type_assert_pointer(size_t node)
     return actual;
 }
 
-static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_NODES == 16);
+static_assert(COUNT_TOKENS == 42);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1815,8 +1867,8 @@ void check_type(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_NODES == 16);
+static_assert(COUNT_TOKENS == 42);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2016,8 +2068,35 @@ void check_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 40);
+typedef struct {
+    size_t node;
+    size_t value;
+} Pred;
+
+Pred preds[SCOPE_CAP];
+size_t preds_count;
+
+void preds_push(size_t node)
+{
+    assert(preds_count < SCOPE_CAP);
+    preds[preds_count].node = node;
+    preds[preds_count].value = nodes[node].token.data;
+    preds_count += 1;
+}
+
+bool preds_find(size_t value, size_t start, size_t *index)
+{
+    for (size_t i = start; i < preds_count; i += 1) {
+        if (preds[i].value == value) {
+            *index = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+static_assert(COUNT_NODES == 16);
+static_assert(COUNT_TOKENS == 42);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2051,6 +2130,43 @@ void check_stmt(size_t node)
 
         check_stmt(nodes[node].nodes[NODE_FOR_BODY]);
     } break;
+
+    case NODE_MATCH: {
+        size_t preds_count_save = preds_count;
+
+        size_t expr = nodes[node].nodes[NODE_MATCH_EXPR];
+        check_expr(expr, false);
+        type_assert_scalar(expr);
+
+        for (size_t branch = nodes[node].nodes[NODE_MATCH_LIST]; branch != 0; branch = nodes[branch].next) {
+            for (size_t pred = nodes[branch].nodes[NODE_BRANCH_LIST]; pred != 0; pred = nodes[pred].next) {
+                check_const(pred);
+                type_assert(pred, nodes[expr].type);
+
+                size_t prev;
+                if (preds_find(nodes[pred].token.data, preds_count_save, &prev)) {
+                    print_pos(stderr, nodes[pred].token.pos);
+                    fprintf(stderr, "error: duplicate branch '%zu'\n", nodes[pred].token.data);
+
+                    print_pos(stderr, nodes[preds[prev].node].token.pos);
+                    fprintf(stderr, "note: handled here\n");
+                    exit(1);
+                }
+
+                preds_push(pred);
+            }
+            check_stmt(nodes[branch].nodes[NODE_BRANCH_BODY]);
+        }
+
+        preds_count = preds_count_save;
+
+        if (nodes[node].nodes[NODE_MATCH_ELSE] != 0) {
+            check_stmt(nodes[node].nodes[NODE_MATCH_ELSE]);
+        }
+    } break;
+
+    case NODE_BRANCH:
+        break;
 
     case NODE_FN: {
         size_t prev;
@@ -2193,6 +2309,7 @@ void check_stmt(size_t node)
 enum {
     OP_PUSH,
     OP_DROP,
+    OP_DUP,
 
     OP_ADD,
     OP_SUB,
@@ -2223,6 +2340,7 @@ enum {
 
     OP_GOTO,
     OP_ELSE,
+    OP_THEN,
 
     OP_CALL,
     OP_RET,
@@ -2237,7 +2355,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 30);
+static_assert(COUNT_OPS == 32);
 void print_op(FILE *file, Op op)
 {
     switch (op.kind) {
@@ -2247,6 +2365,10 @@ void print_op(FILE *file, Op op)
 
     case OP_DROP:
         fprintf(file, "drop %zu\n", op.data);
+        break;
+
+    case OP_DUP:
+        fprintf(file, "dup\n");
         break;
 
     case OP_ADD:
@@ -2343,6 +2465,10 @@ void print_op(FILE *file, Op op)
 
     case OP_ELSE:
         fprintf(file, "else %zu\n", op.data);
+        break;
+
+    case OP_THEN:
+        fprintf(file, "then %zu\n", op.data);
         break;
 
     case OP_CALL: {
@@ -2447,8 +2573,8 @@ void compile_ref(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 40);
+static_assert(COUNT_NODES == 16);
+static_assert(COUNT_TOKENS == 42);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2641,8 +2767,32 @@ void compile_expr(size_t node, bool ref)
     }
 }
 
-static_assert(COUNT_NODES == 14);
-static_assert(COUNT_TOKENS == 40);
+#define JUMPS_CAP 64
+typedef struct {
+    size_t data[JUMPS_CAP];
+    size_t count;
+} Jumps;
+
+void jumps_save(Jumps *jumps)
+{
+    assert(jumps->count < JUMPS_CAP);
+    jumps->data[jumps->count] = ops_count;
+    jumps->count += 1;
+}
+
+void jumps_restore(Jumps *jumps, size_t start)
+{
+    for (size_t i = start; i < jumps->count; i += 1) {
+        ops[jumps->data[i]].data = ops_count;
+    }
+    jumps->count = start;
+}
+
+Jumps pred_jumps;
+Jumps branch_jumps;
+
+static_assert(COUNT_NODES == 16);
+static_assert(COUNT_TOKENS == 42);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2682,6 +2832,48 @@ void compile_stmt(size_t node)
         compile_stmt(nodes[node].nodes[NODE_FOR_BODY]);
 
         ops_push(OP_GOTO, loop_addr);
+        ops[body_addr].data = ops_count;
+    } break;
+
+    case NODE_MATCH: {
+        size_t expr = nodes[node].nodes[NODE_MATCH_EXPR];
+        compile_expr(expr, false);
+
+        size_t branch_jumps_save = branch_jumps.count;
+        for (size_t branch = nodes[node].nodes[NODE_MATCH_LIST]; branch != 0; branch = nodes[branch].next) {
+            compile_stmt(branch);
+        }
+
+        if (nodes[node].nodes[NODE_MATCH_ELSE] != 0) {
+            compile_stmt(nodes[node].nodes[NODE_MATCH_ELSE]);
+        }
+
+        jumps_restore(&branch_jumps, branch_jumps_save);
+
+        size_t drop = type_size(nodes[expr].type);
+        if (drop) {
+            ops_push(OP_DROP, align(drop));
+        }
+    } break;
+
+    case NODE_BRANCH: {
+        for (size_t pred = nodes[node].nodes[NODE_BRANCH_LIST]; pred != 0; pred = nodes[pred].next) {
+            ops_push(OP_DUP, 0);
+            ops_push(OP_PUSH, nodes[pred].token.data);
+            ops_push(OP_EQ, 0);
+
+            jumps_save(&pred_jumps);
+            ops_push(OP_THEN, 0);
+        }
+
+        size_t body_addr = ops_count;
+        ops_push(OP_GOTO, 0);
+
+        jumps_restore(&pred_jumps, 0);
+        compile_stmt(nodes[node].nodes[NODE_BRANCH_BODY]);
+
+        jumps_save(&branch_jumps);
+        ops_push(OP_GOTO, 0);
         ops[body_addr].data = ops_count;
     } break;
 
@@ -2754,14 +2946,19 @@ void compile_stmt(size_t node)
         ops_push(OP_PRINT, 0);
         break;
 
-    default:
+    default: {
         compile_expr(node, false);
-        ops_push(OP_DROP, align(type_size(nodes[node].type)));
+
+        size_t drop = type_size(nodes[node].type);
+        if (drop != 0) {
+            ops_push(OP_DROP, align(drop));
+        }
+    }
     }
 }
 
 // Generator
-static_assert(COUNT_OPS == 30);
+static_assert(COUNT_OPS == 32);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -2787,6 +2984,10 @@ void generate(char *path)
 
         case OP_DROP:
             fprintf(file, "add rsp, %zu\n", op.data);
+            break;
+
+        case OP_DUP:
+            fprintf(file, "push qword [rsp]\n");
             break;
 
         case OP_ADD:
@@ -2970,6 +3171,12 @@ void generate(char *path)
             fprintf(file, "pop rax\n");
             fprintf(file, "test rax, rax\n");
             fprintf(file, "jz I%zu\n", op.data);
+            break;
+
+        case OP_THEN:
+            fprintf(file, "pop rax\n");
+            fprintf(file, "test rax, rax\n");
+            fprintf(file, "jnz I%zu\n", op.data);
             break;
 
         case OP_CALL: {
