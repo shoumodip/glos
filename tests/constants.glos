@@ -1,5 +1,5 @@
 ##
-stdout: 63
+stdout: 69
 69
 420
 69
@@ -24,6 +24,9 @@ stdout: 63
 0
 1
 0
+0
+1
+2
 ##
 
 const A0 = 34 + 35
@@ -60,6 +63,12 @@ const C11 = 1 == 2
 const C12 = 1 != 2
 const C13 = 1 != 1
 
+const (
+    E0
+    E1
+    E2
+)
+
 fn main() {
     print A0
     print A1
@@ -86,4 +95,8 @@ fn main() {
     print C11
     print C12
     print C13
+
+    print E0
+    print E1
+    print E2
 }

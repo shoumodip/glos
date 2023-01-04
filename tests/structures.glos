@@ -1,3 +1,8 @@
+##
+stdout: 3
+69
+##
+
 struct Vec {
     x int
     y int

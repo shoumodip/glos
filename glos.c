@@ -810,6 +810,7 @@ enum {
 #define NODE_LET_TYPE 1
 
 #define NODE_CONST_EXPR 0
+#define NODE_CONST_LIST 1
 
 #define NODE_STRUCT_FIELDS 0
 
@@ -1204,12 +1205,21 @@ size_t parse_stmt(void)
         break;
 
     case TOKEN_CONST:
-        node = node_new(NODE_CONST, lexer_expect(TOKEN_IDENT));
-        lexer_expect(TOKEN_SET);
-        nodes[node].nodes[NODE_CONST_EXPR] = parse_const(POWER_SET);
+        token = lexer_either(TOKEN_IDENT, TOKEN_LPAREN);
+        node = node_new(NODE_CONST, token);
+        if (token.kind == TOKEN_IDENT) {
+            lexer_expect(TOKEN_SET);
+            nodes[node].nodes[NODE_CONST_EXPR] = parse_const(POWER_SET);
+        } else {
+            size_t *iter = &nodes[node].nodes[NODE_CONST_LIST];
+            while (!lexer_read(TOKEN_RPAREN)) {
+                iter = node_list_push(iter, node_new(NODE_CONST, lexer_expect(TOKEN_IDENT)));
+            }
+        }
         break;
 
     case TOKEN_STRUCT: {
+        local_assert(token, false);
         node = node_new(NODE_STRUCT, lexer_expect(TOKEN_IDENT));
         lexer_expect(TOKEN_LBRACE);
 
@@ -2026,11 +2036,21 @@ void check_stmt(size_t node)
     } break;
 
     case NODE_CONST: {
-        size_t expr = nodes[node].nodes[NODE_CONST_EXPR];
-        check_const(expr);
-        nodes[node].type = nodes[expr].type;
-        nodes[node].token.data = nodes[expr].token.data;
-        constants_push(node);
+        size_t list = nodes[node].nodes[NODE_CONST_LIST];
+        if (list != 0) {
+            for (size_t i = 0; list != 0; i += 1) {
+                nodes[list].type = type_new(TYPE_INT, 0, 0);
+                nodes[list].token.data = i;
+                constants_push(list);
+                list = nodes[list].next;
+            }
+        } else {
+            size_t expr = nodes[node].nodes[NODE_CONST_EXPR];
+            check_const(expr);
+            nodes[node].type = nodes[expr].type;
+            nodes[node].token.data = nodes[expr].token.data;
+            constants_push(node);
+        }
     } break;
 
     case NODE_STRUCT: {
