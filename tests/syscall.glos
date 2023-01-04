@@ -1,0 +1,27 @@
+##
+stdout: 14
+Hello, world!
+
+exit: 69
+##
+
+fn main() {
+    let message [14]char
+    message[0] = 'H'
+    message[1] = 'e'
+    message[2] = 'l'
+    message[3] = 'l'
+    message[4] = 'o'
+    message[5] = ','
+    message[6] = ' '
+    message[7] = 'w'
+    message[8] = 'o'
+    message[9] = 'r'
+    message[10] = 'l'
+    message[11] = 'd'
+    message[12] = '!'
+    message[13] = '\n'
+    syscall(1, 1, &message, 14)
+
+    syscall(60, 69)
+}

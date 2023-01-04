@@ -1993,7 +1993,7 @@ void check_expr(size_t node, bool ref)
         }
         break;
 
-    case NODE_CALL: {
+    case NODE_CALL:
         ref_prevent(node, ref);
 
         if (str_eq(nodes[node].token.str, str_from_cstr("main"))) {
@@ -2002,31 +2002,46 @@ void check_expr(size_t node, bool ref)
             exit(1);
         }
 
-        size_t index;
-        if (!functions_find(nodes[node].token.str, &index)) {
-            error_undefined(node, "function");
+        if (str_eq(nodes[node].token.str, str_from_cstr("syscall"))) {
+            if (nodes[node].token.data < 1 || nodes[node].token.data > 7) {
+                print_pos(stderr, nodes[node].token.pos);
+                fprintf(stderr, "error: expected 1 to 7 arguments, got %zu\n", nodes[node].token.data);
+                exit(1);
+            }
+
+            for (size_t call = nodes[node].nodes[NODE_CALL_ARGS]; call != 0; call = nodes[call].next) {
+                check_expr(call, false);
+                type_assert_scalar(call);
+            }
+
+            nodes[node].type = type_new(TYPE_INT, 0, 0);
+        } else {
+            size_t index;
+            if (!functions_find(nodes[node].token.str, &index)) {
+                error_undefined(node, "function");
+            }
+
+            if (nodes[node].token.data != functions[index].arity) {
+                print_pos(stderr, nodes[node].token.pos);
+                fprintf(stderr, "error: expected %zu arguments, got %zu\n",
+                        functions[index].arity, nodes[node].token.data);
+                exit(1);
+            }
+
+            size_t call = nodes[node].nodes[NODE_CALL_ARGS];
+            size_t real = nodes[functions[index].node].nodes[NODE_FN_ARGS];
+            while (real != 0) {
+                check_expr(call, false);
+                type_assert(call, nodes[real].type);
+
+                call = nodes[call].next;
+                real = nodes[real].next;
+            }
+
+            nodes[node].token.data = index;
+            nodes[node].type = nodes[functions[index].node].type;
         }
-
-        if (nodes[node].token.data != functions[index].arity) {
-            print_pos(stderr, nodes[node].token.pos);
-            fprintf(stderr, "error: expected %zu arguments, got %zu\n",
-                    functions[index].arity, nodes[node].token.data);
-            exit(1);
-        }
-
-        size_t call = nodes[node].nodes[NODE_CALL_ARGS];
-        size_t real = nodes[functions[index].node].nodes[NODE_FN_ARGS];
-        while (real != 0) {
-            check_expr(call, false);
-            type_assert(call, nodes[real].type);
-
-            call = nodes[call].next;
-            real = nodes[real].next;
-        }
-
-        nodes[node].token.data = index;
-        nodes[node].type = nodes[functions[index].node].type;
-    } break;
+        break;
 
     case NODE_UNARY: {
         size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -2437,6 +2452,8 @@ enum {
     OP_RET,
 
     OP_HALT,
+    OP_SYSCALL,
+
     OP_PRINT,
     COUNT_OPS
 };
@@ -2446,7 +2463,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 32);
+static_assert(COUNT_OPS == 33);
 void print_op(FILE *file, Op op)
 {
     switch (op.kind) {
@@ -2576,6 +2593,10 @@ void print_op(FILE *file, Op op)
         fprintf(file, "halt\n");
         break;
 
+    case OP_SYSCALL:
+        fprintf(file, "syscall %zu\n", op.data);
+        break;
+
     case OP_PRINT:
         fprintf(file, "print\n");
         break;
@@ -2695,7 +2716,12 @@ void compile_expr(size_t node, bool ref)
         for (size_t arg = nodes[node].nodes[NODE_CALL_ARGS]; arg != 0; arg = nodes[arg].next) {
             compile_expr(arg, false);
         }
-        ops_push(OP_CALL, nodes[node].token.data);
+
+        if (str_eq(nodes[node].token.str, str_from_cstr("syscall"))) {
+            ops_push(OP_SYSCALL, nodes[node].token.data);
+        } else {
+            ops_push(OP_CALL, nodes[node].token.data);
+        }
         break;
 
     case NODE_UNARY: {
@@ -3051,7 +3077,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 32);
+static_assert(COUNT_OPS == 33);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -3292,6 +3318,18 @@ void generate(char *path)
             fprintf(file, "mov rax, 60\n");
             fprintf(file, "xor rdi, rdi\n");
             fprintf(file, "syscall\n");
+            break;
+
+        case OP_SYSCALL:
+            if (op.data > 6) { fprintf(file, "pop r9\n"); }
+            if (op.data > 5) { fprintf(file, "pop r8\n"); }
+            if (op.data > 4) { fprintf(file, "pop r10\n"); }
+            if (op.data > 3) { fprintf(file, "pop rdx\n"); }
+            if (op.data > 2) { fprintf(file, "pop rsi\n"); }
+            if (op.data > 1) { fprintf(file, "pop rdi\n"); }
+            fprintf(file, "pop rax\n");
+            fprintf(file, "syscall\n");
+            fprintf(file, "push rax\n");
             break;
 
         case OP_PRINT:
