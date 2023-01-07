@@ -1387,6 +1387,12 @@ bool imports_find(Str path)
     return false;
 }
 
+bool is_operator_function_token_kind(int kind)
+{
+    int power = power_from_token_kind(kind);
+    return power >= POWER_CMP && power <= POWER_MUL;
+}
+
 static_assert(COUNT_TOKENS == 57);
 size_t parse_stmt(bool loop)
 {
@@ -1470,7 +1476,19 @@ size_t parse_stmt(bool loop)
 
     case TOKEN_FN:
         local_assert(token, false);
-        node = node_new(NODE_FN, lexer_expect(TOKEN_IDENT));
+
+        token = lexer_either(TOKEN_IDENT, TOKEN_LBRACKET);
+        if (token.kind == TOKEN_LBRACKET) {
+            token = lexer_next();
+            if (!is_operator_function_token_kind(token.kind)) {
+                print_pos(stderr, token.pos);
+                fprintf(stderr, "error: expected binary operator, got %s\n", cstr_from_token_kind(token.kind));
+                exit(1);
+            }
+            lexer_expect(TOKEN_RBRACKET);
+        }
+
+        node = node_new(NODE_FN, token);
         lexer_expect(TOKEN_LPAREN);
         parser_local = true;
 
@@ -1732,6 +1750,7 @@ void eval_const_binary(size_t node)
 }
 
 // Type
+// TODO: deep check types for equality
 bool type_eq(Type a, Type b)
 {
     return a.kind == b.kind && a.ref == b.ref;
@@ -1875,6 +1894,20 @@ bool functions_find(Str name, size_t *index)
 {
     for (size_t i = 0; i < functions_count; i += 1) {
         if (str_eq(nodes[functions[i].node].token.str, name)) {
+            *index = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool operator_functions_find(int kind, size_t lhs, size_t rhs, size_t *index)
+{
+    for (size_t i = 0; i < functions_count; i += 1) {
+        size_t func = functions[i].node;
+        if (nodes[func].token.kind == kind &&
+            type_eq(nodes[nodes[func].nodes[NODE_FN_ARGS]].type, nodes[lhs].type) &&
+            type_eq(nodes[nodes[nodes[func].nodes[NODE_FN_ARGS]].next].type, nodes[rhs].type)) {
             *index = i;
             return true;
         }
@@ -2302,6 +2335,23 @@ void check_expr(size_t node, bool ref)
         size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
         size_t rhs = nodes[node].nodes[NODE_BINARY_RHS];
 
+        if (is_operator_function_token_kind(nodes[node].token.kind)) {
+            ref_prevent(node, ref);
+            check_expr(lhs, false);
+            check_expr(rhs, false);
+
+            size_t index;
+            if (operator_functions_find(nodes[node].token.kind, lhs, rhs, &index)) {
+                nodes[node].kind = NODE_CALL;
+                nodes[node].nodes[NODE_CALL_ARGS] = lhs;
+                nodes[lhs].next = rhs;
+
+                nodes[node].token.data = index;
+                nodes[node].type = nodes[functions[index].node].type;
+                return;
+            }
+        }
+
         switch (nodes[node].token.kind) {
         case TOKEN_DOT:
             check_expr(lhs, false);
@@ -2349,9 +2399,6 @@ void check_expr(size_t node, bool ref)
         case TOKEN_SHR:
         case TOKEN_BOR:
         case TOKEN_BAND:
-            ref_prevent(node, ref);
-            check_expr(lhs, false);
-            check_expr(rhs, false);
             nodes[node].type = type_assert(rhs, type_assert_arith(lhs));
             break;
 
@@ -2373,9 +2420,6 @@ void check_expr(size_t node, bool ref)
         case TOKEN_LE:
         case TOKEN_EQ:
         case TOKEN_NE:
-            ref_prevent(node, ref);
-            check_expr(lhs, false);
-            check_expr(rhs, false);
             type_assert(rhs, type_assert_arith(lhs));
             nodes[node].type = type_new(TYPE_BOOL, 0, 0);
             break;
@@ -2537,29 +2581,50 @@ void check_stmt(size_t node)
         break;
 
     case NODE_FN: {
-        size_t prev;
-        if (functions_find(nodes[node].token.str, &prev)) {
-            error_redefinition(node, functions[prev].node, "function");
+        if (nodes[node].token.kind == TOKEN_IDENT) {
+            size_t prev;
+            if (functions_find(nodes[node].token.str, &prev)) {
+                error_redefinition(node, functions[prev].node, "function");
+            }
+        }
+
+        size_t ret = nodes[node].nodes[NODE_FN_TYPE];
+        size_t args = nodes[node].nodes[NODE_FN_ARGS];
+        if (str_eq(nodes[node].token.str, str_from_cstr("main"))) {
+            if (args != 0) {
+                print_pos(stderr, nodes[args].token.pos);
+                fprintf(stderr, "error: function 'main' cannot take arguments\n");
+                exit(1);
+            }
+
+            if (ret != 0) {
+                print_pos(stderr, nodes[ret].token.pos);
+                fprintf(stderr, "error: function 'main' cannot return anything\n");
+                exit(1);
+            }
         }
 
         size_t arity = 0;
         size_t variables_count_save = variables_count;
-        size_t args = nodes[node].nodes[NODE_FN_ARGS];
         for (size_t arg = args; arg != 0; arg = nodes[arg].next) {
             check_redefinition(arg, args, "argument");
             check_stmt(arg);
             arity += 1;
         }
 
-        if (str_eq(nodes[node].token.str, str_from_cstr("main"))) {
-            if (arity != 0) {
-                print_pos(stderr, nodes[nodes[node].nodes[NODE_FN_ARGS]].token.pos);
-                fprintf(stderr, "error: function 'main' cannot take arguments\n");
+        if (nodes[node].token.kind != TOKEN_IDENT) {
+            if (arity != 2) {
+                print_pos(stderr, nodes[node].token.pos);
+                fprintf(stderr, "error: operator functions must take 2 arguments\n");
                 exit(1);
+            }
+
+            size_t prev;
+            if (operator_functions_find(nodes[node].token.kind, nodes[node].nodes[NODE_FN_ARGS], nodes[nodes[node].nodes[NODE_FN_ARGS]].next, &prev)) {
+                error_redefinition(node, functions[prev].node, "operator function");
             }
         }
 
-        size_t ret = nodes[node].nodes[NODE_FN_TYPE];
         if (ret != 0) {
             check_type(ret);
             nodes[node].type = nodes[ret].type;
@@ -4188,16 +4253,9 @@ int main(int argc, char **argv)
         }
 
         path = argv[2];
-        if (str_ends_with(str_from_cstr(path), str_from_cstr(".glos"))) {
-            args_push(*argv);
-            args_push("-r");
-            args_push(path);
-        } else {
-            arena_push(&path_arena, "./", 2);
-            arena_push(&path_arena, path, strlen(path));
-            args_push(path_arena.data);
-        }
-
+        args_push(*argv);
+        args_push("-r");
+        args_push(path);
         for (int i = 3; i < argc; i += 1) {
             args_push(argv[i]);
         }

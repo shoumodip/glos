@@ -1,0 +1,18 @@
+##
+stdout: 14
+Hello, world!
+##
+
+fn [<<](fd int, str Str) int {
+    syscall(1, fd, str.data, str.size)
+    return fd
+}
+
+fn [<<](fd int, ch char) int {
+    syscall(1, fd, &ch, 1)
+    return fd
+}
+
+fn main() {
+    1 << "Hello, world!" << '\n'
+}
