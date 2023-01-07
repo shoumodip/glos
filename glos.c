@@ -322,13 +322,15 @@ enum {
     TOKEN_ARGC,
     TOKEN_ARGV,
     TOKEN_ASSERT,
+
+    TOKEN_BREAK,
     TOKEN_RETURN,
 
     TOKEN_PRINT,
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_TOKENS == 53);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -482,6 +484,9 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_ASSERT:
         return "keyword 'assert'";
 
+    case TOKEN_BREAK:
+        return "keyword 'break'";
+
     case TOKEN_RETURN:
         return "keyword 'return'";
 
@@ -623,7 +628,7 @@ char lexer_char(char *name)
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_TOKENS == 53);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -708,6 +713,8 @@ Token lexer_next(void)
             token.kind = TOKEN_ARGV;
         } else if (str_eq(token.str, str_from_cstr("assert"))) {
             token.kind = TOKEN_ASSERT;
+        } else if (str_eq(token.str, str_from_cstr("break"))) {
+            token.kind = TOKEN_BREAK;
         } else if (str_eq(token.str, str_from_cstr("return"))) {
             token.kind = TOKEN_RETURN;
         } else if (str_eq(token.str, str_from_cstr("print"))) {
@@ -953,8 +960,9 @@ enum {
     NODE_LET,
     NODE_CONST,
     NODE_STRUCT,
-
     NODE_ASSERT,
+
+    NODE_BREAK,
     NODE_RETURN,
 
     NODE_PRINT,
@@ -1065,7 +1073,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_TOKENS == 53);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -1118,7 +1126,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_TOKENS == 53);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -1203,7 +1211,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_TOKENS == 53);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1341,8 +1349,8 @@ bool imports_find(Str path)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 52);
-size_t parse_stmt(void)
+static_assert(COUNT_TOKENS == 53);
+size_t parse_stmt(bool loop)
 {
     size_t node;
     Token token = lexer_next();
@@ -1352,7 +1360,7 @@ size_t parse_stmt(void)
         local_assert(token, true);
         node = node_new(NODE_BLOCK, token);
         for (size_t *list = &nodes[node].nodes[NODE_BLOCK_START]; !lexer_read(TOKEN_RBRACE); ) {
-            list = node_list_push(list, parse_stmt());
+            list = node_list_push(list, parse_stmt(loop));
         }
         break;
 
@@ -1362,11 +1370,11 @@ size_t parse_stmt(void)
         nodes[node].nodes[NODE_IF_COND] = parse_expr(POWER_SET);
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
-        nodes[node].nodes[NODE_IF_THEN] = parse_stmt();
+        nodes[node].nodes[NODE_IF_THEN] = parse_stmt(loop);
 
         if (lexer_read(TOKEN_ELSE)) {
             lexer_buffer(lexer_expect(TOKEN_LBRACE));
-            nodes[node].nodes[NODE_IF_ELSE] = parse_stmt();
+            nodes[node].nodes[NODE_IF_ELSE] = parse_stmt(loop);
         }
         break;
 
@@ -1376,7 +1384,7 @@ size_t parse_stmt(void)
 
         token = lexer_peek();
         if (token.kind == TOKEN_LET) {
-            nodes[node].nodes[NODE_FOR_INIT] = parse_stmt();
+            nodes[node].nodes[NODE_FOR_INIT] = parse_stmt(true);
             lexer_expect(TOKEN_COMMA);
             nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET);
 
@@ -1388,7 +1396,7 @@ size_t parse_stmt(void)
         }
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
-        nodes[node].nodes[NODE_FOR_BODY] = parse_stmt();
+        nodes[node].nodes[NODE_FOR_BODY] = parse_stmt(true);
         break;
 
     case TOKEN_MATCH: {
@@ -1402,7 +1410,7 @@ size_t parse_stmt(void)
         while (!lexer_read(TOKEN_RBRACE)) {
             if (lexer_read(TOKEN_ELSE)) {
                 lexer_expect(TOKEN_ARROW);
-                nodes[node].nodes[NODE_MATCH_ELSE] = parse_stmt();
+                nodes[node].nodes[NODE_MATCH_ELSE] = parse_stmt(loop);
                 lexer_expect(TOKEN_RBRACE);
                 break;
             } else {
@@ -1416,7 +1424,7 @@ size_t parse_stmt(void)
                     }
                 }
 
-                nodes[branch].nodes[NODE_BRANCH_BODY] = parse_stmt();
+                nodes[branch].nodes[NODE_BRANCH_BODY] = parse_stmt(loop);
                 branches = node_list_push(branches, branch);
             }
         }
@@ -1448,7 +1456,7 @@ size_t parse_stmt(void)
         nodes[node].nodes[NODE_FN_BODY] = node_new(NODE_BLOCK, token);
         for (size_t *list = &nodes[nodes[node].nodes[NODE_FN_BODY]].nodes[NODE_BLOCK_START]; !lexer_read(TOKEN_RBRACE); ) {
             token = lexer_peek();
-            list = node_list_push(list, parse_stmt());
+            list = node_list_push(list, parse_stmt(false));
         }
 
         if (nodes[node].nodes[NODE_FN_TYPE] != 0 && token.kind != TOKEN_RETURN) {
@@ -1524,7 +1532,7 @@ size_t parse_stmt(void)
         lexer_buffer(token);
         lexer_open(path.data);
         for (tops_iter = &tops_base; !lexer_read(TOKEN_EOF); ) {
-            size_t stmt = parse_stmt();
+            size_t stmt = parse_stmt(false);
             if (stmt != 0) {
                 tops_iter = node_list_push(tops_iter, stmt);
             }
@@ -1544,6 +1552,18 @@ size_t parse_stmt(void)
             nodes[node].nodes[NODE_ASSERT_EXPR] = parse_const(POWER_SET);
         }
         lexer_expect(TOKEN_RPAREN);
+        break;
+
+    case TOKEN_BREAK:
+        local_assert(token, true);
+
+        if (!loop) {
+            print_pos(stderr, token.pos);
+            fprintf(stderr, "error: unexpected %s outside of loop\n", cstr_from_token_kind(token.kind));
+            exit(1);
+        }
+
+        node = node_new(NODE_BREAK, token);
         break;
 
     case TOKEN_RETURN:
@@ -1570,8 +1590,8 @@ size_t parse_stmt(void)
 }
 
 // Constant Evaluator
-static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_NODES == 17);
+static_assert(COUNT_TOKENS == 53);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1593,8 +1613,8 @@ void eval_const_unary(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_NODES == 17);
+static_assert(COUNT_TOKENS == 53);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1923,8 +1943,8 @@ Type type_assert_pointer(size_t node)
     return actual;
 }
 
-static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_NODES == 17);
+static_assert(COUNT_TOKENS == 53);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2061,8 +2081,8 @@ void check_type(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_NODES == 17);
+static_assert(COUNT_TOKENS == 53);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2348,8 +2368,8 @@ bool preds_find(size_t value, size_t start, size_t *index)
     return false;
 }
 
-static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_NODES == 17);
+static_assert(COUNT_TOKENS == 53);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2431,6 +2451,7 @@ void check_stmt(size_t node)
         }
     } break;
 
+    case NODE_BREAK:
     case NODE_BRANCH:
         break;
 
@@ -2944,8 +2965,8 @@ void compile_ref(size_t node)
     }
 }
 
-static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_NODES == 17);
+static_assert(COUNT_TOKENS == 53);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -3232,10 +3253,11 @@ void jumps_restore(Jumps *jumps, size_t start)
 }
 
 Jumps pred_jumps;
+Jumps break_jumps;
 Jumps branch_jumps;
 
-static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 52);
+static_assert(COUNT_NODES == 17);
+static_assert(COUNT_TOKENS == 53);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -3279,6 +3301,8 @@ void compile_stmt(size_t node)
 
         size_t body_addr = ops_count;
         ops_push(OP_ELSE, 0);
+
+        size_t break_jumps_save = branch_jumps.count;
         compile_stmt(nodes[node].nodes[NODE_FOR_BODY]);
 
         size_t update = nodes[node].nodes[NODE_FOR_UPDATE];
@@ -3288,6 +3312,8 @@ void compile_stmt(size_t node)
 
         ops_push(OP_GOTO, loop_addr);
         ops[body_addr].data = ops_count;
+
+        jumps_restore(&break_jumps, break_jumps_save);
 
         local_max = max(local_max, local_size);
         local_size = local_size_save;
@@ -3410,6 +3436,11 @@ void compile_stmt(size_t node)
             nodes[field].token.data = nodes[node].token.data;
             nodes[node].token.data += align(type_size(nodes[field].type));
         }
+        break;
+
+    case NODE_BREAK:
+        jumps_save(&break_jumps);
+        ops_push(OP_GOTO, 0);
         break;
 
     case NODE_RETURN: {
@@ -4099,7 +4130,7 @@ int main(int argc, char **argv)
 
         lexer_open(path);
         for (tops_iter = &tops_base; !lexer_read(TOKEN_EOF); ) {
-            size_t stmt = parse_stmt();
+            size_t stmt = parse_stmt(false);
             if (stmt != 0) {
                 tops_iter = node_list_push(tops_iter, stmt);
             }
