@@ -291,14 +291,16 @@ enum {
     TOKEN_BAND,
     TOKEN_BNOT,
 
+    TOKEN_LOR,
+    TOKEN_LAND,
+    TOKEN_LNOT,
+
     TOKEN_SET,
     TOKEN_ADD_SET,
     TOKEN_SUB_SET,
     TOKEN_MUL_SET,
     TOKEN_DIV_SET,
     TOKEN_MOD_SET,
-
-    TOKEN_LNOT,
 
     TOKEN_GT,
     TOKEN_GE,
@@ -330,7 +332,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -406,6 +408,15 @@ char *cstr_from_token_kind(int kind)
     case TOKEN_BNOT:
         return "'~'";
 
+    case TOKEN_LOR:
+        return "'||'";
+
+    case TOKEN_LAND:
+        return "'&&'";
+
+    case TOKEN_LNOT:
+        return "'!'";
+
     case TOKEN_SET:
         return "'='";
 
@@ -423,9 +434,6 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_MOD_SET:
         return "'%='";
-
-    case TOKEN_LNOT:
-        return "'!'";
 
     case TOKEN_GT:
         return "'>'";
@@ -628,7 +636,7 @@ char lexer_char(char *name)
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -820,11 +828,19 @@ Token lexer_next(void)
             break;
 
         case '|':
-            token.kind = TOKEN_BOR;
+            if (lexer_match('|')) {
+                token.kind = TOKEN_LOR;
+            } else {
+                token.kind = TOKEN_BOR;
+            }
             break;
 
         case '&':
-            token.kind = TOKEN_BAND;
+            if (lexer_match('&')) {
+                token.kind = TOKEN_LAND;
+            } else {
+                token.kind = TOKEN_BAND;
+            }
             break;
 
         case '~':
@@ -1063,6 +1079,7 @@ bool node_list_find(size_t list, size_t node)
 enum {
     POWER_NIL,
     POWER_SET,
+    POWER_LOR,
     POWER_CMP,
     POWER_ADD,
     POWER_BOR,
@@ -1073,7 +1090,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -1095,6 +1112,10 @@ int power_from_token_kind(int kind)
     case TOKEN_BOR:
     case TOKEN_BAND:
         return POWER_BOR;
+
+    case TOKEN_LOR:
+    case TOKEN_LAND:
+        return POWER_LOR;
 
     case TOKEN_SET:
     case TOKEN_ADD_SET:
@@ -1126,7 +1147,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -1211,7 +1232,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1349,7 +1370,7 @@ bool imports_find(Str path)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 size_t parse_stmt(bool loop)
 {
     size_t node;
@@ -1591,7 +1612,7 @@ size_t parse_stmt(bool loop)
 
 // Constant Evaluator
 static_assert(COUNT_NODES == 17);
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1614,7 +1635,7 @@ void eval_const_unary(size_t node)
 }
 
 static_assert(COUNT_NODES == 17);
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1647,6 +1668,14 @@ void eval_const_binary(size_t node)
 
     case TOKEN_BAND:
         nodes[node].token.data = nodes[lhs].token.data & nodes[rhs].token.data;
+        break;
+
+    case TOKEN_LOR:
+        nodes[node].token.data = nodes[lhs].token.data || nodes[rhs].token.data;
+        break;
+
+    case TOKEN_LAND:
+        nodes[node].token.data = nodes[lhs].token.data && nodes[rhs].token.data;
         break;
 
     case TOKEN_GT:
@@ -1944,7 +1973,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 17);
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2082,7 +2111,7 @@ void check_type(size_t node)
 }
 
 static_assert(COUNT_NODES == 17);
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2286,6 +2315,17 @@ void check_expr(size_t node, bool ref)
             nodes[node].type = type_assert(rhs, type_assert_arith(lhs));
             break;
 
+        case TOKEN_LOR:
+        case TOKEN_LAND:
+            ref_prevent(node, ref);
+            nodes[node].type = type_new(TYPE_BOOL, 0, 0);
+            check_expr(lhs, false);
+            type_assert(lhs, nodes[node].type);
+
+            check_expr(rhs, false);
+            type_assert(rhs, nodes[node].type);
+            break;
+
         case TOKEN_GT:
         case TOKEN_GE:
         case TOKEN_LT:
@@ -2369,7 +2409,7 @@ bool preds_find(size_t value, size_t start, size_t *index)
 }
 
 static_assert(COUNT_NODES == 17);
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2966,7 +3006,7 @@ void compile_ref(size_t node)
 }
 
 static_assert(COUNT_NODES == 17);
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -3126,6 +3166,32 @@ void compile_expr(size_t node, bool ref)
             ops_push(OP_BAND, 0);
             break;
 
+        case TOKEN_LOR: {
+            compile_expr(lhs, false);
+
+            size_t right_addr = ops_count;
+            ops_push(OP_THEN, 0);
+
+            compile_expr(rhs, false);
+            ops_push(OP_GOTO, ops_count + 2);
+
+            ops[right_addr].data = ops_count;
+            ops_push(OP_PUSH, 1);
+        } break;
+
+        case TOKEN_LAND: {
+            compile_expr(lhs, false);
+
+            size_t right_addr = ops_count;
+            ops_push(OP_ELSE, 0);
+
+            compile_expr(rhs, false);
+            ops_push(OP_GOTO, ops_count + 2);
+
+            ops[right_addr].data = ops_count;
+            ops_push(OP_PUSH, 0);
+        } break;
+
         case TOKEN_SET:
             compile_expr(lhs, true);
             compile_expr(rhs, false);
@@ -3257,7 +3323,7 @@ Jumps break_jumps;
 Jumps branch_jumps;
 
 static_assert(COUNT_NODES == 17);
-static_assert(COUNT_TOKENS == 53);
+static_assert(COUNT_TOKENS == 55);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {

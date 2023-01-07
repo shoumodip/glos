@@ -1,8 +1,16 @@
 ##
-stdout: 8
+stdout: 24
 1
 0
 0
+1
+0
+0
+0
+1
+0
+1
+1
 1
 ##
 
@@ -11,4 +19,14 @@ fn main() {
     print false
     print !true
     print !false
+
+    print false && false
+    print false && true
+    print true && false
+    print true && true
+
+    print false || false
+    print false || true
+    print true || false
+    print true || true
 }
