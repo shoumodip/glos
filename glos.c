@@ -1750,10 +1750,23 @@ void eval_const_binary(size_t node)
 }
 
 // Type
-// TODO: deep check types for equality
 bool type_eq(Type a, Type b)
 {
-    return a.kind == b.kind && a.ref == b.ref;
+    if (a.kind != b.kind || a.ref != b.ref) {
+        return false;
+    }
+
+    if (a.kind == TYPE_ARRAY) {
+        size_t a_size = nodes[nodes[a.data].nodes[NODE_BINARY_LHS]].token.data;
+        size_t b_size = nodes[nodes[b.data].nodes[NODE_BINARY_LHS]].token.data;
+
+        Type a_base = nodes[nodes[a.data].nodes[NODE_BINARY_RHS]].type;
+        Type b_base = nodes[nodes[b.data].nodes[NODE_BINARY_RHS]].type;
+
+        return a_size == b_size && type_eq(a_base, b_base);
+    }
+
+    return a.kind != TYPE_STRUCT || a.data == b.data;
 }
 
 bool type_isarray(Type type)
