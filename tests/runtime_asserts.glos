@@ -1,0 +1,8 @@
+##
+stderr: 49
+tests/runtime_asserts.glos:7:5: assertion failed
+##
+
+fn main() {
+    assert(false)
+}

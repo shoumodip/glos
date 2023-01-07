@@ -1535,9 +1535,14 @@ size_t parse_stmt(void)
     };
 
     case TOKEN_ASSERT:
+        token.data = parser_local;
         node = node_new(NODE_ASSERT, token);
         lexer_expect(TOKEN_LPAREN);
-        nodes[node].nodes[NODE_ASSERT_EXPR] = parse_const(POWER_SET);
+        if (parser_local) {
+            nodes[node].nodes[NODE_ASSERT_EXPR] = parse_expr(POWER_SET);
+        } else {
+            nodes[node].nodes[NODE_ASSERT_EXPR] = parse_const(POWER_SET);
+        }
         lexer_expect(TOKEN_RPAREN);
         break;
 
@@ -2536,9 +2541,15 @@ void check_stmt(size_t node)
 
     case NODE_ASSERT: {
         size_t expr = nodes[node].nodes[NODE_ASSERT_EXPR];
-        check_const(expr);
+        if (nodes[node].token.data == 1) {
+            check_expr(expr, false);
+        } else {
+            check_const(expr);
+        }
+
         type_assert(expr, type_new(TYPE_BOOL, 0, 0));
-        if (nodes[expr].token.data == 0) {
+
+        if (nodes[node].token.data == 0 && nodes[expr].token.data == 0) {
             print_pos(stderr, nodes[node].token.pos);
             fprintf(stderr, "assertion failed\n");
             exit(1);
@@ -3366,7 +3377,31 @@ void compile_stmt(size_t node)
     } break;
 
     case NODE_CONST:
+        break;
+
     case NODE_ASSERT:
+        if (nodes[node].token.data == 1) {
+            compile_expr(nodes[node].nodes[NODE_ASSERT_EXPR], false);
+
+            ops_push(OP_THEN, ops_count + 6);
+            ops_push(OP_PUSH, 1);
+            ops_push(OP_PUSH, 2);
+
+            size_t capacity = ARENA_CAP - strs_arena.size;
+
+            Str str;
+            str.data = strs_arena.data + strs_arena.size;
+            str.size = snprintf(str.data, capacity, "%s:%zu:%zu: assertion failed\n",
+                                nodes[node].token.pos.path,
+                                nodes[node].token.pos.row,
+                                nodes[node].token.pos.col);
+            assert(str.size < capacity);
+            strs_arena.size += str.size;
+
+            ops_push(OP_STR, str_push(str));
+            ops_push(OP_SYSCALL, 4);
+            ops_push(OP_HALT, 1);
+        }
         break;
 
     case NODE_STRUCT:
@@ -3972,32 +4007,35 @@ int main(int argc, char **argv)
 
     switch (mode) {
     case MODE_TEST_RUN: {
-        bool first = true;
-        if (str_ends_with(str_from_cstr(argv[2]), str_from_cstr(".glos"))) {
-            if (first) {
-                first = false;
-            } else {
-                fprintf(stderr, "\n");
-            }
+        if (path == NULL) {
+            usage(stderr);
+            fprintf(stderr, "\nerror: file path not provided\n");
+            exit(1);
+        }
 
-            path = argv[2];
+        path = argv[2];
+        if (str_ends_with(str_from_cstr(path), str_from_cstr(".glos"))) {
             args_push(*argv);
             args_push("-r");
             args_push(path);
-            for (int i = 3; i < argc; i += 1) {
-                args_push(argv[i]);
-            }
-
-            Test test = {0};
-            test.exit = capture_command(args, &test.out, &test.err);
-            test.debug = true;
-
-            fprintf(stderr, "%s: test\n\n", path);
-            fprintf(stderr, "----------- Result -----------\n");
-            print_test(stderr, test);
-            fprintf(stderr, "------------------------------\n");
-            test_free(&test);
+        } else {
+            arena_push(&path_arena, "./", 2);
+            arena_push(&path_arena, path, strlen(path));
+            args_push(path_arena.data);
         }
+
+        for (int i = 3; i < argc; i += 1) {
+            args_push(argv[i]);
+        }
+
+        Test test = {0};
+        test.exit = capture_command(args, &test.out, &test.err);
+        test.debug = true;
+
+        fprintf(stderr, "----------- Result -----------\n");
+        print_test(stderr, test);
+        fprintf(stderr, "------------------------------\n");
+        test_free(&test);
     } break;
 
     case MODE_TEST_CHECK: {
