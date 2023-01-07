@@ -1526,12 +1526,12 @@ size_t parse_stmt(bool loop)
 
     case TOKEN_LET:
         node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT));
+        nodes[node].token.data = parser_local;
         if (lexer_read(TOKEN_SET)) {
             nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET);
         } else {
             nodes[node].nodes[NODE_LET_TYPE] = parse_type();
         }
-        nodes[node].token.data = parser_local;
         break;
 
     case TOKEN_CONST:
@@ -1587,7 +1587,7 @@ size_t parse_stmt(bool loop)
 
         lexer_buffer(token);
         lexer_open(path.data);
-        for (tops_iter = &tops_base; !lexer_read(TOKEN_EOF); ) {
+        while (!lexer_read(TOKEN_EOF)) {
             size_t stmt = parse_stmt(false);
             if (stmt != 0) {
                 tops_iter = node_list_push(tops_iter, stmt);
@@ -1753,6 +1753,21 @@ void eval_const_binary(size_t node)
 bool type_eq(Type a, Type b)
 {
     if (a.kind != b.kind || a.ref != b.ref) {
+        if (a.ref == b.ref && a.ref == 1) {
+            a.ref = 0;
+            b.ref = 0;
+
+            if (b.kind == TYPE_ARRAY) {
+                Type t = a;
+                a = b;
+                b = t;
+            }
+
+            if (a.kind == TYPE_ARRAY && type_eq(nodes[nodes[a.data].nodes[NODE_BINARY_RHS]].type, b)) {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -2966,7 +2981,7 @@ void print_op(FILE *file, Op op)
         break;
 
     case OP_HALT:
-        fprintf(file, "halt\n");
+        fprintf(file, "halt %zu\n", op.data);
         break;
 
     case OP_SYSCALL:
@@ -3127,7 +3142,7 @@ size_t global_alloc(size_t size)
 
 void compile_ref(size_t node)
 {
-    if (nodes[node].token.data | 1) {
+    if (nodes[node].token.data & 1) {
         ops_push(OP_LPTR, nodes[node].token.data & ~1);
     } else {
         ops_push(OP_GPTR, nodes[node].token.data);
@@ -3589,7 +3604,7 @@ void compile_stmt(size_t node)
             ops_push(OP_RET, functions_current);
         }
 
-        function->vars = max(local_max, function->ret) - function->args;
+        function->vars = max(local_max, align(function->ret)) - function->args;
         local_size = local_size_save;
     } break;
 
@@ -3941,7 +3956,7 @@ void generate(char *path)
             Function *function = &functions[op.data];
             fprintf(file, "pop rax\n");
             fprintf(file, "pop rbp\n");
-            fprintf(file, "add rsp, %zu\n", function->args + function->vars - function->ret);
+            fprintf(file, "add rsp, %zu\n", function->args + function->vars - align(function->ret));
             fprintf(file, "jmp rax\n");
         } break;
 
@@ -3955,7 +3970,7 @@ void generate(char *path)
 
         case OP_HALT:
             fprintf(file, "mov rax, 60\n");
-            fprintf(file, "xor rdi, rdi\n");
+            fprintf(file, "mov rdi, %zu\n", op.data);
             fprintf(file, "syscall\n");
             break;
 
@@ -4183,6 +4198,7 @@ bool test_file(char *program, char *path, Str contents)
             arena_push_char(&path_arena, '\0');
         }
     }
+    args_push(NULL);
 
     if (str_eq(key, str_from_cstr("stdout:"))) {
         test_parse_data(path, &contents, &expected.out);
@@ -4354,17 +4370,26 @@ int main(int argc, char **argv)
             check_stmt(iter);
         }
 
-        ops_push(OP_CALL, 0);
-        ops_push(OP_HALT, 0);
-
-        if (!functions_find(str_from_cstr("main"), &ops[0].data)) {
+        size_t main;
+        if (!functions_find(str_from_cstr("main"), &main)) {
             print_pos(stderr, lexer.pos);
             fprintf(stderr, "error: function 'main' is not defined\n");
             exit(1);
         }
 
-        for (size_t iter = tops_base; iter != 0; iter = nodes[iter].next) {
-            compile_stmt(iter);
+        for (size_t i = 0; i < structures_count; i += 1) {
+            compile_stmt(structures[i]);
+        }
+
+        for (size_t i = 0; i < variables_count; i += 1) {
+            compile_stmt(variables[i]);
+        }
+
+        ops_push(OP_CALL, main);
+        ops_push(OP_HALT, 0);
+
+        for (size_t i = 0; i < functions_count; i += 1) {
+            compile_stmt(functions[i].node);
         }
 
         path_arena.size = 0;
@@ -4386,6 +4411,7 @@ int main(int argc, char **argv)
             for (int i = 3; i < argc; i += 1) {
                 args_push(argv[i]);
             }
+            args_push(NULL);
 
             exit(execute_command(args, false));
         }

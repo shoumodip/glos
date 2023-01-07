@@ -1,0 +1,48 @@
+use std.libc
+
+fn str_from_cstr(src *char) Str {
+    let str Str
+    str.data = src
+    str.size = strlen(src)
+    return str
+}
+
+fn str_from_int(buf *char, n int) Str {
+    let neg = false
+    if n < 0 {
+        neg = true
+        n = -n
+    }
+
+    let str Str
+    str.data = buf
+    if n == 0 {
+        str.size = 1
+    } else {
+        str.size = 0
+        for let i = n, i != 0, i /= 10 {
+            str.size += 1
+        }
+    }
+
+    if neg {
+        str.size += 1
+    }
+
+    let end = str.size - 1
+    if n == 0 {
+        buf[end] = '0'
+    } else {
+        for n != 0 {
+            buf[end] = '0' + (n % 10) as char
+            end -= 1
+            n /= 10
+        }
+
+        if neg {
+            buf[end] = '-'
+        }
+    }
+
+    return str
+}

@@ -13,11 +13,10 @@ bar
 baz
 ##
 
-use std.libc
+use std.io
 
 fn main() {
     for let i = 0, i < argc, i += 1 {
-        syscall(1, 1, argv[i], cstr_size(argv[i]))
-        syscall(1, 1, "\n"c, 1)
+        &stdout << str_from_cstr(argv[i]) << '\n'
     }
 }

@@ -1,6 +1,8 @@
 ##
 stderr: 49
-tests/runtime_asserts.glos:7:5: assertion failed
+tests/runtime_asserts.glos:9:5: assertion failed
+
+exit: 1
 ##
 
 fn main() {
