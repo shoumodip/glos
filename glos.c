@@ -314,6 +314,8 @@ enum {
     TOKEN_STRUCT,
 
     TOKEN_USE,
+    TOKEN_ARGC,
+    TOKEN_ARGV,
     TOKEN_ASSERT,
     TOKEN_RETURN,
 
@@ -321,7 +323,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -450,6 +452,12 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_USE:
         return "keyword 'use'";
+
+    case TOKEN_ARGC:
+        return "keyword 'argc'";
+
+    case TOKEN_ARGV:
+        return "keyword 'argv'";
 
     case TOKEN_ASSERT:
         return "keyword 'assert'";
@@ -595,7 +603,7 @@ char lexer_char(char *name)
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -674,6 +682,10 @@ Token lexer_next(void)
             token.kind = TOKEN_STRUCT;
         } else if (str_eq(token.str, str_from_cstr("use"))) {
             token.kind = TOKEN_USE;
+        } else if (str_eq(token.str, str_from_cstr("argc"))) {
+            token.kind = TOKEN_ARGC;
+        } else if (str_eq(token.str, str_from_cstr("argv"))) {
+            token.kind = TOKEN_ARGV;
         } else if (str_eq(token.str, str_from_cstr("assert"))) {
             token.kind = TOKEN_ASSERT;
         } else if (str_eq(token.str, str_from_cstr("return"))) {
@@ -1011,7 +1023,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -1059,7 +1071,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -1144,7 +1156,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1158,6 +1170,8 @@ size_t parse_expr(int mbp)
 
     case TOKEN_INT:
     case TOKEN_STR:
+    case TOKEN_ARGC:
+    case TOKEN_ARGV:
     case TOKEN_BOOL:
     case TOKEN_CHAR:
     case TOKEN_CSTR:
@@ -1280,7 +1294,7 @@ bool imports_find(Str path)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1493,7 +1507,7 @@ size_t parse_stmt(void)
 
 // Constant Evaluator
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1516,7 +1530,7 @@ void eval_const_unary(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1846,7 +1860,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1984,7 +1998,7 @@ void check_type(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -1998,6 +2012,16 @@ void check_expr(size_t node, bool ref)
         case TOKEN_STR:
             ref_prevent(node, ref);
             nodes[node].type = type_new(TYPE_STRUCT, 0, 0);
+            break;
+
+        case TOKEN_ARGC:
+            ref_prevent(node, ref);
+            nodes[node].type = type_new(TYPE_INT, 0, 0);
+            break;
+
+        case TOKEN_ARGV:
+            ref_prevent(node, ref);
+            nodes[node].type = type_new(TYPE_CHAR, 2, 0);
             break;
 
         case TOKEN_BOOL:
@@ -2021,6 +2045,7 @@ void check_expr(size_t node, bool ref)
                 nodes[node].type = nodes[variables[index]].type;
                 nodes[node].token.data = variables[index];
             } else if (constants_find(nodes[node].token.str, &index)) {
+                ref_prevent(node, ref);
                 nodes[node].type = nodes[constants[index]].type;
                 nodes[node].token.data = nodes[constants[index]].token.data;
                 nodes[node].token.kind = TOKEN_INT;
@@ -2244,7 +2269,7 @@ bool preds_find(size_t value, size_t start, size_t *index)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2495,6 +2520,8 @@ enum {
     OP_CALL,
     OP_RET,
 
+    OP_ARGC,
+    OP_ARGV,
     OP_HALT,
     OP_SYSCALL,
 
@@ -2507,7 +2534,7 @@ typedef struct {
     size_t data;
 } Op;
 
-static_assert(COUNT_OPS == 35);
+static_assert(COUNT_OPS == 37);
 void print_op(FILE *file, Op op)
 {
     switch (op.kind) {
@@ -2641,6 +2668,14 @@ void print_op(FILE *file, Op op)
         fprintf(file, "ret args=%zu, vars=%zu size=%zu\n", function->args, function->vars, function->ret);
     } break;
 
+    case OP_ARGC:
+        fprintf(file, "argc\n");
+        break;
+
+    case OP_ARGV:
+        fprintf(file, "argv\n");
+        break;
+
     case OP_HALT:
         fprintf(file, "halt\n");
         break;
@@ -2692,7 +2727,7 @@ size_t str_push(Str str)
     return strs_count - 1;
 }
 
-Str token_str_encode(Token token, Arena *arena, bool cstr)
+Str token_str_encode(Token token, bool cstr)
 {
     if (token.kind == TOKEN_STR) {
         token.str.size -= 1;
@@ -2701,7 +2736,7 @@ Str token_str_encode(Token token, Arena *arena, bool cstr)
     }
 
     Str str;
-    str.data = arena->data + arena->size;
+    str.data = strs_arena.data + strs_arena.size;
     str.size = 0;
 
     for (size_t i = 1; i < token.str.size; i += 1) {
@@ -2737,12 +2772,12 @@ Str token_str_encode(Token token, Arena *arena, bool cstr)
             }
         }
 
-        arena_push_char(arena, ch);
+        arena_push_char(&strs_arena, ch);
         str.size += 1;
     }
 
     if (cstr) {
-        arena_push_char(arena, '\0');
+        arena_push_char(&strs_arena, '\0');
     }
 
     return str;
@@ -2811,12 +2846,20 @@ void compile_ref(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
     case NODE_ATOM:
         switch (nodes[node].token.kind) {
+        case TOKEN_ARGC:
+            ops_push(OP_ARGC, 0);
+            break;
+
+        case TOKEN_ARGV:
+            ops_push(OP_ARGV, 0);
+            break;
+
         case TOKEN_INT:
         case TOKEN_BOOL:
         case TOKEN_CHAR:
@@ -2824,11 +2867,11 @@ void compile_expr(size_t node, bool ref)
             break;
 
         case TOKEN_STR:
-            ops_push(OP_STR, str_push(token_str_encode(nodes[node].token, &strs_arena, false)));
+            ops_push(OP_STR, str_push(token_str_encode(nodes[node].token, false)));
             break;
 
         case TOKEN_CSTR:
-            ops_push(OP_CSTR, str_push(token_str_encode(nodes[node].token, &strs_arena, true)));
+            ops_push(OP_CSTR, str_push(token_str_encode(nodes[node].token, true)));
             break;
 
         case TOKEN_IDENT: {
@@ -3043,7 +3086,7 @@ Jumps pred_jumps;
 Jumps branch_jumps;
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 45);
+static_assert(COUNT_TOKENS == 47);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -3209,7 +3252,7 @@ void compile_stmt(size_t node)
 }
 
 // Generator
-static_assert(COUNT_OPS == 35);
+static_assert(COUNT_OPS == 37);
 void generate(char *path)
 {
     FILE *file = fopen(path, "w");
@@ -3220,6 +3263,13 @@ void generate(char *path)
 
     fprintf(file, "format elf64 executable\n");
     fprintf(file, "segment readable executable\n");
+
+    fprintf(file, "mov [argv], rsp\n");
+    fprintf(file, "add qword [argv], 16\n");
+
+    fprintf(file, "mov rax, [rsp]\n");
+    fprintf(file, "dec rax\n");
+    fprintf(file, "mov qword [argc], rax\n");
 
     for (size_t i = 0; i < ops_count; i += 1) {
         Op op = ops[i];
@@ -3455,6 +3505,14 @@ void generate(char *path)
             fprintf(file, "jmp rax\n");
         } break;
 
+        case OP_ARGC:
+            fprintf(file, "push qword [argc]\n");
+            break;
+
+        case OP_ARGV:
+            fprintf(file, "push qword [argv]\n");
+            break;
+
         case OP_HALT:
             fprintf(file, "mov rax, 60\n");
             fprintf(file, "xor rdi, rdi\n");
@@ -3517,6 +3575,9 @@ void generate(char *path)
     fprintf(file, "ret\n");
 
     fprintf(file, "segment readable writeable\n");
+    fprintf(file, "argv: rq 1\n");
+    fprintf(file, "argc: rq 1\n");
+
     if (global_size != 0) {
         fprintf(file, "memory: rb %zu\n", global_size);
     }
@@ -3543,6 +3604,17 @@ void generate(char *path)
 }
 
 // Tester
+#define ARGS_CAP 1024
+char *args[ARGS_CAP];
+size_t args_count;
+
+void args_push(char *item)
+{
+    assert(args_count < ARGS_CAP);
+    args[args_count] = item;
+    args_count += 1;
+}
+
 typedef struct {
     Str out;
     Str err;
@@ -3571,6 +3643,15 @@ void test_free(Test *test)
 
 void print_test(FILE *file, Test test)
 {
+    if (test.debug && args_count > 3) {
+        fprintf(file, "argc: %zu\n", args_count - 3);
+        for (size_t i = 3; i < args_count; i += 1) {
+            fprintf(file, "arg: %zu\n", strlen(args[i]));
+            fprintf(file, "%s\n", args[i]);
+            fprintf(file, "\n");
+        }
+    }
+
     if (test.out.size != 0) {
         if (test.debug) {
             fprintf(file, "stdout: %zu\n", test.out.size);
@@ -3615,12 +3696,54 @@ void test_parse_data(char *path, Str *contents, Str *out)
     *contents = str_drop_left(*contents, out->size);
 }
 
+size_t test_parse_int(char *path, Str *contents)
+{
+    Str number = str_split_by(contents, '\n');
+    size_t value;
+    if (!int_from_str(number, &value)) {
+        fprintf(stderr, "%s: error: invalid number '", path);
+        print_str(stderr, number);
+        fprintf(stderr, "'\n");
+        exit(1);
+    }
+    return value;
+}
+
 bool test_file(char *program, char *path, Str contents)
 {
+    path_arena.size = 0;
+
+    args_count = 0;
+    args_push(program);
+    args_push("-r");
+    args_push(path);
+
     Test expected = {0};
     contents = str_drop_left(contents, 3);
 
     Str key = str_split_by(&contents, ' ');
+    if (str_eq(key, str_from_cstr("argc:"))) {
+        size_t args_count = test_parse_int(path, &contents);
+        contents = str_trim_left(contents, '\n');
+        key = str_split_by(&contents, ' ');
+
+        for (size_t i = 0; i < args_count; i += 1) {
+            if (!str_eq(key, str_from_cstr("arg:"))) {
+                fprintf(stderr, "%s: error: not enough arguments in file\n", path);
+                exit(1);
+            }
+
+            Str arg;
+            test_parse_data(path, &contents, &arg);
+            contents = str_trim_left(contents, '\n');
+            key = str_split_by(&contents, ' ');
+
+            args_push(path_arena.data + path_arena.size);
+            arena_push(&path_arena, arg.data, arg.size);
+            arena_push_char(&path_arena, '\0');
+        }
+    }
+
     if (str_eq(key, str_from_cstr("stdout:"))) {
         test_parse_data(path, &contents, &expected.out);
         contents = str_trim_left(contents, '\n');
@@ -3634,15 +3757,9 @@ bool test_file(char *program, char *path, Str contents)
     }
 
     if (str_eq(key, str_from_cstr("exit:"))) {
-        size_t value;
-        if (!int_from_str(str_split_by(&contents, '\n'), &value)) {
-            fprintf(stderr, "%s: error: expected number of bytes of stdout\n", path);
-            exit(1);
-        }
-        expected.exit = value;
+        expected.exit = test_parse_int(path, &contents);
     }
 
-    char *args[] = {program, "-r", path, NULL};
     Test actual = {0};
     actual.exit = capture_command(args, &actual.out, &actual.err);
 
@@ -3703,26 +3820,30 @@ int main(int argc, char **argv)
     switch (mode) {
     case MODE_TEST_RUN: {
         bool first = true;
-        for (int i = 2; i < argc; i += 1) {
-            if (str_ends_with(str_from_cstr(argv[i]), str_from_cstr(".glos"))) {
-                if (first) {
-                    first = false;
-                } else {
-                    fprintf(stderr, "\n");
-                }
-
-                path = argv[i];
-                char *args[] = {*argv, "-r", path, NULL};
-                Test test = {0};
-                test.exit = capture_command(args, &test.out, &test.err);
-                test.debug = true;
-
-                fprintf(stderr, "%s: test\n\n", path);
-                fprintf(stderr, "----------- Result -----------\n");
-                print_test(stderr, test);
-                fprintf(stderr, "------------------------------\n");
-                test_free(&test);
+        if (str_ends_with(str_from_cstr(argv[2]), str_from_cstr(".glos"))) {
+            if (first) {
+                first = false;
+            } else {
+                fprintf(stderr, "\n");
             }
+
+            path = argv[2];
+            args_push(*argv);
+            args_push("-r");
+            args_push(path);
+            for (int i = 3; i < argc; i += 1) {
+                args_push(argv[i]);
+            }
+
+            Test test = {0};
+            test.exit = capture_command(args, &test.out, &test.err);
+            test.debug = true;
+
+            fprintf(stderr, "%s: test\n\n", path);
+            fprintf(stderr, "----------- Result -----------\n");
+            print_test(stderr, test);
+            fprintf(stderr, "------------------------------\n");
+            test_free(&test);
         }
     } break;
 
@@ -3825,8 +3946,12 @@ int main(int argc, char **argv)
             path_arena.size -= 6;
             path_arena.data[path_arena.size] = '\0';
 
-            argv[2] = path_arena.data;
-            exit(execute_command(argv + 2, false));
+            args_push(path_arena.data);
+            for (int i = 3; i < argc; i += 1) {
+                args_push(argv[i]);
+            }
+
+            exit(execute_command(args, false));
         }
     }
 }

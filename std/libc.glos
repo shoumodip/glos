@@ -1,0 +1,8 @@
+fn cstr_size(src *char) int {
+    let i = 0
+    for src[i] != '\0' {
+        # TODO: implement the '+=' operator
+        i = i + 1
+    }
+    return i
+}

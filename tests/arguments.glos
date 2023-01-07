@@ -1,0 +1,30 @@
+##
+argc: 3
+arg: 3
+foo
+
+arg: 3
+bar
+
+arg: 3
+baz
+
+stdout: 12
+foo
+bar
+baz
+##
+
+use std.libc
+
+fn main() {
+    # TODO: implement the `for init, cond, update` form
+    let i = 0
+    for i < argc {
+        syscall(1, 1, argv[i], cstr_size(argv[i]))
+        syscall(1, 1, "\n"c, 1)
+
+        # TODO: implement the '+=' operator
+        i = i + 1
+    }
+}
