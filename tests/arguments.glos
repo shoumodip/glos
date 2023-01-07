@@ -2,10 +2,8 @@
 argc: 3
 arg: 3
 foo
-
 arg: 3
 bar
-
 arg: 3
 baz
 
@@ -23,8 +21,6 @@ fn main() {
     for i < argc {
         syscall(1, 1, argv[i], cstr_size(argv[i]))
         syscall(1, 1, "\n"c, 1)
-
-        # TODO: implement the '+=' operator
-        i = i + 1
+        i += 1
     }
 }

@@ -292,6 +292,11 @@ enum {
     TOKEN_BNOT,
 
     TOKEN_SET,
+    TOKEN_ADD_SET,
+    TOKEN_SUB_SET,
+    TOKEN_MUL_SET,
+    TOKEN_DIV_SET,
+    TOKEN_MOD_SET,
 
     TOKEN_LNOT,
 
@@ -323,7 +328,7 @@ enum {
     COUNT_TOKENS
 };
 
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 char *cstr_from_token_kind(int kind)
 {
     switch (kind) {
@@ -401,6 +406,21 @@ char *cstr_from_token_kind(int kind)
 
     case TOKEN_SET:
         return "'='";
+
+    case TOKEN_ADD_SET:
+        return "'+='";
+
+    case TOKEN_SUB_SET:
+        return "'-='";
+
+    case TOKEN_MUL_SET:
+        return "'*='";
+
+    case TOKEN_DIV_SET:
+        return "'/='";
+
+    case TOKEN_MOD_SET:
+        return "'%='";
 
     case TOKEN_LNOT:
         return "'!'";
@@ -603,7 +623,7 @@ char lexer_char(char *name)
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 Token lexer_next(void)
 {
     if (lexer.peeked) {
@@ -753,23 +773,43 @@ Token lexer_next(void)
             break;
 
         case '+':
-            token.kind = TOKEN_ADD;
+            if (lexer_match('=')) {
+                token.kind = TOKEN_ADD_SET;
+            } else {
+                token.kind = TOKEN_ADD;
+            }
             break;
 
         case '-':
-            token.kind = TOKEN_SUB;
+            if (lexer_match('=')) {
+                token.kind = TOKEN_SUB_SET;
+            } else {
+                token.kind = TOKEN_SUB;
+            }
             break;
 
         case '*':
-            token.kind = TOKEN_MUL;
+            if (lexer_match('=')) {
+                token.kind = TOKEN_MUL_SET;
+            } else {
+                token.kind = TOKEN_MUL;
+            }
             break;
 
         case '/':
-            token.kind = TOKEN_DIV;
+            if (lexer_match('=')) {
+                token.kind = TOKEN_DIV_SET;
+            } else {
+                token.kind = TOKEN_DIV;
+            }
             break;
 
         case '%':
-            token.kind = TOKEN_MOD;
+            if (lexer_match('=')) {
+                token.kind = TOKEN_MOD_SET;
+            } else {
+                token.kind = TOKEN_MOD;
+            }
             break;
 
         case '|':
@@ -1023,7 +1063,7 @@ enum {
     POWER_IDX,
 };
 
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 int power_from_token_kind(int kind)
 {
     switch (kind) {
@@ -1047,6 +1087,11 @@ int power_from_token_kind(int kind)
         return POWER_BOR;
 
     case TOKEN_SET:
+    case TOKEN_ADD_SET:
+    case TOKEN_SUB_SET:
+    case TOKEN_MUL_SET:
+    case TOKEN_DIV_SET:
+    case TOKEN_MOD_SET:
         return POWER_SET;
 
     case TOKEN_GT:
@@ -1071,7 +1116,7 @@ void error_unexpected(Token token)
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 size_t parse_const(int mbp)
 {
     size_t node;
@@ -1156,7 +1201,7 @@ size_t parse_type(void)
     return node;
 }
 
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 size_t parse_expr(int mbp)
 {
     size_t node;
@@ -1294,7 +1339,7 @@ bool imports_find(Str path)
     return false;
 }
 
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 size_t parse_stmt(void)
 {
     size_t node;
@@ -1507,7 +1552,7 @@ size_t parse_stmt(void)
 
 // Constant Evaluator
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 void eval_const_unary(size_t node)
 {
     size_t expr = nodes[node].nodes[NODE_UNARY_EXPR];
@@ -1530,7 +1575,7 @@ void eval_const_unary(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 void eval_const_binary(size_t node)
 {
     size_t lhs = nodes[node].nodes[NODE_BINARY_LHS];
@@ -1860,7 +1905,7 @@ Type type_assert_pointer(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 void check_const(size_t node)
 {
     switch (nodes[node].kind) {
@@ -1998,7 +2043,7 @@ void check_type(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 void check_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -2221,6 +2266,20 @@ void check_expr(size_t node, bool ref)
             nodes[node].type = type_new(TYPE_NIL, 0, 0);
             break;
 
+        case TOKEN_ADD_SET:
+        case TOKEN_SUB_SET:
+        case TOKEN_MUL_SET:
+        case TOKEN_DIV_SET:
+        case TOKEN_MOD_SET:
+            ref_prevent(node, ref);
+            check_expr(lhs, true);
+            type_assert_arith(lhs);
+
+            check_expr(rhs, false);
+            type_assert(rhs, nodes[lhs].type);
+            nodes[node].type = type_new(TYPE_NIL, 0, 0);
+            break;
+
         case TOKEN_AS: {
             ref_prevent(node, ref);
 
@@ -2269,7 +2328,7 @@ bool preds_find(size_t value, size_t start, size_t *index)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 void check_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -2846,7 +2905,7 @@ void compile_ref(size_t node)
 }
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 void compile_expr(size_t node, bool ref)
 {
     switch (nodes[node].kind) {
@@ -3012,6 +3071,56 @@ void compile_expr(size_t node, bool ref)
             ops_push(OP_STORE, type_size(nodes[rhs].type));
             break;
 
+        case TOKEN_ADD_SET: {
+            size_t size = type_size(nodes[rhs].type);
+            compile_expr(lhs, true);
+            ops_push(OP_DUP, 0);
+            ops_push(OP_LOAD, size);
+            compile_expr(rhs, false);
+            ops_push(OP_ADD, 0);
+            ops_push(OP_STORE, size);
+        } break;
+
+        case TOKEN_SUB_SET: {
+            size_t size = type_size(nodes[rhs].type);
+            compile_expr(lhs, true);
+            ops_push(OP_DUP, 0);
+            ops_push(OP_LOAD, size);
+            compile_expr(rhs, false);
+            ops_push(OP_SUB, 0);
+            ops_push(OP_STORE, size);
+        } break;
+
+        case TOKEN_MUL_SET: {
+            size_t size = type_size(nodes[rhs].type);
+            compile_expr(lhs, true);
+            ops_push(OP_DUP, 0);
+            ops_push(OP_LOAD, size);
+            compile_expr(rhs, false);
+            ops_push(OP_MUL, 0);
+            ops_push(OP_STORE, size);
+        } break;
+
+        case TOKEN_DIV_SET: {
+            size_t size = type_size(nodes[rhs].type);
+            compile_expr(lhs, true);
+            ops_push(OP_DUP, 0);
+            ops_push(OP_LOAD, size);
+            compile_expr(rhs, false);
+            ops_push(OP_DIV, 0);
+            ops_push(OP_STORE, size);
+        } break;
+
+        case TOKEN_MOD_SET: {
+            size_t size = type_size(nodes[rhs].type);
+            compile_expr(lhs, true);
+            ops_push(OP_DUP, 0);
+            ops_push(OP_LOAD, size);
+            compile_expr(rhs, false);
+            ops_push(OP_MOD, 0);
+            ops_push(OP_STORE, size);
+        } break;
+
         case TOKEN_GT:
             compile_expr(lhs, false);
             compile_expr(rhs, false);
@@ -3086,7 +3195,7 @@ Jumps pred_jumps;
 Jumps branch_jumps;
 
 static_assert(COUNT_NODES == 16);
-static_assert(COUNT_TOKENS == 47);
+static_assert(COUNT_TOKENS == 52);
 void compile_stmt(size_t node)
 {
     switch (nodes[node].kind) {
@@ -3648,8 +3757,8 @@ void print_test(FILE *file, Test test)
         for (size_t i = 3; i < args_count; i += 1) {
             fprintf(file, "arg: %zu\n", strlen(args[i]));
             fprintf(file, "%s\n", args[i]);
-            fprintf(file, "\n");
         }
+        fprintf(file, "\n");
     }
 
     if (test.out.size != 0) {
