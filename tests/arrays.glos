@@ -15,23 +15,15 @@ fn main() {
     const N = 3
     let xs [N][N]int
 
-    let i = 0
-    for i < N {
-        let j = 0
-        for j < N {
+    for let i = 0, i < N, i += 1 {
+        for let j = 0, j < N, j += 1 {
             xs[i][j] = (i + 1) * (j + 1)
-            j = j + 1
         }
-        i = i + 1
     }
 
-    i = 0
-    for i < N {
-        let j = 0
-        for j < N {
+    for let i = 0, i < N, i += 1 {
+        for let j = 0, j < N, j += 1 {
             print xs[i][j]
-            j = j + 1
         }
-        i = i + 1
     }
 }

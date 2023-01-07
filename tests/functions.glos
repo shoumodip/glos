@@ -17,7 +17,7 @@ stdout: 27
 fn list(i int, n int) {
     for i < n {
         print i
-        i = i + 1
+        i += 1
     }
 }
 

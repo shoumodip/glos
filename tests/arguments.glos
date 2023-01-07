@@ -16,11 +16,8 @@ baz
 use std.libc
 
 fn main() {
-    # TODO: implement the `for init, cond, update` form
-    let i = 0
-    for i < argc {
+    for let i = 0, i < argc, i += 1 {
         syscall(1, 1, argv[i], cstr_size(argv[i]))
         syscall(1, 1, "\n"c, 1)
-        i += 1
     }
 }

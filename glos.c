@@ -977,8 +977,10 @@ enum {
 #define NODE_IF_THEN 1
 #define NODE_IF_ELSE 2
 
-#define NODE_FOR_COND 0
-#define NODE_FOR_BODY 1
+#define NODE_FOR_INIT 0
+#define NODE_FOR_COND 1
+#define NODE_FOR_UPDATE 2
+#define NODE_FOR_BODY 3
 
 #define NODE_MATCH_EXPR 0
 #define NODE_MATCH_LIST 1
@@ -1010,7 +1012,7 @@ typedef struct {
     Type type;
     Token token;
 
-    size_t nodes[3];
+    size_t nodes[4];
     size_t next;
 } Node;
 
@@ -1371,7 +1373,19 @@ size_t parse_stmt(void)
     case TOKEN_FOR:
         local_assert(token, true);
         node = node_new(NODE_FOR, token);
-        nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET);
+
+        token = lexer_peek();
+        if (token.kind == TOKEN_LET) {
+            nodes[node].nodes[NODE_FOR_INIT] = parse_stmt();
+            lexer_expect(TOKEN_COMMA);
+            nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET);
+
+            if (lexer_read(TOKEN_COMMA)) {
+                nodes[node].nodes[NODE_FOR_UPDATE] = parse_expr(POWER_NIL);
+            }
+        } else {
+            nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET);
+        }
 
         lexer_buffer(lexer_expect(TOKEN_LBRACE));
         nodes[node].nodes[NODE_FOR_BODY] = parse_stmt();
@@ -2135,6 +2149,8 @@ void check_expr(size_t node, bool ref)
                 print_pos(stderr, nodes[node].token.pos);
                 fprintf(stderr, "error: expected %zu arguments, got %zu\n",
                         functions[index].arity, nodes[node].token.data);
+                print_pos(stderr, nodes[functions[index].node].token.pos);
+                fprintf(stderr, "note: defined here\n");
                 exit(1);
             }
 
@@ -2356,11 +2372,24 @@ void check_stmt(size_t node)
     } break;
 
     case NODE_FOR: {
+        size_t variables_count_save = variables_count;
+
+        size_t init = nodes[node].nodes[NODE_FOR_INIT];
+        if (init != 0) {
+            check_stmt(init);
+        }
+
         size_t cond = nodes[node].nodes[NODE_FOR_COND];
         check_expr(cond, false);
         type_assert(cond, type_new(TYPE_BOOL, 0, 0));
 
+        size_t update = nodes[node].nodes[NODE_FOR_UPDATE];
+        if (update != 0) {
+            check_stmt(update);
+        }
+
         check_stmt(nodes[node].nodes[NODE_FOR_BODY]);
+        variables_count = variables_count_save;
     } break;
 
     case NODE_MATCH: {
@@ -3227,6 +3256,13 @@ void compile_stmt(size_t node)
     } break;
 
     case NODE_FOR: {
+        size_t local_size_save = local_size;
+
+        size_t init = nodes[node].nodes[NODE_FOR_INIT];
+        if (init != 0) {
+            compile_stmt(init);
+        }
+
         size_t loop_addr = ops_count;
         compile_expr(nodes[node].nodes[NODE_FOR_COND], false);
 
@@ -3234,8 +3270,16 @@ void compile_stmt(size_t node)
         ops_push(OP_ELSE, 0);
         compile_stmt(nodes[node].nodes[NODE_FOR_BODY]);
 
+        size_t update = nodes[node].nodes[NODE_FOR_UPDATE];
+        if (update != 0) {
+            compile_stmt(update);
+        }
+
         ops_push(OP_GOTO, loop_addr);
         ops[body_addr].data = ops_count;
+
+        local_max = max(local_max, local_size);
+        local_size = local_size_save;
     } break;
 
     case NODE_MATCH: {
