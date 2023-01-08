@@ -1,0 +1,29 @@
+use std.str
+
+const ARENA_CAP = 16000
+
+struct Arena {
+    data [ARENA_CAP]char
+    size int
+}
+
+fn arena_push(arena *Arena, data *char, size int) {
+    assert arena.size + size <= ARENA_CAP
+    memcpy(&arena.data + arena.size as *char, data, size)
+    arena.size += size
+}
+
+fn [<<](a *Arena, str Str) *Arena {
+    arena_push(a, str.data, str.size)
+    return a
+}
+
+fn [<<](a *Arena, ch char) *Arena {
+    arena_push(a, &ch, 1)
+    return a
+}
+
+fn [<<](a *Arena, n int) *Arena {
+    let buf [20]char
+    return a << str_from_int(&buf, n)
+}

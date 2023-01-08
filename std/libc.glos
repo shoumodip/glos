@@ -1,17 +1,34 @@
 const STDOUT = 1
 const STDERR = 2
 
+fn read(fd int, data *char, count int) int {
+    return syscall(0, fd, data, count)
+}
+
 fn write(fd int, data *char, count int) int {
     return syscall(1, fd, data, count)
+}
+
+const O_RDONLY = 0
+const O_WRONLY = 1
+
+fn open(path *char, flags int, mode int) int {
+	return syscall(2, path, flags, mode)
 }
 
 fn close(fd int) {
 	syscall(3, fd)
 }
 
+fn fstat(fd int, statbuf *[144]char) int {
+	return syscall(5, fd, statbuf)
+}
+
 const PROT_READ = 1
 const PROT_WRITE = 2
+
 const MAP_PRIVATE = 2
+const MAP_ANONYMOUS = 32
 const MAP_ANONYMOUS = 32
 
 fn mmap(addr *char, length int, prot int, flags int, fd int, offset int) *char {
@@ -22,8 +39,62 @@ fn munmap(addr *char, length int) {
 	syscall(11, addr, length)
 }
 
+const FIONREAD = 21531
+
+fn ioctl(fd int, cmd int, arg int) int {
+	return syscall(16, fd, cmd, arg)
+}
+
+fn pipe(fds *int) int {
+	return syscall(22, fds)
+}
+
+fn dup2(old int, new int) int {
+	return syscall(33, old, new)
+}
+
+fn fork() int {
+	return syscall(57)
+}
+
+fn execve(path *char, args **char, env **char) int {
+	return syscall(59, path, args, env)
+}
+
+fn exit(code int) {
+	syscall(60, code)
+}
+
+fn wait4(pid int, status *int, options int, usage int) int {
+	return syscall(61, pid, status, options, usage)
+}
+
+fn WEXITSTATUS(n int) int {
+	return n & 65280 >> 8
+}
+
 fn creat(path *char, mode int) int {
 	return syscall(85, path, mode)
+}
+
+fn unlink(path *char) int {
+	return syscall(87, path)
+}
+
+fn isspace(ch char) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n'
+}
+
+fn isdigit(ch char) bool {
+	return ch >= '0' && ch <= '9'
+}
+
+fn isalpha(ch char) bool {
+	return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+}
+
+fn isalnum(ch char) bool {
+	return isalpha(ch) || isdigit(ch)
 }
 
 fn memcpy(dst *char, src *char, count int) *char {
@@ -31,6 +102,15 @@ fn memcpy(dst *char, src *char, count int) *char {
         dst[i] = src[i]
     }
     return dst
+}
+
+fn memcmp(a *char, b *char, count int) int {
+    for let i = 0, i < count, i += 1 {
+        if a[i] != b[i] {
+            return (a[i] - b[i]) as int
+        }
+    }
+    return 0
 }
 
 fn strlen(src *char) int {

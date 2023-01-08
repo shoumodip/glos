@@ -1,0 +1,537 @@
+use std.io
+
+struct Pos {
+    path Str
+    row int
+    col int
+}
+
+fn [<<](f *File, pos Pos) *File {
+    return f << pos.path << ':' << pos.row << ':' << pos.col << ": "
+}
+
+# Token
+const (
+    TOKEN_EOF
+    TOKEN_INT
+    TOKEN_STR
+    TOKEN_BOOL
+    TOKEN_CHAR
+    TOKEN_CSTR
+    TOKEN_IDENT
+
+    TOKEN_DOT
+    TOKEN_ARROW
+    TOKEN_COMMA
+    TOKEN_LPAREN
+    TOKEN_RPAREN
+    TOKEN_LBRACE
+    TOKEN_RBRACE
+    TOKEN_LBRACKET
+    TOKEN_RBRACKET
+
+    TOKEN_ADD
+    TOKEN_SUB
+    TOKEN_MUL
+    TOKEN_DIV
+    TOKEN_MOD
+
+    TOKEN_SHL
+    TOKEN_SHR
+    TOKEN_BOR
+    TOKEN_BAND
+    TOKEN_BNOT
+
+    TOKEN_LOR
+    TOKEN_LAND
+    TOKEN_LNOT
+
+    TOKEN_SET
+    TOKEN_ADD_SET
+    TOKEN_SUB_SET
+    TOKEN_MUL_SET
+    TOKEN_DIV_SET
+    TOKEN_MOD_SET
+
+    TOKEN_GT
+    TOKEN_GE
+    TOKEN_LT
+    TOKEN_LE
+    TOKEN_EQ
+    TOKEN_NE
+
+    TOKEN_AS
+    TOKEN_IF
+    TOKEN_ELSE
+    TOKEN_FOR
+    TOKEN_MATCH
+
+    TOKEN_FN
+    TOKEN_LET
+    TOKEN_CONST
+    TOKEN_STRUCT
+
+    TOKEN_USE
+    TOKEN_ARGC
+    TOKEN_ARGV
+    TOKEN_ASSERT
+
+    TOKEN_BREAK
+    TOKEN_RETURN
+
+    TOKEN_PRINT
+    COUNT_TOKENS
+)
+
+assert COUNT_TOKENS == 57
+fn str_from_token_kind(kind int) Str {
+    match kind {
+        TOKEN_EOF => return "end of file"
+        TOKEN_INT => return "integer"
+        TOKEN_STR => return "string"
+        TOKEN_BOOL => return "boolean"
+        TOKEN_CHAR => return "character"
+        TOKEN_CSTR => return "C-string"
+        TOKEN_IDENT => return "identifier"
+
+        TOKEN_DOT => return "'.'"
+        TOKEN_ARROW => return "'=>'"
+        TOKEN_COMMA => return "','"
+        TOKEN_LPAREN => return "'('"
+        TOKEN_RPAREN => return "')'"
+        TOKEN_LBRACE => return "'{'"
+        TOKEN_RBRACE => return "'}'"
+        TOKEN_LBRACKET => return "'['"
+        TOKEN_RBRACKET => return "']'"
+
+        TOKEN_ADD => return "'+'"
+        TOKEN_SUB => return "'-'"
+        TOKEN_MUL => return "'*'"
+        TOKEN_DIV => return "'/'"
+        TOKEN_MOD => return "'%'"
+
+        TOKEN_SHL => return "'<'"
+        TOKEN_SHR => return "'>'"
+        TOKEN_BOR => return "'|'"
+        TOKEN_BAND => return "'&'"
+        TOKEN_BNOT => return "'~'"
+
+        TOKEN_LOR => return "'||'"
+        TOKEN_LAND => return "'&&'"
+        TOKEN_LNOT => return "'!'"
+
+        TOKEN_SET => return "'='"
+        TOKEN_ADD_SET => return "'+='"
+        TOKEN_SUB_SET => return "'-='"
+        TOKEN_MUL_SET => return "'*='"
+        TOKEN_DIV_SET => return "'/='"
+        TOKEN_MOD_SET => return "'%='"
+
+        TOKEN_GT => return "'>'"
+        TOKEN_GE => return "'>='"
+        TOKEN_LT => return "'<'"
+        TOKEN_LE => return "'<='"
+        TOKEN_EQ => return "'=='"
+        TOKEN_NE => return "'!='"
+
+        TOKEN_AS => return "'as'"
+        TOKEN_IF => return "keyword 'if'"
+        TOKEN_ELSE => return "keyword 'else'"
+        TOKEN_FOR => return "keyword 'for'"
+        TOKEN_MATCH => return "keyword 'match'"
+
+        TOKEN_FN => return "keyword 'fn'"
+        TOKEN_LET => return "keyword 'let'"
+        TOKEN_CONST => return "keyword 'const'"
+        TOKEN_STRUCT => return "keyword 'struct'"
+
+        TOKEN_USE => return "keyword 'use'"
+        TOKEN_ARGC => return "keyword 'argc'"
+        TOKEN_ARGV => return "keyword 'argv'"
+        TOKEN_ASSERT => return "keyword 'assert'"
+
+        TOKEN_BREAK => return "keyword 'break'"
+        TOKEN_RETURN => return "keyword 'return'"
+
+        TOKEN_PRINT => return "keyword 'print'"
+        else => assert false # unreachable
+    }
+    return ""
+}
+
+struct Token {
+    kind int
+    data int
+    pos Pos
+    str Str
+}
+
+struct Lexer {
+    pos Pos
+    str Str
+    peeked bool
+    buffer Token
+    prev_row int
+}
+
+let lexer Lexer
+
+fn lexer_open(path *char) {
+    lexer.pos.path = str_from_cstr(path)
+
+    if !read_file(&lexer.str, path) {
+        if lexer.peeked {
+            &stderr << lexer.buffer.pos
+        }
+
+        &stderr << "error: could not read file '" << lexer.pos.path << "'\n"
+        exit(1)
+    }
+
+    lexer.pos.row = 1
+    lexer.pos.col = 1
+    lexer.peeked = false
+}
+
+fn lexer_buffer(token Token) {
+    lexer.peeked = true
+    lexer.buffer = token
+}
+
+fn lexer_advance() {
+    if *lexer.str.data == '\n' {
+        lexer.pos.row += 1
+        lexer.pos.col = 1
+    } else {
+        lexer.pos.col += 1
+    }
+
+    lexer.str.data += 1 as *char
+    lexer.str.size -= 1
+}
+
+fn lexer_consume() char {
+    lexer_advance()
+    return lexer.str.data[-1]
+}
+
+fn lexer_match(ch char) bool {
+    if lexer.str.size > 0 && *lexer.str.data == ch {
+        lexer_advance()
+        return true
+    }
+    return false
+}
+
+fn error_invalid(name Str) {
+    &stderr << lexer.pos << "error: invalid " << name << " '" << lexer.str.data[-1] << "'\n"
+    exit(1)
+}
+
+fn error_unterminated(name Str) {
+    &stderr << lexer.pos << "error: unterminated " << name << "\n"
+    exit(1)
+}
+
+fn lexer_char(name Str) char {
+    if lexer.str.size == 0 {
+        error_unterminated(name)
+    }
+
+    let ch = lexer_consume()
+    if ch == '\\' {
+        if lexer.str.size == 0 {
+            error_unterminated("escape character")
+        }
+
+        let pos = lexer.pos
+        match lexer_consume() {
+            'n' => ch = '\n'
+            't' => ch = '\t'
+            '0' => ch = '\0'
+            '"' => ch = '"'
+            '\'' => ch = '\''
+            '\\' => ch = '\\'
+            else => {
+                lexer.pos = pos
+                error_invalid("escape character")
+            }
+        }
+    }
+
+    return ch
+}
+
+assert COUNT_TOKENS == 57
+fn lexer_next() Token {
+    if lexer.peeked {
+        lexer.peeked = false
+        lexer.prev_row = lexer.buffer.pos.row
+        return lexer.buffer
+    }
+
+    for lexer.str.size > 0 {
+        if isspace(*lexer.str.data) {
+            lexer_advance()
+        } else if lexer_match('#') {
+            if lexer_match('#') {
+                for lexer.str.size > 0 {
+                    if lexer_match('#') && lexer_match('#') {
+                        break
+                    }
+
+                    lexer_advance()
+                }
+            } else {
+                for lexer.str.size > 0 && *lexer.str.data != '\n' {
+                    lexer_advance()
+                }
+            }
+        } else {
+            break
+        }
+    }
+
+    let token Token
+    token.pos = lexer.pos
+    token.str = lexer.str
+
+    if lexer.str.size == 0 {
+        token.kind = TOKEN_EOF
+    } else if isdigit(*lexer.str.data) {
+        token.kind = TOKEN_INT
+        token.data = 0
+
+        for lexer.str.size > 0 && isdigit(*lexer.str.data) {
+            token.data = token.data * 10 + (lexer_consume() - '0') as int
+        }
+
+        token.str.size -= lexer.str.size
+    } else if isalpha(*lexer.str.data) || *lexer.str.data == '_' {
+        for lexer.str.size > 0 && (isalnum(*lexer.str.data) || *lexer.str.data == '_') {
+            lexer_advance()
+        }
+
+        token.str.size -= lexer.str.size
+
+        if token.str == "true" {
+            token.kind = TOKEN_BOOL
+            token.data = 1
+        } else if token.str == "false" {
+            token.kind = TOKEN_BOOL
+            token.data = 0
+        } else if token.str == "as" {
+            token.kind = TOKEN_AS
+        } else if token.str == "if" {
+            token.kind = TOKEN_IF
+        } else if token.str == "else" {
+            token.kind = TOKEN_ELSE
+        } else if token.str == "for" {
+            token.kind = TOKEN_FOR
+        } else if token.str == "match" {
+            token.kind = TOKEN_MATCH
+        } else if token.str == "fn" {
+            token.kind = TOKEN_FN
+        } else if token.str == "let" {
+            token.kind = TOKEN_LET
+        } else if token.str == "const" {
+            token.kind = TOKEN_CONST
+        } else if token.str == "struct" {
+            token.kind = TOKEN_STRUCT
+        } else if token.str == "use" {
+            token.kind = TOKEN_USE
+        } else if token.str == "argc" {
+            token.kind = TOKEN_ARGC
+        } else if token.str == "argv" {
+            token.kind = TOKEN_ARGV
+        } else if token.str == "assert" {
+            token.kind = TOKEN_ASSERT
+        } else if token.str == "break" {
+            token.kind = TOKEN_BREAK
+        } else if token.str == "return" {
+            token.kind = TOKEN_RETURN
+        } else if token.str == "print" {
+            token.kind = TOKEN_PRINT
+        } else {
+            token.kind = TOKEN_IDENT
+        }
+    } else {
+        match lexer_consume() {
+            '\'' => {
+                token.kind = TOKEN_CHAR
+                token.data = lexer_char("character") as int
+                if !lexer_match('\'') {
+                    error_unterminated("character")
+                }
+            }
+
+            '"' => {
+                for true {
+                    let ch = lexer_char("string")
+                    if ch == '"' && lexer.str.data[-2] != '\\' {
+                        break
+                    }
+                }
+
+                if lexer_match('c') {
+                    token.kind = TOKEN_CSTR
+                } else {
+                    token.kind = TOKEN_STR
+                }
+            }
+
+            '.' => token.kind = TOKEN_DOT
+            ',' => token.kind = TOKEN_COMMA
+            '(' => token.kind = TOKEN_LPAREN
+            ')' => token.kind = TOKEN_RPAREN
+            '{' => token.kind = TOKEN_LBRACE
+            '}' => token.kind = TOKEN_RBRACE
+            '[' => token.kind = TOKEN_LBRACKET
+            ']' => token.kind = TOKEN_RBRACKET
+
+            '+' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_ADD_SET
+                } else {
+                    token.kind = TOKEN_ADD
+                }
+            }
+
+            '-' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_SUB_SET
+                } else {
+                    token.kind = TOKEN_SUB
+                }
+            }
+
+            '*' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_MUL_SET
+                } else {
+                    token.kind = TOKEN_MUL
+                }
+            }
+
+            '/' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_DIV_SET
+                } else {
+                    token.kind = TOKEN_DIV
+                }
+            }
+
+            '%' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_MOD_SET
+                } else {
+                    token.kind = TOKEN_MOD
+                }
+            }
+
+            '|' => {
+                if lexer_match('|') {
+                    token.kind = TOKEN_LOR
+                } else {
+                    token.kind = TOKEN_BOR
+                }
+            }
+
+            '&' => {
+                if lexer_match('&') {
+                    token.kind = TOKEN_LAND
+                } else {
+                    token.kind = TOKEN_BAND
+                }
+            }
+
+            '~' => token.kind = TOKEN_BNOT
+
+            '>' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_GE
+                } else if lexer_match('>') {
+                    token.kind = TOKEN_SHR
+                } else {
+                    token.kind = TOKEN_GT
+                }
+            }
+
+            '<' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_LE
+                } else if lexer_match('<') {
+                    token.kind = TOKEN_SHL
+                } else {
+                    token.kind = TOKEN_LT
+                }
+            }
+
+            '=' => {
+                if lexer_match('>') {
+                    token.kind = TOKEN_ARROW
+                } else if lexer_match('=') {
+                    token.kind = TOKEN_EQ
+                } else {
+                    token.kind = TOKEN_SET
+                }
+            }
+
+            '!' => {
+                if lexer_match('=') {
+                    token.kind = TOKEN_NE
+                } else {
+                    token.kind = TOKEN_LNOT
+                }
+            }
+
+            else => {
+                lexer.pos = token.pos
+                error_invalid("character")
+            }
+        }
+
+        token.str.size -= lexer.str.size
+    }
+
+    lexer.prev_row = token.pos.row
+    return token
+}
+
+fn lexer_peek() Token {
+    let prev_row = lexer.prev_row
+    if !lexer.peeked {
+        lexer_buffer(lexer_next())
+        lexer.prev_row = prev_row
+    }
+    return lexer.buffer
+}
+
+fn lexer_read(kind int) bool {
+    lexer_peek()
+    lexer.peeked = lexer.buffer.kind != kind
+    return !lexer.peeked
+}
+
+fn lexer_expect(kind int) Token {
+    let token = lexer_next()
+    if token.kind != kind {
+        &stderr << "error: expected " << str_from_token_kind(kind) << ", got " << str_from_token_kind(token.kind) << "\n"
+        exit(1)
+    }
+    return token
+}
+
+fn lexer_either(a int, b int) Token {
+    let token = lexer_next()
+    if token.kind != a && token.kind != b {
+        &stderr << "error: expected " << str_from_token_kind(a) << " or " << str_from_token_kind(b) << ", got " << str_from_token_kind(token.kind) << "\n"
+        exit(1)
+    }
+    return token
+}
+
+fn lexer_peek_row(token *Token) bool {
+    *token = lexer_peek()
+    return token.pos.row == lexer.prev_row
+}

@@ -1,0 +1,345 @@
+use src.compiler
+
+assert COUNT_OPS == 39
+fn generate(path *char) {
+    let file File
+    if !file_create(&file, path) {
+        &stderr << "error: could not write file '" << str_from_cstr(path) << "'\n"
+        exit(1)
+    }
+
+    &file << "format elf64 executable\n"
+    &file << "segment readable executable\n"
+
+    &file << "mov [argv], rsp\n"
+    &file << "add qword [argv], 16\n"
+
+    &file << "mov rax, [rsp]\n"
+    &file << "dec rax\n"
+    &file << "mov qword [argc], rax\n"
+
+    for let i = 0, i < ops_count, i += 1 {
+        let op = ops[i]
+        &file << 'I' << i << ": ;; " << op
+        match op.kind {
+        OP_PUSH => {
+            &file << "mov rax, " << op.data << '\n'
+            &file << "push rax\n"
+        }
+
+        OP_DROP => &file << "add rsp, " << op.data << '\n'
+
+        OP_DUP => &file << "push qword [rsp]\n"
+
+        OP_STR => {
+            &file << "push strings+" << strs[op.data].data as int - &strs_arena.data as int << '\n'
+            &file << "push " << strs[op.data].size << '\n'
+        }
+
+        OP_CSTR => &file << "push strings+" << strs[op.data].data as int - &strs_arena.data as int << '\n'
+
+        OP_ADD => {
+            &file << "pop rax\n"
+            &file << "add [rsp], rax\n"
+        }
+
+        OP_SUB => {
+            &file << "pop rax\n"
+            &file << "sub [rsp], rax\n"
+        }
+
+        OP_MUL => {
+            &file << "pop rbx\n"
+            &file << "pop rax\n"
+            &file << "imul rbx\n"
+            &file << "push rax\n"
+        }
+
+        OP_DIV => {
+            &file << "pop rbx\n"
+            &file << "pop rax\n"
+            &file << "cqo\n"
+            &file << "idiv rbx\n"
+            &file << "push rax\n"
+        }
+
+        OP_MOD => {
+            &file << "pop rbx\n"
+            &file << "pop rax\n"
+            &file << "cqo\n"
+            &file << "idiv rbx\n"
+            &file << "push rdx\n"
+        }
+
+        OP_NEG => &file << "neg qword [rsp]\n"
+
+        OP_SHL => {
+            &file << "pop rcx\n"
+            &file << "pop rbx\n"
+            &file << "shl rbx, cl\n"
+            &file << "push rbx\n"
+        }
+
+        OP_SHR => {
+            &file << "pop rcx\n"
+            &file << "pop rbx\n"
+            &file << "shr rbx, cl\n"
+            &file << "push rbx\n"
+        }
+
+        OP_BOR => {
+            &file << "pop rax\n"
+            &file << "or [rsp], rax\n"
+        }
+
+        OP_BAND => {
+            &file << "pop rax\n"
+            &file << "and [rsp], rax\n"
+        }
+
+        OP_BNOT => &file << "not qword [rsp]\n"
+
+        OP_LNOT => {
+            &file << "pop rax\n"
+            &file << "xor rbx, rbx\n"
+            &file << "test rax, rax\n"
+            &file << "sete bl\n"
+            &file << "push rbx\n"
+        }
+
+        OP_GT => {
+            &file << "pop rax\n"
+            &file << "xor rbx, rbx\n"
+            &file << "cmp [rsp], rax\n"
+            &file << "setg bl\n"
+            &file << "mov [rsp], rbx\n"
+        }
+
+        OP_GE => {
+            &file << "pop rax\n"
+            &file << "xor rbx, rbx\n"
+            &file << "cmp [rsp], rax\n"
+            &file << "setge bl\n"
+            &file << "mov [rsp], rbx\n"
+        }
+
+        OP_LT => {
+            &file << "pop rax\n"
+            &file << "xor rbx, rbx\n"
+            &file << "cmp [rsp], rax\n"
+            &file << "setl bl\n"
+            &file << "mov [rsp], rbx\n"
+        }
+
+        OP_LE => {
+            &file << "pop rax\n"
+            &file << "xor rbx, rbx\n"
+            &file << "cmp [rsp], rax\n"
+            &file << "setle bl\n"
+            &file << "mov [rsp], rbx\n"
+        }
+
+        OP_EQ => {
+            &file << "pop rax\n"
+            &file << "xor rbx, rbx\n"
+            &file << "cmp [rsp], rax\n"
+            &file << "sete bl\n"
+            &file << "mov [rsp], rbx\n"
+        }
+
+        OP_NE => {
+            &file << "pop rax\n"
+            &file << "xor rbx, rbx\n"
+            &file << "cmp [rsp], rax\n"
+            &file << "setne bl\n"
+            &file << "mov [rsp], rbx\n"
+        }
+
+        OP_GPTR => &file << "push memory+" << op.data << '\n'
+
+        OP_LPTR => {
+            &file << "lea rax, [rbp-" << op.data << "]\n"
+            &file << "push rax\n"
+        }
+
+        OP_LOAD => {
+            &file << "pop rax\n"
+            match op.data {
+                1 => {
+                    &file << "xor rbx, rbx\n"
+                    &file << "mov bl, [rax]\n"
+                    &file << "push rbx\n"
+                }
+
+                8 => &file << "push qword [rax]\n"
+
+                else => {
+                    &file << "sub rsp, " << op.data << '\n'
+                    for let j = 0, j < op.data, j += 8 {
+                        &file << "mov rbx, [rax+" << j << "]\n"
+                        &file << "mov [rsp+" << j << "], rbx\n"
+                    }
+                }
+            }
+        }
+
+        OP_STORE => {
+            match op.data {
+                1 => {
+                    &file << "pop rbx\n"
+                    &file << "pop rax\n"
+                    &file << "mov [rax], bl\n"
+                }
+
+                8 => {
+                    &file << "pop rbx\n"
+                    &file << "pop rax\n"
+                    &file << "mov [rax], rbx\n"
+                }
+
+                else => {
+                    &file << "mov rax, [rsp+" << op.data << "]\n"
+                    for let j = 0, j < op.data, j += 8 {
+                        &file << "mov rbx, [rsp+" << j << "]\n"
+                        &file << "mov [rax+" << j << "], rbx\n"
+                    }
+                    &file << "add rsp, " << op.data + 8 << '\n'
+                }
+            }
+        }
+
+        OP_FIELD => &file << "add qword [rsp], " << op.data << '\n'
+
+        OP_INDEX => {
+            &file << "pop rax\n"
+            &file << "mov rbx, " << op.data << '\n'
+            &file << "mul rbx\n"
+            &file << "add [rsp], rax\n"
+        }
+
+        OP_GOTO => &file << "jmp I" << op.data << '\n'
+
+        OP_ELSE => {
+            &file << "pop rax\n"
+            &file << "test rax, rax\n"
+            &file << "jz I" << op.data << '\n'
+        }
+
+        OP_THEN => {
+            &file << "pop rax\n"
+            &file << "test rax, rax\n"
+            &file << "jnz I" << op.data << '\n'
+        }
+
+        OP_CALL => {
+            let function = &functions[op.data]
+            &file << "sub rsp, " << function.vars << '\n'
+            &file << "push rbp\n"
+            &file << "lea rbp, [rsp+" << function.args + function.vars + 8 << "]\n"
+            &file << "call I" << nodes[function.node].token.data << '\n'
+        }
+
+        OP_RET => {
+            let function = &functions[op.data]
+            &file << "pop rax\n"
+            &file << "pop rbp\n"
+            &file << "add rsp, " << function.args + function.vars - function.ret << '\n'
+            &file << "jmp rax\n"
+        }
+
+        OP_ARGC => &file << "push qword [argc]\n"
+
+        OP_ARGV => &file << "push qword [argv]\n"
+
+        OP_HALT => {
+            &file << "mov rax, 60\n"
+            &file << "mov rdi, " << op.data << '\n'
+            &file << "syscall\n"
+        }
+
+        OP_SYSCALL => {
+            if op.data > 6 { &file << "pop r9\n" }
+            if op.data > 5 { &file << "pop r8\n" }
+            if op.data > 4 { &file << "pop r10\n" }
+            if op.data > 3 { &file << "pop rdx\n" }
+            if op.data > 2 { &file << "pop rsi\n" }
+            if op.data > 1 { &file << "pop rdi\n" }
+            &file << "pop rax\n"
+            &file << "syscall\n"
+            &file << "push rax\n"
+        }
+
+        OP_PRINT => {
+            &file << "pop rdi\n"
+            &file << "call PRINT\n"
+        }
+
+        else => assert false # unreachable
+        }
+    }
+
+    &file << "PRINT:\n"
+    &file << "mov r9, -3689348814741910323\n"
+    &file << "sub rsp, 40\n"
+    &file << "mov BYTE [rsp+31], 10\n"
+    &file << "lea rcx, [rsp+30]\n"
+    &file << ".L2:\n"
+    &file << "mov rax, rdi\n"
+    &file << "lea r8, [rsp+32]\n"
+    &file << "mul r9\n"
+    &file << "mov rax, rdi\n"
+    &file << "sub r8, rcx\n"
+    &file << "shr rdx, 3\n"
+    &file << "lea rsi, [rdx+rdx*4]\n"
+    &file << "add rsi, rsi\n"
+    &file << "sub rax, rsi\n"
+    &file << "add eax, 48\n"
+    &file << "mov BYTE [rcx], al\n"
+    &file << "mov rax, rdi\n"
+    &file << "mov rdi, rdx\n"
+    &file << "mov rdx, rcx\n"
+    &file << "sub rcx, 1\n"
+    &file << "cmp rax, 9\n"
+    &file << "ja .L2\n"
+    &file << "lea rax, [rsp+32]\n"
+    &file << "mov edi, 1\n"
+    &file << "sub rdx, rax\n"
+    &file << "xor eax, eax\n"
+    &file << "lea rsi, [rsp+32+rdx]\n"
+    &file << "mov rdx, r8\n"
+    &file << "mov rax, 1\n"
+    &file << "syscall\n"
+    &file << "add rsp, 40\n"
+    &file << "ret\n"
+
+    &file << "segment readable writeable\n"
+    &file << "argv: rq 1\n"
+    &file << "argc: rq 1\n"
+
+    if global_size != 0 {
+        &file << "memory: rb " << global_size << '\n'
+    }
+
+    if strs_arena.size != 0 {
+        &file << "strings: db " << strs_arena.data[0] as int
+
+        for let i = 1, i < strs_arena.size, i += 1 {
+            &file << ',' << strs_arena.data[i] as int
+        }
+
+        &file << "\n"
+    }
+
+    file_close(&file)
+
+    let args [3]*char
+    args[0] = "/bin/fasm"c
+    args[1] = path
+    args[2] = 0 as *char
+    if execute_command(&args as **char, true) == 0 {
+        unlink(path)
+    } else {
+        &stderr << "error: could not generate executable\n"
+        exit(1)
+    }
+}

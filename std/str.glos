@@ -1,3 +1,4 @@
+use std.math
 use std.libc
 
 fn str_from_cstr(src *char) Str {
@@ -45,4 +46,65 @@ fn str_from_int(buf *char, n int) Str {
     }
 
     return str
+}
+
+fn int_from_str(str Str, out *int) bool {
+    let n = 0
+    for let i = 0, i < str.size, i += 1 {
+        if isdigit(str.data[i]) {
+            n = n * 10 + (str.data[i] - '0') as int
+        } else {
+            return false
+        }
+    }
+
+    *out = n
+    return true
+}
+
+fn [==](a Str, b Str) bool {
+    return a.size == b.size && memcmp(a.data, b.data, b.size) == 0
+}
+
+fn [!=](a Str, b Str) bool {
+    return !(a == b)
+}
+
+fn str_ends_with(a Str, b Str) bool {
+    return a.size >= b.size && memcmp(a.data + (a.size - b.size) as *char, b.data, b.size) == 0
+}
+
+fn str_starts_with(a Str, b Str) bool {
+    return a.size >= b.size && memcmp(a.data, b.data, b.size) == 0
+}
+
+fn str_drop_left(str Str, n int) Str {
+    n = min(n, str.size)
+    str.data += n as *char
+    str.size -= n
+    return str
+}
+
+fn str_trim_left(str Str, ch char) Str {
+    let n = 0
+    for n < str.size && str.data[n] == ch {
+        n += 1
+    }
+    return str_drop_left(str, n)
+}
+
+fn str_split_at(str *Str, n int) Str {
+    n = min(n, str.size)
+    let head = *str
+    head.size = n
+    *str = str_drop_left(*str, n + 1)
+    return head
+}
+
+fn str_split_by(str *Str, ch char) Str {
+    let i = 0
+    for i < str.size && str.data[i] != ch {
+        i += 1
+    }
+    return str_split_at(str, i)
 }

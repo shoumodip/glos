@@ -1,0 +1,934 @@
+use src.parser
+
+assert COUNT_NODES == 17
+assert COUNT_TOKENS == 57
+fn eval_const_unary(node int) {
+	let expr = nodes[node].nodes[NODE_UNARY_EXPR]
+
+	match nodes[node].token.kind {
+		TOKEN_SUB => nodes[node].token.data = -nodes[expr].token.data
+		TOKEN_BNOT => nodes[node].token.data = ~nodes[expr].token.data
+		TOKEN_LNOT => nodes[node].token.data = !(nodes[expr].token.data as bool) as int
+		else => assert false # unreachable
+	}
+}
+
+assert COUNT_NODES == 17
+assert COUNT_TOKENS == 57
+fn eval_const_binary(node int) {
+	let lhs = nodes[node].nodes[NODE_BINARY_LHS]
+	let rhs = nodes[node].nodes[NODE_BINARY_RHS]
+
+	match nodes[node].token.kind {
+		TOKEN_ADD => nodes[node].token.data = nodes[lhs].token.data + nodes[rhs].token.data
+		TOKEN_SUB => nodes[node].token.data = nodes[lhs].token.data - nodes[rhs].token.data
+		TOKEN_MUL => nodes[node].token.data = nodes[lhs].token.data * nodes[rhs].token.data
+		TOKEN_DIV => nodes[node].token.data = nodes[lhs].token.data / nodes[rhs].token.data
+		TOKEN_MOD => nodes[node].token.data = nodes[lhs].token.data % nodes[rhs].token.data
+		TOKEN_SHL => nodes[node].token.data = nodes[lhs].token.data << nodes[rhs].token.data
+		TOKEN_SHR => nodes[node].token.data = nodes[lhs].token.data >> nodes[rhs].token.data
+		TOKEN_BOR => nodes[node].token.data = nodes[lhs].token.data | nodes[rhs].token.data
+		TOKEN_BAND => nodes[node].token.data = nodes[lhs].token.data & nodes[rhs].token.data
+		TOKEN_LOR => nodes[node].token.data = (nodes[lhs].token.data as bool || nodes[rhs].token.data as bool) as int
+		TOKEN_LAND => nodes[node].token.data = (nodes[lhs].token.data as bool && nodes[rhs].token.data as bool) as int
+		TOKEN_GT => nodes[node].token.data = (nodes[lhs].token.data > nodes[rhs].token.data) as int
+		TOKEN_GE => nodes[node].token.data = (nodes[lhs].token.data >= nodes[rhs].token.data) as int
+		TOKEN_LT => nodes[node].token.data = (nodes[lhs].token.data < nodes[rhs].token.data) as int
+		TOKEN_LE => nodes[node].token.data = (nodes[lhs].token.data <= nodes[rhs].token.data) as int
+		TOKEN_EQ => nodes[node].token.data = (nodes[lhs].token.data == nodes[rhs].token.data) as int
+		TOKEN_NE => nodes[node].token.data = (nodes[lhs].token.data != nodes[rhs].token.data) as int
+		else => assert false # unreachable
+	}
+}
+
+fn [==](a Type, b Type) bool {
+	if a.kind != b.kind || a.ref != b.ref {
+		if a.ref == b.ref && a.ref == 1 {
+			a.ref = 0
+			b.ref = 0
+
+			if b.kind == TYPE_ARRAY {
+				let t = a
+				a = b
+				b = t
+			}
+
+			if a.kind == TYPE_ARRAY && nodes[nodes[a.data].nodes[NODE_BINARY_RHS]].type == b {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if a.kind == TYPE_ARRAY {
+		let a_size = nodes[nodes[a.data].nodes[NODE_BINARY_LHS]].token.data
+		let b_size = nodes[nodes[b.data].nodes[NODE_BINARY_LHS]].token.data
+
+		let a_base = nodes[nodes[a.data].nodes[NODE_BINARY_RHS]].type
+		let b_base = nodes[nodes[b.data].nodes[NODE_BINARY_RHS]].type
+
+		return a_size == b_size && a_base == b_base
+	}
+
+	return a.kind != TYPE_STRUCT || a.data == b.data
+}
+
+fn [!=](a Type, b Type) bool {
+	return !(a == b)
+}
+
+fn type_isarray(type Type) bool {
+	return type.kind == TYPE_ARRAY && type.ref == 0
+}
+
+fn type_new(kind int, ref int, data int) Type {
+	let type Type
+	type.kind = kind
+	type.ref = ref
+	type.data = data
+	return type
+}
+
+fn type_ref(type Type) Type {
+	type.ref += 1
+	return type
+}
+
+fn type_deref(type Type) Type {
+	if type_isarray(type) {
+		return nodes[nodes[type.data].nodes[NODE_BINARY_RHS]].type
+	}
+
+	assert type.ref > 0
+	type.ref -= 1
+	return type
+}
+
+assert COUNT_TYPES == 6
+fn [<<](f *File, type Type) *File {
+	for let i = 0, i < type.ref, i += 1 {
+		f << '*'
+	}
+
+	match type.kind {
+		TYPE_NIL => f << "nil"
+		TYPE_INT => f << "int"
+		TYPE_BOOL => f << "bool"
+		TYPE_CHAR => f << "char"
+		TYPE_ARRAY => f << '[' << nodes[nodes[type.data].nodes[NODE_BINARY_LHS]].token.data << ']' << nodes[nodes[type.data].nodes[NODE_BINARY_RHS]].type
+		TYPE_STRUCT => f << nodes[type.data].token.str
+		else => assert false # unreachable
+	}
+
+	return f
+}
+
+# Scope
+const SCOPE_CAP = 1024
+
+let constants [SCOPE_CAP]int
+let constants_count int
+
+fn constants_push(node int) {
+	assert constants_count < SCOPE_CAP
+	constants[constants_count] = node
+	constants_count += 1
+}
+
+fn constants_find(name Str, index *int) bool {
+	for let i = constants_count, i > 0, i -= 1 {
+		if nodes[constants[i - 1]].token.str == name {
+			*index = i - 1
+			return true
+		}
+	}
+	return false
+}
+
+let variables [SCOPE_CAP]int
+let variables_count int
+
+fn variables_push(node int) {
+	assert variables_count < SCOPE_CAP
+	variables[variables_count] = node
+	variables_count += 1
+}
+
+fn variables_find(name Str, index *int) bool {
+	for let i = variables_count, i > 0, i -= 1 {
+		if nodes[variables[i - 1]].token.str == name {
+			*index = i - 1
+			return true
+		}
+	}
+	return false
+}
+
+struct Function {
+	node int
+	args int
+	vars int
+
+	ret int
+	arity int
+}
+
+let functions [SCOPE_CAP]Function
+let functions_count int
+let functions_current int
+
+fn functions_push(node int, arity int) {
+	assert functions_count < SCOPE_CAP
+	functions[functions_count].node = node
+	functions[functions_count].arity = arity
+	functions_count += 1
+}
+
+fn functions_find(name Str, index *int) bool {
+	for let i = 0, i < functions_count, i += 1 {
+		if nodes[functions[i].node].token.str == name {
+			*index = i
+			return true
+		}
+	}
+	return false
+}
+
+fn operator_functions_find(kind int, lhs int, rhs int, index *int) bool {
+	for let i = 0, i < functions_count, i += 1 {
+		let func = functions[i].node
+		if nodes[func].token.kind == kind && nodes[nodes[func].nodes[NODE_FN_ARGS]].type == nodes[lhs].type && nodes[nodes[nodes[func].nodes[NODE_FN_ARGS]].next].type == nodes[rhs].type {
+			*index = i
+			return true
+		}
+	}
+	return false
+}
+
+let structures [SCOPE_CAP]int
+let structures_count int
+
+fn structures_push(node int) {
+	assert structures_count < SCOPE_CAP
+	structures[structures_count] = node
+	structures_count += 1
+}
+
+fn structures_find(name Str, index *int) bool {
+	for let i = structures_count, i > 0, i -= 1 {
+		if nodes[structures[i - 1]].token.str == name {
+			*index = i - 1
+			return true
+		}
+	}
+	return false
+}
+
+fn error_undefined(node int, name Str) {
+	&stderr << nodes[node].token.pos << "error: undefined " << name << " '" << nodes[node].token.str << "'\n"
+	exit(1)
+}
+
+fn error_redefinition(node int, prev int, name Str) {
+	&stderr << nodes[node].token.pos << "error: redefinition of " << name << " '" << nodes[node].token.str << "'\n"
+	&stderr << nodes[prev].token.pos << "note: defined here\n"
+	exit(1)
+}
+
+fn check_redefinition(node int, list int, name Str) {
+	for list != 0 && list != node {
+		if nodes[list].token.str == nodes[node].token.str {
+			error_redefinition(node, list, name)
+		}
+		list = nodes[list].next
+	}
+}
+
+fn ref_prevent(node int, ref bool) {
+	if ref {
+		&stderr << nodes[node].token.pos << "error: cannot take reference to value not in memory\n"
+		exit(1)
+	}
+}
+
+fn type_assert(node int, expected Type) Type {
+	let actual = nodes[node].type
+	if actual != expected {
+		&stderr << nodes[node].token.pos << "error: expected type '" << expected << "', got '" << actual << "'\n"
+		exit(1)
+	}
+	return actual
+}
+
+fn type_assert_arith(node int) Type {
+	let actual = nodes[node].type
+	if actual.kind != TYPE_INT && actual.kind != TYPE_CHAR && actual.ref == 0 {
+		&stderr << nodes[node].token.pos << "error: expected arithmetic type, got '" << actual <<  "'\n"
+		exit(1)
+	}
+	return actual
+}
+
+fn type_assert_scalar(node int) Type {
+	let actual = nodes[node].type
+	if actual.kind != TYPE_INT && actual.kind != TYPE_BOOL && actual.kind != TYPE_CHAR && actual.ref == 0 {
+		&stderr << nodes[node].token.pos << "error: expected scalar type, got '" << actual << "'\n"
+		exit(1)
+	}
+	return actual
+}
+
+fn type_assert_pointer(node int) Type {
+	let actual = nodes[node].type
+	if actual.ref == 0 && actual.kind != TYPE_ARRAY {
+		&stderr << nodes[node].token.pos << "error: expected pointer type, got '" << actual << "'\n"
+		exit(1)
+	}
+	return actual
+}
+
+assert COUNT_NODES == 17
+assert COUNT_TOKENS == 57
+fn check_const(node int) {
+	match nodes[node].kind {
+		NODE_ATOM => {
+			match nodes[node].token.kind {
+				TOKEN_INT => nodes[node].type = type_new(TYPE_INT, 0, 0)
+				TOKEN_BOOL => nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+				TOKEN_CHAR => nodes[node].type = type_new(TYPE_CHAR, 0, 0)
+				TOKEN_IDENT => {
+					let index int
+					if constants_find(nodes[node].token.str, &index) {
+						nodes[node].type = nodes[constants[index]].type
+						nodes[node].token.data = nodes[constants[index]].token.data
+					} else {
+						error_undefined(node, "constant")
+					}
+				}
+
+				else => assert false # unreachable
+			}
+		}
+
+		NODE_UNARY => {
+			let expr = nodes[node].nodes[NODE_UNARY_EXPR]
+
+			match nodes[node].token.kind {
+				TOKEN_SUB, TOKEN_BNOT => {
+					check_const(expr)
+					nodes[node].type = type_assert_arith(expr)
+				}
+
+				TOKEN_LNOT => {
+					check_const(expr)
+					nodes[node].type = type_assert(expr, type_new(TYPE_BOOL, 0, 0))
+				}
+
+				else => assert false # unreachable
+			}
+
+			eval_const_unary(node)
+		}
+
+		NODE_BINARY => {
+			let lhs = nodes[node].nodes[NODE_BINARY_LHS]
+			let rhs = nodes[node].nodes[NODE_BINARY_RHS]
+
+			match nodes[node].token.kind {
+				TOKEN_ADD, TOKEN_SUB, TOKEN_MUL, TOKEN_DIV, TOKEN_MOD, TOKEN_SHL, TOKEN_SHR, TOKEN_BOR, TOKEN_BAND => {
+					check_const(lhs)
+					check_const(rhs)
+					nodes[node].type = type_assert(rhs, type_assert_arith(lhs))
+				}
+
+				TOKEN_LOR, TOKEN_LAND => {
+					nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+
+					check_const(lhs)
+					type_assert(lhs, nodes[node].type)
+
+					check_const(rhs)
+					type_assert(rhs, nodes[node].type)
+				}
+
+				TOKEN_GT, TOKEN_GE, TOKEN_LT, TOKEN_LE => {
+					check_const(lhs)
+					check_const(rhs)
+					type_assert(rhs, type_assert_arith(lhs))
+					nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+				}
+
+				TOKEN_EQ, TOKEN_NE => {
+					check_const(lhs)
+					check_const(rhs)
+					type_assert(rhs, type_assert_scalar(lhs))
+					nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+				}
+
+				else => assert false # unreachable
+			}
+
+			eval_const_binary(node)
+		}
+
+		else => assert false # unreachable
+	}
+}
+
+assert COUNT_TYPES == 6
+fn check_type(node int) {
+	match nodes[node].kind {
+		NODE_ATOM => {
+			if nodes[node].token.str == "int" {
+				nodes[node].type = type_new(TYPE_INT, 0, 0)
+			} else if nodes[node].token.str == "bool" {
+				nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+			} else if nodes[node].token.str == "char" {
+				nodes[node].type = type_new(TYPE_CHAR, 0, 0)
+			} else if structures_find(nodes[node].token.str, &nodes[node].token.data) {
+				nodes[node].token.data = structures[nodes[node].token.data]
+				nodes[node].type = type_new(TYPE_STRUCT, 0, nodes[node].token.data)
+			} else {
+				error_undefined(node, "type")
+			}
+		}
+
+		NODE_UNARY => {
+			let expr = nodes[node].nodes[NODE_UNARY_EXPR]
+			check_type(expr)
+			nodes[node].type = type_ref(nodes[expr].type)
+		}
+
+		NODE_BINARY => {
+			let lhs = nodes[node].nodes[NODE_BINARY_LHS]
+			let rhs = nodes[node].nodes[NODE_BINARY_RHS]
+
+			check_const(lhs)
+			type_assert(lhs, type_new(TYPE_INT, 0, 0))
+			if nodes[lhs].token.data == 0 {
+				&stderr << nodes[lhs].token.pos << "error: array cannot have zero elements\n"
+				exit(1)
+			}
+
+			check_type(rhs)
+			nodes[node].type = type_new(TYPE_ARRAY, 0, node)
+		}
+
+		else => assert false # unreachable
+	}
+}
+
+assert COUNT_NODES == 17
+assert COUNT_TOKENS == 57
+fn check_expr(node int, ref bool) {
+	match nodes[node].kind {
+		NODE_ATOM => {
+			match nodes[node].token.kind {
+				TOKEN_INT => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_INT, 0, 0)
+				}
+
+				TOKEN_STR => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_STRUCT, 0, 0)
+				}
+
+				TOKEN_ARGC => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_INT, 0, 0)
+				}
+
+				TOKEN_ARGV => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_CHAR, 2, 0)
+				}
+
+				TOKEN_BOOL => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+				}
+
+				TOKEN_CHAR => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_CHAR, 0, 0)
+				}
+
+				TOKEN_CSTR => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_CHAR, 1, 0)
+				}
+
+				TOKEN_IDENT => {
+					let index int
+					if variables_find(nodes[node].token.str, &index) {
+						nodes[node].type = nodes[variables[index]].type
+						nodes[node].token.data = variables[index]
+					} else if constants_find(nodes[node].token.str, &index) {
+						ref_prevent(node, ref)
+						nodes[node].type = nodes[constants[index]].type
+						nodes[node].token.data = nodes[constants[index]].token.data
+						nodes[node].token.kind = TOKEN_INT
+					} else {
+						error_undefined(node, "identifier")
+					}
+				}
+
+				else => assert false # unreachable
+			}
+		}
+
+		NODE_CALL => {
+			ref_prevent(node, ref)
+
+			if nodes[node].token.str == "main" {
+				&stderr << nodes[node].token.pos << "error: function 'main' cannot be called\n"
+				exit(1)
+			}
+
+			if nodes[node].token.str == "syscall" {
+				if nodes[node].token.data < 1 || nodes[node].token.data > 7 {
+					&stderr << nodes[node].token.pos << "error: expected 1 to 7 arguments, got " << nodes[node].token.data << '\n'
+					exit(1)
+				}
+
+				for let call = nodes[node].nodes[NODE_CALL_ARGS], call != 0, call = nodes[call].next {
+					check_expr(call, false)
+					type_assert_scalar(call)
+				}
+
+				nodes[node].type = type_new(TYPE_INT, 0, 0)
+			} else {
+				let index int
+				if !functions_find(nodes[node].token.str, &index) {
+					error_undefined(node, "function")
+				}
+
+				if nodes[node].token.data != functions[index].arity {
+					&stderr << nodes[node].token.pos << "error: expected " << functions[index].arity << " arguments, got " << nodes[node].token.data << '\n'
+					&stderr << nodes[functions[index].node].token.pos << "note: defined here\n"
+					exit(1)
+				}
+
+				let call = nodes[node].nodes[NODE_CALL_ARGS]
+				let real = nodes[functions[index].node].nodes[NODE_FN_ARGS]
+				for real != 0 {
+					check_expr(call, false)
+					type_assert(call, nodes[real].type)
+
+					call = nodes[call].next
+					real = nodes[real].next
+				}
+
+				nodes[node].token.data = index
+				nodes[node].type = nodes[functions[index].node].type
+			}
+		}
+
+		NODE_UNARY => {
+			let expr = nodes[node].nodes[NODE_UNARY_EXPR]
+
+			match nodes[node].token.kind {
+				TOKEN_SUB, TOKEN_BNOT => {
+					ref_prevent(node, ref)
+					check_expr(expr, false)
+					nodes[node].type = type_assert_arith(expr)
+				}
+
+				TOKEN_LNOT => {
+					ref_prevent(node, ref)
+					check_expr(expr, false)
+					nodes[node].type = type_assert(expr, type_new(TYPE_BOOL, 0, 0))
+				}
+
+				TOKEN_MUL => {
+					check_expr(expr, false)
+					if type_isarray(nodes[expr].type) {
+						&stderr << nodes[expr].token.pos << "error: cannot deference array\n"
+						exit(1)
+					}
+					nodes[node].type = type_deref(type_assert_pointer(expr))
+				}
+
+				TOKEN_BAND => {
+					ref_prevent(node, ref)
+					check_expr(expr, true)
+					nodes[node].type = type_ref(nodes[expr].type)
+				}
+
+				else => assert false # unreachable
+			}
+		}
+
+		NODE_BINARY => {
+			let lhs = nodes[node].nodes[NODE_BINARY_LHS]
+			let rhs = nodes[node].nodes[NODE_BINARY_RHS]
+
+			if is_operator_function_token_kind(nodes[node].token.kind) {
+				ref_prevent(node, ref)
+				check_expr(lhs, false)
+				check_expr(rhs, false)
+
+				let index int
+				if operator_functions_find(nodes[node].token.kind, lhs, rhs, &index) {
+					nodes[node].kind = NODE_CALL
+					nodes[node].nodes[NODE_CALL_ARGS] = lhs
+					nodes[lhs].next = rhs
+
+					nodes[node].token.data = index
+					nodes[node].type = nodes[functions[index].node].type
+					return
+				}
+			}
+
+			match nodes[node].token.kind {
+				TOKEN_DOT => {
+					check_expr(lhs, false)
+					if nodes[lhs].type.kind != TYPE_STRUCT {
+						&stderr << nodes[lhs].token.pos << "error: expected structure value, got '" << nodes[lhs].type << "'\n"
+						exit(1)
+					}
+
+					let real = nodes[lhs].type.data
+					if !node_list_find(nodes[real].nodes[NODE_STRUCT_FIELDS], rhs) {
+						&stderr << nodes[rhs].token.pos << "error: undefined field '" << nodes[rhs].token.str << "' in structure '" << nodes[real].token.str << "'\n"
+
+						if nodes[real].token.pos.path.size != 0 {
+							&stderr << nodes[real].token.pos << "note: defined here\n"
+							exit(1)
+						}
+					}
+
+					nodes[node].type = nodes[nodes[rhs].token.data].type
+				}
+
+				TOKEN_LBRACKET => {
+					check_expr(lhs, false)
+					ref_prevent(lhs, nodes[lhs].kind == NODE_CALL && type_isarray(nodes[lhs].type))
+					check_expr(rhs, false)
+					nodes[node].type = type_deref(type_assert_pointer(lhs))
+					type_assert(rhs, type_new(TYPE_INT, 0, 0))
+				}
+
+				TOKEN_ADD, TOKEN_SUB, TOKEN_MUL, TOKEN_DIV, TOKEN_MOD, TOKEN_SHL, TOKEN_SHR, TOKEN_BOR, TOKEN_BAND => {
+					nodes[node].type = type_assert(rhs, type_assert_arith(lhs))
+				}
+
+				TOKEN_LOR, TOKEN_LAND => {
+					ref_prevent(node, ref)
+					nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+
+					check_expr(lhs, false)
+					type_assert(lhs, nodes[node].type)
+
+					check_expr(rhs, false)
+					type_assert(rhs, nodes[node].type)
+				}
+
+				TOKEN_GT, TOKEN_GE, TOKEN_LT, TOKEN_LE => {
+					type_assert(rhs, type_assert_arith(lhs))
+					nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+				}
+
+				TOKEN_EQ, TOKEN_NE => {
+					type_assert(rhs, type_assert_scalar(lhs))
+					nodes[node].type = type_new(TYPE_BOOL, 0, 0)
+				}
+
+				TOKEN_SET => {
+					ref_prevent(node, ref)
+					check_expr(lhs, true)
+					check_expr(rhs, false)
+					type_assert(rhs, nodes[lhs].type)
+					nodes[node].type = type_new(TYPE_NIL, 0, 0)
+				}
+
+				TOKEN_ADD_SET, TOKEN_SUB_SET, TOKEN_MUL_SET, TOKEN_DIV_SET, TOKEN_MOD_SET => {
+					ref_prevent(node, ref)
+					check_expr(lhs, true)
+					type_assert_arith(lhs)
+
+					check_expr(rhs, false)
+					type_assert(rhs, nodes[lhs].type)
+					nodes[node].type = type_new(TYPE_NIL, 0, 0)
+				}
+
+				TOKEN_AS => {
+					ref_prevent(node, ref)
+
+					check_expr(lhs, false)
+					type_assert_scalar(lhs)
+
+					check_type(rhs)
+					type_assert_scalar(rhs)
+
+					nodes[node].type = nodes[rhs].type
+				}
+
+				else => assert false # unreachable
+			}
+		}
+
+		else => assert false # unreachable
+	}
+}
+
+struct Pred {
+	node int
+	value int
+}
+
+let preds [SCOPE_CAP]Pred
+let preds_count int
+
+fn preds_push(node int) {
+	assert preds_count < SCOPE_CAP
+	preds[preds_count].node = node
+	preds[preds_count].value = nodes[node].token.data
+	preds_count += 1
+}
+
+fn preds_find(value int, start int, index *int) bool {
+	for let i = start, i < preds_count, i += 1 {
+		if preds[i].value == value {
+			*index = i
+			return true
+		}
+	}
+	return false
+}
+
+assert COUNT_NODES == 17
+assert COUNT_TOKENS == 57
+fn check_stmt(node int) {
+	match nodes[node].kind {
+		NODE_BLOCK => {
+			let constants_count_save = constants_count
+			let variables_count_save = variables_count
+			for let iter = nodes[node].nodes[NODE_BLOCK_START], iter != 0, iter = nodes[iter].next {
+				check_stmt(iter)
+			}
+			constants_count = constants_count_save
+			variables_count = variables_count_save
+		}
+
+		NODE_IF => {
+			let cond = nodes[node].nodes[NODE_IF_COND]
+			check_expr(cond, false)
+			type_assert(cond, type_new(TYPE_BOOL, 0, 0))
+
+			check_stmt(nodes[node].nodes[NODE_IF_THEN])
+
+			let ante = nodes[node].nodes[NODE_IF_ELSE]
+			if ante != 0 {
+				check_stmt(ante)
+			}
+		}
+
+		NODE_FOR => {
+			let variables_count_save = variables_count
+
+			let init = nodes[node].nodes[NODE_FOR_INIT]
+			if init != 0 {
+				check_stmt(init)
+			}
+
+			let cond = nodes[node].nodes[NODE_FOR_COND]
+			check_expr(cond, false)
+			type_assert(cond, type_new(TYPE_BOOL, 0, 0))
+
+			let update = nodes[node].nodes[NODE_FOR_UPDATE]
+			if update != 0 {
+				check_stmt(update)
+			}
+
+			check_stmt(nodes[node].nodes[NODE_FOR_BODY])
+			variables_count = variables_count_save
+		}
+
+		NODE_MATCH => {
+			let preds_count_save = preds_count
+
+			let expr = nodes[node].nodes[NODE_MATCH_EXPR]
+			check_expr(expr, false)
+			type_assert_scalar(expr)
+
+			for let branch = nodes[node].nodes[NODE_MATCH_LIST], branch != 0, branch = nodes[branch].next {
+				for let pred = nodes[branch].nodes[NODE_BRANCH_LIST], pred != 0, pred = nodes[pred].next {
+					check_const(pred)
+					type_assert(pred, nodes[expr].type)
+
+					let prev int
+					if preds_find(nodes[pred].token.data, preds_count_save, &prev) {
+						&stderr << nodes[pred].token.pos << "error: duplicate branch '" << nodes[pred].token.data << "'\n"
+						&stderr << nodes[preds[prev].node].token.pos << "note: handled here\n"
+						exit(1)
+					}
+
+					preds_push(pred)
+				}
+				check_stmt(nodes[branch].nodes[NODE_BRANCH_BODY])
+			}
+
+			preds_count = preds_count_save
+
+			if nodes[node].nodes[NODE_MATCH_ELSE] != 0 {
+				check_stmt(nodes[node].nodes[NODE_MATCH_ELSE])
+			}
+		}
+
+		NODE_BREAK, NODE_BRANCH => {}
+
+		NODE_FN => {
+			if nodes[node].token.kind == TOKEN_IDENT {
+				let prev int
+				if functions_find(nodes[node].token.str, &prev) {
+					error_redefinition(node, functions[prev].node, "function")
+				}
+			}
+
+			let ret = nodes[node].nodes[NODE_FN_TYPE]
+			let args = nodes[node].nodes[NODE_FN_ARGS]
+			if nodes[node].token.str == "main" {
+				if args != 0 {
+					&stderr << nodes[args].token.pos << "error: function 'main' cannot take arguments\n"
+					exit(1)
+				}
+
+				if ret != 0 {
+					&stderr << nodes[ret].token.pos << "error: function 'main' cannot return anything\n"
+					exit(1)
+				}
+			}
+
+			let arity = 0
+			let variables_count_save = variables_count
+			for let arg = args, arg != 0, arg = nodes[arg].next {
+				check_redefinition(arg, args, "argument")
+				check_stmt(arg)
+				arity += 1
+			}
+
+			if nodes[node].token.kind != TOKEN_IDENT {
+				if arity != 2 {
+					&stderr << nodes[node].token.pos << "error: operator functions must take 2 arguments\n"
+					exit(1)
+				}
+
+				let prev int
+				if operator_functions_find(nodes[node].token.kind, args, nodes[args].next, &prev) {
+					error_redefinition(node, functions[prev].node, "operator function")
+				}
+			}
+
+			if ret != 0 {
+				check_type(ret)
+				nodes[node].type = nodes[ret].type
+			} else {
+				nodes[node].type = type_new(TYPE_NIL, 0, 0)
+			}
+
+			nodes[node].token.data = functions_count
+
+			functions_current = functions_count
+			functions_push(node, arity)
+
+			check_stmt(nodes[node].nodes[NODE_FN_BODY])
+			variables_count = variables_count_save
+		}
+
+		NODE_LET => {
+			let expr = nodes[node].nodes[NODE_LET_EXPR]
+			if expr != 0 {
+				check_expr(expr, false)
+				if nodes[expr].type == type_new(TYPE_NIL, 0, 0) {
+					&stderr << nodes[expr].token.pos << "error: cannot declare variable with type 'nil'\n"
+					exit(1)
+				}
+				nodes[node].type = nodes[expr].type
+			} else {
+				expr = nodes[node].nodes[NODE_LET_TYPE]
+				check_type(expr)
+				nodes[node].type = nodes[expr].type
+			}
+
+			variables_push(node)
+		}
+
+		NODE_CONST => {
+			let list = nodes[node].nodes[NODE_CONST_LIST]
+			if list != 0 {
+				for let i = 0, list != 0, i += 1 {
+					nodes[list].type = type_new(TYPE_INT, 0, 0)
+					nodes[list].token.data = i
+					constants_push(list)
+					list = nodes[list].next
+				}
+			} else {
+				let expr = nodes[node].nodes[NODE_CONST_EXPR]
+				check_const(expr)
+				nodes[node].type = nodes[expr].type
+				nodes[node].token.data = nodes[expr].token.data
+				constants_push(node)
+			}
+		}
+
+		NODE_STRUCT => {
+			let prev int
+			if structures_find(nodes[node].token.str, &prev) {
+				error_redefinition(node, structures[prev], "structure")
+			}
+
+			if nodes[node].token.str == "nil" || nodes[node].token.str == "int" || nodes[node].token.str == "bool" || nodes[node].token.str == "char" {
+				&stderr << nodes[node].token.pos << "error: redefinition of builtin type '" << nodes[node].token.str << "'\n"
+				exit(1)
+			}
+
+			let fields = nodes[node].nodes[NODE_FN_ARGS]
+			for let field = fields, field != 0, field = nodes[field].next {
+				check_redefinition(field, fields, "field")
+				let type = nodes[field].nodes[NODE_LET_TYPE]
+				check_type(type)
+				nodes[field].type = nodes[type].type
+			}
+
+			structures_push(node)
+		}
+
+		NODE_ASSERT => {
+			let expr = nodes[node].nodes[NODE_ASSERT_EXPR]
+			if nodes[node].token.data == 1 {
+				check_expr(expr, false)
+			} else {
+				check_const(expr)
+			}
+
+			type_assert(expr, type_new(TYPE_BOOL, 0, 0))
+
+			if nodes[node].token.data == 0 && nodes[expr].token.data == 0 {
+				&stderr << nodes[node].token.pos << "assertion failed\n"
+				exit(1)
+			}
+		}
+
+		NODE_RETURN => {
+			let expr = nodes[node].nodes[NODE_RETURN_EXPR]
+			if expr != 0 {
+				check_expr(expr, false)
+				nodes[node].type = nodes[expr].type
+			} else {
+				nodes[node].type = type_new(TYPE_NIL, 0, 0)
+			}
+			type_assert(node, nodes[functions[functions_current].node].type)
+		}
+
+		NODE_PRINT => {
+			let expr = nodes[node].nodes[NODE_PRINT_EXPR]
+			check_expr(expr, false)
+			type_assert_scalar(expr)
+		}
+
+		else => check_expr(node, false)
+	}
+}

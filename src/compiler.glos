@@ -1,0 +1,750 @@
+use src.checker
+
+const (
+    OP_PUSH
+    OP_DROP
+    OP_DUP
+    OP_STR
+    OP_CSTR
+
+    OP_ADD
+    OP_SUB
+    OP_MUL
+    OP_DIV
+    OP_MOD
+    OP_NEG
+
+    OP_SHL
+    OP_SHR
+    OP_BOR
+    OP_BAND
+    OP_BNOT
+    OP_LNOT
+
+    OP_GT
+    OP_GE
+    OP_LT
+    OP_LE
+    OP_EQ
+    OP_NE
+
+    OP_GPTR
+    OP_LPTR
+    OP_LOAD
+    OP_STORE
+
+    OP_FIELD
+    OP_INDEX
+
+    OP_GOTO
+    OP_ELSE
+    OP_THEN
+
+    OP_CALL
+    OP_RET
+
+    OP_ARGC
+    OP_ARGV
+    OP_HALT
+    OP_SYSCALL
+
+    OP_PRINT
+    COUNT_OPS
+)
+
+struct Op {
+    kind int
+    data int
+}
+
+assert COUNT_OPS == 39
+fn [<<](f *File, op Op) *File {
+    match op.kind {
+        OP_PUSH => f << "push " << op.data << '\n'
+        OP_DROP => f << "drop " << op.data << '\n'
+        OP_DUP => f << "dup\n"
+        OP_STR => f << "str " << op.data << '\n'
+        OP_CSTR => f << "cstr " << op.data << '\n'
+
+        OP_ADD => f << "add\n"
+        OP_SUB => f << "sub\n"
+        OP_MUL => f << "mul\n"
+        OP_DIV => f << "div\n"
+        OP_MOD => f << "mod\n"
+        OP_NEG => f << "neg\n"
+
+        OP_SHL => f << "shl\n"
+        OP_SHR => f << "shr\n"
+        OP_BOR => f << "bor\n"
+        OP_BAND => f << "band\n"
+        OP_BNOT => f << "bnot\n"
+        OP_LNOT => f << "lnot\n"
+
+        OP_GT => f << "gt\n"
+        OP_GE => f << "ge\n"
+        OP_LT => f << "lt\n"
+        OP_LE => f << "le\n"
+        OP_EQ => f << "eq\n"
+        OP_NE => f << "ne\n"
+
+        OP_GPTR => f << "gptr " << op.data << '\n'
+        OP_LPTR => f << "lptr " << op.data << '\n'
+        OP_LOAD => f << "load " << op.data << '\n'
+        OP_STORE => f << "store " << op.data << '\n'
+
+        OP_FIELD => f << "field " << op.data << '\n'
+        OP_INDEX => f << "index " << op.data << '\n'
+
+        OP_GOTO => f << "goto " << op.data << '\n'
+        OP_ELSE => f << "else " << op.data << '\n'
+        OP_THEN => f << "then " << op.data << '\n'
+
+        OP_CALL => {
+            let function = &functions[op.data]
+            f << "call addr=" << nodes[function.node].token.data << ", args=" << function.args << ", vars=" << function.vars << '\n'
+        }
+
+        OP_RET => {
+            let function = &functions[op.data]
+            f << "ret args=" << function.args << ", vars=" << function.vars << " size=" << function.ret << '\n'
+        }
+
+        OP_ARGC => f << "argc\n"
+        OP_ARGV => f << "argv\n"
+        OP_HALT => f << "halt " << op.data << '\n'
+        OP_SYSCALL => f << "syscall " << op.data << '\n'
+
+        OP_PRINT => f << "print\n"
+        else => assert false # unreachable
+    }
+
+    return f
+}
+
+const OPS_CAP = 32000
+let ops [OPS_CAP]Op
+let ops_count int
+
+fn ops_push(kind int, data int) {
+    assert ops_count < OPS_CAP
+    ops[ops_count].kind = kind
+    ops[ops_count].data = data
+    ops_count += 1
+}
+
+const STRS_CAP = 1024
+
+let strs [STRS_CAP]Str
+let strs_count int
+let strs_arena Arena
+
+fn str_push(str Str) int {
+    assert strs_count < STRS_CAP
+    strs[strs_count] = str
+    strs_count += 1
+    return strs_count - 1
+}
+
+fn str_encode(str Str, cstr bool) Str {
+    if cstr {
+        str.size -= 2
+    } else {
+        str.size -= 1
+    }
+
+    let result Str
+    result.data = &strs_arena.data + strs_arena.size as *char
+    result.size = 0
+
+    for let i = 1, i < str.size, i += 1 {
+        let ch = str.data[i]
+        if ch == '\\' {
+            i += 1
+            match str.data[i] {
+                'n' => ch = '\n'
+                't' => ch = '\t'
+                '0' => ch = '\0'
+                '"' => ch = '"'
+                '\'' => ch = '\''
+                '\\' => ch = '\\'
+                else => assert false # unreachable
+            }
+        }
+
+        &strs_arena << ch
+        result.size += 1
+    }
+
+    if cstr {
+        &strs_arena << '\0'
+    }
+
+    return result
+}
+
+fn align(n int) int {
+    return (n + 7) & -8
+}
+
+assert COUNT_TYPES == 6
+fn type_size(type Type) int {
+    if type.ref > 0 {
+        return 8
+    }
+
+    match type.kind {
+        TYPE_NIL => return 0
+        TYPE_INT => return 8
+        TYPE_BOOL, TYPE_CHAR => return 1
+
+        TYPE_ARRAY => {
+            let base = type_size(nodes[nodes[type.data].nodes[NODE_BINARY_RHS]].type)
+            let count = nodes[nodes[type.data].nodes[NODE_BINARY_LHS]].token.data
+            return base * count
+        }
+
+        TYPE_STRUCT => return nodes[type.data].token.data
+        else => assert false # unreachable
+    }
+
+    return 0
+}
+
+let local_max int
+let local_size int
+fn local_alloc(size int) int {
+    local_size += size
+    return local_size
+}
+
+let global_size int
+fn global_alloc(size int) int {
+    global_size += size
+    return global_size - size
+}
+
+fn compile_ref(node int) {
+    if nodes[node].token.data & 1 == 1 {
+        ops_push(OP_LPTR, nodes[node].token.data & ~1)
+    } else {
+        ops_push(OP_GPTR, nodes[node].token.data)
+    }
+}
+
+assert COUNT_NODES == 17
+assert COUNT_TOKENS == 57
+fn compile_expr(node int, ref bool) {
+    match nodes[node].kind {
+        NODE_ATOM => {
+            match nodes[node].token.kind {
+                TOKEN_ARGC => ops_push(OP_ARGC, 0)
+                TOKEN_ARGV => ops_push(OP_ARGV, 0)
+                TOKEN_INT, TOKEN_BOOL, TOKEN_CHAR => ops_push(OP_PUSH, nodes[node].token.data)
+                TOKEN_STR => ops_push(OP_STR, str_push(str_encode(nodes[node].token.str, false)))
+                TOKEN_CSTR => ops_push(OP_CSTR, str_push(str_encode(nodes[node].token.str, true)))
+                TOKEN_IDENT => {
+                    let real = nodes[node].token.data
+                    compile_ref(real)
+
+                    if !ref {
+                        ops_push(OP_LOAD, type_size(nodes[node].type))
+                    }
+                }
+
+                else => assert false # unreachable
+            }
+        }
+
+        NODE_CALL => {
+            for let arg = nodes[node].nodes[NODE_CALL_ARGS], arg != 0, arg = nodes[arg].next {
+                compile_expr(arg, false)
+            }
+
+            if nodes[node].token.str == "syscall" {
+                ops_push(OP_SYSCALL, nodes[node].token.data)
+            } else {
+                ops_push(OP_CALL, nodes[node].token.data)
+            }
+        }
+
+        NODE_UNARY => {
+            let expr = nodes[node].nodes[NODE_UNARY_EXPR]
+
+            match nodes[node].token.kind {
+                TOKEN_SUB => {
+                    compile_expr(expr, false)
+                    ops_push(OP_NEG, 0)
+                }
+
+                TOKEN_MUL => {
+                    compile_expr(expr, false)
+                    if !ref {
+                        ops_push(OP_LOAD, type_size(nodes[node].type))
+                    }
+                }
+
+                TOKEN_BAND => compile_expr(expr, true)
+
+                TOKEN_BNOT => {
+                    compile_expr(expr, false)
+                    ops_push(OP_BNOT, 0)
+                }
+
+                TOKEN_LNOT => {
+                    compile_expr(expr, false)
+                    ops_push(OP_LNOT, 0)
+                }
+
+                else => assert false # unreachable
+            }
+        }
+
+        NODE_BINARY => {
+            let lhs = nodes[node].nodes[NODE_BINARY_LHS]
+            let rhs = nodes[node].nodes[NODE_BINARY_RHS]
+
+            match nodes[node].token.kind {
+                TOKEN_DOT => {
+                    compile_expr(lhs, true)
+                    for let i = 0, i < nodes[lhs].type.ref, i += 1 {
+                        ops_push(OP_LOAD, 8)
+                    }
+
+                    ops_push(OP_FIELD, nodes[nodes[rhs].token.data].token.data)
+                    if !ref {
+                        ops_push(OP_LOAD, type_size(nodes[node].type))
+                    }
+                }
+
+                TOKEN_LBRACKET => {
+                    let array = type_isarray(nodes[lhs].type)
+                    compile_expr(lhs, array)
+                    compile_expr(rhs, false)
+
+                    let size = type_size(nodes[node].type)
+                    ops_push(OP_INDEX, size)
+
+                    if !ref {
+                        ops_push(OP_LOAD, size)
+                    }
+                }
+
+                TOKEN_ADD => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_ADD, 0)
+                }
+
+                TOKEN_SUB => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_SUB, 0)
+                }
+
+                TOKEN_MUL => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_MUL, 0)
+                }
+
+                TOKEN_DIV => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_DIV, 0)
+                }
+
+                TOKEN_MOD => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_MOD, 0)
+                }
+
+                TOKEN_SHL => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_SHL, 0)
+                }
+
+                TOKEN_SHR => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_SHR, 0)
+                }
+
+                TOKEN_BOR => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_BOR, 0)
+                }
+
+                TOKEN_BAND => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_BAND, 0)
+                }
+
+                TOKEN_LOR => {
+                    compile_expr(lhs, false)
+
+                    let right_addr = ops_count
+                    ops_push(OP_THEN, 0)
+
+                    compile_expr(rhs, false)
+                    ops_push(OP_GOTO, ops_count + 2)
+
+                    ops[right_addr].data = ops_count
+                    ops_push(OP_PUSH, 1)
+                }
+
+                TOKEN_LAND => {
+                    compile_expr(lhs, false)
+
+                    let right_addr = ops_count
+                    ops_push(OP_ELSE, 0)
+
+                    compile_expr(rhs, false)
+                    ops_push(OP_GOTO, ops_count + 2)
+
+                    ops[right_addr].data = ops_count
+                    ops_push(OP_PUSH, 0)
+                }
+
+                TOKEN_SET => {
+                    compile_expr(lhs, true)
+                    compile_expr(rhs, false)
+                    ops_push(OP_STORE, type_size(nodes[rhs].type))
+                }
+
+                TOKEN_ADD_SET => {
+                    let size = type_size(nodes[rhs].type)
+                    compile_expr(lhs, true)
+                    ops_push(OP_DUP, 0)
+                    ops_push(OP_LOAD, size)
+                    compile_expr(rhs, false)
+                    ops_push(OP_ADD, 0)
+                    ops_push(OP_STORE, size)
+                }
+
+                TOKEN_SUB_SET => {
+                    let size = type_size(nodes[rhs].type)
+                    compile_expr(lhs, true)
+                    ops_push(OP_DUP, 0)
+                    ops_push(OP_LOAD, size)
+                    compile_expr(rhs, false)
+                    ops_push(OP_SUB, 0)
+                    ops_push(OP_STORE, size)
+                }
+
+                TOKEN_MUL_SET => {
+                    let size = type_size(nodes[rhs].type)
+                    compile_expr(lhs, true)
+                    ops_push(OP_DUP, 0)
+                    ops_push(OP_LOAD, size)
+                    compile_expr(rhs, false)
+                    ops_push(OP_MUL, 0)
+                    ops_push(OP_STORE, size)
+                }
+
+                TOKEN_DIV_SET => {
+                    let size = type_size(nodes[rhs].type)
+                    compile_expr(lhs, true)
+                    ops_push(OP_DUP, 0)
+                    ops_push(OP_LOAD, size)
+                    compile_expr(rhs, false)
+                    ops_push(OP_DIV, 0)
+                    ops_push(OP_STORE, size)
+                }
+
+                TOKEN_MOD_SET => {
+                    let size = type_size(nodes[rhs].type)
+                    compile_expr(lhs, true)
+                    ops_push(OP_DUP, 0)
+                    ops_push(OP_LOAD, size)
+                    compile_expr(rhs, false)
+                    ops_push(OP_MOD, 0)
+                    ops_push(OP_STORE, size)
+                }
+
+                TOKEN_GT => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_GT, 0)
+                }
+
+                TOKEN_GE => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_GE, 0)
+                }
+
+                TOKEN_LT => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_LT, 0)
+                }
+
+                TOKEN_LE => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_LE, 0)
+                }
+
+                TOKEN_EQ => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_EQ, 0)
+                }
+
+                TOKEN_NE => {
+                    compile_expr(lhs, false)
+                    compile_expr(rhs, false)
+                    ops_push(OP_NE, 0)
+                }
+
+                TOKEN_AS => compile_expr(lhs, false)
+
+                else => assert false # unreachable
+            }
+        }
+
+        else =>
+            assert false # unreachable
+    }
+}
+
+const JUMPS_CAP = 64
+struct Jumps {
+    data [JUMPS_CAP]int
+    count int
+}
+
+fn jumps_save(j *Jumps) {
+    assert j.count < JUMPS_CAP
+    j.data[j.count] = ops_count
+    j.count += 1
+}
+
+fn jumps_restore(j *Jumps, start int) {
+    for let i = start, i < j.count, i += 1 {
+        ops[j.data[i]].data = ops_count
+    }
+    j.count = start
+}
+
+let pred_jumps Jumps
+let break_jumps Jumps
+let branch_jumps Jumps
+
+assert COUNT_NODES == 17
+assert COUNT_TOKENS == 57
+fn compile_stmt(node int) {
+    match nodes[node].kind {
+        NODE_BLOCK => {
+            let local_size_save = local_size
+            for let iter = nodes[node].nodes[NODE_BLOCK_START], iter != 0, iter = nodes[iter].next {
+                compile_stmt(iter)
+            }
+            local_max = max(local_max, local_size)
+            local_size = local_size_save
+        }
+
+        NODE_IF => {
+            compile_expr(nodes[node].nodes[NODE_IF_COND], false)
+
+            let then_addr = ops_count
+            ops_push(OP_ELSE, 0)
+            compile_stmt(nodes[node].nodes[NODE_IF_THEN])
+
+            if nodes[node].nodes[NODE_IF_ELSE] != 0 {
+                let else_addr = ops_count
+                ops_push(OP_GOTO, 0)
+                ops[then_addr].data = ops_count
+                compile_stmt(nodes[node].nodes[NODE_IF_ELSE])
+                ops[else_addr].data = ops_count
+            } else {
+                ops[then_addr].data = ops_count
+            }
+        }
+
+        NODE_FOR => {
+            let local_size_save = local_size
+
+            let init = nodes[node].nodes[NODE_FOR_INIT]
+            if init != 0 {
+                compile_stmt(init)
+            }
+
+            let loop_addr = ops_count
+            compile_expr(nodes[node].nodes[NODE_FOR_COND], false)
+
+            let body_addr = ops_count
+            ops_push(OP_ELSE, 0)
+
+            let break_jumps_save = break_jumps.count
+            compile_stmt(nodes[node].nodes[NODE_FOR_BODY])
+
+            let update = nodes[node].nodes[NODE_FOR_UPDATE]
+            if update != 0 {
+                compile_stmt(update)
+            }
+
+            ops_push(OP_GOTO, loop_addr)
+            ops[body_addr].data = ops_count
+
+            jumps_restore(&break_jumps, break_jumps_save)
+
+            local_max = max(local_max, local_size)
+            local_size = local_size_save
+        }
+
+        NODE_MATCH => {
+            let expr = nodes[node].nodes[NODE_MATCH_EXPR]
+            compile_expr(expr, false)
+
+            let branch_jumps_save = branch_jumps.count
+            for let branch = nodes[node].nodes[NODE_MATCH_LIST], branch != 0, branch = nodes[branch].next {
+                compile_stmt(branch)
+            }
+
+            let drop = type_size(nodes[expr].type)
+            if drop != 0 {
+                ops_push(OP_DROP, align(drop))
+            }
+
+            if nodes[node].nodes[NODE_MATCH_ELSE] != 0 {
+                compile_stmt(nodes[node].nodes[NODE_MATCH_ELSE])
+            }
+
+            jumps_restore(&branch_jumps, branch_jumps_save)
+        }
+
+        NODE_BRANCH => {
+            for let pred = nodes[node].nodes[NODE_BRANCH_LIST], pred != 0, pred = nodes[pred].next {
+                ops_push(OP_DUP, 0)
+                ops_push(OP_PUSH, nodes[pred].token.data)
+                ops_push(OP_EQ, 0)
+
+                jumps_save(&pred_jumps)
+                ops_push(OP_THEN, 0)
+            }
+
+            let body_addr = ops_count
+            ops_push(OP_GOTO, 0)
+
+            jumps_restore(&pred_jumps, 0)
+
+            let drop = type_size(nodes[nodes[node].nodes[NODE_BRANCH_LIST]].type)
+            if drop != 0 {
+                ops_push(OP_DROP, align(drop))
+            }
+
+            compile_stmt(nodes[node].nodes[NODE_BRANCH_BODY])
+
+            jumps_save(&branch_jumps)
+            ops_push(OP_GOTO, 0)
+            ops[body_addr].data = ops_count
+        }
+
+        NODE_FN => {
+            local_max = 0
+            local_size = 0
+
+            functions_current = nodes[node].token.data
+            let function = &functions[functions_current]
+
+            nodes[node].token.data = ops_count
+
+            let local_size_save = local_size
+            for let arg = nodes[node].nodes[NODE_FN_ARGS], arg != 0, arg = nodes[arg].next {
+                compile_stmt(arg)
+            }
+            function.args = local_size
+            function.ret = align(type_size(nodes[node].type))
+
+            compile_stmt(nodes[node].nodes[NODE_FN_BODY])
+            if function.ret == 0 {
+                ops_push(OP_RET, functions_current)
+            }
+
+            function.vars = max(local_max, function.ret) - function.args
+            local_size = local_size_save
+        }
+
+        NODE_LET => {
+            let size = type_size(nodes[node].type)
+            if nodes[node].token.data == 1 {
+                nodes[node].token.data = local_alloc(align(size)) | 1
+            } else {
+                nodes[node].token.data = global_alloc(align(size))
+            }
+
+            let expr = nodes[node].nodes[NODE_LET_EXPR]
+            if expr != 0 {
+                compile_ref(node)
+                compile_expr(expr, false)
+                ops_push(OP_STORE, size)
+            }
+        }
+
+        NODE_CONST => {}
+
+        NODE_ASSERT => {
+            if nodes[node].token.data == 1 {
+                compile_expr(nodes[node].nodes[NODE_ASSERT_EXPR], false)
+
+                ops_push(OP_THEN, ops_count + 6)
+                ops_push(OP_PUSH, 1)
+                ops_push(OP_PUSH, 2)
+
+                let str Str
+                str.data = &strs_arena.data + strs_arena.size as *char
+
+                &strs_arena << nodes[node].token.pos.path << ':' << nodes[node].token.pos.row << ':' << nodes[node].token.pos.col << ": assertion failed\n"
+
+                str.size = &strs_arena.data as int + strs_arena.size - str.data as int
+
+                ops_push(OP_STR, str_push(str))
+                ops_push(OP_SYSCALL, 4)
+                ops_push(OP_HALT, 1)
+            }
+        }
+
+        NODE_STRUCT => {
+            nodes[node].token.data = 0
+            for let field = nodes[node].nodes[NODE_STRUCT_FIELDS], field != 0, field = nodes[field].next {
+                nodes[field].token.data = nodes[node].token.data
+                nodes[node].token.data += align(type_size(nodes[field].type))
+            }
+        }
+
+        NODE_BREAK => {
+            jumps_save(&break_jumps)
+            ops_push(OP_GOTO, 0)
+        }
+
+        NODE_RETURN => {
+            let expr = nodes[node].nodes[NODE_RETURN_EXPR]
+            if expr != 0 {
+                let size = functions[functions_current].ret
+                ops_push(OP_LPTR, size)
+                compile_expr(expr, false)
+                ops_push(OP_STORE, size)
+            }
+            ops_push(OP_RET, functions_current)
+        }
+
+        NODE_PRINT => {
+            compile_expr(nodes[node].nodes[NODE_PRINT_EXPR], false)
+            ops_push(OP_PRINT, 0)
+        }
+
+        else => {
+            compile_expr(node, false)
+
+            let drop = type_size(nodes[node].type)
+            if drop != 0 {
+                ops_push(OP_DROP, align(drop))
+            }
+        }
+    }
+}

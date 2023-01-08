@@ -1,0 +1,332 @@
+use std.cmd
+use src.generator
+
+fn usage(f *File) {
+    f << "usage:\n"
+    f << "  glos CMD FILE\n\n"
+    f << "commands:\n"
+    f << "  help           Print this help and exit\n"
+    f << "  com            Compile the program\n"
+    f << "  run            Compile the program and run it\n"
+    f << "  test           Run the tests for the program\n"
+    f << "  record         Run the program and print the test information\n"
+}
+
+const ARGS_CAP = 1024
+let args [ARGS_CAP]*char
+let args_count int
+let args_start int
+
+fn args_push(item *char) {
+    assert args_count < ARGS_CAP
+    args[args_count] = item
+    args_count += 1
+}
+
+fn arg_next(name Str) Str {
+    if args_start == argc {
+        usage(&stderr)
+        &stderr << "\nerror: " << name << " not provided\n"
+        exit(1)
+    }
+
+    args_start += 1
+    return str_from_cstr(argv[args_start - 1])
+}
+
+struct Test {
+    out Str
+    err Str
+    exit int
+    debug bool
+}
+
+fn test_new() Test {
+    let test Test
+    test.exit = 0
+    test.out.size = 0
+    test.err.size = 0
+    test.debug = false
+    return test
+}
+
+fn test_free(test *Test) {
+    if test.out.size != 0 {
+        munmap(test.out.data, test.out.size)
+        test.out.size = 0
+    }
+
+    if test.err.size != 0 {
+        munmap(test.err.data, test.err.size)
+        test.err.size = 0
+    }
+}
+
+fn [<<](f *File, test Test) *File {
+    if test.debug && args_count > 4 {
+        f << "argc: " << args_count - 4 << '\n'
+        for let i = 3, i < args_count - 1, i += 1 {
+            let arg = str_from_cstr(args[i])
+            f << "arg: " << arg.size << '\n' << arg << '\n'
+        }
+        f << '\n'
+    }
+
+    if test.out.size != 0 {
+        f << "stdout:"
+        if test.debug {
+            f << " " << test.out.size
+        }
+        f << '\n' << test.out << '\n'
+    }
+
+    if test.err.size != 0 {
+        f << "stderr:"
+        if test.debug {
+            f << " " << test.err.size
+        }
+        f << '\n' << test.err << '\n'
+    }
+
+    if test.exit != 0 {
+        f << "exit: " << test.exit << '\n'
+    }
+
+    return f
+}
+
+fn test_parse_data(path Str, contents *Str, out *Str) {
+    let value = str_split_by(contents, '\n')
+    if !int_from_str(value, &out.size) {
+        &stderr << path << ": error: invalid number '" << value << "'\n"
+        exit(1)
+    }
+
+    if contents.size <= out.size {
+        &stderr << path << ": error: not enough bytes in file\n"
+        exit(1)
+    }
+
+    out.data = contents.data
+    *contents = str_drop_left(*contents, out.size)
+}
+
+fn test_parse_int(path Str, contents *Str) int {
+    let number = str_split_by(contents, '\n')
+    let value int
+    if !int_from_str(number, &value) {
+        &stderr << path << ": error: invalid number '" << number << "'\n"
+        exit(1)
+    }
+    return value
+}
+
+fn test_file(path Str, contents Str) bool {
+    path_arena.size = 0
+
+    args_count = 0
+    args_push(argv[-1])
+    args_push("run"c)
+    args_push(path.data)
+
+    let expected = test_new()
+    let key = str_split_by(&contents, ' ')
+    if (key == "argc:") {
+        let args_count = test_parse_int(path, &contents)
+        contents = str_trim_left(contents, '\n')
+        key = str_split_by(&contents, ' ')
+
+        for let i = 0, i < args_count, i += 1 {
+            if key != "arg:" {
+                &stderr << path << ": error: not enough arguments in file\n"
+                exit(1)
+            }
+
+            let arg Str
+            test_parse_data(path, &contents, &arg)
+            contents = str_trim_left(contents, '\n')
+            key = str_split_by(&contents, ' ')
+
+            args_push(&path_arena.data + path_arena.size as *char)
+            &path_arena << arg << '\0'
+        }
+    }
+    args_push(0 as *char)
+
+    if key == "stdout:" {
+        test_parse_data(path, &contents, &expected.out)
+        contents = str_trim_left(contents, '\n')
+        key = str_split_by(&contents, ' ')
+    }
+
+    if key == "stderr:" {
+        test_parse_data(path, &contents, &expected.err)
+        contents = str_trim_left(contents, '\n')
+        key = str_split_by(&contents, ' ')
+    }
+
+    if key == "exit:" {
+        expected.exit = test_parse_int(path, &contents)
+    }
+
+    let actual = test_new()
+    actual.exit = capture_command(&args as **char, &actual.out, &actual.err)
+
+    let failed = actual.exit != expected.exit || actual.out != expected.out || actual.err != expected.err
+    if failed {
+        &stderr << path << ": fail\n\n"
+        &stderr << "----------- Actual -----------\n" << actual << "------------------------------\n\n"
+        &stderr << "---------- Expected ----------\n" << expected << "------------------------------\n\n"
+    }
+
+    test_free(&actual)
+    return !failed
+}
+
+fn mode_com(path Str) {
+    let str_token Token
+    str_token.pos.path.size = 0
+    str_token.str = "Str"
+    str_token.data = 16
+
+    let str_struct = node_new(NODE_STRUCT, str_token)
+    let str_fields = &nodes[str_struct].nodes[NODE_STRUCT_FIELDS]
+
+    str_token.str = "size"
+    str_token.data = 0
+    let str_size = node_new(NODE_LET, str_token)
+    nodes[str_size].type = type_new(TYPE_INT, 0, 0)
+    str_fields = node_list_push(str_fields, str_size)
+
+    str_token.str = "data"
+    str_token.data = 8
+    let str_data = node_new(NODE_LET, str_token)
+    nodes[str_data].type = type_new(TYPE_CHAR, 1, 0)
+    str_fields = node_list_push(str_fields, str_data)
+
+    structures_push(str_struct)
+
+    lexer_open(path.data)
+    for !lexer_read(TOKEN_EOF) {
+        let stmt = parse_stmt(false)
+        if stmt != 0 {
+            tops_iter = node_list_push(tops_iter, stmt)
+        }
+    }
+
+    for let iter = tops_base, iter != 0, iter = nodes[iter].next {
+        check_stmt(iter)
+    }
+
+    let main int
+    if !functions_find("main", &main) {
+        &stderr << lexer.pos << "error: function 'main' is not defined\n"
+        exit(1)
+    }
+
+    for let i = 0, i < structures_count, i += 1 {
+        compile_stmt(structures[i])
+    }
+
+    for let i = 0, i < variables_count, i += 1 {
+        compile_stmt(variables[i])
+    }
+
+    ops_push(OP_CALL, main)
+    ops_push(OP_HALT, 0)
+
+    for let i = 0, i < functions_count, i += 1 {
+        compile_stmt(functions[i].node)
+    }
+
+    path_arena.size = 0
+    &path_arena << "./" << path
+    path_arena.size -= 5
+    path_arena.data[path_arena.size] = '\0'
+    unlink(&path_arena.data)
+
+    arena_push(&path_arena, ".fasm"c, 6)
+    generate(&path_arena.data)
+}
+
+fn mode_run(path Str) {
+    mode_com(path)
+
+    path_arena.size -= 6
+    path_arena.data[path_arena.size] = '\0'
+
+    args_push(&path_arena.data)
+    for args_start < argc {
+        args_push(argv[args_start])
+        args_start += 1
+    }
+    args_push(0 as *char)
+
+    exit(execute_command(&args as **char, false))
+}
+
+fn mode_test() {
+    let total = 0
+    let failed = 0
+    let skipped = 0
+    for let i = args_start, i < argc, i += 1 {
+        let path = str_from_cstr(argv[i])
+        if str_ends_with(path, ".glos") {
+            let contents Str
+            if !read_file(&contents, path.data) {
+                &stderr << "error: could not read file '" << path << "'\n"
+                exit(1)
+            }
+
+            if str_starts_with(contents, "##\n") {
+                total += 1
+                if !test_file(path, str_drop_left(contents, 3)) {
+                    failed += 1
+                }
+            } else {
+                skipped += 1
+                &stderr << path << ": note: testing information not found\n\n"
+            }
+            munmap(contents.data, contents.size)
+        }
+    }
+
+    &stderr << "Total: " << total << ", Passed: " << total - failed << ", Failed: " << failed << ", Skipped: " << skipped << '\n'
+}
+
+fn mode_record(path Str) {
+    args_push(argv[-1])
+    args_push("run"c)
+    args_push(path.data)
+    for let i = args_start, i < argc, i += 1 {
+        args_push(argv[i])
+    }
+    args_push(0 as *char)
+
+    let test = test_new()
+    test.exit = capture_command(&args as **char, &test.out, &test.err)
+    test.debug = true
+
+    &stderr << "----------- Result -----------\n" << test << "------------------------------\n"
+    test_free(&test)
+}
+
+fn main() {
+    let command = arg_next("command")
+    if command == "help" {
+        usage(&stdout)
+        exit(0)
+    } else if command == "com" {
+        mode_com(arg_next("file"))
+    } else if command == "run" {
+        mode_run(arg_next("file"))
+    } else if command == "test" {
+        mode_test()
+    } else if command == "record" {
+        mode_record(arg_next("file"))
+    } else {
+        usage(&stdout)
+        &stderr << "\nerror: invalid command '" << command << "'\n"
+        exit(1)
+    }
+}

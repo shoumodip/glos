@@ -1,5 +1,24 @@
 use std.str
 
+fn read_file(out *Str, path *char) bool {
+    let fd = open(path, O_RDONLY, 420)
+    if fd < 0 {
+        return false
+    }
+
+    let statbuf [144]char
+    if fstat(fd, &statbuf) < 0 {
+        close(fd)
+        return false
+    }
+
+    out.size = *(&statbuf as *int + 48 as *int)
+    out.data = mmap(0 as *char, out.size, PROT_READ, MAP_PRIVATE, fd, 0)
+    close(fd)
+
+    return out.data > 0 as *char
+}
+
 struct File {
     fd int
     buffer Str
@@ -80,3 +99,6 @@ fn [<<](f *File, n int) *File {
 
 let stdout = file_new(STDOUT)
 let stderr = file_new(STDERR)
+
+# let stdout File
+# let stderr File

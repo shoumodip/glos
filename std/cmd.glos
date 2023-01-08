@@ -1,0 +1,106 @@
+use std.io
+
+fn execute_command(args **char, silent bool) int {
+    let pid = fork()
+    if pid < 0 {
+        &stderr << "error: could not fork child\n"
+        exit(1)
+    }
+
+    if pid == 0 {
+        if silent {
+            let fd = open("/dev/null"c, O_WRONLY, 0)
+            if fd < 0 || dup2(fd, STDOUT) < 0 {
+                &stderr << "error: could not silence child\n"
+                exit(1)
+            }
+        }
+
+        if execve(*args, args, 0 as **char) < 0 {
+            &stderr << "error: could not execute child\n"
+            exit(1)
+        }
+    }
+
+    let wstatus int
+    if wait4(-1, &wstatus, 0, 0) < 0 {
+        &stderr << "error: could not wait for child\n"
+        exit(1)
+    }
+    return WEXITSTATUS(wstatus)
+}
+
+fn capture_command(args **char, out *Str, err *Str) int {
+    let pipe_stdout int
+    let pipe_stderr int
+
+    if pipe(&pipe_stdout) < 0 || pipe(&pipe_stderr) < 0 {
+        &stderr << "error: could not create pipe\n"
+        exit(1)
+    }
+
+    let write_stdout = pipe_stdout >> 32
+    let write_stderr = pipe_stderr >> 32
+
+    let read_stdout = pipe_stdout & 4294967295
+    let read_stderr = pipe_stderr & 4294967295
+
+    let pid = fork()
+    if pid < 0 {
+        &stderr << "error: could not fork child\n"
+        exit(1)
+    }
+
+    if pid == 0 {
+        if dup2(write_stdout, STDOUT) < 0 || dup2(write_stderr, STDERR) < 0 {
+            &stderr << "error: could not create pipe\n"
+            exit(1)
+        }
+
+        close(write_stdout)
+        close(write_stderr)
+
+        close(read_stdout)
+        close(read_stderr)
+
+        if execve(*args, args, 0 as **char) < 0 {
+            &stderr << "error: could not execute child\n"
+            exit(1)
+        }
+    }
+
+    close(write_stdout)
+    close(write_stderr)
+
+    let wstatus int
+    if wait4(-1, &wstatus, 0, 0) < 0 {
+        &stderr << "error: could not wait for child\n"
+        exit(1)
+    }
+    let code = WEXITSTATUS(wstatus)
+
+    if ioctl(read_stdout, FIONREAD, &out.size as int) < 0 || ioctl(read_stderr, FIONREAD, &err.size as int) < 0 {
+        &stderr << "error: could not capture query pipe size\n"
+        exit(1)
+    }
+
+    if out.size != 0 {
+        out.data = mmap(0 as *char, out.size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0)
+        if out.data < 0 as *char || read(read_stdout, out.data, out.size) < 0 {
+            &stderr << "error: could not capture child stdout\n"
+            exit(1)
+        }
+    }
+
+    if err.size != 0 {
+        err.data = mmap(0 as *char, err.size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0)
+        if err.data < 0 as *char || read(read_stderr, err.data, err.size) < 0 {
+            &stderr << "error: could not capture child stderr\n"
+            exit(1)
+        }
+    }
+
+    close(read_stdout)
+    close(read_stderr)
+    return code
+}

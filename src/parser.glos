@@ -1,0 +1,601 @@
+use std.arena
+use src.lexer
+
+const (
+    TYPE_NIL
+    TYPE_INT
+    TYPE_BOOL
+    TYPE_CHAR
+    TYPE_ARRAY
+    TYPE_STRUCT
+    COUNT_TYPES
+)
+
+struct Type {
+    kind int
+    ref int
+    data int
+}
+
+const (
+    NODE_ATOM
+    NODE_CALL
+    NODE_UNARY
+    NODE_BINARY
+
+    NODE_BLOCK
+    NODE_IF
+    NODE_FOR
+    NODE_MATCH
+    NODE_BRANCH
+
+    NODE_FN
+    NODE_LET
+    NODE_CONST
+    NODE_STRUCT
+    NODE_ASSERT
+
+    NODE_BREAK
+    NODE_RETURN
+
+    NODE_PRINT
+    COUNT_NODES
+)
+
+const NODE_CALL_ARGS = 0
+
+const NODE_CAST_TYPE = 0
+const NODE_CAST_EXPR = 1
+
+const NODE_UNARY_EXPR = 0
+
+const NODE_BINARY_LHS = 0
+const NODE_BINARY_RHS = 1
+
+const NODE_BLOCK_START = 0
+
+const NODE_IF_COND = 0
+const NODE_IF_THEN = 1
+const NODE_IF_ELSE = 2
+
+const NODE_FOR_INIT = 0
+const NODE_FOR_COND = 1
+const NODE_FOR_UPDATE = 2
+const NODE_FOR_BODY = 3
+
+const NODE_MATCH_EXPR = 0
+const NODE_MATCH_LIST = 1
+const NODE_MATCH_ELSE = 2
+
+const NODE_BRANCH_LIST = 0
+const NODE_BRANCH_BODY = 1
+
+const NODE_FN_ARGS = 0
+const NODE_FN_TYPE = 1
+const NODE_FN_BODY = 2
+
+const NODE_LET_EXPR = 0
+const NODE_LET_TYPE = 1
+
+const NODE_CONST_EXPR = 0
+const NODE_CONST_LIST = 1
+
+const NODE_STRUCT_FIELDS = 0
+
+const NODE_ASSERT_EXPR = 0
+
+const NODE_RETURN_EXPR = 0
+
+const NODE_PRINT_EXPR = 0
+
+struct Node {
+    kind int
+    type Type
+    token Token
+
+    nodes [4]int
+    next int
+}
+
+const NODES_CAP = 16000
+let nodes [NODES_CAP]Node
+let nodes_count int
+
+fn node_new(kind int, token Token) int {
+    assert nodes_count < NODES_CAP
+    nodes[nodes_count].kind = kind
+    nodes[nodes_count].token = token
+    nodes_count += 1
+    return nodes_count - 1
+}
+
+fn node_list_push(list *int, node int) *int {
+    if *list != 0 {
+        list = &nodes[*list].next
+    }
+
+    *list = node
+    return list
+}
+
+fn node_list_find(list int, node int) bool {
+    for list != 0 {
+        if nodes[list].token.str == nodes[node].token.str {
+            nodes[node].token.data = list
+            return true
+        }
+        list = nodes[list].next
+    }
+    return false
+}
+
+const (
+    POWER_NIL
+    POWER_SET
+    POWER_LOR
+    POWER_CMP
+    POWER_SHL
+    POWER_ADD
+    POWER_BOR
+    POWER_MUL
+    POWER_AS
+    POWER_PRE
+    POWER_DOT
+    POWER_IDX
+)
+
+assert COUNT_TOKENS == 57
+fn power_from_token_kind(kind int) int {
+    match kind {
+        TOKEN_DOT => return POWER_DOT
+        TOKEN_LBRACKET => return POWER_IDX
+        TOKEN_ADD, TOKEN_SUB => return POWER_ADD
+        TOKEN_MUL, TOKEN_DIV, TOKEN_MOD => return POWER_MUL
+        TOKEN_SHL, TOKEN_SHR => return POWER_SHL
+        TOKEN_BOR, TOKEN_BAND => return POWER_BOR
+        TOKEN_LOR, TOKEN_LAND => return POWER_LOR
+        TOKEN_SET, TOKEN_ADD_SET, TOKEN_SUB_SET, TOKEN_MUL_SET, TOKEN_DIV_SET, TOKEN_MOD_SET => return POWER_SET
+        TOKEN_GT, TOKEN_GE, TOKEN_LT, TOKEN_LE, TOKEN_EQ, TOKEN_NE => return POWER_CMP
+        TOKEN_AS => return POWER_AS
+    }
+    return POWER_NIL
+}
+
+fn error_unexpected(token Token) {
+    &stderr << token.pos << "error: unexpected " << str_from_token_kind(token.kind) << "\n"
+    exit(1)
+}
+
+assert COUNT_TOKENS == 57
+fn parse_const(mbp int) int {
+    let node int
+    let token = lexer_next()
+
+    match token.kind {
+        TOKEN_LPAREN => {
+            node = parse_const(POWER_SET)
+            lexer_expect(TOKEN_RPAREN)
+        }
+
+        TOKEN_INT, TOKEN_BOOL, TOKEN_CHAR, TOKEN_IDENT => node = node_new(NODE_ATOM, token)
+
+        TOKEN_SUB, TOKEN_BNOT, TOKEN_LNOT => {
+            node = node_new(NODE_UNARY, token)
+            nodes[node].nodes[NODE_UNARY_EXPR] = parse_const(POWER_PRE)
+        }
+
+        else => error_unexpected(token)
+    }
+
+    for true {
+        if !lexer_peek_row(&token) {
+            break
+        }
+
+        let lbp = power_from_token_kind(token.kind)
+        if lbp <= mbp {
+            break
+        }
+        lexer.peeked = false
+
+        let binary = node_new(NODE_BINARY, token)
+        nodes[binary].nodes[NODE_BINARY_LHS] = node
+        match token.kind {
+            TOKEN_AS, TOKEN_DOT, TOKEN_LBRACKET => error_unexpected(token)
+            else => nodes[binary].nodes[NODE_BINARY_RHS] = parse_const(lbp)
+        }
+        node = binary
+    }
+
+    return node
+}
+
+fn parse_type() int {
+    let node int
+    let token = lexer_next()
+    match token.kind {
+        TOKEN_IDENT => node = node_new(NODE_ATOM, token)
+
+        TOKEN_MUL => {
+            node = node_new(NODE_UNARY, token)
+            nodes[node].nodes[NODE_UNARY_EXPR] = parse_type()
+        }
+
+        TOKEN_LBRACKET => {
+            node = node_new(NODE_BINARY, token)
+            nodes[node].nodes[NODE_BINARY_LHS] = parse_const(POWER_SET)
+            lexer_expect(TOKEN_RBRACKET)
+            nodes[node].nodes[NODE_BINARY_RHS] = parse_type()
+        }
+
+        else => error_unexpected(token)
+    }
+
+    return node
+}
+
+assert COUNT_TOKENS == 57
+fn parse_expr(mbp int) int {
+    let node int
+    let token = lexer_next()
+
+    match token.kind {
+        TOKEN_LPAREN => {
+            node = parse_expr(POWER_SET)
+            lexer_expect(TOKEN_RPAREN)
+        }
+
+        TOKEN_INT, TOKEN_STR, TOKEN_ARGC, TOKEN_ARGV, TOKEN_BOOL, TOKEN_CHAR, TOKEN_CSTR => node = node_new(NODE_ATOM, token)
+
+        TOKEN_IDENT => {
+            if (lexer_peek_row(&lexer.buffer) && lexer.buffer.kind == TOKEN_LPAREN) {
+                lexer.peeked = false
+                node = node_new(NODE_CALL, token)
+
+                nodes[node].token.data = 0
+                if (!lexer_read(TOKEN_RPAREN)) {
+                    let args = &nodes[node].nodes[NODE_CALL_ARGS]
+                    for true {
+                        args = node_list_push(args, parse_expr(POWER_SET))
+                        token = lexer_either(TOKEN_COMMA, TOKEN_RPAREN)
+                        nodes[node].token.data += 1
+                        if (token.kind == TOKEN_RPAREN) {
+                            break
+                        }
+                    }
+                }
+            } else {
+                node = node_new(NODE_ATOM, token)
+            }
+        }
+
+        TOKEN_SUB, TOKEN_MUL, TOKEN_BNOT, TOKEN_BAND, TOKEN_LNOT => {
+            node = node_new(NODE_UNARY, token)
+            nodes[node].nodes[NODE_UNARY_EXPR] = parse_expr(POWER_PRE)
+        }
+
+        else => error_unexpected(token)
+    }
+
+    for lexer_peek_row(&token) {
+        let lbp = power_from_token_kind(token.kind)
+        if lbp <= mbp {
+            break
+        }
+        lexer.peeked = false
+
+        let binary = node_new(NODE_BINARY, token)
+        nodes[binary].nodes[NODE_BINARY_LHS] = node
+        match token.kind {
+            TOKEN_DOT => nodes[binary].nodes[NODE_BINARY_RHS] = node_new(NODE_ATOM, lexer_expect(TOKEN_IDENT))
+            TOKEN_LBRACKET => {
+                nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(POWER_SET)
+                lexer_expect(TOKEN_RBRACKET)
+            }
+
+            TOKEN_AS => nodes[binary].nodes[NODE_BINARY_RHS] = parse_type()
+            else => nodes[binary].nodes[NODE_BINARY_RHS] = parse_expr(lbp)
+        }
+        node = binary
+    }
+
+    return node
+}
+
+let parser_local bool
+
+fn local_assert(token Token, expected bool) {
+    if parser_local != expected {
+        &stderr << token.pos << "error: unexpected " << str_from_token_kind(token.kind) << " in "
+
+        if parser_local {
+            &stderr << "local"
+        } else {
+            &stderr << "global"
+        }
+
+        &stderr << " scope\n"
+        exit(1)
+    }
+}
+
+fn parse_decl() int {
+    let node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT))
+    nodes[node].token.data = parser_local as int
+    nodes[node].nodes[NODE_LET_TYPE] = parse_type()
+    return node
+}
+
+let tops_base int
+let tops_iter = &tops_base
+let path_arena Arena
+
+const IMPORTS_CAP = 1024
+let imports [IMPORTS_CAP]Str
+let imports_count int
+
+fn imports_push(path Str) {
+    assert imports_count < IMPORTS_CAP
+    imports[imports_count] = path
+    imports_count += 1
+}
+
+fn imports_find(path Str) bool {
+    for let i = imports_count, i > 0, i -= 1 {
+        if imports[i - 1] == path {
+            return true
+        }
+    }
+    return false
+}
+
+fn is_operator_function_token_kind(kind int) bool
+{
+    let power = power_from_token_kind(kind)
+    return power >= POWER_CMP && power <= POWER_MUL
+}
+
+assert COUNT_TOKENS == 57
+fn parse_stmt(loop bool) int {
+    let node int
+    let token = lexer_next()
+
+    match token.kind {
+        TOKEN_LBRACE => {
+            local_assert(token, true)
+            node = node_new(NODE_BLOCK, token)
+            for let list = &nodes[node].nodes[NODE_BLOCK_START], !lexer_read(TOKEN_RBRACE) {
+                list = node_list_push(list, parse_stmt(loop))
+            }
+        }
+
+        TOKEN_IF => {
+            local_assert(token, true)
+            node = node_new(NODE_IF, token)
+            nodes[node].nodes[NODE_IF_COND] = parse_expr(POWER_SET)
+
+            lexer_buffer(lexer_expect(TOKEN_LBRACE))
+            nodes[node].nodes[NODE_IF_THEN] = parse_stmt(loop)
+
+            if lexer_read(TOKEN_ELSE) {
+                lexer_buffer(lexer_either(TOKEN_LBRACE, TOKEN_IF))
+                nodes[node].nodes[NODE_IF_ELSE] = parse_stmt(loop)
+            }
+        }
+
+        TOKEN_FOR => {
+            local_assert(token, true)
+            node = node_new(NODE_FOR, token)
+
+            token = lexer_peek()
+            if token.kind == TOKEN_LET {
+                nodes[node].nodes[NODE_FOR_INIT] = parse_stmt(true)
+                lexer_expect(TOKEN_COMMA)
+                nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET)
+
+                if lexer_read(TOKEN_COMMA) {
+                    nodes[node].nodes[NODE_FOR_UPDATE] = parse_expr(POWER_NIL)
+                }
+            } else {
+                nodes[node].nodes[NODE_FOR_COND] = parse_expr(POWER_SET)
+            }
+
+            lexer_buffer(lexer_expect(TOKEN_LBRACE))
+            nodes[node].nodes[NODE_FOR_BODY] = parse_stmt(true)
+        }
+
+        TOKEN_MATCH => {
+            local_assert(token, true)
+            node = node_new(NODE_MATCH, token)
+
+            nodes[node].nodes[NODE_MATCH_EXPR] = parse_expr(POWER_SET)
+            let branches = &nodes[node].nodes[NODE_MATCH_LIST]
+
+            lexer_expect(TOKEN_LBRACE)
+            for !lexer_read(TOKEN_RBRACE) {
+                if lexer_read(TOKEN_ELSE) {
+                    lexer_expect(TOKEN_ARROW)
+                    nodes[node].nodes[NODE_MATCH_ELSE] = parse_stmt(loop)
+                    lexer_expect(TOKEN_RBRACE)
+                    break
+                } else {
+                    let branch = node_new(NODE_BRANCH, token)
+                    let preds = &nodes[branch].nodes[NODE_BRANCH_LIST]
+                    for true {
+                        preds = node_list_push(preds, parse_const(POWER_SET))
+                        token = lexer_either(TOKEN_COMMA, TOKEN_ARROW)
+                        if token.kind == TOKEN_ARROW {
+                            break
+                        }
+                    }
+
+                    nodes[branch].nodes[NODE_BRANCH_BODY] = parse_stmt(loop)
+                    branches = node_list_push(branches, branch)
+                }
+            }
+        }
+
+        TOKEN_FN => {
+            local_assert(token, false)
+
+            token = lexer_either(TOKEN_IDENT, TOKEN_LBRACKET)
+            if token.kind == TOKEN_LBRACKET {
+                token = lexer_next()
+                if !is_operator_function_token_kind(token.kind) {
+                    &stderr << token.pos << "error: expected binary operator, got " << str_from_token_kind(token.kind) << '\n'
+                    exit(1)
+                }
+                lexer_expect(TOKEN_RBRACKET)
+            }
+
+            node = node_new(NODE_FN, token)
+            lexer_expect(TOKEN_LPAREN)
+            parser_local = true
+
+            if !lexer_read(TOKEN_RPAREN) {
+                let args = &nodes[node].nodes[NODE_FN_ARGS]
+                for true {
+                    args = node_list_push(args, parse_decl())
+                    token = lexer_either(TOKEN_COMMA, TOKEN_RPAREN)
+                    if token.kind == TOKEN_RPAREN {
+                        break
+                    }
+                }
+            }
+
+            token = lexer_peek()
+            if token.kind != TOKEN_LBRACE {
+                nodes[node].nodes[NODE_FN_TYPE] = parse_type()
+            }
+
+            lexer_expect(TOKEN_LBRACE)
+            nodes[node].nodes[NODE_FN_BODY] = node_new(NODE_BLOCK, token)
+            for let list = &nodes[nodes[node].nodes[NODE_FN_BODY]].nodes[NODE_BLOCK_START], !lexer_read(TOKEN_RBRACE) {
+                token = lexer_peek()
+                list = node_list_push(list, parse_stmt(false))
+            }
+
+            if nodes[node].nodes[NODE_FN_TYPE] != 0 && token.kind != TOKEN_RETURN {
+                &stderr << lexer.buffer.pos << "error: expected keyword 'return' before '}'\n"
+                exit(1)
+            }
+
+            parser_local = false
+        }
+
+        TOKEN_LET => {
+            node = node_new(NODE_LET, lexer_expect(TOKEN_IDENT))
+            nodes[node].token.data = parser_local as int
+            if lexer_read(TOKEN_SET) {
+                nodes[node].nodes[NODE_LET_EXPR] = parse_expr(POWER_SET)
+            } else {
+                nodes[node].nodes[NODE_LET_TYPE] = parse_type()
+            }
+        }
+
+        TOKEN_CONST => {
+            token = lexer_either(TOKEN_IDENT, TOKEN_LPAREN)
+            node = node_new(NODE_CONST, token)
+            if token.kind == TOKEN_IDENT {
+                lexer_expect(TOKEN_SET)
+                nodes[node].nodes[NODE_CONST_EXPR] = parse_const(POWER_SET)
+            } else {
+                for let iter = &nodes[node].nodes[NODE_CONST_LIST], !lexer_read(TOKEN_RPAREN) {
+                    iter = node_list_push(iter, node_new(NODE_CONST, lexer_expect(TOKEN_IDENT)))
+                }
+            }
+        }
+
+        TOKEN_STRUCT => {
+            local_assert(token, false)
+            node = node_new(NODE_STRUCT, lexer_expect(TOKEN_IDENT))
+            lexer_expect(TOKEN_LBRACE)
+
+            for let fields = &nodes[node].nodes[NODE_STRUCT_FIELDS], !lexer_read(TOKEN_RBRACE) {
+                fields = node_list_push(fields, parse_decl())
+            }
+        }
+
+        TOKEN_USE => {
+            local_assert(token, false)
+
+            let path Str
+            path.data = &path_arena.data + path_arena.size as *char
+            for true {
+                let step = lexer_expect(TOKEN_IDENT)
+                arena_push(&path_arena, step.str.data, step.str.size)
+
+                if lexer_read(TOKEN_DOT) {
+                    &path_arena << '/'
+                } else {
+                    break
+                }
+            }
+            arena_push(&path_arena, ".glos"c, 6)
+            path.size = &path_arena.data as int + path_arena.size - path.data as int
+
+            if imports_find(path) {
+                path_arena.size -= path.size
+                return 0
+            }
+            imports_push(path)
+
+            let lexer_save = lexer
+
+            lexer_buffer(token)
+            lexer_open(path.data)
+            for !lexer_read(TOKEN_EOF) {
+                let stmt = parse_stmt(false)
+                if stmt != 0 {
+                    tops_iter = node_list_push(tops_iter, stmt)
+                }
+            }
+
+            lexer = lexer_save
+            return 0
+        }
+
+        TOKEN_ASSERT => {
+            token.data = parser_local as int
+            node = node_new(NODE_ASSERT, token)
+            if parser_local {
+                nodes[node].nodes[NODE_ASSERT_EXPR] = parse_expr(POWER_SET)
+            } else {
+                nodes[node].nodes[NODE_ASSERT_EXPR] = parse_const(POWER_SET)
+            }
+        }
+
+        TOKEN_BREAK => {
+            local_assert(token, true)
+
+            if !loop {
+                &stderr << token.pos << "error: unexpected " << str_from_token_kind(token.kind) << " outside of loop\n"
+                exit(1)
+            }
+
+            node = node_new(NODE_BREAK, token)
+        }
+
+        TOKEN_RETURN => {
+            local_assert(token, true)
+            node = node_new(NODE_RETURN, token)
+            if lexer_peek_row(&token) {
+                nodes[node].nodes[NODE_RETURN_EXPR] = parse_expr(POWER_SET)
+            }
+        }
+
+        TOKEN_PRINT => {
+            local_assert(token, true)
+            node = node_new(NODE_PRINT, token)
+            nodes[node].nodes[NODE_PRINT_EXPR] = parse_expr(POWER_SET)
+        }
+
+        else => {
+            local_assert(token, true)
+            lexer_buffer(token)
+            node = parse_expr(POWER_NIL)
+        }
+    }
+
+    return node
+}
