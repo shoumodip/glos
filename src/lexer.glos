@@ -52,6 +52,8 @@ const (
     TOKEN_MUL_SET
     TOKEN_DIV_SET
     TOKEN_MOD_SET
+    TOKEN_BOR_SET
+    TOKEN_BAND_SET
 
     TOKEN_GT
     TOKEN_GE
@@ -83,7 +85,7 @@ const (
     COUNT_TOKENS
 )
 
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn str_from_token_kind(kind int) Str {
     match kind {
         TOKEN_EOF => return "end of file"
@@ -110,8 +112,8 @@ fn str_from_token_kind(kind int) Str {
         TOKEN_DIV => return "'/'"
         TOKEN_MOD => return "'%'"
 
-        TOKEN_SHL => return "'<'"
-        TOKEN_SHR => return "'>'"
+        TOKEN_SHL => return "'<<'"
+        TOKEN_SHR => return "'>>'"
         TOKEN_BOR => return "'|'"
         TOKEN_BAND => return "'&'"
         TOKEN_BNOT => return "'~'"
@@ -126,6 +128,8 @@ fn str_from_token_kind(kind int) Str {
         TOKEN_MUL_SET => return "'*='"
         TOKEN_DIV_SET => return "'/='"
         TOKEN_MOD_SET => return "'%='"
+        TOKEN_BOR_SET => return "'|='"
+        TOKEN_BAND_SET => return "'&='"
 
         TOKEN_GT => return "'>'"
         TOKEN_GE => return "'>='"
@@ -262,7 +266,7 @@ fn lexer_char(name Str) char {
     return ch
 }
 
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn lexer_next() Token {
     if lexer.peeked {
         lexer.peeked = false
@@ -432,6 +436,8 @@ fn lexer_next() Token {
             '|' => {
                 if lexer_match('|') {
                     token.kind = TOKEN_LOR
+                } else if lexer_match('=') {
+                    token.kind = TOKEN_BOR_SET
                 } else {
                     token.kind = TOKEN_BOR
                 }
@@ -440,6 +446,8 @@ fn lexer_next() Token {
             '&' => {
                 if lexer_match('&') {
                     token.kind = TOKEN_LAND
+                } else if lexer_match('=') {
+                    token.kind = TOKEN_BAND_SET
                 } else {
                     token.kind = TOKEN_BAND
                 }
@@ -516,7 +524,7 @@ fn lexer_read(kind int) bool {
 fn lexer_expect(kind int) Token {
     let token = lexer_next()
     if token.kind != kind {
-        &stderr << "error: expected " << str_from_token_kind(kind) << ", got " << str_from_token_kind(token.kind) << "\n"
+        &stderr << token.pos << "error: expected " << str_from_token_kind(kind) << ", got " << str_from_token_kind(token.kind) << "\n"
         exit(1)
     }
     return token
@@ -525,7 +533,7 @@ fn lexer_expect(kind int) Token {
 fn lexer_either(a int, b int) Token {
     let token = lexer_next()
     if token.kind != a && token.kind != b {
-        &stderr << "error: expected " << str_from_token_kind(a) << " or " << str_from_token_kind(b) << ", got " << str_from_token_kind(token.kind) << "\n"
+        &stderr << token.pos << "error: expected " << str_from_token_kind(a) << " or " << str_from_token_kind(b) << ", got " << str_from_token_kind(token.kind) << "\n"
         exit(1)
     }
     return token

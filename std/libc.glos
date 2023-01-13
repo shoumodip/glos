@@ -1,3 +1,5 @@
+# Syscalls (unistd.h)
+
 const STDOUT = 1
 const STDERR = 2
 
@@ -37,6 +39,20 @@ fn mmap(addr *char, length int, prot int, flags int, fd int, offset int) *char {
 
 fn munmap(addr *char, length int) {
 	syscall(11, addr, length)
+}
+
+fn brk(addr *char) *char {
+	return syscall(12, addr) as *char
+}
+
+let sbrk_head *char
+fn sbrk(size int) *char {
+    if sbrk_head == 0 as *char {
+        sbrk_head = brk(0 as *char)
+    }
+
+    sbrk_head = brk(sbrk_head + size as *char)
+    return sbrk_head
 }
 
 const FIONREAD = 21531
@@ -81,6 +97,7 @@ fn unlink(path *char) int {
 	return syscall(87, path)
 }
 
+# Characters (ctype.h)
 fn isspace(ch char) bool {
 	return ch == ' ' || ch == '\t' || ch == '\n'
 }
@@ -97,11 +114,19 @@ fn isalnum(ch char) bool {
 	return isalpha(ch) || isdigit(ch)
 }
 
+# Memory Operations (string.h)
 fn memcpy(dst *char, src *char, count int) *char {
     for let i = 0, i < count, i += 1 {
         dst[i] = src[i]
     }
     return dst
+}
+
+fn memset(mem *char, ch char, count int) *char {
+    for let i = 0, i < count, i += 1 {
+        mem[i] = ch
+    }
+    return mem
 }
 
 fn memcmp(a *char, b *char, count int) int {
@@ -119,4 +144,90 @@ fn strlen(src *char) int {
         i += 1
     }
     return i
+}
+
+fn align(n int) int {
+    return (n + 7) & -8
+}
+
+# Memory Allocations (malloc.h)
+const BLOCK_SIZE = 0
+const BLOCK_DATA = 8
+
+fn block_size_ref(block *char) *int {
+    return block as *int + BLOCK_SIZE as *int
+}
+
+fn block_data_ref(block *char) *char {
+    return block + BLOCK_DATA as *char
+}
+
+fn block_size(block *char) int {
+    return *block_size_ref(block) & ~1
+}
+
+let heap_base *char
+let heap_head *char
+
+fn malloc_reuse(size int) *char {
+    for let block = heap_base, block < heap_head, block = block_data_ref(block) + block_size(block) as *char {
+        if *block_size_ref(block) & 1 == 0 && block_size(block) >= size {
+            return block
+        }
+    }
+    return 0 as *char
+}
+
+fn malloc(size int) *char {
+    if size == 0 {
+        return 0 as *char
+    }
+    size = align(size)
+
+    let block = malloc_reuse(size)
+    if block != 0 as *char {
+        *(block_data_ref(block) as *int + block_size(block) as *int) = block_size(block) - size - BLOCK_DATA
+    } else {
+        block = sbrk(size + BLOCK_DATA)
+    }
+    *block_size_ref(block) = size | 1
+
+    if heap_base == 0 as *char {
+        heap_base = block
+    }
+
+    heap_head = block_data_ref(block)
+    return heap_head
+}
+
+fn free(block *char) {
+    if block == 0 as *char {
+        return
+    }
+
+    block -= BLOCK_DATA as *char
+    *block_size_ref(block) &= ~1
+
+    let next = block_data_ref(block) + block_size(block) as *char
+    if next < heap_head && *block_size_ref(next) & 1 == 0 {
+        *block_size_ref(block) += block_size(next) + BLOCK_DATA
+    }
+}
+
+fn realloc(block *char, size int) *char {
+    if block == 0 as *char {
+        return malloc(size)
+    }
+
+    let old_size = block_size(block - BLOCK_DATA as *char)
+    if old_size >= size {
+        return block
+    }
+
+    free(block)
+    return memcpy(malloc(size), block, old_size)
+}
+
+fn zalloc(size int) *char {
+    return memset(malloc(size), '\0', size)
 }

@@ -182,10 +182,6 @@ fn str_encode(str Str, cstr bool) Str {
     return result
 }
 
-fn align(n int) int {
-    return (n + 7) & -8
-}
-
 assert COUNT_TYPES == 6
 fn type_size(type Type) int {
     if type.ref > 0 {
@@ -232,7 +228,7 @@ fn compile_ref(node int) {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn compile_expr(node int, ref bool) {
     match nodes[node].kind {
         NODE_ATOM => {
@@ -465,6 +461,26 @@ fn compile_expr(node int, ref bool) {
                     ops_push(OP_STORE, size)
                 }
 
+                TOKEN_BOR_SET => {
+                    let size = type_size(nodes[rhs].type)
+                    compile_expr(lhs, true)
+                    ops_push(OP_DUP, 0)
+                    ops_push(OP_LOAD, size)
+                    compile_expr(rhs, false)
+                    ops_push(OP_BOR, 0)
+                    ops_push(OP_STORE, size)
+                }
+
+                TOKEN_BAND_SET => {
+                    let size = type_size(nodes[rhs].type)
+                    compile_expr(lhs, true)
+                    ops_push(OP_DUP, 0)
+                    ops_push(OP_LOAD, size)
+                    compile_expr(rhs, false)
+                    ops_push(OP_BAND, 0)
+                    ops_push(OP_STORE, size)
+                }
+
                 TOKEN_GT => {
                     compile_expr(lhs, false)
                     compile_expr(rhs, false)
@@ -536,7 +552,7 @@ let break_jumps Jumps
 let branch_jumps Jumps
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn compile_stmt(node int) {
     match nodes[node].kind {
         NODE_BLOCK => {

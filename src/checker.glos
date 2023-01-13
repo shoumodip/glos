@@ -1,7 +1,7 @@
 use src.parser
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn eval_const_unary(node int) {
 	let expr = nodes[node].nodes[NODE_UNARY_EXPR]
 
@@ -14,7 +14,7 @@ fn eval_const_unary(node int) {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn eval_const_binary(node int) {
 	let lhs = nodes[node].nodes[NODE_BINARY_LHS]
 	let rhs = nodes[node].nodes[NODE_BINARY_RHS]
@@ -289,7 +289,7 @@ fn type_assert_pointer(node int) Type {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn check_const(node int) {
 	match nodes[node].kind {
 		NODE_ATOM => {
@@ -420,7 +420,7 @@ fn check_type(node int) {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn check_expr(node int, ref bool) {
 	match nodes[node].kind {
 		NODE_ATOM => {
@@ -644,7 +644,7 @@ fn check_expr(node int, ref bool) {
 					nodes[node].type = type_new(TYPE_NIL, 0, 0)
 				}
 
-				TOKEN_ADD_SET, TOKEN_SUB_SET, TOKEN_MUL_SET, TOKEN_DIV_SET, TOKEN_MOD_SET => {
+				TOKEN_ADD_SET, TOKEN_SUB_SET, TOKEN_MUL_SET, TOKEN_DIV_SET, TOKEN_MOD_SET, TOKEN_BOR_SET, TOKEN_BAND_SET => {
 					ref_prevent(node, ref)
 					check_expr(lhs, true)
 					type_assert_arith(lhs)
@@ -700,7 +700,7 @@ fn preds_find(value int, start int, index *int) bool {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn check_stmt(node int) {
 	match nodes[node].kind {
 		NODE_BLOCK => {

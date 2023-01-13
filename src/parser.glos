@@ -144,7 +144,7 @@ const (
     POWER_IDX
 )
 
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn power_from_token_kind(kind int) int {
     match kind {
         TOKEN_DOT => return POWER_DOT
@@ -154,7 +154,7 @@ fn power_from_token_kind(kind int) int {
         TOKEN_SHL, TOKEN_SHR => return POWER_SHL
         TOKEN_BOR, TOKEN_BAND => return POWER_BOR
         TOKEN_LOR, TOKEN_LAND => return POWER_LOR
-        TOKEN_SET, TOKEN_ADD_SET, TOKEN_SUB_SET, TOKEN_MUL_SET, TOKEN_DIV_SET, TOKEN_MOD_SET => return POWER_SET
+        TOKEN_SET, TOKEN_ADD_SET, TOKEN_SUB_SET, TOKEN_MUL_SET, TOKEN_DIV_SET, TOKEN_MOD_SET, TOKEN_BOR_SET, TOKEN_BAND_SET => return POWER_SET
         TOKEN_GT, TOKEN_GE, TOKEN_LT, TOKEN_LE, TOKEN_EQ, TOKEN_NE => return POWER_CMP
         TOKEN_AS => return POWER_AS
     }
@@ -166,7 +166,7 @@ fn error_unexpected(token Token) {
     exit(1)
 }
 
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn parse_const(mbp int) int {
     let node int
     let token = lexer_next()
@@ -234,7 +234,7 @@ fn parse_type() int {
     return node
 }
 
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn parse_expr(mbp int) int {
     let node int
     let token = lexer_next()
@@ -355,7 +355,7 @@ fn is_operator_function_token_kind(kind int) bool
     return power >= POWER_CMP && power <= POWER_MUL
 }
 
-assert COUNT_TOKENS == 57
+assert COUNT_TOKENS == 59
 fn parse_stmt(loop bool) int {
     let node int
     let token = lexer_next()
