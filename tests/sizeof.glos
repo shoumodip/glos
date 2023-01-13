@@ -1,0 +1,16 @@
+##
+stdout: 12
+8
+1
+1
+16
+80
+##
+
+fn main() {
+    print sizeof(int)
+    print sizeof(bool)
+    print sizeof(char)
+    print sizeof(Str)
+    print sizeof([10]int)
+}

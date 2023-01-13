@@ -228,7 +228,7 @@ fn compile_ref(node int) {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn compile_expr(node int, ref bool) {
     match nodes[node].kind {
         NODE_ATOM => {
@@ -289,6 +289,10 @@ fn compile_expr(node int, ref bool) {
                 TOKEN_LNOT => {
                     compile_expr(expr, false)
                     ops_push(OP_LNOT, 0)
+                }
+
+                TOKEN_SIZEOF => {
+                    ops_push(OP_PUSH, type_size(nodes[expr].type))
                 }
 
                 else => assert false # unreachable
@@ -552,7 +556,7 @@ let break_jumps Jumps
 let branch_jumps Jumps
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn compile_stmt(node int) {
     match nodes[node].kind {
         NODE_BLOCK => {

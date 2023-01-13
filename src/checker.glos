@@ -1,7 +1,7 @@
 use src.parser
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn eval_const_unary(node int) {
 	let expr = nodes[node].nodes[NODE_UNARY_EXPR]
 
@@ -14,7 +14,7 @@ fn eval_const_unary(node int) {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn eval_const_binary(node int) {
 	let lhs = nodes[node].nodes[NODE_BINARY_LHS]
 	let rhs = nodes[node].nodes[NODE_BINARY_RHS]
@@ -289,7 +289,7 @@ fn type_assert_pointer(node int) Type {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn check_const(node int) {
 	match nodes[node].kind {
 		NODE_ATOM => {
@@ -420,7 +420,7 @@ fn check_type(node int) {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn check_expr(node int, ref bool) {
 	match nodes[node].kind {
 		NODE_ATOM => {
@@ -556,6 +556,11 @@ fn check_expr(node int, ref bool) {
 					check_expr(expr, true)
 					nodes[node].type = type_ref(nodes[expr].type)
 				}
+
+                TOKEN_SIZEOF => {
+                    check_type(expr)
+                    nodes[node].type = type_new(TYPE_INT, 0, 0)
+                }
 
 				else => assert false # unreachable
 			}
@@ -700,7 +705,7 @@ fn preds_find(value int, start int, index *int) bool {
 }
 
 assert COUNT_NODES == 17
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn check_stmt(node int) {
 	match nodes[node].kind {
 		NODE_BLOCK => {

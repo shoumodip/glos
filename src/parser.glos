@@ -144,7 +144,7 @@ const (
     POWER_IDX
 )
 
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn power_from_token_kind(kind int) int {
     match kind {
         TOKEN_DOT => return POWER_DOT
@@ -166,7 +166,7 @@ fn error_unexpected(token Token) {
     exit(1)
 }
 
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn parse_const(mbp int) int {
     let node int
     let token = lexer_next()
@@ -234,7 +234,7 @@ fn parse_type() int {
     return node
 }
 
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn parse_expr(mbp int) int {
     let node int
     let token = lexer_next()
@@ -272,6 +272,13 @@ fn parse_expr(mbp int) int {
         TOKEN_SUB, TOKEN_MUL, TOKEN_BNOT, TOKEN_BAND, TOKEN_LNOT => {
             node = node_new(NODE_UNARY, token)
             nodes[node].nodes[NODE_UNARY_EXPR] = parse_expr(POWER_PRE)
+        }
+
+        TOKEN_SIZEOF => {
+            node = node_new(NODE_UNARY, token)
+            lexer_expect(TOKEN_LPAREN)
+            nodes[node].nodes[NODE_UNARY_EXPR] = parse_type()
+            lexer_expect(TOKEN_RPAREN)
         }
 
         else => error_unexpected(token)
@@ -355,7 +362,7 @@ fn is_operator_function_token_kind(kind int) bool
     return power >= POWER_CMP && power <= POWER_MUL
 }
 
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn parse_stmt(loop bool) int {
     let node int
     let token = lexer_next()

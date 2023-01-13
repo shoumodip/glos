@@ -67,6 +67,7 @@ const (
     TOKEN_ELSE
     TOKEN_FOR
     TOKEN_MATCH
+    TOKEN_SIZEOF
 
     TOKEN_FN
     TOKEN_LET
@@ -85,7 +86,7 @@ const (
     COUNT_TOKENS
 )
 
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn str_from_token_kind(kind int) Str {
     match kind {
         TOKEN_EOF => return "end of file"
@@ -143,6 +144,7 @@ fn str_from_token_kind(kind int) Str {
         TOKEN_ELSE => return "keyword 'else'"
         TOKEN_FOR => return "keyword 'for'"
         TOKEN_MATCH => return "keyword 'match'"
+        TOKEN_SIZEOF => return "'sizeof'"
 
         TOKEN_FN => return "keyword 'fn'"
         TOKEN_LET => return "keyword 'let'"
@@ -266,7 +268,7 @@ fn lexer_char(name Str) char {
     return ch
 }
 
-assert COUNT_TOKENS == 59
+assert COUNT_TOKENS == 60
 fn lexer_next() Token {
     if lexer.peeked {
         lexer.peeked = false
@@ -334,6 +336,8 @@ fn lexer_next() Token {
             token.kind = TOKEN_FOR
         } else if token.str == "match" {
             token.kind = TOKEN_MATCH
+        } else if token.str == "sizeof" {
+            token.kind = TOKEN_SIZEOF
         } else if token.str == "fn" {
             token.kind = TOKEN_FN
         } else if token.str == "let" {
