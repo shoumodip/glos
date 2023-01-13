@@ -1,0 +1,30 @@
+##
+stdout: 26
+2
+4
+6
+8
+10
+12
+14
+16
+18
+20
+##
+
+use std.io
+use std.array
+
+fn main() {
+    let items *int
+    let count = 0
+    let capacity = 0
+
+    for let i = 0, i < 10, i += 1 {
+        *(array_push(&items as **char, &count, &capacity, sizeof(int)) as *int) = (i + 1) * 2
+    }
+
+    for let i = 0, i < count, i += 1 {
+        &stdout << items[i] << '\n'
+    }
+}

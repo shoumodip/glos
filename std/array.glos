@@ -1,0 +1,14 @@
+use std.libc
+use std.math
+
+const ARRAY_MIN_CAP = 128
+
+fn array_push(array **char, count *int, capacity *int, size int) *char {
+    if *count >= *capacity {
+        *capacity = max(*capacity * 2, ARRAY_MIN_CAP)
+        *array = realloc(*array, *capacity * size)
+    }
+
+    *count += 1
+    return *array + ((*count - 1) * size) as *char
+}
