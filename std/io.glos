@@ -99,6 +99,3 @@ fn [<<](f *File, n int) *File {
 
 let stdout = file_new(STDOUT)
 let stderr = file_new(STDERR)
-
-# let stdout File
-# let stderr File
