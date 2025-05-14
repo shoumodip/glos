@@ -1,90 +1,127 @@
+#include <unistd.h>
+
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
 
-#include "basic.h"
+#include "checker.h"
+#include "compiler.h"
+#include "parser.h"
 
-int main(void) {
-    LLVMModuleRef module = LLVMModuleCreateWithName("");
+static void usage(FILE *file) {
+    fprintf(file, "Usage:\n");
+    fprintf(file, "    glos [FLAGS] FILE\n");
+    fprintf(file, "\n");
+    fprintf(file, "Flags:\n");
+    fprintf(file, "    -h          Show this message\n");
+    fprintf(file, "    -r          Run the program after compiling it\n");
+    fprintf(file, "    -o <name>   Set the name of the output executable\n");
+}
 
-    // Debug Print
-    const char   dpf_str[] = "%ld\n";
-    LLVMTypeRef  dpf_type = LLVMArrayType(LLVMInt8Type(), len(dpf_str));
-    LLVMValueRef dpf_const = LLVMConstString(dpf_str, len(dpf_str) - 1, false);
-    LLVMValueRef dpf_global = LLVMAddGlobal(module, dpf_type, "");
-
-    LLVMSetInitializer(dpf_global, dpf_const);
-    LLVMSetGlobalConstant(dpf_global, true);
-    LLVMSetLinkage(dpf_global, LLVMPrivateLinkage);
-    LLVMSetUnnamedAddr(dpf_global, LLVMGlobalUnnamedAddr);
-
-    LLVMTypeRef printf_args[] = {LLVMPointerType(LLVMInt8Type(), 0)};
-    LLVMTypeRef printf_type =
-        LLVMFunctionType(LLVMInt32Type(), printf_args, len(printf_args), true);
-
-    LLVMValueRef printf_func = LLVMAddFunction(module, "printf", printf_type);
-    LLVMSetFunctionCallConv(printf_func, LLVMCCallConv);
-
-    // Main
-    LLVMTypeRef  main_type = LLVMFunctionType(LLVMInt32Type(), NULL, 0, false);
-    LLVMValueRef main_func = LLVMAddFunction(module, "main", main_type);
-
-    LLVMBuilderRef    builder = LLVMCreateBuilder();
-    LLVMBasicBlockRef entry = LLVMAppendBasicBlock(main_func, "entry");
-    LLVMPositionBuilderAtEnd(builder, entry);
-
-    LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
-    LLVMValueRef indices[] = {zero, zero};
-    LLVMValueRef dpf_ptr =
-        LLVMBuildInBoundsGEP2(builder, dpf_type, dpf_global, indices, len(indices), "");
-
-    LLVMValueRef call_args[] = {dpf_ptr, LLVMConstInt(LLVMInt64Type(), 69, true)};
-    LLVMBuildCall2(builder, printf_type, printf_func, call_args, len(call_args), "");
-
-    // Main Return
-    LLVMBuildRet(builder, LLVMConstInt(LLVMInt32Type(), 0, false));
-
-    // Compilation
-    LLVMInitializeNativeTarget();
-    LLVMInitializeNativeAsmPrinter();
-
-    char *error = NULL;
-    char *triple = LLVMGetDefaultTargetTriple();
-
-    LLVMTargetRef target = NULL;
-    if (LLVMGetTargetFromTriple(triple, &target, &error)) {
-        fprintf(stderr, "ERROR: Could not get LLVM target\n");
+static const char *nextArg(int *argc, char ***argv, const char *expected) {
+    if (*argc <= 0) {
+        fprintf(stderr, "ERROR: %s not provided\n", expected);
+        fprintf(stderr, "\n");
+        usage(stderr);
         exit(1);
     }
 
-    LLVMTargetMachineRef target_machine = LLVMCreateTargetMachine(
-        target, triple, "", "", LLVMCodeGenLevelDefault, LLVMRelocPIC, LLVMCodeModelDefault);
+    (*argc)--;
+    return *(*argv)++;
+}
 
-    LLVMTargetMachineEmitToFile(target_machine, module, "hello.o", LLVMObjectFile, &error);
-    if (error) {
-        fprintf(stderr, "ERROR: Could not emit LLVM object file\n");
+int main(int argc, char **argv) {
+    bool        run = false;
+    const char *inputPath = NULL;
+    const char *outputPath = NULL;
+
+    nextArg(&argc, &argv, "Program name");
+    while (true) {
+        const char *arg = nextArg(&argc, &argv, "Input file");
+        if (!strcmp(arg, "-h")) {
+            usage(stdout);
+            exit(0);
+        }
+
+        if (!strcmp(arg, "-r")) {
+            run = true;
+            continue;
+        }
+
+        if (!strcmp(arg, "-o")) {
+            outputPath = nextArg(&argc, &argv, "Output file");
+            continue;
+        }
+
+        if (*arg == '-') {
+            fprintf(stderr, "ERROR: Invalid flag '%s'\n", arg);
+            fprintf(stderr, "\n");
+            usage(stderr);
+            exit(1);
+        }
+
+        inputPath = arg;
+        break;
+    }
+
+    Lexer l = {0};
+    if (!lexerNew(&l, inputPath)) {
+        fprintf(stderr, "ERROR: Could not open file '%s'\n", inputPath);
         exit(1);
     }
 
-    LLVMDisposeBuilder(builder);
-    LLVMDisposeModule(module);
-    LLVMDisposeTargetMachine(target_machine);
+    Parser p = {0};
+    parseFile(&p, l);
+    checkNodes(p.nodes);
 
-    // Linking
-    const char *args[] = {
-        "cc",
-        "-o",
-        "hello",
-        "hello.o",
-        NULL,
-    };
+    if (run) {
+        char tmpPath[] = "/tmp/glos_run_XXXXXX";
 
-    if (!runCommand(args)) {
-        fprintf(stderr, "ERROR: Could not link executable\n");
-        exit(1);
+        const char *exePath = outputPath;
+        if (!outputPath) {
+            const int fd = mkstemp(tmpPath);
+            if (fd < 0) {
+                // Could not get temporary file path. Use the input file path as template
+                const Str base = strStripSuffix(strFromCstr(inputPath), strFromCstr(".glos"));
+                if (*base.data == '/') {
+                    exePath = tempStrToCstr(base);
+                } else {
+                    exePath = tempSprintf("./" StrFmt, StrArg(base));
+                }
+            } else {
+                close(fd);
+                exePath = tmpPath;
+            }
+        } else if (*outputPath != '/') {
+            exePath = tempSprintf("./%s", outputPath);
+        }
+
+        compileProgram(p.nodes, exePath);
+
+        const char **args = calloc(argc + 2, sizeof(*args));
+        assert(args);
+
+        args[0] = exePath;
+        for (size_t i = 0; i < argc; i++) {
+            args[i + 1] = argv[i];
+        }
+
+        const int result = runCommand(args);
+
+        // If the user provided an output path along with the run flag, assume that the user needs
+        // the executable to persist.
+        if (!outputPath) {
+            removeFile(exePath);
+        }
+
+        return result;
     }
 
-    removeFile("hello.o");
+    if (!outputPath) {
+        outputPath = tempStrToCstr(strStripSuffix(strFromCstr(inputPath), strFromCstr(".glos")));
+    }
+
+    compileProgram(p.nodes, outputPath);
     return 0;
 }
