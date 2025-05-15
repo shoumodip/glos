@@ -1,8 +1,11 @@
 #include "ast.h"
 
-static_assert(COUNT_TYPES == 3, "");
+static_assert(COUNT_TYPES == 4, "");
 const char *typeToString(Type type) {
     switch (type.kind) {
+    case TYPE_NIL:
+        return "nil";
+
     case TYPE_BOOL:
         return "bool";
 

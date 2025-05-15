@@ -63,6 +63,17 @@ static Type typeAssertScalar(const Node *n) {
     return n->type;
 }
 
+static void errorUndefined(const Node *n, const char *label) {
+    fprintf(
+        stderr,
+        PosFmt "ERROR: Undefined %s '" StrFmt "'\n",
+        PosArg(n->token.pos),
+        label,
+        StrArg(n->token.str));
+
+    exit(1);
+}
+
 static void errorRedefinition(const Node *n, const Node *previous, const char *label) {
     fprintf(
         stderr,
@@ -75,11 +86,51 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
     exit(1);
 }
 
-static_assert(COUNT_NODES == 7, "");
-static void checkNode(Context *c, Node *n) {
+static_assert(COUNT_TYPES == 4, "");
+static void checkType(Context *c, Node *n) {
+    unused(c);
+
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 16, "");
+        if (strMatch(n->token.str, "bool")) {
+            n->type = (Type) {.kind = TYPE_BOOL};
+        } else if (strMatch(n->token.str, "i64")) {
+            n->type = (Type) {.kind = TYPE_I64};
+        } else {
+            errorUndefined(n, "type");
+        }
+        break;
+
+    case NODE_FN:
+        assert(!n->as.fn.args);
+        assert(!n->as.fn.ret);
+
+        n->type = (Type) {.kind = TYPE_FN};
+        break;
+
+    default:
+        unreachable();
+    }
+}
+
+static void refPrevent(Node *n, bool ref) {
+    if (ref) {
+        fprintf(
+            stderr,
+            PosFmt "ERROR: Cannot take reference to value not in memory\n",
+            PosArg(n->token.pos));
+
+        exit(1);
+    }
+}
+
+static_assert(COUNT_NODES == 8, "");
+static void checkExpr(Context *c, Node *n, bool ref) {
+    bool allowRef = false;
+
+    switch (n->kind) {
+    case NODE_ATOM:
+        static_assert(COUNT_TOKENS == 18, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -89,6 +140,17 @@ static void checkNode(Context *c, Node *n) {
             n->type = (Type) {.kind = TYPE_BOOL};
             break;
 
+        case TOKEN_IDENT: {
+            Node *definition = scopeFind(c->globals, n->token.str);
+            if (definition) {
+                n->as.atom.definition = definition;
+                n->type = definition->type;
+                allowRef = true;
+            } else {
+                errorUndefined(n, "identifier");
+            }
+        } break;
+
         default:
             unreachable();
         }
@@ -97,10 +159,10 @@ static void checkNode(Context *c, Node *n) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 16, "");
+        static_assert(COUNT_TOKENS == 18, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
-            checkNode(c, operand);
+            checkExpr(c, operand, false);
             n->type = typeAssertArith(operand);
             break;
 
@@ -113,15 +175,22 @@ static void checkNode(Context *c, Node *n) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 16, "");
+        static_assert(COUNT_TOKENS == 18, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
         case TOKEN_MUL:
         case TOKEN_DIV:
-            checkNode(c, lhs);
-            checkNode(c, rhs);
+            checkExpr(c, lhs, false);
+            checkExpr(c, rhs, false);
             n->type = typeAssert(rhs, typeAssertArith(lhs));
+            break;
+
+        case TOKEN_SET:
+            checkExpr(c, lhs, true);
+            checkExpr(c, rhs, false);
+            typeAssert(rhs, lhs->type);
+            n->type = (Type) {.kind = TYPE_NIL};
             break;
 
         default:
@@ -129,19 +198,30 @@ static void checkNode(Context *c, Node *n) {
         }
     } break;
 
+    default:
+        unreachable();
+    }
+
+    if (!allowRef) {
+        refPrevent(n, ref);
+    }
+}
+
+static void checkStmt(Context *c, Node *n) {
+    switch (n->kind) {
     case NODE_BLOCK:
         for (Node *it = n->as.block.head; it; it = it->next) {
-            checkNode(c, it);
+            checkStmt(c, it);
         }
         break;
 
     case NODE_IF:
-        checkNode(c, n->as.iff.condition);
+        checkExpr(c, n->as.iff.condition, false);
         typeAssert(n->as.iff.condition, (Type) {.kind = TYPE_BOOL});
 
-        checkNode(c, n->as.iff.consequence);
+        checkStmt(c, n->as.iff.consequence);
         if (n->as.iff.antecedence) {
-            checkNode(c, n->as.iff.antecedence);
+            checkStmt(c, n->as.iff.antecedence);
         }
         break;
 
@@ -157,23 +237,50 @@ static void checkNode(Context *c, Node *n) {
         }
 
         scopePush(&c->globals, n);
-        checkNode(c, n->as.fn.body);
+        checkStmt(c, n->as.fn.body);
 
         n->type = (Type) {.kind = TYPE_FN};
         break;
 
+    case NODE_VAR:
+        if (!n->as.var.local) {
+            const Node *previous = scopeFind(c->globals, n->token.str);
+            if (previous) {
+                errorRedefinition(n, previous, "identifier");
+            }
+        }
+
+        if (n->as.var.type) {
+            checkType(c, n->as.var.type);
+            n->type = n->as.var.type->type;
+        }
+
+        if (n->as.var.expr) {
+            checkExpr(c, n->as.var.expr, false);
+            n->type = n->as.var.expr->type;
+
+            if (n->as.var.type) {
+                typeAssert(n->as.var.expr, n->as.var.type->type);
+            }
+        }
+
+        assert(!n->as.var.local);
+        scopePush(&c->globals, n);
+        break;
+
     case NODE_PRINT:
-        checkNode(c, n->as.print.operand);
+        checkExpr(c, n->as.print.operand, false);
         typeAssertScalar(n->as.print.operand);
         break;
 
     default:
-        unreachable();
+        checkExpr(c, n, false);
+        break;
     }
 }
 
 void checkNodes(Context *c, Nodes nodes) {
     for (Node *it = nodes.head; it; it = it->next) {
-        checkNode(c, it);
+        checkStmt(c, it);
     }
 }

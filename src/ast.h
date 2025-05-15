@@ -8,6 +8,7 @@ typedef struct LLVMOpaqueType  *LLVMTypeRef;
 typedef struct LLVMOpaqueValue *LLVMValueRef;
 
 typedef enum {
+    TYPE_NIL,
     TYPE_BOOL,
     TYPE_I64,
     TYPE_FN,
@@ -31,10 +32,15 @@ typedef enum {
     NODE_IF,
 
     NODE_FN,
+    NODE_VAR,
 
     NODE_PRINT,
     COUNT_NODES
 } NodeKind;
+
+typedef struct {
+    Node *definition;
+} NodeAtom;
 
 typedef struct {
     Node *head;
@@ -65,6 +71,14 @@ typedef struct {
 } NodeFn;
 
 typedef struct {
+    Node *expr;
+    Node *type;
+    bool  local;
+
+    LLVMValueRef llvm;
+} NodeVar;
+
+typedef struct {
     Node *operand;
 } NodePrint;
 
@@ -74,13 +88,15 @@ struct Node {
     Token    token;
 
     union {
+        NodeAtom   atom;
         NodeUnary  unary;
         NodeBinary binary;
 
         Nodes  block;
         NodeIf iff;
 
-        NodeFn fn;
+        NodeFn  fn;
+        NodeVar var;
 
         NodePrint print;
     } as;

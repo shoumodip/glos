@@ -9,7 +9,9 @@
 #include <string.h>
 
 // Helper Macros
-#define len(a)        (sizeof(a) / sizeof(*(a)))
+#define len(a)    (sizeof(a) / sizeof(*(a)))
+#define unused(v) (void) (v)
+
 #define todo()        assert(false && "TODO")
 #define unreachable() assert(false && "Unreachable")
 

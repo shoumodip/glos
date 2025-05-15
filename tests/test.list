@@ -3,3 +3,10 @@ booleans/basics.glos
 conditions/basics.glos
 conditions/error-expected-block-or-if.glos
 conditions/error-expected-condition-type-bool.glos
+global-variables/basics.glos
+global-variables/error-undefined.glos
+global-variables/error-redefinition.glos
+global-variables/error-assignment-definition-type-mismatch.glos
+assignment/basics.glos
+assignment/error-type-mismatch.glos
+assignment/error-cannot-take-reference.glos

@@ -37,7 +37,7 @@ typedef enum {
     POWER_PRE
 } Power;
 
-static_assert(COUNT_TOKENS == 16, "");
+static_assert(COUNT_TOKENS == 18, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -47,6 +47,9 @@ static Power tokenKindPower(TokenKind kind) {
     case TOKEN_MUL:
     case TOKEN_DIV:
         return POWER_MUL;
+
+    case TOKEN_SET:
+        return POWER_SET;
 
     default:
         return POWER_NIL;
@@ -58,7 +61,30 @@ static void errorUnexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 16, "");
+static_assert(COUNT_TOKENS == 18, "");
+static Node *parseType(Parser *p) {
+    Node *node = NULL;
+    Token token = lexerNext(&p->lexer);
+
+    switch (token.kind) {
+    case TOKEN_IDENT:
+        node = nodeNew(p, NODE_ATOM, token);
+        break;
+
+    case TOKEN_FN:
+        node = nodeNew(p, NODE_FN, token);
+        lexerExpect(&p->lexer, TOKEN_LPAREN);
+        lexerExpect(&p->lexer, TOKEN_RPAREN);
+        break;
+
+    default:
+        errorUnexpected(token);
+    }
+
+    return node;
+}
+
+static_assert(COUNT_TOKENS == 18, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -66,6 +92,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
     switch (token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
+    case TOKEN_IDENT:
         node = nodeNew(p, NODE_ATOM, token);
         break;
 
@@ -117,7 +144,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 16, "");
+static_assert(COUNT_TOKENS == 18, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -164,6 +191,22 @@ static Node *parseStmt(Parser *p) {
         }
 
         p->local = localSave;
+        break;
+
+    case TOKEN_VAR:
+        localAssert(p, token, false);
+        node = nodeNew(p, NODE_VAR, lexerExpect(&p->lexer, TOKEN_IDENT));
+
+        token = lexerPeek(&p->lexer);
+        if (token.kind != TOKEN_SET) {
+            node->as.var.type = parseType(p);
+        }
+
+        if (lexerRead(&p->lexer, TOKEN_SET)) {
+            node->as.var.expr = parseExpr(p, POWER_SET);
+        }
+
+        node->as.var.local = p->local;
         break;
 
     case TOKEN_PRINT:

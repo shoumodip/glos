@@ -1,0 +1,9 @@
+var x i64
+
+fn main() {
+    x = 69
+    print x
+
+    x = 420
+    print x
+}

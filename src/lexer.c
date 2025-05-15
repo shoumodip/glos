@@ -84,7 +84,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 16, "");
+static_assert(COUNT_TOKENS == 18, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -148,6 +148,8 @@ Token lexerNext(Lexer *l) {
             token.kind = TOKEN_ELSE;
         } else if (strMatch(token.str, "fn")) {
             token.kind = TOKEN_FN;
+        } else if (strMatch(token.str, "var")) {
+            token.kind = TOKEN_VAR;
         } else if (strMatch(token.str, "print")) {
             token.kind = TOKEN_PRINT;
         } else {
@@ -188,6 +190,10 @@ Token lexerNext(Lexer *l) {
 
     case '/':
         token.kind = TOKEN_DIV;
+        break;
+
+    case '=':
+        token.kind = TOKEN_SET;
         break;
 
     default:

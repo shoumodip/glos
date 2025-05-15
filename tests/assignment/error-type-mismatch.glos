@@ -1,0 +1,5 @@
+var x i64
+
+fn main() {
+    x = true
+}
