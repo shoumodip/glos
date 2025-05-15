@@ -12,6 +12,10 @@
     } while (0)
 
 // String View
+bool strEq(Str a, Str b) {
+    return a.length == b.length && memcmp(a.data, b.data, b.length) == 0;
+}
+
 bool strMatch(Str a, const char *b) {
     return a.length == strlen(b) && memcmp(b, a.data, a.length) == 0;
 }

@@ -5,7 +5,6 @@
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
 
-#include "checker.h"
 #include "compiler.h"
 #include "parser.h"
 
@@ -73,7 +72,9 @@ int main(int argc, char **argv) {
 
     Parser p = {0};
     parseFile(&p, l);
-    checkNodes(p.nodes);
+
+    Context c = {0};
+    checkNodes(&c, p.nodes);
 
     if (run) {
         char tmpPath[] = "/tmp/glos_run_XXXXXX";
@@ -97,7 +98,7 @@ int main(int argc, char **argv) {
             exePath = tempSprintf("./%s", outputPath);
         }
 
-        compileProgram(p.nodes, exePath);
+        compileProgram(c, exePath);
 
         const char **args = calloc(argc + 2, sizeof(*args));
         assert(args);
@@ -122,6 +123,6 @@ int main(int argc, char **argv) {
         outputPath = tempStrToCstr(strStripSuffix(strFromCstr(inputPath), strFromCstr(".glos")));
     }
 
-    compileProgram(p.nodes, outputPath);
+    compileProgram(c, outputPath);
     return 0;
 }

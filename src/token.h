@@ -28,6 +28,8 @@ typedef enum {
     TOKEN_MUL,
     TOKEN_DIV,
 
+    TOKEN_FN,
+
     TOKEN_PRINT,
     COUNT_TOKENS
 } TokenKind;

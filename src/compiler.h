@@ -1,8 +1,8 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include "ast.h"
+#include "checker.h"
 
-void compileProgram(Nodes nodes, const char *executableName);
+void compileProgram(Context context, const char *executableName);
 
 #endif // COMPILER_H

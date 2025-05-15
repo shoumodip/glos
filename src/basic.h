@@ -22,6 +22,7 @@ typedef struct {
 #define StrFmt    "%.*s"
 #define StrArg(s) (int) ((s).length), ((s).data)
 
+bool strEq(Str a, Str b);
 bool strMatch(Str a, const char *b);
 bool strHasSuffix(Str a, Str b);
 

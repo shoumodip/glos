@@ -2,6 +2,7 @@
 #define PARSER_H
 
 #include "ast.h"
+#include "lexer.h"
 
 typedef struct {
     Node  *data;
@@ -10,8 +11,9 @@ typedef struct {
 
 typedef struct {
     Lexer lexer;
-    Nodes nodes;
+    bool  local;
 
+    Nodes    nodes;
     NodePool pool;
 } Parser;
 

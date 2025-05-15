@@ -1,6 +1,6 @@
 #include "ast.h"
 
-static_assert(COUNT_TYPES == 2, "");
+static_assert(COUNT_TYPES == 3, "");
 const char *typeToString(Type type) {
     switch (type.kind) {
     case TYPE_BOOL:
@@ -8,6 +8,9 @@ const char *typeToString(Type type) {
 
     case TYPE_I64:
         return "i64";
+
+    case TYPE_FN:
+        return "fn ()";
 
     default:
         unreachable();

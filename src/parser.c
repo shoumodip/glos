@@ -37,7 +37,7 @@ typedef enum {
     POWER_PRE
 } Power;
 
-static_assert(COUNT_TOKENS == 13, "");
+static_assert(COUNT_TOKENS == 14, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -58,7 +58,7 @@ static void errorUnexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 13, "");
+static_assert(COUNT_TOKENS == 14, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -104,13 +104,27 @@ static Node *parseExpr(Parser *p, Power mbp) {
     return node;
 }
 
-static_assert(COUNT_TOKENS == 13, "");
+static void localAssert(Parser *p, Token token, bool local) {
+    if (p->local != local) {
+        fprintf(
+            stderr,
+            PosFmt "ERROR: Unexpected %s in %s scope\n",
+            PosArg(token.pos),
+            tokenKindName(token.kind),
+            p->local ? "local" : "global");
+
+        exit(1);
+    }
+}
+
+static_assert(COUNT_TOKENS == 14, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
     Token token = lexerNext(&p->lexer);
     switch (token.kind) {
     case TOKEN_LBRACE:
+        localAssert(p, token, true);
         node = nodeNew(p, NODE_BLOCK, token);
         while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
             nodesPush(&node->as.block, parseStmt(p));
@@ -120,12 +134,32 @@ static Node *parseStmt(Parser *p) {
         node->token = p->lexer.buffer;
         break;
 
+    case TOKEN_FN:
+        localAssert(p, token, false);
+        node = nodeNew(p, NODE_FN, lexerExpect(&p->lexer, TOKEN_IDENT));
+
+        const bool localSave = p->local;
+        p->local = true;
+
+        {
+            lexerExpect(&p->lexer, TOKEN_LPAREN);
+            lexerExpect(&p->lexer, TOKEN_RPAREN);
+
+            lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));
+            node->as.fn.body = parseStmt(p);
+        }
+
+        p->local = localSave;
+        break;
+
     case TOKEN_PRINT:
+        localAssert(p, token, true);
         node = nodeNew(p, NODE_PRINT, token);
         node->as.print.operand = parseExpr(p, POWER_SET);
         break;
 
     default:
+        localAssert(p, token, true);
         lexerBuffer(&p->lexer, token);
         node = parseExpr(p, POWER_NIL);
         break;

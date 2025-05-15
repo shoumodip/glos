@@ -1,18 +1,24 @@
 #ifndef AST_H
 #define AST_H
 
-#include "lexer.h"
+#include "token.h"
 
 typedef struct Node Node;
+
+typedef struct LLVMOpaqueType  *LLVMTypeRef;
+typedef struct LLVMOpaqueValue *LLVMValueRef;
 
 typedef enum {
     TYPE_BOOL,
     TYPE_I64,
+    TYPE_FN,
     COUNT_TYPES
 } TypeKind;
 
 typedef struct {
     TypeKind kind;
+
+    LLVMTypeRef llvm;
 } Type;
 
 bool        typeEq(Type a, Type b);
@@ -24,6 +30,8 @@ typedef enum {
     NODE_BINARY,
 
     NODE_BLOCK,
+
+    NODE_FN,
 
     NODE_PRINT,
     COUNT_NODES
@@ -44,6 +52,13 @@ typedef struct {
 } NodeBinary;
 
 typedef struct {
+    Node *args;
+    Node *ret;
+
+    Node *body;
+} NodeFn;
+
+typedef struct {
     Node *operand;
 } NodePrint;
 
@@ -58,10 +73,14 @@ struct Node {
 
         Nodes block;
 
+        NodeFn fn;
+
         NodePrint print;
     } as;
 
     Node *next;
+
+    LLVMValueRef llvm;
 };
 
 #endif // AST_H
