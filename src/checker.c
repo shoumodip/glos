@@ -75,11 +75,11 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
     exit(1);
 }
 
-static_assert(COUNT_NODES == 6, "");
+static_assert(COUNT_NODES == 7, "");
 static void checkNode(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 14, "");
+        static_assert(COUNT_TOKENS == 16, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -97,7 +97,7 @@ static void checkNode(Context *c, Node *n) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 14, "");
+        static_assert(COUNT_TOKENS == 16, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkNode(c, operand);
@@ -113,7 +113,7 @@ static void checkNode(Context *c, Node *n) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 14, "");
+        static_assert(COUNT_TOKENS == 16, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -132,6 +132,16 @@ static void checkNode(Context *c, Node *n) {
     case NODE_BLOCK:
         for (Node *it = n->as.block.head; it; it = it->next) {
             checkNode(c, it);
+        }
+        break;
+
+    case NODE_IF:
+        checkNode(c, n->as.iff.condition);
+        typeAssert(n->as.iff.condition, (Type) {.kind = TYPE_BOOL});
+
+        checkNode(c, n->as.iff.consequence);
+        if (n->as.iff.antecedence) {
+            checkNode(c, n->as.iff.antecedence);
         }
         break;
 

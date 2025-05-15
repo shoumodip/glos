@@ -8,10 +8,15 @@
 #include <llvm-c/Analysis.h>
 
 typedef struct {
-    Context context;
-
-    LLVMModuleRef  module;
+    LLVMValueRef   fn;
     LLVMBuilderRef builder;
+} Emitter;
+
+typedef struct {
+    Context context;
+    Emitter emitter;
+
+    LLVMModuleRef module;
 
     // The 'print' keyword
     LLVMTypeRef  printFmtType;
@@ -20,11 +25,11 @@ typedef struct {
     LLVMValueRef printFuncValue;
 } Compiler;
 
-static_assert(COUNT_NODES == 6, "");
+static_assert(COUNT_NODES == 7, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 14, "");
+        static_assert(COUNT_TOKENS == 16, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type.llvm = LLVMInt64Type();
@@ -42,12 +47,12 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 14, "");
+        static_assert(COUNT_TOKENS == 16, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand);
             n->type.llvm = operand->type.llvm;
-            return LLVMBuildNeg(c->builder, operandValue, "");
+            return LLVMBuildNeg(c->emitter.builder, operandValue, "");
         };
 
         default:
@@ -59,34 +64,34 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 14, "");
+        static_assert(COUNT_TOKENS == 16, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs);
             const LLVMValueRef rhsValue = compileExpr(c, rhs);
             n->type.llvm = lhs->type.llvm;
-            return LLVMBuildAdd(c->builder, lhsValue, rhsValue, "");
+            return LLVMBuildAdd(c->emitter.builder, lhsValue, rhsValue, "");
         }
 
         case TOKEN_SUB: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs);
             const LLVMValueRef rhsValue = compileExpr(c, rhs);
             n->type.llvm = lhs->type.llvm;
-            return LLVMBuildSub(c->builder, lhsValue, rhsValue, "");
+            return LLVMBuildSub(c->emitter.builder, lhsValue, rhsValue, "");
         }
 
         case TOKEN_MUL: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs);
             const LLVMValueRef rhsValue = compileExpr(c, rhs);
             n->type.llvm = lhs->type.llvm;
-            return LLVMBuildMul(c->builder, lhsValue, rhsValue, "");
+            return LLVMBuildMul(c->emitter.builder, lhsValue, rhsValue, "");
         }
 
         case TOKEN_DIV: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs);
             const LLVMValueRef rhsValue = compileExpr(c, rhs);
             n->type.llvm = lhs->type.llvm;
-            return LLVMBuildSDiv(c->builder, lhsValue, rhsValue, "");
+            return LLVMBuildSDiv(c->emitter.builder, lhsValue, rhsValue, "");
         }
 
         default:
@@ -99,8 +104,8 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 6, "");
-static_assert(COUNT_TOKENS == 14, "");
+static_assert(COUNT_NODES == 7, "");
+static_assert(COUNT_TOKENS == 16, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -109,6 +114,35 @@ static void compileStmt(Compiler *c, Node *n) {
         }
         break;
 
+    case NODE_IF: {
+        const LLVMValueRef cond = compileExpr(c, n->as.iff.condition);
+
+        LLVMBasicBlockRef thenBlock = LLVMAppendBasicBlock(c->emitter.fn, "");
+        LLVMBasicBlockRef elseBlock = LLVMAppendBasicBlock(c->emitter.fn, "");
+
+        LLVMBasicBlockRef finalBlock = elseBlock;
+        if (n->as.iff.antecedence) {
+            finalBlock = LLVMAppendBasicBlock(c->emitter.fn, "");
+        }
+
+        LLVMBuildCondBr(c->emitter.builder, cond, thenBlock, elseBlock);
+
+        // Then
+        LLVMPositionBuilderAtEnd(c->emitter.builder, thenBlock);
+        compileStmt(c, n->as.iff.consequence);
+        LLVMBuildBr(c->emitter.builder, finalBlock);
+
+        // Else
+        if (n->as.iff.antecedence) {
+            LLVMPositionBuilderAtEnd(c->emitter.builder, elseBlock);
+            compileStmt(c, n->as.iff.antecedence);
+            LLVMBuildBr(c->emitter.builder, finalBlock);
+        }
+
+        // Finally
+        LLVMPositionBuilderAtEnd(c->emitter.builder, finalBlock);
+    } break;
+
     case NODE_FN: {
         assert(!n->as.fn.args);
         assert(!n->as.fn.ret);
@@ -116,24 +150,30 @@ static void compileStmt(Compiler *c, Node *n) {
         n->type.llvm = LLVMFunctionType(LLVMVoidType(), NULL, 0, false);
         n->llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
 
-        LLVMBasicBlockRef body = LLVMAppendBasicBlock(n->llvm, "entry");
-        LLVMPositionBuilderAtEnd(c->builder, body);
-        compileStmt(c, n->as.fn.body);
-        LLVMBuildRetVoid(c->builder);
+        const Emitter emitterSave = c->emitter;
+        c->emitter.fn = n->llvm;
+        {
+            LLVMBasicBlockRef body = LLVMAppendBasicBlock(n->llvm, "entry");
+            LLVMPositionBuilderAtEnd(c->emitter.builder, body);
+            compileStmt(c, n->as.fn.body);
+            LLVMBuildRetVoid(c->emitter.builder);
+        }
+        c->emitter = emitterSave;
     } break;
 
     case NODE_PRINT: {
         LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
         LLVMValueRef indices[] = {zero, zero};
         LLVMValueRef fmtPtr = LLVMBuildInBoundsGEP2(
-            c->builder, c->printFmtType, c->printFmtValue, indices, len(indices), "");
+            c->emitter.builder, c->printFmtType, c->printFmtValue, indices, len(indices), "");
 
         LLVMValueRef args[] = {
             fmtPtr,
             compileExpr(c, n->as.print.operand),
         };
 
-        LLVMBuildCall2(c->builder, c->printFuncType, c->printFuncValue, args, len(args), "");
+        LLVMBuildCall2(
+            c->emitter.builder, c->printFuncType, c->printFuncValue, args, len(args), "");
     } break;
 
     default:
@@ -169,7 +209,7 @@ void compileProgram(Context context, const char *executableName) {
     Compiler c = {0};
     c.context = context;
     c.module = LLVMModuleCreateWithName(executableName);
-    c.builder = LLVMCreateBuilder();
+    c.emitter.builder = LLVMCreateBuilder();
 
     // The 'print' keyword
     {
@@ -202,9 +242,9 @@ void compileProgram(Context context, const char *executableName) {
         LLVMValueRef cMainFunc = LLVMAddFunction(c.module, "main", cMainType);
 
         LLVMBasicBlockRef cMainEntry = LLVMAppendBasicBlock(cMainFunc, "entry");
-        LLVMPositionBuilderAtEnd(c.builder, cMainEntry);
-        LLVMBuildCall2(c.builder, mainFn->type.llvm, mainFn->llvm, NULL, 0, "");
-        LLVMBuildRet(c.builder, LLVMConstInt(LLVMInt32Type(), 0, false));
+        LLVMPositionBuilderAtEnd(c.emitter.builder, cMainEntry);
+        LLVMBuildCall2(c.emitter.builder, mainFn->type.llvm, mainFn->llvm, NULL, 0, "");
+        LLVMBuildRet(c.emitter.builder, LLVMConstInt(LLVMInt32Type(), 0, false));
     }
 
     // Verify LLVM Module
@@ -237,7 +277,7 @@ void compileProgram(Context context, const char *executableName) {
             exit(1);
         }
 
-        LLVMDisposeBuilder(c.builder);
+        LLVMDisposeBuilder(c.emitter.builder);
         LLVMDisposeModule(c.module);
         LLVMDisposeTargetMachine(targetMachine);
     }

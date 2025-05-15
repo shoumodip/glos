@@ -37,7 +37,7 @@ typedef enum {
     POWER_PRE
 } Power;
 
-static_assert(COUNT_TOKENS == 14, "");
+static_assert(COUNT_TOKENS == 16, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -58,7 +58,7 @@ static void errorUnexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 14, "");
+static_assert(COUNT_TOKENS == 16, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -117,7 +117,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 14, "");
+static_assert(COUNT_TOKENS == 16, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -132,6 +132,20 @@ static Node *parseStmt(Parser *p) {
 
         assert(p->lexer.buffer.kind == TOKEN_RBRACE);
         node->token = p->lexer.buffer;
+        break;
+
+    case TOKEN_IF:
+        localAssert(p, token, true);
+        node = nodeNew(p, NODE_IF, token);
+        node->as.iff.condition = parseExpr(p, POWER_SET);
+
+        lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));
+        node->as.iff.consequence = parseStmt(p);
+
+        if (lexerRead(&p->lexer, TOKEN_ELSE)) {
+            lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE, TOKEN_IF));
+            node->as.iff.antecedence = parseStmt(p);
+        }
         break;
 
     case TOKEN_FN:

@@ -1,6 +1,6 @@
 #include "token.h"
 
-static_assert(COUNT_TOKENS == 14, "");
+static_assert(COUNT_TOKENS == 16, "");
 const char *tokenKindName(TokenKind kind) {
     switch (kind) {
     case TOKEN_EOF:
@@ -38,6 +38,12 @@ const char *tokenKindName(TokenKind kind) {
 
     case TOKEN_DIV:
         return "'/'";
+
+    case TOKEN_IF:
+        return "'if'";
+
+    case TOKEN_ELSE:
+        return "'else'";
 
     case TOKEN_FN:
         return "'fn'";

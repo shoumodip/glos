@@ -1,2 +1,5 @@
 integers/basics.glos
 booleans/basics.glos
+conditions/basics.glos
+conditions/error-expected-block-or-if.glos
+conditions/error-expected-condition-type-bool.glos
