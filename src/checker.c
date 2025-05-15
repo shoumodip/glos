@@ -41,10 +41,10 @@ static Type typeAssertScalar(const Node *n) {
 }
 
 static_assert(COUNT_NODES == 4, "");
-static_assert(COUNT_TOKENS == 9, "");
 static void checkNode(Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
+        static_assert(COUNT_TOKENS == 11, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -62,6 +62,7 @@ static void checkNode(Node *n) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
+        static_assert(COUNT_TOKENS == 11, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkNode(operand);
@@ -77,6 +78,7 @@ static void checkNode(Node *n) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
+        static_assert(COUNT_TOKENS == 11, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:

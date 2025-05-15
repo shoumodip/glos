@@ -19,10 +19,10 @@ typedef struct {
 } Compiler;
 
 static_assert(COUNT_NODES == 4, "");
-static_assert(COUNT_TOKENS == 9, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
+        static_assert(COUNT_TOKENS == 11, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(LLVMInt64Type(), n->token.as.integer, true);
@@ -38,6 +38,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
+        static_assert(COUNT_TOKENS == 11, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand);
@@ -53,6 +54,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
+        static_assert(COUNT_TOKENS == 11, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs);
@@ -89,7 +91,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n) {
 }
 
 static_assert(COUNT_NODES == 4, "");
-static_assert(COUNT_TOKENS == 9, "");
+static_assert(COUNT_TOKENS == 11, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_PRINT: {

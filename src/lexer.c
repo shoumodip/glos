@@ -84,7 +84,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 9, "");
+static_assert(COUNT_TOKENS == 11, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -152,6 +152,14 @@ Token lexerNext(Lexer *l) {
     }
 
     switch (readChar(l)) {
+    case '(':
+        token.kind = TOKEN_LPAREN;
+        break;
+
+    case ')':
+        token.kind = TOKEN_RPAREN;
+        break;
+
     case '+':
         token.kind = TOKEN_ADD;
         break;

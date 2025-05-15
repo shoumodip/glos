@@ -18,6 +18,9 @@ typedef enum {
     TOKEN_BOOL,
     TOKEN_IDENT,
 
+    TOKEN_LPAREN,
+    TOKEN_RPAREN,
+
     TOKEN_ADD,
     TOKEN_SUB,
     TOKEN_MUL,

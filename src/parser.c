@@ -37,7 +37,7 @@ typedef enum {
     POWER_PRE
 } Power;
 
-static_assert(COUNT_TOKENS == 9, "");
+static_assert(COUNT_TOKENS == 11, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -58,7 +58,7 @@ static void errorUnexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 9, "");
+static_assert(COUNT_TOKENS == 11, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -72,6 +72,11 @@ static Node *parseExpr(Parser *p, Power mbp) {
     case TOKEN_SUB:
         node = nodeNew(p, NODE_UNARY, token);
         node->as.unary.operand = parseExpr(p, POWER_PRE);
+        break;
+
+    case TOKEN_LPAREN:
+        node = parseExpr(p, POWER_SET);
+        lexerExpect(&p->lexer, TOKEN_RPAREN);
         break;
 
     default:
@@ -99,7 +104,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
     return node;
 }
 
-static_assert(COUNT_TOKENS == 9, "");
+static_assert(COUNT_TOKENS == 11, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
