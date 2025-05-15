@@ -148,12 +148,12 @@ static void compileStmt(Compiler *c, Node *n) {
         assert(!n->as.fn.ret);
 
         n->type.llvm = LLVMFunctionType(LLVMVoidType(), NULL, 0, false);
-        n->llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
+        n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
 
         const Emitter emitterSave = c->emitter;
-        c->emitter.fn = n->llvm;
+        c->emitter.fn = n->as.fn.llvm;
         {
-            LLVMBasicBlockRef body = LLVMAppendBasicBlock(n->llvm, "entry");
+            LLVMBasicBlockRef body = LLVMAppendBasicBlock(n->as.fn.llvm, "entry");
             LLVMPositionBuilderAtEnd(c->emitter.builder, body);
             compileStmt(c, n->as.fn.body);
             LLVMBuildRetVoid(c->emitter.builder);
@@ -243,7 +243,7 @@ void compileProgram(Context context, const char *executableName) {
 
         LLVMBasicBlockRef cMainEntry = LLVMAppendBasicBlock(cMainFunc, "entry");
         LLVMPositionBuilderAtEnd(c.emitter.builder, cMainEntry);
-        LLVMBuildCall2(c.emitter.builder, mainFn->type.llvm, mainFn->llvm, NULL, 0, "");
+        LLVMBuildCall2(c.emitter.builder, mainFn->type.llvm, mainFn->as.fn.llvm, NULL, 0, "");
         LLVMBuildRet(c.emitter.builder, LLVMConstInt(LLVMInt32Type(), 0, false));
     }
 

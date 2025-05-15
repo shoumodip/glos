@@ -3,8 +3,7 @@
 
 #include "token.h"
 
-typedef struct Node Node;
-
+typedef struct Node             Node;
 typedef struct LLVMOpaqueType  *LLVMTypeRef;
 typedef struct LLVMOpaqueValue *LLVMValueRef;
 
@@ -16,8 +15,7 @@ typedef enum {
 } TypeKind;
 
 typedef struct {
-    TypeKind kind;
-
+    TypeKind    kind;
     LLVMTypeRef llvm;
 } Type;
 
@@ -61,8 +59,9 @@ typedef struct {
 typedef struct {
     Node *args;
     Node *ret;
-
     Node *body;
+
+    LLVMValueRef llvm;
 } NodeFn;
 
 typedef struct {
@@ -87,8 +86,6 @@ struct Node {
     } as;
 
     Node *next;
-
-    LLVMValueRef llvm;
 };
 
 #endif // AST_H
