@@ -23,6 +23,8 @@ typedef enum {
     NODE_UNARY,
     NODE_BINARY,
 
+    NODE_BLOCK,
+
     NODE_PRINT,
     COUNT_NODES
 } NodeKind;
@@ -53,6 +55,8 @@ struct Node {
     union {
         NodeUnary  unary;
         NodeBinary binary;
+
+        Nodes block;
 
         NodePrint print;
     } as;

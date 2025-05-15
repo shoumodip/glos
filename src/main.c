@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
         assert(args);
 
         args[0] = exePath;
-        for (size_t i = 0; i < argc; i++) {
+        for (int i = 0; i < argc; i++) {
             args[i + 1] = argv[i];
         }
 

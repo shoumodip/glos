@@ -2,4 +2,4 @@
 
 set -xe
 
-cc -o glos src/*.c -lLLVM
+cc $(cat compile_flags.txt) -o glos src/*.c -lLLVM

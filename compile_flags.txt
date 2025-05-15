@@ -1,0 +1,5 @@
+-Wall
+-Wextra
+-Wmissing-prototypes
+-Wimplicit-fallthrough
+-pedantic

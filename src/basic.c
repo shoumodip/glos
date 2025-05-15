@@ -87,7 +87,7 @@ bool readFile(Str *out, const char *path) {
         returnDefer(false);
     }
 
-    if (fread(data, 1, length, f) != length) {
+    if (fread(data, 1, length, f) != (size_t) length) {
         returnDefer(false);
     }
 
