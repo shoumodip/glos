@@ -1,4 +1,4 @@
-:i count 30
+:i count 31
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -259,6 +259,14 @@ functions/error-argument-type-mismatch.glos
 
 :b stderr 88
 functions/error-argument-type-mismatch.glos:4:9: ERROR: Expected type 'i64', got 'bool'
+
+:b testcase 74
+functions/error-cannot-call-pointer-to-function-without-dereferencing.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 144
+functions/error-cannot-call-pointer-to-function-without-dereferencing.glos:5:5: ERROR: Cannot call type '&fn ()' without dereferencing it first
 
 :b testcase 20
 pointers/basics.glos
