@@ -22,9 +22,12 @@ functions/no-arguments-no-return-first-class.glos
 functions/yes-arguments-no-return-basics.glos
 functions/yes-arguments-no-return-first-class.glos
 functions/arguments-as-local-memory.glos
+functions/nested-functions.glos
 functions/error-argument-count-mismatch.glos
 functions/error-argument-type-mismatch.glos
 functions/error-cannot-call-pointer-to-function-without-dereferencing.glos
+functions/error-nested-functions-outside-identifier-used-inside.glos
+functions/error-nested-functions-inside-identifier-used-outside.glos
 pointers/basics.glos
 pointers/multiple-level-type-parse.glos
 pointers/error-cannot-take-reference.glos

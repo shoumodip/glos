@@ -1,0 +1,9 @@
+fn main() {
+    var x = 69
+
+    fn foo() {
+        print x
+    }
+
+    foo()
+}

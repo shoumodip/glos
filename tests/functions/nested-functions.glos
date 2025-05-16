@@ -1,0 +1,8 @@
+fn main() {
+    fn printInt(x i64) {
+        print x
+    }
+
+    printInt(69)
+    printInt(420)
+}

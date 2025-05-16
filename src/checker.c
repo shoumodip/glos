@@ -13,14 +13,14 @@ static void scopePush(Scope *s, Node *n) {
 
 static FnContext fnContextBegin(Context *c, NodeFn *fn) {
     const FnContext save = c->fnContext;
-    c->fnContext.fn = fn;
     c->fnContext.base = c->locals.length;
+    c->fnContext.fn = fn;
     return save;
 }
 
 static void fnContextEnd(Context *c, FnContext save) {
+    c->locals.length = c->fnContext.base;
     c->fnContext = save;
-    c->locals.length = save.base;
 }
 
 static Node *fnContextFind(FnContext f, Scope s, Str name) {
@@ -367,15 +367,18 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FN:
         assert(!n->as.fn.ret);
 
-        {
+        if (c->fnContext.fn) {
+            scopePush(&c->locals, n);
+        } else {
             const Node *previous = scopeFind(c->globals, n->token.str);
             if (previous) {
                 errorRedefinition(n, previous, "identifier");
             }
+
+            scopePush(&c->globals, n);
         }
 
         n->type = (Type) {.kind = TYPE_FN, .spec = n};
-        scopePush(&c->globals, n);
 
         {
             const FnContext fnContextSave = fnContextBegin(c, &n->as.fn);

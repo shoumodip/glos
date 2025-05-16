@@ -251,7 +251,6 @@ static Node *parseStmt(Parser *p) {
         break;
 
     case TOKEN_FN:
-        localAssert(p, token, false);
         node = nodeNew(p, NODE_FN, lexerExpect(&p->lexer, TOKEN_IDENT));
 
         const bool localSave = p->local;

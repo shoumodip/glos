@@ -1,4 +1,4 @@
-:i count 31
+:i count 34
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -244,6 +244,15 @@ functions/arguments-as-local-memory.glos
 
 :b stderr 0
 
+:b testcase 31
+functions/nested-functions.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
+
 :b testcase 44
 functions/error-argument-count-mismatch.glos
 :i returncode 1
@@ -267,6 +276,22 @@ functions/error-cannot-call-pointer-to-function-without-dereferencing.glos
 
 :b stderr 144
 functions/error-cannot-call-pointer-to-function-without-dereferencing.glos:5:5: ERROR: Cannot call type '&fn ()' without dereferencing it first
+
+:b testcase 68
+functions/error-nested-functions-outside-identifier-used-inside.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 107
+functions/error-nested-functions-outside-identifier-used-inside.glos:5:15: ERROR: Undefined identifier 'x'
+
+:b testcase 68
+functions/error-nested-functions-inside-identifier-used-outside.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 107
+functions/error-nested-functions-inside-identifier-used-outside.glos:6:11: ERROR: Undefined identifier 'x'
 
 :b testcase 20
 pointers/basics.glos

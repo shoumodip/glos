@@ -9,7 +9,8 @@
 #include <stdbool.h>
 
 typedef struct {
-    LLVMValueRef fn;
+    LLVMValueRef      fn;
+    LLVMBasicBlockRef block;
 } FnCompiler;
 
 typedef struct {
@@ -27,6 +28,7 @@ typedef struct {
 } Compiler;
 
 static FnCompiler fnCompilerBegin(Compiler *c, Node *fn) {
+    c->fnCompiler.block = LLVMGetInsertBlock(c->builder);
     const FnCompiler save = c->fnCompiler;
     c->fnCompiler.fn = fn->as.fn.llvm;
     return save;
@@ -34,6 +36,7 @@ static FnCompiler fnCompilerBegin(Compiler *c, Node *fn) {
 
 static void fnCompilerEnd(Compiler *c, FnCompiler save) {
     c->fnCompiler = save;
+    LLVMPositionBuilderAtEnd(c->builder, save.block);
 }
 
 // How the type should actually be represented in memory.
