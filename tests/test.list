@@ -10,3 +10,5 @@ global-variables/error-assignment-definition-type-mismatch.glos
 assignment/basics.glos
 assignment/error-type-mismatch.glos
 assignment/error-cannot-take-reference.glos
+loops/basics.glos
+loops/error-expected-condition-type-bool.glos

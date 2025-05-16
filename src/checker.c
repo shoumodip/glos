@@ -124,13 +124,13 @@ static void refPrevent(Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 25, "");
+        static_assert(COUNT_TOKENS == 26, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -159,7 +159,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 25, "");
+        static_assert(COUNT_TOKENS == 26, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -180,7 +180,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 25, "");
+        static_assert(COUNT_TOKENS == 26, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -224,7 +224,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -241,6 +241,16 @@ static void checkStmt(Context *c, Node *n) {
         if (n->as.iff.antecedence) {
             checkStmt(c, n->as.iff.antecedence);
         }
+        break;
+
+    case NODE_FOR:
+        assert(!n->as.forr.init);
+        assert(!n->as.forr.update);
+
+        checkExpr(c, n->as.forr.condition, false);
+        typeAssert(n->as.forr.condition, (Type) {.kind = TYPE_BOOL});
+
+        checkStmt(c, n->as.forr.body);
         break;
 
     case NODE_FN:

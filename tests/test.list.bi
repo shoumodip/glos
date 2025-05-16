@@ -1,4 +1,4 @@
-:i count 12
+:i count 14
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -124,4 +124,29 @@ assignment/error-cannot-take-reference.glos
 
 :b stderr 101
 assignment/error-cannot-take-reference.glos:2:5: ERROR: Cannot take reference to value not in memory
+
+:b testcase 17
+loops/basics.glos
+:i returncode 0
+:b stdout 20
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+:b stderr 0
+
+:b testcase 45
+loops/error-expected-condition-type-bool.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 90
+loops/error-expected-condition-type-bool.glos:2:9: ERROR: Expected type 'bool', got 'i64'
 

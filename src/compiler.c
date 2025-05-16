@@ -51,7 +51,7 @@ static void compileType(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_VAR:
@@ -65,13 +65,13 @@ static LLVMValueRef definitionLLVMValue(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 25, "");
+        static_assert(COUNT_TOKENS == 26, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -98,7 +98,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 25, "");
+        static_assert(COUNT_TOKENS == 26, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -119,7 +119,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 25, "");
+        static_assert(COUNT_TOKENS == 26, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -197,7 +197,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -230,6 +230,30 @@ static void compileStmt(Compiler *c, Node *n) {
             compileStmt(c, n->as.iff.antecedence);
             LLVMBuildBr(c->emitter.builder, finalBlock);
         }
+
+        // Finally
+        LLVMPositionBuilderAtEnd(c->emitter.builder, finalBlock);
+    } break;
+
+    case NODE_FOR: {
+        assert(!n->as.forr.init);
+        assert(!n->as.forr.update);
+
+        LLVMBasicBlockRef condBlock = LLVMAppendBasicBlock(c->emitter.fn, "");
+        LLVMBasicBlockRef bodyBlock = LLVMAppendBasicBlock(c->emitter.fn, "");
+        LLVMBasicBlockRef finalBlock = LLVMAppendBasicBlock(c->emitter.fn, "");
+
+        LLVMBuildBr(c->emitter.builder, condBlock);
+
+        // Condition
+        LLVMPositionBuilderAtEnd(c->emitter.builder, condBlock);
+        const LLVMValueRef condValue = compileExpr(c, n->as.forr.condition, false);
+        LLVMBuildCondBr(c->emitter.builder, condValue, bodyBlock, finalBlock);
+
+        // Body
+        LLVMPositionBuilderAtEnd(c->emitter.builder, bodyBlock);
+        compileStmt(c, n->as.forr.body);
+        LLVMBuildBr(c->emitter.builder, condBlock);
 
         // Finally
         LLVMPositionBuilderAtEnd(c->emitter.builder, finalBlock);

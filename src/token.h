@@ -41,6 +41,7 @@ typedef enum {
 
     TOKEN_IF,
     TOKEN_ELSE,
+    TOKEN_FOR,
 
     TOKEN_FN,
     TOKEN_VAR,
