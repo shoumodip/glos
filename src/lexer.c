@@ -53,6 +53,14 @@ static char readChar(Lexer *l) {
     return l->str.data[-1];
 }
 
+static bool matchChar(Lexer *l, char ch) {
+    if (l->str.length > 0 && *l->str.data == ch) {
+        nextChar(l);
+        return true;
+    }
+    return false;
+}
+
 static void skipWhitespace(Lexer *l) {
     l->onNewline = false;
     while (l->str.length) {
@@ -84,7 +92,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 18, "");
+static_assert(COUNT_TOKENS == 25, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -192,8 +200,36 @@ Token lexerNext(Lexer *l) {
         token.kind = TOKEN_DIV;
         break;
 
+    case '!':
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_NE;
+        } else {
+            token.kind = TOKEN_LNOT;
+        }
+        break;
+
+    case '>':
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_GE;
+        } else {
+            token.kind = TOKEN_GT;
+        }
+        break;
+
+    case '<':
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_LE;
+        } else {
+            token.kind = TOKEN_LT;
+        }
+        break;
+
     case '=':
-        token.kind = TOKEN_SET;
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_EQ;
+        } else {
+            token.kind = TOKEN_SET;
+        }
         break;
 
     default:

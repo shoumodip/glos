@@ -2,21 +2,39 @@
 :b testcase 20
 integers/basics.glos
 :i returncode 0
-:b stdout 17
+:b stdout 49
 69
 420
 69
 420
 69
+1
+0
+0
+1
+1
+0
+1
+0
+0
+1
+1
+0
+1
+0
+1
+0
 
 :b stderr 0
 
 :b testcase 20
 booleans/basics.glos
 :i returncode 0
-:b stdout 4
+:b stdout 8
 1
 0
+0
+1
 
 :b stderr 0
 

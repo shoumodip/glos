@@ -32,12 +32,13 @@ static void nodesPush(Nodes *ns, Node *node) {
 typedef enum {
     POWER_NIL,
     POWER_SET,
+    POWER_CMP,
     POWER_ADD,
     POWER_MUL,
     POWER_PRE
 } Power;
 
-static_assert(COUNT_TOKENS == 18, "");
+static_assert(COUNT_TOKENS == 25, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -51,6 +52,14 @@ static Power tokenKindPower(TokenKind kind) {
     case TOKEN_SET:
         return POWER_SET;
 
+    case TOKEN_GT:
+    case TOKEN_GE:
+    case TOKEN_LT:
+    case TOKEN_LE:
+    case TOKEN_EQ:
+    case TOKEN_NE:
+        return POWER_CMP;
+
     default:
         return POWER_NIL;
     }
@@ -61,7 +70,7 @@ static void errorUnexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 18, "");
+static_assert(COUNT_TOKENS == 25, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -84,7 +93,7 @@ static Node *parseType(Parser *p) {
     return node;
 }
 
-static_assert(COUNT_TOKENS == 18, "");
+static_assert(COUNT_TOKENS == 25, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -97,6 +106,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
         break;
 
     case TOKEN_SUB:
+    case TOKEN_LNOT:
         node = nodeNew(p, NODE_UNARY, token);
         node->as.unary.operand = parseExpr(p, POWER_PRE);
         break;
@@ -144,7 +154,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 18, "");
+static_assert(COUNT_TOKENS == 25, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

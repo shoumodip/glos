@@ -71,7 +71,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 18, "");
+        static_assert(COUNT_TOKENS == 25, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -98,12 +98,17 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 18, "");
+        static_assert(COUNT_TOKENS == 25, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
             return LLVMBuildNeg(c->emitter.builder, operandValue, "");
         };
+
+        case TOKEN_LNOT: {
+            const LLVMValueRef operandValue = compileExpr(c, operand, false);
+            return LLVMBuildNot(c->emitter.builder, operandValue, "");
+        }
 
         default:
             unreachable();
@@ -114,7 +119,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 18, "");
+        static_assert(COUNT_TOKENS == 25, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -146,6 +151,42 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildStore(c->emitter.builder, rhsValue, lhsValue);
         }
 
+        case TOKEN_GT: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildICmp(c->emitter.builder, LLVMIntSGT, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_GE: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildICmp(c->emitter.builder, LLVMIntSGE, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_LT: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildICmp(c->emitter.builder, LLVMIntSLT, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_LE: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildICmp(c->emitter.builder, LLVMIntSLE, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_EQ: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildICmp(c->emitter.builder, LLVMIntEQ, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_NE: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildICmp(c->emitter.builder, LLVMIntNE, lhsValue, rhsValue, "");
+        }
+
         default:
             unreachable();
         }
@@ -157,7 +198,6 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 }
 
 static_assert(COUNT_NODES == 8, "");
-static_assert(COUNT_TOKENS == 18, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:

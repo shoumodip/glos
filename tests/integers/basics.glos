@@ -1,7 +1,31 @@
 fn main() {
+    // Arithmetics
     print 34 + 35
     print 500 - 80
     print 23 * 3
     print 1260 / 3
     print 17 * 2 + 35
+
+    // Comparisons
+    print 2 > 1
+    print 1 > 1
+    print 0 > 1
+
+    print 2 >= 1
+    print 1 >= 1
+    print 0 >= 1
+
+    print 1 < 2
+    print 1 < 1
+    print 1 < 0
+
+    print 1 <= 2
+    print 1 <= 1
+    print 1 <= 0
+
+    print 1 == 1
+    print 1 == 2
+
+    print 1 != 2
+    print 1 != 1
 }
