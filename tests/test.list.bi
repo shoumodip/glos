@@ -207,7 +207,9 @@ functions/no-arguments-no-return-basics.glos
 :b testcase 49
 functions/no-arguments-no-return-first-class.glos
 :i returncode 0
-:b stdout 7
+:b stdout 14
+69
+420
 69
 420
 

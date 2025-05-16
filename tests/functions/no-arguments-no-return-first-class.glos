@@ -14,4 +14,12 @@ fn main() {
 
     f = bar
     f()
+
+    var g = &f
+
+    *g = foo
+    f()
+
+    f = bar
+    (*g)() // Absolute cinema
 }
