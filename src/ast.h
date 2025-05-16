@@ -30,6 +30,7 @@ typedef enum {
 
 typedef struct {
     TypeKind kind;
+    size_t   ref;
     Node    *spec;
 
     LLVMTypeRef llvm;

@@ -2,4 +2,5 @@
 -Wextra
 -Wmissing-prototypes
 -Wimplicit-fallthrough
+-Wno-format-zero-length
 -pedantic

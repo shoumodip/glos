@@ -1,0 +1,9 @@
+fn main() {
+    var x i64 = 69
+    var y &i64 = &x
+    var z &&i64 = &y
+
+    print x
+    **z = 420
+    print x
+}

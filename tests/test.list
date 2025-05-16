@@ -24,3 +24,7 @@ functions/yes-arguments-no-return-first-class.glos
 functions/arguments-as-local-memory.glos
 functions/error-argument-count-mismatch.glos
 functions/error-argument-type-mismatch.glos
+pointers/basics.glos
+pointers/multiple-level-type-parse.glos
+pointers/error-cannot-take-reference.glos
+pointers/error-dereference-expected-pointer.glos

@@ -1,0 +1,40 @@
+fn f() {
+    var x = 69
+    var p = &x
+
+    print x
+    *p = 420
+    print x
+}
+
+fn g() {
+    var a = 69
+    var b = 420
+
+    var y = &a
+    var z = &y
+
+    print a
+    print b
+
+    *y = 420
+
+    print a
+    print b
+
+    *z = &b
+    *y = 69
+
+    print a
+    print b
+
+    **z = 1337
+
+    print a
+    print b
+}
+
+fn main() {
+    f()
+    g()
+}

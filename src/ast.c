@@ -14,18 +14,29 @@ Node *scopeFind(Scope s, Str name) {
 
 static_assert(COUNT_TYPES == 4, "");
 const char *typeToString(Type type) {
+    const char *start = tempSprintf("");
+    tempContinue();
+
+    for (size_t i = 0; i < type.ref; i++) {
+        tempSprintf("&");
+        tempContinue();
+    }
+
     switch (type.kind) {
     case TYPE_NIL:
-        return tempSprintf("nil");
+        tempSprintf("nil");
+        break;
 
     case TYPE_BOOL:
-        return tempSprintf("bool");
+        tempSprintf("bool");
+        break;
 
     case TYPE_I64:
-        return tempSprintf("i64");
+        tempSprintf("i64");
+        break;
 
     case TYPE_FN: {
-        const char *str = tempSprintf("fn (");
+        tempSprintf("fn (");
         {
             assert(type.spec);
             const NodeFn fn = type.spec->as.fn;
@@ -44,17 +55,17 @@ const char *typeToString(Type type) {
         tempSprintf(")");
 
         assert(!type.spec->as.fn.ret);
-        return str;
-    }
+    } break;
 
     default:
         unreachable();
     }
+
+    return start;
 }
 
-static_assert(sizeof(Type) == 24, "");
 bool typeEq(Type a, Type b) {
-    if (a.kind != b.kind) {
+    if (a.kind != b.kind || a.ref != b.ref) {
         return false;
     }
 

@@ -65,7 +65,7 @@ static Type typeAssert(const Node *n, Type expected) {
 }
 
 static Type typeAssertArith(const Node *n) {
-    if (n->type.kind != TYPE_I64) {
+    if (n->type.kind != TYPE_I64 && n->type.ref == 0) {
         fprintf(
             stderr,
             PosFmt "ERROR: Expected arithmetic type, got '%s'\n",
@@ -78,7 +78,7 @@ static Type typeAssertArith(const Node *n) {
 }
 
 static Type typeAssertScalar(const Node *n) {
-    if (n->type.kind != TYPE_I64 && n->type.kind != TYPE_BOOL) {
+    if (n->type.kind != TYPE_I64 && n->type.kind != TYPE_BOOL && n->type.ref == 0) {
         fprintf(
             stderr,
             PosFmt "ERROR: Expected scalar type, got '%s'\n",
@@ -128,6 +128,12 @@ static void checkType(Context *c, Node *n) {
         }
         break;
 
+    case NODE_UNARY:
+        checkType(c, n->as.unary.operand);
+        n->type = n->as.unary.operand->type;
+        n->type.ref++;
+        break;
+
     case NODE_FN:
         for (Node *it = n->as.fn.args.head; it; it = it->next) {
             checkType(c, it->as.arg.type);
@@ -160,7 +166,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 27, "");
+        static_assert(COUNT_TOKENS == 28, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -204,6 +210,16 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             exit(1);
         }
 
+        if (fn->type.ref != 0) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Cannot call type '%s' without dereferencing it first\n",
+                PosArg(fn->token.pos),
+                typeToString(fn->type));
+
+            exit(1);
+        }
+
         const NodeCall actual = n->as.call;
         const NodeFn   expected = fn->type.spec->as.fn;
         if (actual.arity != expected.arity) {
@@ -229,11 +245,34 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 27, "");
+        static_assert(COUNT_TOKENS == 28, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
             n->type = typeAssertArith(operand);
+            break;
+
+        case TOKEN_MUL:
+            checkExpr(c, operand, false);
+            if (operand->type.ref == 0) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Expected pointer type, got '%s'\n",
+                    PosArg(operand->token.pos),
+                    typeToString(operand->type));
+
+                exit(1);
+            }
+            n->type = operand->type;
+            n->type.ref--;
+
+            allowRef = true;
+            break;
+
+        case TOKEN_BAND:
+            checkExpr(c, operand, true);
+            n->type = operand->type;
+            n->type.ref++;
             break;
 
         case TOKEN_LNOT:
@@ -250,7 +289,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 27, "");
+        static_assert(COUNT_TOKENS == 28, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:

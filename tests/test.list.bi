@@ -1,4 +1,4 @@
-:i count 26
+:i count 30
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -234,7 +234,9 @@ functions/yes-arguments-no-return-first-class.glos
 :b testcase 40
 functions/arguments-as-local-memory.glos
 :i returncode 0
-:b stdout 7
+:b stdout 14
+69
+420
 69
 420
 
@@ -255,4 +257,46 @@ functions/error-argument-type-mismatch.glos
 
 :b stderr 88
 functions/error-argument-type-mismatch.glos:4:9: ERROR: Expected type 'i64', got 'bool'
+
+:b testcase 20
+pointers/basics.glos
+:i returncode 0
+:b stdout 38
+69
+420
+69
+420
+420
+420
+420
+69
+420
+1337
+
+:b stderr 0
+
+:b testcase 39
+pointers/multiple-level-type-parse.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
+
+:b testcase 41
+pointers/error-cannot-take-reference.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 99
+pointers/error-cannot-take-reference.glos:2:6: ERROR: Cannot take reference to value not in memory
+
+:b testcase 48
+pointers/error-dereference-expected-pointer.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 94
+pointers/error-dereference-expected-pointer.glos:2:6: ERROR: Expected pointer type, got 'i64'
 
