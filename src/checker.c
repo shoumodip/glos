@@ -131,7 +131,6 @@ static void checkType(Context *c, Node *n) {
     case NODE_FN:
         assert(!n->as.fn.args);
         assert(!n->as.fn.ret);
-
         n->type = (Type) {.kind = TYPE_FN};
         break;
 
@@ -151,7 +150,7 @@ static void refPrevent(Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
@@ -182,6 +181,24 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             unreachable();
         }
         break;
+
+    case NODE_CALL: {
+        Node *fn = n->as.call.fn;
+        checkExpr(c, fn, false);
+
+        if (fn->type.kind != TYPE_FN) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Cannot call type '%s'\n",
+                PosArg(fn->token.pos),
+                typeToString(fn->type));
+
+            exit(1);
+        }
+
+        assert(!n->as.call.args);
+        n->type = nodeFnReturnType(fn->as.fn);
+    } break;
 
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
@@ -251,7 +268,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {

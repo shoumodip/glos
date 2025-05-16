@@ -130,5 +130,9 @@ int runCommand(const char **args) {
         return 1;
     }
 
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+
     return WEXITSTATUS(status);
 }

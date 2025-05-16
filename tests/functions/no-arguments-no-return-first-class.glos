@@ -1,0 +1,17 @@
+fn foo() {
+    print 69
+}
+
+fn bar() {
+    print 420
+}
+
+var f fn ()
+
+fn main() {
+    f = foo
+    f()
+
+    f = bar
+    f()
+}

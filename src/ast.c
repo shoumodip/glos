@@ -34,3 +34,8 @@ const char *typeToString(Type type) {
 bool typeEq(Type a, Type b) {
     return a.kind == b.kind;
 }
+
+Type nodeFnReturnType(NodeFn fn) {
+    assert(!fn.ret);
+    return (Type) {.kind = TYPE_NIL};
+}

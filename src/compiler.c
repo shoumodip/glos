@@ -51,8 +51,7 @@ static void compileType(Node *n) {
         break;
 
     case TYPE_FN:
-        assert(!n->as.fn.args);
-        assert(!n->as.fn.ret);
+        static_assert(sizeof(Type) == 16, ""); // The type spec has not been added
         n->type.llvm = LLVMFunctionType(LLVMVoidType(), NULL, 0, false);
         break;
 
@@ -61,7 +60,17 @@ static void compileType(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 9, "");
+// How the type should actually be represented in memory.
+// Eg: fn () -> ptr
+static LLVMTypeRef typeInMemory(Type type) {
+    if (type.kind == TYPE_FN) {
+        return LLVMPointerType(type.llvm, 0);
+    }
+
+    return type.llvm;
+}
+
+static_assert(COUNT_NODES == 10, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_VAR:
@@ -75,7 +84,7 @@ static LLVMValueRef definitionLLVMValue(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
@@ -93,17 +102,25 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             Node *definition = n->as.atom.definition;
 
             LLVMValueRef definitionLLVM = definitionLLVMValue(definition);
-            if (ref) {
+            if (ref || definition->kind == NODE_FN) {
                 return definitionLLVM;
             }
 
-            return LLVMBuildLoad2(c->builder, n->type.llvm, definitionLLVM, "");
+            return LLVMBuildLoad2(c->builder, typeInMemory(n->type), definitionLLVM, "");
         };
 
         default:
             unreachable();
         }
         break;
+
+    case NODE_CALL: {
+        Node *fn = n->as.call.fn;
+        assert(!n->as.call.args);
+
+        const LLVMValueRef fnValue = compileExpr(c, fn, false);
+        return LLVMBuildCall2(c->builder, fn->type.llvm, fnValue, NULL, 0, "");
+    };
 
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
@@ -207,7 +224,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -285,7 +302,7 @@ static void compileStmt(Compiler *c, Node *n) {
                 Node *it = n->as.fn.locals.data[i];
                 if (it->kind == NODE_VAR) {
                     compileType(it);
-                    it->as.var.llvm = LLVMBuildAlloca(c->builder, it->type.llvm, "");
+                    it->as.var.llvm = LLVMBuildAlloca(c->builder, typeInMemory(it->type), "");
                 }
             }
 
@@ -295,22 +312,26 @@ static void compileStmt(Compiler *c, Node *n) {
         fnCompilerEnd(c, fnCompilerSave);
     } break;
 
-    case NODE_VAR:
+    case NODE_VAR: {
         if (n->as.var.local) {
             // The type was already compiled in the function prelude
+            const LLVMTypeRef llvmType = typeInMemory(n->type);
+
             LLVMValueRef assign = NULL;
             if (n->as.var.expr) {
                 assign = compileExpr(c, n->as.var.expr, false);
             } else {
-                assign = LLVMConstNull(n->type.llvm);
+                assign = LLVMConstNull(llvmType);
             }
             LLVMBuildStore(c->builder, assign, n->as.var.llvm);
         } else {
             compileType(n);
-            n->as.var.llvm = LLVMAddGlobal(c->module, n->type.llvm, ""); // TODO: Public variables
-            LLVMSetInitializer(n->as.var.llvm, LLVMConstNull(n->type.llvm));
+            const LLVMTypeRef llvmType = typeInMemory(n->type);
+
+            n->as.var.llvm = LLVMAddGlobal(c->module, llvmType, ""); // TODO: Public variables
+            LLVMSetInitializer(n->as.var.llvm, LLVMConstNull(llvmType));
         }
-        break;
+    } break;
 
     case NODE_PRINT: {
         LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
@@ -339,11 +360,21 @@ static Node *getMain(Context context) {
         exit(1);
     }
 
+    if (main->kind != NODE_FN) {
+        fprintf(
+            stderr,
+            PosFmt "ERROR: Function 'main' must be a function literal\n",
+            PosArg(main->token.pos));
+
+        exit(1);
+    }
+
     const Type expected = {.kind = TYPE_FN};
     if (!typeEq(main->type, expected)) {
         fprintf(
             stderr,
-            "ERROR: Expected function 'main' to be of type '%s', got '%s'\n",
+            PosFmt "ERROR: Expected function 'main' to be of type '%s', got '%s'\n",
+            PosArg(main->token.pos),
             typeToString(expected),
             typeToString(main->type));
 

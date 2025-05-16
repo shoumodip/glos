@@ -1,0 +1,9 @@
+fn nice() {
+    print 69
+    print 420
+}
+
+fn main() {
+    nice()
+    nice()
+}

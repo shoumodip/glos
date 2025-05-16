@@ -17,3 +17,5 @@ local-variables/shadowing.glos
 local-variables/error-assignment-definition-type-mismatch.glos
 local-variables/error-undefined-outside-scope.glos
 local-variables/error-undefined-outside-scope-despite-same-depth.glos
+functions/no-arguments-no-return-basics.glos
+functions/no-arguments-no-return-first-class.glos

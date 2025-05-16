@@ -38,6 +38,7 @@ const char *typeToString(Type type);
 
 typedef enum {
     NODE_ATOM,
+    NODE_CALL,
     NODE_UNARY,
     NODE_BINARY,
 
@@ -55,6 +56,12 @@ typedef enum {
 typedef struct {
     Node *definition;
 } NodeAtom;
+
+typedef struct {
+    Node  *fn;
+    Node  *args;
+    size_t arity;
+} NodeCall;
 
 typedef struct {
     Node *operand;
@@ -87,6 +94,8 @@ typedef struct {
     LLVMValueRef llvm;
 } NodeFn;
 
+Type nodeFnReturnType(NodeFn fn);
+
 typedef struct {
     Node *expr;
     Node *type;
@@ -106,6 +115,7 @@ struct Node {
 
     union {
         NodeAtom   atom;
+        NodeCall   call;
         NodeUnary  unary;
         NodeBinary binary;
 

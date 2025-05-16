@@ -1,4 +1,4 @@
-:i count 19
+:i count 21
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -192,4 +192,24 @@ local-variables/error-undefined-outside-scope-despite-same-depth.glos
 
 :b stderr 108
 local-variables/error-undefined-outside-scope-despite-same-depth.glos:6:15: ERROR: Undefined identifier 'x'
+
+:b testcase 44
+functions/no-arguments-no-return-basics.glos
+:i returncode 0
+:b stdout 14
+69
+420
+69
+420
+
+:b stderr 0
+
+:b testcase 49
+functions/no-arguments-no-return-first-class.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
 

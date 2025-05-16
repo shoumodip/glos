@@ -35,12 +35,16 @@ typedef enum {
     POWER_CMP,
     POWER_ADD,
     POWER_MUL,
-    POWER_PRE
+    POWER_PRE,
+    POWER_DOT
 } Power;
 
 static_assert(COUNT_TOKENS == 26, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
+    case TOKEN_LPAREN:
+        return POWER_DOT;
+
     case TOKEN_ADD:
     case TOKEN_SUB:
         return POWER_ADD;
@@ -132,10 +136,21 @@ static Node *parseExpr(Parser *p, Power mbp) {
         }
         lexerUnbuffer(&p->lexer);
 
-        Node *binary = nodeNew(p, NODE_BINARY, token);
-        binary->as.binary.lhs = node;
-        binary->as.binary.rhs = parseExpr(p, lbp);
-        node = binary;
+        switch (token.kind) {
+        case TOKEN_LPAREN: {
+            Node *call = nodeNew(p, NODE_CALL, token);
+            call->as.call.fn = node;
+            lexerExpect(&p->lexer, TOKEN_RPAREN);
+            node = call;
+        } break;
+
+        default: {
+            Node *binary = nodeNew(p, NODE_BINARY, token);
+            binary->as.binary.lhs = node;
+            binary->as.binary.rhs = parseExpr(p, lbp);
+            node = binary;
+        } break;
+        }
     }
 
     return node;
