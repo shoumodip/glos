@@ -213,7 +213,6 @@ static Node *parseStmt(Parser *p) {
         break;
 
     case TOKEN_VAR:
-        localAssert(p, token, false);
         node = nodeNew(p, NODE_VAR, lexerExpect(&p->lexer, TOKEN_IDENT));
 
         token = lexerPeek(&p->lexer);

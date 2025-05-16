@@ -7,6 +7,19 @@ typedef struct Node             Node;
 typedef struct LLVMOpaqueType  *LLVMTypeRef;
 typedef struct LLVMOpaqueValue *LLVMValueRef;
 
+typedef struct {
+    Node *head;
+    Node *tail;
+} Nodes;
+
+typedef struct {
+    Node **data;
+    size_t length;
+    size_t capacity;
+} Scope;
+
+Node *scopeFind(Scope s, Str name);
+
 typedef enum {
     TYPE_NIL,
     TYPE_BOOL,
@@ -44,11 +57,6 @@ typedef struct {
 } NodeAtom;
 
 typedef struct {
-    Node *head;
-    Node *tail;
-} Nodes;
-
-typedef struct {
     Node *operand;
 } NodeUnary;
 
@@ -74,6 +82,7 @@ typedef struct {
     Node *args;
     Node *ret;
     Node *body;
+    Scope locals;
 
     LLVMValueRef llvm;
 } NodeFn;

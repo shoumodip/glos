@@ -12,8 +12,8 @@
 #define len(a)    (sizeof(a) / sizeof(*(a)))
 #define unused(v) (void) (v)
 
-#define todo()        assert(false && "TODO")
-#define unreachable() assert(false && "Unreachable")
+#define todo()        (fprintf(stderr, "%s:%d: TODO\n", __FILE__, __LINE__), abort())
+#define unreachable() (fprintf(stderr, "%s:%d: Unreachable\n", __FILE__, __LINE__), abort())
 
 // String View
 typedef struct {

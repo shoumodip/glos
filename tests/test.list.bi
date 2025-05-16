@@ -1,4 +1,4 @@
-:i count 14
+:i count 19
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -149,4 +149,47 @@ loops/error-expected-condition-type-bool.glos
 
 :b stderr 90
 loops/error-expected-condition-type-bool.glos:2:9: ERROR: Expected type 'bool', got 'i64'
+
+:b testcase 27
+local-variables/basics.glos
+:i returncode 0
+:b stdout 12
+69
+420
+1337
+
+:b stderr 0
+
+:b testcase 30
+local-variables/shadowing.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
+
+:b testcase 62
+local-variables/error-assignment-definition-type-mismatch.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 108
+local-variables/error-assignment-definition-type-mismatch.glos:2:17: ERROR: Expected type 'i64', got 'bool'
+
+:b testcase 50
+local-variables/error-undefined-outside-scope.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 89
+local-variables/error-undefined-outside-scope.glos:7:11: ERROR: Undefined identifier 'x'
+
+:b testcase 69
+local-variables/error-undefined-outside-scope-despite-same-depth.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 108
+local-variables/error-undefined-outside-scope-despite-same-depth.glos:6:15: ERROR: Undefined identifier 'x'
 

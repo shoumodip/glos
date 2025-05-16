@@ -11,15 +11,42 @@ static void scopePush(Scope *s, Node *n) {
     s->data[s->length++] = n;
 }
 
-Node *scopeFind(Scope s, Str name) {
-    for (size_t i = s.length; i > 0; i--) {
-        Node *it = s.data[i - 1];
-        if (strEq(it->token.str, name)) {
-            return it;
+static FnContext fnContextBegin(Context *c, NodeFn *fn) {
+    const FnContext save = c->fnContext;
+    c->fnContext.fn = fn;
+    c->fnContext.base = c->locals.length;
+    return save;
+}
+
+static void fnContextEnd(Context *c, FnContext save) {
+    c->fnContext = save;
+    c->locals.length = save.base;
+}
+
+static Node *fnContextFind(FnContext f, Scope s, Str name) {
+    assert(f.base <= s.length);
+    s.data += f.base;
+    s.length -= f.base;
+    return scopeFind(s, name);
+}
+
+static Node *identFind(Context *c, Str name) {
+    if (c->fnContext.fn) {
+        Node *local = fnContextFind(c->fnContext, c->locals, name);
+        if (local) {
+            return local;
         }
     }
 
-    return NULL;
+    return scopeFind(c->globals, name);
+}
+
+static size_t blockBegin(Context *c) {
+    return c->locals.length;
+}
+
+static void blockRestore(Context *c, size_t save) {
+    c->locals.length = save;
 }
 
 // Checker
@@ -141,7 +168,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             break;
 
         case TOKEN_IDENT: {
-            Node *definition = scopeFind(c->globals, n->token.str);
+            Node *definition = identFind(c, n->token.str);
             if (definition) {
                 n->as.atom.definition = definition;
                 n->type = definition->type;
@@ -227,11 +254,13 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 static_assert(COUNT_NODES == 9, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
-    case NODE_BLOCK:
+    case NODE_BLOCK: {
+        const size_t blockSave = blockBegin(c);
         for (Node *it = n->as.block.head; it; it = it->next) {
             checkStmt(c, it);
         }
-        break;
+        blockRestore(c, blockSave);
+    } break;
 
     case NODE_IF:
         checkExpr(c, n->as.iff.condition, false);
@@ -265,7 +294,12 @@ static void checkStmt(Context *c, Node *n) {
         }
 
         scopePush(&c->globals, n);
-        checkStmt(c, n->as.fn.body);
+
+        {
+            const FnContext fnContextSave = fnContextBegin(c, &n->as.fn);
+            checkStmt(c, n->as.fn.body);
+            fnContextEnd(c, fnContextSave);
+        }
 
         n->type = (Type) {.kind = TYPE_FN};
         break;
@@ -292,8 +326,12 @@ static void checkStmt(Context *c, Node *n) {
             }
         }
 
-        assert(!n->as.var.local);
-        scopePush(&c->globals, n);
+        if (n->as.var.local) {
+            scopePush(&c->locals, n);
+            scopePush(&c->fnContext.fn->locals, n);
+        } else {
+            scopePush(&c->globals, n);
+        }
         break;
 
     case NODE_PRINT:

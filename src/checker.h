@@ -4,14 +4,14 @@
 #include "ast.h"
 
 typedef struct {
-    Node **data;
-    size_t length;
-    size_t capacity;
-} Scope;
-
-Node *scopeFind(Scope s, Str name);
+    NodeFn *fn;
+    size_t  base;
+} FnContext;
 
 typedef struct {
+    FnContext fnContext;
+
+    Scope locals;
     Scope globals;
 } Context;
 

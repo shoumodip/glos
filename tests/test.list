@@ -12,3 +12,8 @@ assignment/error-type-mismatch.glos
 assignment/error-cannot-take-reference.glos
 loops/basics.glos
 loops/error-expected-condition-type-bool.glos
+local-variables/basics.glos
+local-variables/shadowing.glos
+local-variables/error-assignment-definition-type-mismatch.glos
+local-variables/error-undefined-outside-scope.glos
+local-variables/error-undefined-outside-scope-despite-same-depth.glos

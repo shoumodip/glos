@@ -1,0 +1,11 @@
+fn main() {
+    var x = 69
+    print x
+
+    var x = x == 69
+    if x {
+        print 420
+    } else {
+        print 1337
+    }
+}
