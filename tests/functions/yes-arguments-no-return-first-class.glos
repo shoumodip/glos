@@ -1,0 +1,12 @@
+fn mapInt(x i64, f fn (i64)) {
+    f(x)
+}
+
+fn showTwice(x i64) {
+    print x
+    print x
+}
+
+fn main() {
+    mapInt(69, showTwice) // Absolute cinema
+}

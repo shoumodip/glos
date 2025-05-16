@@ -18,6 +18,8 @@ typedef enum {
     TOKEN_BOOL,
     TOKEN_IDENT,
 
+    TOKEN_COMMA,
+
     TOKEN_LBRACE,
     TOKEN_RBRACE,
     TOKEN_LPAREN,

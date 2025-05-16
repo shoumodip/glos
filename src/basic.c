@@ -46,6 +46,12 @@ static char *tempAlloc(size_t n) {
     return result;
 }
 
+void tempContinue(void) {
+    assert(tempLength);
+    assert(tempBuffer[tempLength - 1] == '\0');
+    tempLength--;
+}
+
 char *tempSprintf(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);

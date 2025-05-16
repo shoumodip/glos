@@ -19,3 +19,8 @@ local-variables/error-undefined-outside-scope.glos
 local-variables/error-undefined-outside-scope-despite-same-depth.glos
 functions/no-arguments-no-return-basics.glos
 functions/no-arguments-no-return-first-class.glos
+functions/yes-arguments-no-return-basics.glos
+functions/yes-arguments-no-return-first-class.glos
+functions/arguments-as-local-memory.glos
+functions/error-argument-count-mismatch.glos
+functions/error-argument-type-mismatch.glos

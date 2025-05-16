@@ -39,7 +39,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 26, "");
+static_assert(COUNT_TOKENS == 27, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -74,7 +74,7 @@ static void errorUnexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 26, "");
+static_assert(COUNT_TOKENS == 27, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -87,7 +87,32 @@ static Node *parseType(Parser *p) {
     case TOKEN_FN:
         node = nodeNew(p, NODE_FN, token);
         lexerExpect(&p->lexer, TOKEN_LPAREN);
-        lexerExpect(&p->lexer, TOKEN_RPAREN);
+
+        while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
+            const Token argToken = lexerNext(&p->lexer);
+
+            Node *arg = nodeNew(p, NODE_ARG, argToken);
+            if (argToken.kind == TOKEN_IDENT) {
+                const Token peek = lexerPeek(&p->lexer);
+                if (peek.kind == TOKEN_COMMA || peek.kind == TOKEN_RPAREN) {
+                    arg->token = token;
+                    arg->as.arg.type = nodeNew(p, NODE_ATOM, argToken);
+                } else {
+                    arg->as.arg.type = parseType(p);
+                }
+            } else {
+                lexerBuffer(&p->lexer, argToken);
+                arg->token = token;
+                arg->as.arg.type = parseType(p);
+            }
+
+            arg->as.arg.index = node->as.fn.arity++;
+            nodesPush(&node->as.fn.args, arg);
+
+            if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
+                break;
+            }
+        }
         break;
 
     default:
@@ -97,7 +122,7 @@ static Node *parseType(Parser *p) {
     return node;
 }
 
-static_assert(COUNT_TOKENS == 26, "");
+static_assert(COUNT_TOKENS == 27, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -140,7 +165,16 @@ static Node *parseExpr(Parser *p, Power mbp) {
         case TOKEN_LPAREN: {
             Node *call = nodeNew(p, NODE_CALL, token);
             call->as.call.fn = node;
-            lexerExpect(&p->lexer, TOKEN_RPAREN);
+
+            while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
+                nodesPush(&call->as.call.args, parseExpr(p, POWER_SET));
+                call->as.call.arity++;
+
+                if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
+                    break;
+                }
+            }
+
             node = call;
         } break;
 
@@ -169,7 +203,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 26, "");
+static_assert(COUNT_TOKENS == 27, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -218,7 +252,16 @@ static Node *parseStmt(Parser *p) {
 
         {
             lexerExpect(&p->lexer, TOKEN_LPAREN);
-            lexerExpect(&p->lexer, TOKEN_RPAREN);
+            while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
+                Node *arg = nodeNew(p, NODE_ARG, lexerExpect(&p->lexer, TOKEN_IDENT));
+                arg->as.arg.type = parseType(p);
+                arg->as.arg.index = node->as.fn.arity++;
+                nodesPush(&node->as.fn.args, arg);
+
+                if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
+                    break;
+                }
+            }
 
             lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));
             node->as.fn.body = parseStmt(p);

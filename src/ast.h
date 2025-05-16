@@ -29,7 +29,9 @@ typedef enum {
 } TypeKind;
 
 typedef struct {
-    TypeKind    kind;
+    TypeKind kind;
+    Node    *spec;
+
     LLVMTypeRef llvm;
 } Type;
 
@@ -47,6 +49,7 @@ typedef enum {
     NODE_FOR,
 
     NODE_FN,
+    NODE_ARG,
     NODE_VAR,
 
     NODE_PRINT,
@@ -59,7 +62,7 @@ typedef struct {
 
 typedef struct {
     Node  *fn;
-    Node  *args;
+    Nodes  args;
     size_t arity;
 } NodeCall;
 
@@ -86,15 +89,25 @@ typedef struct {
 } NodeFor;
 
 typedef struct {
-    Node *args;
-    Node *ret;
-    Node *body;
+    Node  *ret;
+    Node  *body;
+    Nodes  args;
+    size_t arity;
+
     Scope locals;
 
     LLVMValueRef llvm;
 } NodeFn;
 
 Type nodeFnReturnType(NodeFn fn);
+
+typedef struct {
+    Node  *type;
+    size_t index;
+    bool   memory;
+
+    LLVMValueRef llvm;
+} NodeArg;
 
 typedef struct {
     Node *expr;
@@ -124,6 +137,7 @@ struct Node {
         NodeFor forr;
 
         NodeFn  fn;
+        NodeArg arg;
         NodeVar var;
 
         NodePrint print;

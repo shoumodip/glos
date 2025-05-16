@@ -35,6 +35,16 @@ static void fnCompilerEnd(Compiler *c, FnCompiler save) {
     c->fnCompiler = save;
 }
 
+// How the type should actually be represented in memory.
+// Eg: fn () -> ptr
+static LLVMTypeRef typeInMemory(Type type) {
+    if (type.kind == TYPE_FN) {
+        return LLVMPointerType(type.llvm, 0);
+    }
+
+    return type.llvm;
+}
+
 static_assert(COUNT_TYPES == 4, "");
 static void compileType(Node *n) {
     switch (n->type.kind) {
@@ -50,47 +60,49 @@ static void compileType(Node *n) {
         n->type.llvm = LLVMInt64Type();
         break;
 
-    case TYPE_FN:
-        static_assert(sizeof(Type) == 16, ""); // The type spec has not been added
-        n->type.llvm = LLVMFunctionType(LLVMVoidType(), NULL, 0, false);
-        break;
+    case TYPE_FN: {
+        assert(n->type.spec);
+        NodeFn *fn = &n->type.spec->as.fn;
+        assert(!fn->ret);
+
+        LLVMTypeRef *argsLLVM = calloc(fn->arity, sizeof(LLVMTypeRef));
+        for (Node *it = fn->args.head; it; it = it->next) {
+            compileType(it);
+            argsLLVM[it->as.arg.index] = typeInMemory(it->type);
+        }
+
+        n->type.llvm = LLVMFunctionType(LLVMVoidType(), argsLLVM, fn->arity, false);
+    } break;
 
     default:
         unreachable();
     }
 }
 
-// How the type should actually be represented in memory.
-// Eg: fn () -> ptr
-static LLVMTypeRef typeInMemory(Type type) {
-    if (type.kind == TYPE_FN) {
-        return LLVMPointerType(type.llvm, 0);
-    }
-
-    return type.llvm;
-}
-
-static_assert(COUNT_NODES == 10, "");
+static_assert(COUNT_NODES == 11, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
-    case NODE_VAR:
-        return n->as.var.llvm;
-
     case NODE_FN:
         return n->as.fn.llvm;
 
+    case NODE_ARG:
+        return n->as.arg.llvm;
+
+    case NODE_VAR:
+        return n->as.var.llvm;
+
     default:
         unreachable();
     }
 }
 
-static_assert(COUNT_NODES == 10, "");
+static_assert(COUNT_NODES == 11, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 26, "");
+        static_assert(COUNT_TOKENS == 27, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -100,6 +112,12 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
         case TOKEN_IDENT: {
             Node *definition = n->as.atom.definition;
+            if (definition->kind == NODE_ARG) {
+                NodeArg arg = definition->as.arg;
+                if (!arg.memory) {
+                    return LLVMGetParam(c->fnCompiler.fn, arg.index);
+                }
+            }
 
             LLVMValueRef definitionLLVM = definitionLLVMValue(definition);
             if (ref || definition->kind == NODE_FN) {
@@ -115,17 +133,26 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         break;
 
     case NODE_CALL: {
-        Node *fn = n->as.call.fn;
-        assert(!n->as.call.args);
+        NodeCall call = n->as.call;
 
-        const LLVMValueRef fnValue = compileExpr(c, fn, false);
-        return LLVMBuildCall2(c->builder, fn->type.llvm, fnValue, NULL, 0, "");
+        Node        *fn = call.fn;
+        LLVMValueRef fnValue = compileExpr(c, fn, false);
+
+        LLVMValueRef *argsLLVM = calloc(call.arity, sizeof(LLVMValueRef));
+        {
+            size_t i = 0;
+            for (Node *it = call.args.head; it; it = it->next) {
+                argsLLVM[i++] = compileExpr(c, it, false);
+            }
+        }
+
+        return LLVMBuildCall2(c->builder, fn->type.llvm, fnValue, argsLLVM, call.arity, "");
     };
 
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 26, "");
+        static_assert(COUNT_TOKENS == 27, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -146,7 +173,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 26, "");
+        static_assert(COUNT_TOKENS == 27, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -224,7 +251,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 10, "");
+static_assert(COUNT_NODES == 11, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -287,16 +314,23 @@ static void compileStmt(Compiler *c, Node *n) {
     } break;
 
     case NODE_FN: {
-        assert(!n->as.fn.args);
         assert(!n->as.fn.ret);
-
-        n->type.llvm = LLVMFunctionType(LLVMVoidType(), NULL, 0, false);
+        compileType(n);
         n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
 
         const FnCompiler fnCompilerSave = fnCompilerBegin(c, n);
         {
             LLVMBasicBlockRef body = LLVMAppendBasicBlock(n->as.fn.llvm, "entry");
             LLVMPositionBuilderAtEnd(c->builder, body);
+
+            for (Node *it = n->as.fn.args.head; it; it = it->next) {
+                NodeArg *arg = &it->as.arg;
+                if (arg->memory) {
+                    LLVMValueRef argLLVM = LLVMGetParam(c->fnCompiler.fn, arg->index);
+                    arg->llvm = LLVMBuildAlloca(c->builder, typeInMemory(it->type), "");
+                    LLVMBuildStore(c->builder, argLLVM, arg->llvm);
+                }
+            }
 
             for (size_t i = 0; i < n->as.fn.locals.length; i++) {
                 Node *it = n->as.fn.locals.data[i];
@@ -369,18 +403,17 @@ static Node *getMain(Context context) {
         exit(1);
     }
 
-    const Type expected = {.kind = TYPE_FN};
-    if (!typeEq(main->type, expected)) {
+    NodeFn mainFn = main->as.fn;
+    if (mainFn.arity) {
         fprintf(
             stderr,
-            PosFmt "ERROR: Expected function 'main' to be of type '%s', got '%s'\n",
-            PosArg(main->token.pos),
-            typeToString(expected),
-            typeToString(main->type));
+            PosFmt "ERROR: Function 'main' cannot take any arguments\n",
+            PosArg(main->token.pos));
 
         exit(1);
     }
 
+    assert(!mainFn.ret);
     return main;
 }
 

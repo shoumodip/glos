@@ -1,0 +1,5 @@
+fn foo(x i64, y i64) {}
+
+fn main() {
+    foo()
+}

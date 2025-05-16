@@ -1,4 +1,4 @@
-:i count 21
+:i count 26
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -212,4 +212,47 @@ functions/no-arguments-no-return-first-class.glos
 420
 
 :b stderr 0
+
+:b testcase 45
+functions/yes-arguments-no-return-basics.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
+
+:b testcase 50
+functions/yes-arguments-no-return-first-class.glos
+:i returncode 0
+:b stdout 6
+69
+69
+
+:b stderr 0
+
+:b testcase 40
+functions/arguments-as-local-memory.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
+
+:b testcase 44
+functions/error-argument-count-mismatch.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 85
+functions/error-argument-count-mismatch.glos:4:8: ERROR: Expected 2 arguments, got 0
+
+:b testcase 43
+functions/error-argument-type-mismatch.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 88
+functions/error-argument-type-mismatch.glos:4:9: ERROR: Expected type 'i64', got 'bool'
 

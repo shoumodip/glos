@@ -32,6 +32,7 @@ Str strFromCstr(const char *cstr);
 Str strStripSuffix(Str a, Str b);
 
 // Temporary String Builder
+void  tempContinue(void);
 char *tempSprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 char *tempStrToCstr(Str s);
 

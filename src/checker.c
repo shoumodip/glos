@@ -129,9 +129,13 @@ static void checkType(Context *c, Node *n) {
         break;
 
     case NODE_FN:
-        assert(!n->as.fn.args);
+        for (Node *it = n->as.fn.args.head; it; it = it->next) {
+            checkType(c, it->as.arg.type);
+            it->type = it->as.arg.type->type;
+        }
+
         assert(!n->as.fn.ret);
-        n->type = (Type) {.kind = TYPE_FN};
+        n->type = (Type) {.kind = TYPE_FN, .spec = n};
         break;
 
     default:
@@ -150,13 +154,13 @@ static void refPrevent(Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 10, "");
+static_assert(COUNT_NODES == 11, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 26, "");
+        static_assert(COUNT_TOKENS == 27, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -172,6 +176,10 @@ static void checkExpr(Context *c, Node *n, bool ref) {
                 n->as.atom.definition = definition;
                 n->type = definition->type;
                 allowRef = true;
+
+                if (definition->kind == NODE_ARG && ref) {
+                    definition->as.arg.memory = true;
+                }
             } else {
                 errorUndefined(n, "identifier");
             }
@@ -196,14 +204,32 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             exit(1);
         }
 
-        assert(!n->as.call.args);
-        n->type = nodeFnReturnType(fn->as.fn);
+        const NodeCall actual = n->as.call;
+        const NodeFn   expected = fn->type.spec->as.fn;
+        if (actual.arity != expected.arity) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Expected %zu argument%s, got %zu\n",
+                PosArg(n->token.pos),
+                expected.arity,
+                expected.arity == 1 ? "" : "s",
+                actual.arity);
+
+            exit(1);
+        }
+
+        for (Node *a = actual.args.head, *e = expected.args.head; a; a = a->next, e = e->next) {
+            checkExpr(c, a, false);
+            typeAssert(a, e->type);
+        }
+
+        n->type = nodeFnReturnType(fn->type.spec->as.fn);
     } break;
 
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 26, "");
+        static_assert(COUNT_TOKENS == 27, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -224,7 +250,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 26, "");
+        static_assert(COUNT_TOKENS == 27, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -268,7 +294,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 10, "");
+static_assert(COUNT_NODES == 11, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -300,7 +326,6 @@ static void checkStmt(Context *c, Node *n) {
         break;
 
     case NODE_FN:
-        assert(!n->as.fn.args);
         assert(!n->as.fn.ret);
 
         {
@@ -310,15 +335,26 @@ static void checkStmt(Context *c, Node *n) {
             }
         }
 
+        n->type = (Type) {.kind = TYPE_FN, .spec = n};
         scopePush(&c->globals, n);
 
         {
             const FnContext fnContextSave = fnContextBegin(c, &n->as.fn);
+            for (Node *it = n->as.fn.args.head; it; it = it->next) {
+                checkStmt(c, it);
+            }
+
             checkStmt(c, n->as.fn.body);
             fnContextEnd(c, fnContextSave);
         }
+        break;
 
-        n->type = (Type) {.kind = TYPE_FN};
+    case NODE_ARG:
+        checkType(c, n->as.arg.type);
+        n->type = n->as.arg.type->type;
+
+        scopePush(&c->locals, n);
+        scopePush(&c->fnContext.fn->locals, n);
         break;
 
     case NODE_VAR:
