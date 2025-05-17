@@ -4,4 +4,9 @@ fn main() {
     print sizeof(fn ())
     print sizeof(rawptr)
     print sizeof(&&bool)
+
+    print sizeof{main()}
+    print sizeof{69}
+    print sizeof{420 == 1337}
+    print sizeof{0 as rawptr}
 }

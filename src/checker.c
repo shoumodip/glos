@@ -133,10 +133,10 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
     exit(1);
 }
 
+static void checkExpr(Context *c, Node *n, bool ref);
+
 static_assert(COUNT_TYPES == 5, "");
 static void checkType(Context *c, Node *n) {
-    unused(c);
-
     switch (n->kind) {
     case NODE_ATOM:
         if (strMatch(n->token.str, "bool")) {
@@ -150,11 +150,17 @@ static void checkType(Context *c, Node *n) {
         }
         break;
 
-    case NODE_UNARY:
-        checkType(c, n->as.unary.operand);
-        n->type = n->as.unary.operand->type;
-        n->type.ref++;
-        break;
+    case NODE_UNARY: {
+        Node *operand = n->as.unary.operand;
+        if (n->token.kind == TOKEN_BAND) {
+            checkType(c, operand);
+            n->type = operand->type;
+            n->type.ref++;
+        } else {
+            checkExpr(c, operand, false);
+            n->type = operand->type;
+        }
+    } break;
 
     case NODE_FN:
         for (Node *it = n->as.fn.args.head; it; it = it->next) {
@@ -187,13 +193,13 @@ static void refPrevent(Node *n, bool ref) {
 
 static void checkFn(Context *c, Node *n);
 
-static_assert(COUNT_NODES == 12, "");
+static_assert(COUNT_NODES == 13, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -272,7 +278,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -322,11 +328,6 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             n->type = typeAssert(operand, (Type) {.kind = TYPE_BOOL});
             break;
 
-        case TOKEN_SIZEOF:
-            checkType(c, operand);
-            n->type = (Type) {.kind = TYPE_I64}; // TODO: Make this u64 later
-            break;
-
         default:
             unreachable();
         }
@@ -336,7 +337,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -407,6 +408,17 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_SIZEOF: {
+        Node *operand = n->as.sizeoff.operand;
+        if (n->as.sizeoff.isExpr) {
+            checkExpr(c, operand, false);
+        } else {
+            checkType(c, operand);
+        }
+
+        n->type = (Type) {.kind = TYPE_I64}; // TODO: Make this u64 later
+    } break;
+
     case NODE_FN:
         checkFn(c, n);
         break;
@@ -420,7 +432,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 12, "");
+static_assert(COUNT_NODES == 13, "");
 static bool executionEnds(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -454,7 +466,7 @@ static bool executionEnds(Node *n) {
         return false;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -468,7 +480,7 @@ static bool executionEnds(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 12, "");
+static_assert(COUNT_NODES == 13, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -503,7 +515,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

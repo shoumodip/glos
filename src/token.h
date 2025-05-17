@@ -52,6 +52,7 @@ typedef enum {
 
     TOKEN_AS,
     TOKEN_SIZEOF,
+    TOKEN_TYPEOF,
 
     TOKEN_IF,
     TOKEN_ELSE,

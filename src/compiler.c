@@ -96,7 +96,7 @@ static void compileType(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 12, "");
+static_assert(COUNT_NODES == 13, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -137,13 +137,13 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 
 static void compileFn(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 12, "");
+static_assert(COUNT_NODES == 13, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -193,7 +193,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -222,10 +222,6 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildNot(c->builder, operandValue, "");
         }
 
-        case TOKEN_SIZEOF:
-            compileType(operand);
-            return LLVMSizeOf(typeInMemory(operand->type));
-
         default:
             unreachable();
         }
@@ -235,7 +231,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -432,6 +428,17 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_SIZEOF: {
+        Node *operand = n->as.sizeoff.operand;
+        compileType(operand);
+
+        if (operand->type.kind == TYPE_UNIT) {
+            return LLVMConstNull(n->type.llvm);
+        }
+
+        return LLVMSizeOf(typeInMemory(operand->type));
+    }
+
     case NODE_FN:
         compileFn(c, n);
         return n->as.fn.llvm;
@@ -441,7 +448,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 12, "");
+static_assert(COUNT_NODES == 13, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -506,7 +513,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             LLVMValueRef operandValue = NULL;

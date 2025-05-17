@@ -1,4 +1,4 @@
-:i count 48
+:i count 49
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -474,12 +474,28 @@ type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integer
 :b testcase 18
 sizeof/basics.glos
 :i returncode 0
-:b stdout 10
+:b stdout 18
 1
 8
 8
 8
 8
+0
+8
+1
+8
+
+:b stderr 0
+
+:b testcase 18
+typeof/basics.glos
+:i returncode 0
+:b stdout 13
+69
+420
+0
+8
+1
 
 :b stderr 0
 

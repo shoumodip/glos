@@ -47,6 +47,7 @@ typedef enum {
     NODE_CALL,
     NODE_UNARY,
     NODE_BINARY,
+    NODE_SIZEOF,
 
     NODE_BLOCK,
     NODE_IF,
@@ -80,6 +81,11 @@ typedef struct {
     Node *lhs;
     Node *rhs;
 } NodeBinary;
+
+typedef struct {
+    Node *operand;
+    bool  isExpr;
+} NodeSizeof;
 
 typedef struct {
     Node *condition;
@@ -141,6 +147,7 @@ struct Node {
         NodeCall   call;
         NodeUnary  unary;
         NodeBinary binary;
+        NodeSizeof sizeoff;
 
         Nodes   block;
         NodeIf  iff;

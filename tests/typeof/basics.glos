@@ -1,0 +1,11 @@
+fn main() {
+    var x = 69
+    var y typeof(x) = 420
+
+    print x
+    print y
+
+    print sizeof(typeof(main()))
+    print sizeof(typeof(x + y))
+    print sizeof(typeof(x + y == 1337))
+}
