@@ -92,7 +92,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 34, "");
+static_assert(COUNT_TOKENS == 36, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -209,11 +209,19 @@ Token lexerNext(Lexer *l) {
         break;
 
     case '|':
-        token.kind = TOKEN_BOR;
+        if (matchChar(l, '|')) {
+            token.kind = TOKEN_LOR;
+        } else {
+            token.kind = TOKEN_BOR;
+        }
         break;
 
     case '&':
-        token.kind = TOKEN_BAND;
+        if (matchChar(l, '&')) {
+            token.kind = TOKEN_LAND;
+        } else {
+            token.kind = TOKEN_BAND;
+        }
         break;
 
     case '~':
@@ -312,4 +320,21 @@ Token lexerExpect(Lexer *l, const TokenKind *kinds) {
 
     fprintf(stderr, ", got %s\n", tokenKindName(token.kind));
     exit(1);
+}
+
+Token lexerSplitToken(Lexer *l, Token token) {
+    switch (token.kind) {
+    case TOKEN_LAND:
+        token.kind = TOKEN_BAND;
+        break;
+
+    default:
+        unreachable();
+    }
+
+    token.str.length = 1;
+    Token remainder = token;
+    remainder.pos.col++;
+    lexerBuffer(l, remainder);
+    return token;
 }

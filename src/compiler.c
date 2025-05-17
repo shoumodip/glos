@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include "ast.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Target.h>
@@ -120,7 +121,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 34, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -170,7 +171,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 34, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -208,7 +209,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 34, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -262,6 +263,52 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, true);
             const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
             return LLVMBuildStore(c->builder, rhsValue, lhsValue);
+        }
+
+        case TOKEN_LOR: {
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+
+            LLVMBasicBlockRef currentBlock = LLVMGetInsertBlock(c->builder);
+            LLVMBasicBlockRef rhsBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
+            LLVMBasicBlockRef finalBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
+            LLVMBuildCondBr(c->builder, lhsValue, finalBlock, rhsBlock);
+
+            // RHS
+            LLVMPositionBuilderAtEnd(c->builder, rhsBlock);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            LLVMBuildBr(c->builder, finalBlock);
+
+            // Finally
+            LLVMPositionBuilderAtEnd(c->builder, finalBlock);
+
+            LLVMValueRef result = LLVMBuildPhi(c->builder, n->type.llvm, "");
+            LLVMValueRef trueLLVM = LLVMConstInt(n->type.llvm, true, false);
+            LLVMAddIncoming(result, &trueLLVM, &currentBlock, 1);
+            LLVMAddIncoming(result, &rhsValue, &rhsBlock, 1);
+            return result;
+        }
+
+        case TOKEN_LAND: {
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+
+            LLVMBasicBlockRef currentBlock = LLVMGetInsertBlock(c->builder);
+            LLVMBasicBlockRef rhsBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
+            LLVMBasicBlockRef finalBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
+            LLVMBuildCondBr(c->builder, lhsValue, rhsBlock, finalBlock);
+
+            // RHS
+            LLVMPositionBuilderAtEnd(c->builder, rhsBlock);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            LLVMBuildBr(c->builder, finalBlock);
+
+            // Finally
+            LLVMPositionBuilderAtEnd(c->builder, finalBlock);
+
+            LLVMValueRef result = LLVMBuildPhi(c->builder, n->type.llvm, "");
+            LLVMValueRef falseLLVM = LLVMConstInt(n->type.llvm, false, false);
+            LLVMAddIncoming(result, &falseLLVM, &currentBlock, 1);
+            LLVMAddIncoming(result, &rhsValue, &rhsBlock, 1);
+            return result;
         }
 
         case TOKEN_GT: {
@@ -379,7 +426,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 34, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             LLVMValueRef operandValue = NULL;

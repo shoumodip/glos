@@ -1,7 +1,27 @@
+fn foo(x bool) bool {
+    print 69
+    return x
+}
+
+fn bar(x bool) bool {
+    print 420
+    return x
+}
+
 fn main() {
     print true
     print false
 
     print !true
     print !false
+
+    print foo(true)  && bar(true)
+    print foo(true)  && bar(false)
+    print foo(false) && bar(true)
+    print foo(false) && bar(false)
+
+    print foo(true)  || bar(true)
+    print foo(true)  || bar(false)
+    print foo(false) || bar(true)
+    print foo(false) || bar(false)
 }

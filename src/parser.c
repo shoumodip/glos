@@ -32,7 +32,9 @@ static void nodesPush(Nodes *ns, Node *node) {
 typedef enum {
     POWER_NIL,
     POWER_SET,
+    POWER_LOR,
     POWER_CMP,
+    POWER_SHL,
     POWER_ADD,
     POWER_BOR,
     POWER_MUL,
@@ -40,7 +42,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 34, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -56,12 +58,18 @@ static Power tokenKindPower(TokenKind kind) {
 
     case TOKEN_SHL:
     case TOKEN_SHR:
+        return POWER_SHL;
+
     case TOKEN_BOR:
     case TOKEN_BAND:
         return POWER_BOR;
 
     case TOKEN_SET:
         return POWER_SET;
+
+    case TOKEN_LOR:
+    case TOKEN_LAND:
+        return POWER_LOR;
 
     case TOKEN_GT:
     case TOKEN_GE:
@@ -82,10 +90,10 @@ static void errorUnexpected(Token token) {
 }
 
 static bool tokenKindIsStartOfType(TokenKind k) {
-    return k == TOKEN_IDENT || k == TOKEN_BAND || k == TOKEN_FN;
+    return k == TOKEN_IDENT || k == TOKEN_BAND || k == TOKEN_LAND || k == TOKEN_FN;
 }
 
-static_assert(COUNT_TOKENS == 34, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -97,6 +105,11 @@ static Node *parseType(Parser *p) {
 
     case TOKEN_BAND:
         node = nodeNew(p, NODE_UNARY, token);
+        node->as.unary.operand = parseType(p);
+        break;
+
+    case TOKEN_LAND:
+        node = nodeNew(p, NODE_UNARY, lexerSplitToken(&p->lexer, token));
         node->as.unary.operand = parseType(p);
         break;
 
@@ -145,7 +158,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 34, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -233,7 +246,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 34, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

@@ -39,6 +39,8 @@ typedef enum {
 
     TOKEN_SET,
 
+    TOKEN_LOR,
+    TOKEN_LAND,
     TOKEN_LNOT,
 
     TOKEN_GT,
