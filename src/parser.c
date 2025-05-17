@@ -34,12 +34,13 @@ typedef enum {
     POWER_SET,
     POWER_CMP,
     POWER_ADD,
+    POWER_BOR,
     POWER_MUL,
     POWER_PRE,
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 30, "");
+static_assert(COUNT_TOKENS == 34, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -52,6 +53,12 @@ static Power tokenKindPower(TokenKind kind) {
     case TOKEN_MUL:
     case TOKEN_DIV:
         return POWER_MUL;
+
+    case TOKEN_SHL:
+    case TOKEN_SHR:
+    case TOKEN_BOR:
+    case TOKEN_BAND:
+        return POWER_BOR;
 
     case TOKEN_SET:
         return POWER_SET;
@@ -78,7 +85,7 @@ static bool tokenKindIsStartOfType(TokenKind k) {
     return k == TOKEN_IDENT || k == TOKEN_BAND || k == TOKEN_FN;
 }
 
-static_assert(COUNT_TOKENS == 30, "");
+static_assert(COUNT_TOKENS == 34, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -138,7 +145,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 30, "");
+static_assert(COUNT_TOKENS == 34, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -152,6 +159,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
 
     case TOKEN_SUB:
     case TOKEN_MUL:
+    case TOKEN_BNOT:
     case TOKEN_LNOT:
     case TOKEN_BAND:
         node = nodeNew(p, NODE_UNARY, token);
@@ -225,7 +233,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 30, "");
+static_assert(COUNT_TOKENS == 34, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

@@ -92,7 +92,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 30, "");
+static_assert(COUNT_TOKENS == 34, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -208,8 +208,16 @@ Token lexerNext(Lexer *l) {
         token.kind = TOKEN_DIV;
         break;
 
+    case '|':
+        token.kind = TOKEN_BOR;
+        break;
+
     case '&':
         token.kind = TOKEN_BAND;
+        break;
+
+    case '~':
+        token.kind = TOKEN_BNOT;
         break;
 
     case '!':
@@ -221,7 +229,9 @@ Token lexerNext(Lexer *l) {
         break;
 
     case '>':
-        if (matchChar(l, '=')) {
+        if (matchChar(l, '>')) {
+            token.kind = TOKEN_SHR;
+        } else if (matchChar(l, '=')) {
             token.kind = TOKEN_GE;
         } else {
             token.kind = TOKEN_GT;
@@ -229,7 +239,9 @@ Token lexerNext(Lexer *l) {
         break;
 
     case '<':
-        if (matchChar(l, '=')) {
+        if (matchChar(l, '<')) {
+            token.kind = TOKEN_SHL;
+        } else if (matchChar(l, '=')) {
             token.kind = TOKEN_LE;
         } else {
             token.kind = TOKEN_LT;

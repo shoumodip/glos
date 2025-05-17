@@ -120,7 +120,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 30, "");
+        static_assert(COUNT_TOKENS == 34, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -170,7 +170,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 30, "");
+        static_assert(COUNT_TOKENS == 34, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -189,6 +189,11 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         case TOKEN_BAND:
             return compileExpr(c, operand, true);
 
+        case TOKEN_BNOT: {
+            const LLVMValueRef operandValue = compileExpr(c, operand, false);
+            return LLVMBuildNot(c->builder, operandValue, "");
+        }
+
         case TOKEN_LNOT: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
             return LLVMBuildNot(c->builder, operandValue, "");
@@ -203,7 +208,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 30, "");
+        static_assert(COUNT_TOKENS == 34, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -227,6 +232,30 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
             return LLVMBuildSDiv(c->builder, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_SHL: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildShl(c->builder, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_SHR: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildAShr(c->builder, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_BOR: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildOr(c->builder, lhsValue, rhsValue, "");
+        }
+
+        case TOKEN_BAND: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            return LLVMBuildAnd(c->builder, lhsValue, rhsValue, "");
         }
 
         case TOKEN_SET: {
@@ -350,7 +379,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 30, "");
+        static_assert(COUNT_TOKENS == 34, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             LLVMValueRef operandValue = NULL;

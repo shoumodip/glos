@@ -28,4 +28,13 @@ fn main() {
 
     print 1 != 2
     print 1 != 1
+
+    // Bitwise
+    print 276 >> 2
+    print 105 << 2
+
+    print ~-70
+    print 160 | 260
+    print 77 & 103
+    print ~-419 + 10 & 3
 }

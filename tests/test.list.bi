@@ -2,7 +2,7 @@
 :b testcase 20
 integers/basics.glos
 :i returncode 0
-:b stdout 49
+:b stdout 70
 69
 420
 69
@@ -24,6 +24,12 @@ integers/basics.glos
 0
 1
 0
+69
+420
+69
+420
+69
+420
 
 :b stderr 0
 
