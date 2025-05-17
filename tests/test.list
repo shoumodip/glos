@@ -7,6 +7,7 @@ global-variables/basics.glos
 global-variables/error-undefined.glos
 global-variables/error-redefinition.glos
 global-variables/error-assignment-definition-type-mismatch.glos
+global-variables/error-cannot-define-with-type-unit.glos
 assignment/basics.glos
 assignment/error-type-mismatch.glos
 assignment/error-cannot-take-reference.glos
@@ -17,6 +18,7 @@ local-variables/shadowing.glos
 local-variables/error-assignment-definition-type-mismatch.glos
 local-variables/error-undefined-outside-scope.glos
 local-variables/error-undefined-outside-scope-despite-same-depth.glos
+local-variables/error-cannot-define-with-type-unit.glos
 functions/no-arguments-no-return-basics.glos
 functions/no-arguments-no-return-first-class.glos
 functions/yes-arguments-no-return-basics.glos

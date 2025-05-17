@@ -23,8 +23,8 @@ const char *typeToString(Type type) {
     }
 
     switch (type.kind) {
-    case TYPE_NIL:
-        tempSprintf("nil");
+    case TYPE_UNIT:
+        tempSprintf("()");
         break;
 
     case TYPE_BOOL:
@@ -98,5 +98,5 @@ bool typeEq(Type a, Type b) {
 
 Type nodeFnReturnType(NodeFn fn) {
     assert(!fn.ret);
-    return (Type) {.kind = TYPE_NIL};
+    return (Type) {.kind = TYPE_UNIT};
 }

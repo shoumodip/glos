@@ -21,7 +21,7 @@ typedef struct {
 Node *scopeFind(Scope s, Str name);
 
 typedef enum {
-    TYPE_NIL,
+    TYPE_UNIT,
     TYPE_BOOL,
     TYPE_I64,
     TYPE_FN,

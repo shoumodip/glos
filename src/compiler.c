@@ -57,7 +57,7 @@ static void compileType(Node *n) {
     }
 
     switch (n->type.kind) {
-    case TYPE_NIL:
+    case TYPE_UNIT:
         n->type.llvm = LLVMVoidType();
         break;
 

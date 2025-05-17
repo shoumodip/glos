@@ -304,7 +304,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             checkExpr(c, lhs, true);
             checkExpr(c, rhs, false);
             typeAssert(rhs, lhs->type);
-            n->type = (Type) {.kind = TYPE_NIL};
+            n->type = (Type) {.kind = TYPE_UNIT};
             break;
 
         case TOKEN_GT:
@@ -412,12 +412,23 @@ static void checkStmt(Context *c, Node *n) {
             n->type = n->as.var.type->type;
         }
 
-        if (n->as.var.expr) {
-            checkExpr(c, n->as.var.expr, false);
-            n->type = n->as.var.expr->type;
+        Node *expr = n->as.var.expr;
+        if (expr) {
+            checkExpr(c, expr, false);
+            n->type = expr->type;
+
+            if (n->type.kind == TYPE_UNIT) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Cannot define variable with type '%s'\n",
+                    PosArg(n->token.pos),
+                    typeToString(n->type));
+
+                exit(1);
+            }
 
             if (n->as.var.type) {
-                typeAssert(n->as.var.expr, n->as.var.type->type);
+                typeAssert(expr, n->as.var.type->type);
             }
         }
 

@@ -1,4 +1,4 @@
-:i count 34
+:i count 36
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -100,6 +100,14 @@ global-variables/error-assignment-definition-type-mismatch.glos
 :b stderr 109
 global-variables/error-assignment-definition-type-mismatch.glos:1:13: ERROR: Expected type 'i64', got 'bool'
 
+:b testcase 56
+global-variables/error-cannot-define-with-type-unit.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 107
+global-variables/error-cannot-define-with-type-unit.glos:3:5: ERROR: Cannot define variable with type '()'
+
 :b testcase 22
 assignment/basics.glos
 :i returncode 0
@@ -192,6 +200,14 @@ local-variables/error-undefined-outside-scope-despite-same-depth.glos
 
 :b stderr 108
 local-variables/error-undefined-outside-scope-despite-same-depth.glos:6:15: ERROR: Undefined identifier 'x'
+
+:b testcase 55
+local-variables/error-cannot-define-with-type-unit.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 106
+local-variables/error-cannot-define-with-type-unit.glos:4:9: ERROR: Cannot define variable with type '()'
 
 :b testcase 44
 functions/no-arguments-no-return-basics.glos
