@@ -45,3 +45,4 @@ pointers/error-cannot-dereference-raw-pointer.glos
 type-cast/basics.glos
 type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos
 type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos
+sizeof/basics.glos

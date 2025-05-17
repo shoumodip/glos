@@ -1,0 +1,7 @@
+fn main() {
+    print sizeof(bool)
+    print sizeof(i64)
+    print sizeof(fn ())
+    print sizeof(rawptr)
+    print sizeof(&&bool)
+}

@@ -193,7 +193,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 38, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -272,7 +272,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 38, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -322,6 +322,11 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             n->type = typeAssert(operand, (Type) {.kind = TYPE_BOOL});
             break;
 
+        case TOKEN_SIZEOF:
+            checkType(c, operand);
+            n->type = (Type) {.kind = TYPE_I64}; // TODO: Make this u64 later
+            break;
+
         default:
             unreachable();
         }
@@ -331,7 +336,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 38, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -449,7 +454,7 @@ static bool executionEnds(Node *n) {
         return false;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 38, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -498,7 +503,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 38, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

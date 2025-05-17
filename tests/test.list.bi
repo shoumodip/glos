@@ -1,4 +1,4 @@
-:i count 47
+:i count 48
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -470,4 +470,16 @@ type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integer
 
 :b stderr 139
 type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos:2:11: ERROR: Cannot cast type '&i64' to type 'bool'
+
+:b testcase 18
+sizeof/basics.glos
+:i returncode 0
+:b stdout 10
+1
+8
+8
+8
+8
+
+:b stderr 0
 

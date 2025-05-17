@@ -43,7 +43,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -97,7 +97,7 @@ static bool tokenKindIsStartOfType(TokenKind k) {
     return k == TOKEN_IDENT || k == TOKEN_BAND || k == TOKEN_LAND || k == TOKEN_FN;
 }
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -162,7 +162,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -185,6 +185,13 @@ static Node *parseExpr(Parser *p, Power mbp) {
 
     case TOKEN_LPAREN:
         node = parseExpr(p, POWER_SET);
+        lexerExpect(&p->lexer, TOKEN_RPAREN);
+        break;
+
+    case TOKEN_SIZEOF:
+        lexerExpect(&p->lexer, TOKEN_LPAREN);
+        node = nodeNew(p, NODE_UNARY, token);
+        node->as.unary.operand = parseType(p);
         lexerExpect(&p->lexer, TOKEN_RPAREN);
         break;
 
@@ -257,7 +264,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
