@@ -1,4 +1,4 @@
-:i count 41
+:i count 42
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -298,6 +298,16 @@ functions/return-not-unit.glos
 :i returncode 0
 :b stdout 3
 69
+
+:b stderr 0
+
+:b testcase 24
+functions/anonymous.glos
+:i returncode 0
+:b stdout 12
+69
+420
+1337
 
 :b stderr 0
 

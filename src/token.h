@@ -19,6 +19,7 @@ typedef enum {
     TOKEN_IDENT,
 
     TOKEN_COMMA,
+    TOKEN_ARROW,
 
     TOKEN_LBRACE,
     TOKEN_RBRACE,

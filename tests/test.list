@@ -29,6 +29,7 @@ functions/arguments-as-local-memory.glos
 functions/nested-functions.glos
 functions/return-unit.glos
 functions/return-not-unit.glos
+functions/anonymous.glos
 functions/error-argument-count-mismatch.glos
 functions/error-argument-type-mismatch.glos
 functions/error-function-literal-is-not-memory.glos

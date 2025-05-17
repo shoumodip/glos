@@ -163,13 +163,15 @@ static void refPrevent(Node *n, bool ref) {
     }
 }
 
+static void checkFn(Context *c, Node *n);
+
 static_assert(COUNT_NODES == 12, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -248,7 +250,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -292,7 +294,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -326,6 +328,10 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             unreachable();
         }
     } break;
+
+    case NODE_FN:
+        checkFn(c, n);
+        break;
 
     default:
         unreachable();
@@ -370,7 +376,7 @@ static bool executionEnds(Node *n) {
         return false;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -419,7 +425,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};
@@ -437,41 +443,7 @@ static void checkStmt(Context *c, Node *n) {
     } break;
 
     case NODE_FN:
-        if (c->fnContext.fn) {
-            scopePush(&c->locals, n);
-        } else {
-            const Node *previous = scopeFind(c->globals, n->token.str);
-            if (previous) {
-                errorRedefinition(n, previous, "identifier");
-            }
-
-            scopePush(&c->globals, n);
-        }
-
-        n->type = (Type) {.kind = TYPE_FN, .spec = n};
-
-        {
-            const FnContext fnContextSave = fnContextBegin(c, &n->as.fn);
-            for (Node *it = n->as.fn.args.head; it; it = it->next) {
-                checkStmt(c, it);
-            }
-
-            if (n->as.fn.ret) {
-                checkType(c, n->as.fn.ret);
-            }
-
-            checkStmt(c, n->as.fn.body);
-            if (n->as.fn.ret && !executionEnds(n->as.fn.body)) {
-                fprintf(
-                    stderr,
-                    PosFmt "ERROR: Expected return statement\n",
-                    PosArg(n->as.fn.body->token.pos));
-
-                exit(1);
-            }
-
-            fnContextEnd(c, fnContextSave);
-        }
+        checkFn(c, n);
         break;
 
     case NODE_ARG:
@@ -531,6 +503,46 @@ static void checkStmt(Context *c, Node *n) {
     default:
         checkExpr(c, n, false);
         break;
+    }
+}
+
+static void checkFn(Context *c, Node *n) {
+    if (n->token.kind == TOKEN_IDENT) {
+        if (c->fnContext.fn) {
+            scopePush(&c->locals, n);
+        } else {
+            const Node *previous = scopeFind(c->globals, n->token.str);
+            if (previous) {
+                errorRedefinition(n, previous, "identifier");
+            }
+
+            scopePush(&c->globals, n);
+        }
+    }
+
+    n->type = (Type) {.kind = TYPE_FN, .spec = n};
+
+    {
+        const FnContext fnContextSave = fnContextBegin(c, &n->as.fn);
+        for (Node *it = n->as.fn.args.head; it; it = it->next) {
+            checkStmt(c, it);
+        }
+
+        if (n->as.fn.ret) {
+            checkType(c, n->as.fn.ret);
+        }
+
+        checkStmt(c, n->as.fn.body);
+        if (n->as.fn.ret && !executionEnds(n->as.fn.body)) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Expected return statement\n",
+                PosArg(n->as.fn.body->token.pos));
+
+            exit(1);
+        }
+
+        fnContextEnd(c, fnContextSave);
     }
 }
 

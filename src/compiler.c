@@ -112,13 +112,15 @@ static LLVMValueRef definitionLLVMValue(Node *n) {
     }
 }
 
+static void compileFn(Compiler *c, Node *n);
+
 static_assert(COUNT_NODES == 12, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -168,7 +170,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -201,7 +203,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -274,6 +276,10 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_FN:
+        compileFn(c, n);
+        return n->as.fn.llvm;
+
     default:
         unreachable();
     }
@@ -344,16 +350,20 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 29, "");
+        static_assert(COUNT_TOKENS == 30, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
+            LLVMValueRef operandValue = NULL;
             if (operand) {
-                LLVMBuildRet(c->builder, compileExpr(c, operand, false));
-            } else {
-                LLVMBuildRetVoid(c->builder);
+                operandValue = compileExpr(c, operand, false);
             }
 
-            // TODO: This is a temporary hack till code reachability analysis is implemented
+            if (n->type.kind == TYPE_UNIT) {
+                LLVMBuildRetVoid(c->builder);
+            } else {
+                LLVMBuildRet(c->builder, operandValue);
+            }
+
             LLVMBasicBlockRef deadBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
             LLVMPositionBuilderAtEnd(c->builder, deadBlock);
         } break;
@@ -363,42 +373,9 @@ static void compileStmt(Compiler *c, Node *n) {
         }
     } break;
 
-    case NODE_FN: {
-        compileType(n);
-        n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
-
-        const FnCompiler fnCompilerSave = fnCompilerBegin(c, n);
-        {
-            LLVMBasicBlockRef body = LLVMAppendBasicBlock(n->as.fn.llvm, "entry");
-            LLVMPositionBuilderAtEnd(c->builder, body);
-
-            for (Node *it = n->as.fn.args.head; it; it = it->next) {
-                NodeArg *arg = &it->as.arg;
-                if (arg->memory) {
-                    LLVMValueRef argLLVM = LLVMGetParam(c->fnCompiler.fn, arg->index);
-                    arg->llvm = LLVMBuildAlloca(c->builder, typeInMemory(it->type), "");
-                    LLVMBuildStore(c->builder, argLLVM, arg->llvm);
-                }
-            }
-
-            for (size_t i = 0; i < n->as.fn.locals.length; i++) {
-                Node *it = n->as.fn.locals.data[i];
-                if (it->kind == NODE_VAR) {
-                    compileType(it);
-                    it->as.var.llvm = LLVMBuildAlloca(c->builder, typeInMemory(it->type), "");
-                }
-            }
-
-            compileStmt(c, n->as.fn.body);
-
-            if (n->as.fn.ret) {
-                LLVMBuildRet(c->builder, LLVMConstNull(typeInMemory(n->as.fn.ret->type)));
-            } else {
-                LLVMBuildRetVoid(c->builder);
-            }
-        }
-        fnCompilerEnd(c, fnCompilerSave);
-    } break;
+    case NODE_FN:
+        compileFn(c, n);
+        break;
 
     case NODE_VAR: {
         if (n->as.var.local) {
@@ -439,6 +416,43 @@ static void compileStmt(Compiler *c, Node *n) {
         compileExpr(c, n, false);
         break;
     }
+}
+
+static void compileFn(Compiler *c, Node *n) {
+    compileType(n);
+    n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
+
+    const FnCompiler fnCompilerSave = fnCompilerBegin(c, n);
+    {
+        LLVMBasicBlockRef body = LLVMAppendBasicBlock(n->as.fn.llvm, "entry");
+        LLVMPositionBuilderAtEnd(c->builder, body);
+
+        for (Node *it = n->as.fn.args.head; it; it = it->next) {
+            NodeArg *arg = &it->as.arg;
+            if (arg->memory) {
+                LLVMValueRef argLLVM = LLVMGetParam(c->fnCompiler.fn, arg->index);
+                arg->llvm = LLVMBuildAlloca(c->builder, typeInMemory(it->type), "");
+                LLVMBuildStore(c->builder, argLLVM, arg->llvm);
+            }
+        }
+
+        for (size_t i = 0; i < n->as.fn.locals.length; i++) {
+            Node *it = n->as.fn.locals.data[i];
+            if (it->kind == NODE_VAR) {
+                compileType(it);
+                it->as.var.llvm = LLVMBuildAlloca(c->builder, typeInMemory(it->type), "");
+            }
+        }
+
+        compileStmt(c, n->as.fn.body);
+
+        if (n->as.fn.ret) {
+            LLVMBuildRet(c->builder, LLVMConstNull(typeInMemory(n->as.fn.ret->type)));
+        } else {
+            LLVMBuildRetVoid(c->builder);
+        }
+    }
+    fnCompilerEnd(c, fnCompilerSave);
 }
 
 static Node *getMain(Context context) {
