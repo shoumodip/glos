@@ -50,9 +50,9 @@ static LLVMTypeRef typeInMemory(Type type) {
     return type.llvm;
 }
 
-static_assert(COUNT_TYPES == 4, "");
+static_assert(COUNT_TYPES == 5, "");
 static void compileType(Node *n) {
-    if (n->type.ref) {
+    if (typeIsPointer(n->type)) {
         n->type.llvm = LLVMPointerType(LLVMVoidType(), 0);
         return;
     }
@@ -115,7 +115,7 @@ static LLVMValueRef definitionLLVMValue(Node *n) {
 
 // LLVM cannot perform arithmetic operations on pointers directly
 static void beforeArith(Compiler *c, Type type, LLVMValueRef *lhs, LLVMValueRef *rhs) {
-    if (type.ref == 0) {
+    if (!typeIsPointer(type)) {
         return;
     }
 
@@ -128,7 +128,7 @@ static void beforeArith(Compiler *c, Type type, LLVMValueRef *lhs, LLVMValueRef 
 }
 
 static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
-    if (type.ref == 0) {
+    if (!typeIsPointer(type)) {
         return result;
     }
 
@@ -387,8 +387,8 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             }
 
             const LLVMTypeRef toLLVM = typeInMemory(to);
-            if (from.ref != 0) {
-                if (to.ref != 0) {
+            if (typeIsPointer(from)) {
+                if (typeIsPointer(to)) {
                     // Pointer -> Pointer
                     return LLVMBuildBitCast(c->builder, lhsValue, toLLVM, "");
                 } else {
@@ -402,13 +402,13 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
                 return LLVMBuildZExt(c->builder, lhsValue, toLLVM, "");
             }
 
-            static_assert(COUNT_TYPES == 4, "");
+            static_assert(COUNT_TYPES == 5, "");
             const size_t intSizes[COUNT_TYPES] = {
                 [TYPE_I64] = 64,
             };
 
             if (intSizes[from.kind]) {
-                if (to.ref != 0) {
+                if (typeIsPointer(to)) {
                     // Integer -> Pointer
                     return LLVMBuildIntToPtr(c->builder, lhsValue, toLLVM, "");
                 }

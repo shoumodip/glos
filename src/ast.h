@@ -25,6 +25,7 @@ typedef enum {
     TYPE_BOOL,
     TYPE_I64,
     TYPE_FN,
+    TYPE_RAWPTR,
     COUNT_TYPES
 } TypeKind;
 
@@ -36,8 +37,10 @@ typedef struct {
     LLVMTypeRef llvm;
 } Type;
 
-bool        typeEq(Type a, Type b);
 const char *typeToString(Type type);
+
+bool typeEq(Type a, Type b);
+bool typeIsPointer(Type type);
 
 typedef enum {
     NODE_ATOM,

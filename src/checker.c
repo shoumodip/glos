@@ -65,7 +65,7 @@ static Type typeAssert(const Node *n, Type expected) {
 }
 
 static Type typeAssertArith(const Node *n) {
-    if (n->type.kind != TYPE_I64 && n->type.ref == 0) {
+    if (n->type.kind != TYPE_I64 && !typeIsPointer(n->type)) {
         fprintf(
             stderr,
             PosFmt "ERROR: Expected arithmetic type, got '%s'\n",
@@ -78,7 +78,7 @@ static Type typeAssertArith(const Node *n) {
 }
 
 static Type typeAssertScalar(const Node *n) {
-    if (n->type.kind != TYPE_I64 && n->type.kind != TYPE_BOOL && n->type.ref == 0) {
+    if (n->type.kind != TYPE_I64 && n->type.kind != TYPE_BOOL && !typeIsPointer(n->type)) {
         fprintf(
             stderr,
             PosFmt "ERROR: Expected scalar type, got '%s'\n",
@@ -99,11 +99,11 @@ static bool typeCastIllegal(Type from, Type to) {
 
     // Not 64 Bit Integer -> Pointer
     // Pointer            -> Not 64 Bit Integer
-    if (from.ref == 0 && to.ref != 0 && from.kind != TYPE_I64) {
+    if (!typeIsPointer(from) && typeIsPointer(to) && from.kind != TYPE_I64) {
         return true;
     }
 
-    if (to.ref == 0 && from.ref != 0 && to.kind != TYPE_I64) {
+    if (!typeIsPointer(to) && typeIsPointer(from) && to.kind != TYPE_I64) {
         return true;
     }
 
@@ -133,7 +133,7 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
     exit(1);
 }
 
-static_assert(COUNT_TYPES == 4, "");
+static_assert(COUNT_TYPES == 5, "");
 static void checkType(Context *c, Node *n) {
     unused(c);
 
@@ -143,6 +143,8 @@ static void checkType(Context *c, Node *n) {
             n->type = (Type) {.kind = TYPE_BOOL};
         } else if (strMatch(n->token.str, "i64")) {
             n->type = (Type) {.kind = TYPE_I64};
+        } else if (strMatch(n->token.str, "rawptr")) {
+            n->type = (Type) {.kind = TYPE_RAWPTR};
         } else {
             errorUndefined(n, "type");
         }
@@ -279,6 +281,15 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         case TOKEN_MUL:
             checkExpr(c, operand, false);
+            if (operand->type.kind == TYPE_RAWPTR) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Cannot dereference raw pointer\n",
+                    PosArg(operand->token.pos));
+
+                exit(1);
+            }
+
             if (operand->type.ref == 0) {
                 fprintf(
                     stderr,
@@ -288,6 +299,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
                 exit(1);
             }
+
             n->type = operand->type;
             n->type.ref--;
 

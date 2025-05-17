@@ -1,0 +1,1 @@
+var _ = *(0 as rawptr)

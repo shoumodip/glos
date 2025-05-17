@@ -41,6 +41,7 @@ pointers/arithmetics.glos
 pointers/multiple-level-type-parse.glos
 pointers/error-cannot-take-reference.glos
 pointers/error-dereference-expected-pointer.glos
+pointers/error-cannot-dereference-raw-pointer.glos
 type-cast/basics.glos
 type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos
 type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos

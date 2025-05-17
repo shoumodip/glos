@@ -1,4 +1,4 @@
-:i count 46
+:i count 47
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -434,6 +434,14 @@ pointers/error-dereference-expected-pointer.glos
 
 :b stderr 94
 pointers/error-dereference-expected-pointer.glos:2:6: ERROR: Expected pointer type, got 'i64'
+
+:b testcase 50
+pointers/error-cannot-dereference-raw-pointer.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 95
+pointers/error-cannot-dereference-raw-pointer.glos:1:13: ERROR: Cannot dereference raw pointer
 
 :b testcase 21
 type-cast/basics.glos

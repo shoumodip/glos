@@ -12,7 +12,7 @@ Node *scopeFind(Scope s, Str name) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 4, "");
+static_assert(COUNT_TYPES == 5, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -64,6 +64,10 @@ const char *typeToString(Type type) {
         }
     } break;
 
+    case TYPE_RAWPTR:
+        tempSprintf("rawptr");
+        break;
+
     default:
         unreachable();
     }
@@ -100,6 +104,10 @@ bool typeEq(Type a, Type b) {
     default:
         return true;
     }
+}
+
+bool typeIsPointer(Type type) {
+    return type.kind == TYPE_RAWPTR || type.ref != 0;
 }
 
 Type nodeFnReturnType(const NodeFn *fn) {
