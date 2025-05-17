@@ -1,0 +1,5 @@
+fn main() {
+    print 69
+    return
+    print 420
+}

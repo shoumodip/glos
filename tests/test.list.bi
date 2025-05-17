@@ -1,4 +1,4 @@
-:i count 36
+:i count 37
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -266,6 +266,14 @@ functions/nested-functions.glos
 :b stdout 7
 69
 420
+
+:b stderr 0
+
+:b testcase 26
+functions/return-unit.glos
+:i returncode 0
+:b stdout 3
+69
 
 :b stderr 0
 

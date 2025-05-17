@@ -49,6 +49,8 @@ typedef enum {
     NODE_IF,
     NODE_FOR,
 
+    NODE_FLOW,
+
     NODE_FN,
     NODE_ARG,
     NODE_VAR,
@@ -88,6 +90,10 @@ typedef struct {
     Node *update;
     Node *body;
 } NodeFor;
+
+typedef struct {
+    Node *operand;
+} NodeFlow;
 
 typedef struct {
     Node  *ret;
@@ -136,6 +142,8 @@ struct Node {
         Nodes   block;
         NodeIf  iff;
         NodeFor forr;
+
+        NodeFlow flow;
 
         NodeFn  fn;
         NodeArg arg;

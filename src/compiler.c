@@ -88,7 +88,7 @@ static void compileType(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 11, "");
+static_assert(COUNT_NODES == 12, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -105,13 +105,13 @@ static LLVMValueRef definitionLLVMValue(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 11, "");
+static_assert(COUNT_NODES == 12, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 28, "");
+        static_assert(COUNT_TOKENS == 29, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -161,7 +161,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 28, "");
+        static_assert(COUNT_TOKENS == 29, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -194,7 +194,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 28, "");
+        static_assert(COUNT_TOKENS == 29, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -272,7 +272,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 11, "");
+static_assert(COUNT_NODES == 12, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -333,6 +333,23 @@ static void compileStmt(Compiler *c, Node *n) {
         // Finally
         LLVMPositionBuilderAtEnd(c->builder, finalBlock);
     } break;
+
+    case NODE_FLOW:
+        static_assert(COUNT_TOKENS == 29, "");
+        switch (n->token.kind) {
+        case TOKEN_RETURN: {
+            assert(!n->as.flow.operand);
+            LLVMBuildRetVoid(c->builder);
+
+            // TODO: This is a temporary hack till code reachability analysis is implemented
+            LLVMBasicBlockRef deadBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
+            LLVMPositionBuilderAtEnd(c->builder, deadBlock);
+        } break;
+
+        default:
+            unreachable();
+        }
+        break;
 
     case NODE_FN: {
         assert(!n->as.fn.ret);
