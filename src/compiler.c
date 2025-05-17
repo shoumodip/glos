@@ -1,5 +1,4 @@
 #include "compiler.h"
-#include "ast.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Target.h>
@@ -22,8 +21,10 @@ typedef struct {
     LLVMBuilderRef builder;
 
     // The 'print' keyword
-    LLVMTypeRef  printFmtType;
-    LLVMValueRef printFmtValue;
+    LLVMTypeRef  printSFmtType;
+    LLVMValueRef printSFmtValue;
+    LLVMTypeRef  printUFmtType;
+    LLVMValueRef printUFmtValue;
     LLVMTypeRef  printFuncType;
     LLVMValueRef printFuncValue;
 } Compiler;
@@ -50,7 +51,7 @@ static LLVMTypeRef typeInMemory(Type type) {
     return type.llvm;
 }
 
-static_assert(COUNT_TYPES == 8, "");
+static_assert(COUNT_TYPES == 12, "");
 static void compileType(Node *n) {
     if (typeIsPointer(n->type)) {
         n->type.llvm = LLVMPointerType(LLVMVoidType(), 0);
@@ -67,18 +68,22 @@ static void compileType(Node *n) {
         break;
 
     case TYPE_I8:
+    case TYPE_U8:
         n->type.llvm = LLVMInt8Type();
         break;
 
     case TYPE_I16:
+    case TYPE_U16:
         n->type.llvm = LLVMInt16Type();
         break;
 
     case TYPE_I32:
+    case TYPE_U32:
         n->type.llvm = LLVMInt32Type();
         break;
 
     case TYPE_I64:
+    case TYPE_U64:
         n->type.llvm = LLVMInt64Type();
         break;
 
@@ -270,7 +275,14 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             LLVMValueRef rhsValue = compileExpr(c, rhs, false);
             beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildSDiv(c->builder, lhsValue, rhsValue, ""));
+
+            LLVMValueRef result = NULL;
+            if (typeIsSigned(n->type)) {
+                result = LLVMBuildSDiv(c->builder, lhsValue, rhsValue, "");
+            } else {
+                result = LLVMBuildUDiv(c->builder, lhsValue, rhsValue, "");
+            }
+            return afterArith(c, n->type, result);
         }
 
         case TOKEN_SHL: {
@@ -284,7 +296,14 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             LLVMValueRef rhsValue = compileExpr(c, rhs, false);
             beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildAShr(c->builder, lhsValue, rhsValue, ""));
+
+            LLVMValueRef result = NULL;
+            if (typeIsSigned(n->type)) {
+                result = LLVMBuildAShr(c->builder, lhsValue, rhsValue, "");
+            } else {
+                result = LLVMBuildLShr(c->builder, lhsValue, rhsValue, "");
+            }
+            return afterArith(c, n->type, result);
         }
 
         case TOKEN_BOR: {
@@ -356,25 +375,33 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         case TOKEN_GT: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildICmp(c->builder, LLVMIntSGT, lhsValue, rhsValue, "");
+
+            const LLVMIntPredicate pred = typeIsSigned(lhs->type) ? LLVMIntSGT : LLVMIntUGT;
+            return LLVMBuildICmp(c->builder, pred, lhsValue, rhsValue, "");
         }
 
         case TOKEN_GE: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildICmp(c->builder, LLVMIntSGE, lhsValue, rhsValue, "");
+
+            const LLVMIntPredicate pred = typeIsSigned(lhs->type) ? LLVMIntSGE : LLVMIntUGE;
+            return LLVMBuildICmp(c->builder, pred, lhsValue, rhsValue, "");
         }
 
         case TOKEN_LT: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildICmp(c->builder, LLVMIntSLT, lhsValue, rhsValue, "");
+
+            const LLVMIntPredicate pred = typeIsSigned(lhs->type) ? LLVMIntSLT : LLVMIntULT;
+            return LLVMBuildICmp(c->builder, pred, lhsValue, rhsValue, "");
         }
 
         case TOKEN_LE: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildICmp(c->builder, LLVMIntSLE, lhsValue, rhsValue, "");
+
+            const LLVMIntPredicate pred = typeIsSigned(lhs->type) ? LLVMIntSLE : LLVMIntULE;
+            return LLVMBuildICmp(c->builder, pred, lhsValue, rhsValue, "");
         }
 
         case TOKEN_EQ: {
@@ -414,12 +441,17 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
                 return LLVMBuildZExt(c->builder, lhsValue, toLLVM, "");
             }
 
-            static_assert(COUNT_TYPES == 8, "");
+            static_assert(COUNT_TYPES == 12, "");
             const size_t intSizes[COUNT_TYPES] = {
                 [TYPE_I8] = 8,
                 [TYPE_I16] = 16,
                 [TYPE_I32] = 32,
                 [TYPE_I64] = 64,
+
+                [TYPE_U8] = 8,
+                [TYPE_U16] = 16,
+                [TYPE_U32] = 32,
+                [TYPE_U64] = 64,
             };
 
             if (intSizes[from.kind]) {
@@ -442,11 +474,15 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
                         return lhsValue;
                     }
 
-                    if (fromSize < toSize) {
-                        return LLVMBuildSExt(c->builder, lhsValue, toLLVM, "");
+                    if (fromSize > toSize) {
+                        return LLVMBuildTrunc(c->builder, lhsValue, toLLVM, "");
                     }
 
-                    return LLVMBuildTrunc(c->builder, lhsValue, toLLVM, "");
+                    if (typeIsSigned(from)) {
+                        return LLVMBuildSExt(c->builder, lhsValue, toLLVM, "");
+                    } else {
+                        return LLVMBuildZExt(c->builder, lhsValue, toLLVM, "");
+                    }
                 }
             }
 
@@ -594,12 +630,20 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_PRINT: {
         LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
         LLVMValueRef indices[] = {zero, zero};
-        LLVMValueRef fmtPtr = LLVMBuildInBoundsGEP2(
-            c->builder, c->printFmtType, c->printFmtValue, indices, len(indices), "");
+        LLVMValueRef operandValue = compileExpr(c, n->as.print.operand, false);
+
+        LLVMValueRef fmtPtr = NULL;
+        if (typeIsSigned(n->as.print.operand->type)) {
+            fmtPtr = LLVMBuildInBoundsGEP2(
+                c->builder, c->printSFmtType, c->printSFmtValue, indices, len(indices), "");
+        } else {
+            fmtPtr = LLVMBuildInBoundsGEP2(
+                c->builder, c->printUFmtType, c->printUFmtValue, indices, len(indices), "");
+        }
 
         LLVMValueRef args[] = {
             fmtPtr,
-            compileExpr(c, n->as.print.operand, false),
+            operandValue,
         };
 
         LLVMBuildCall2(c->builder, c->printFuncType, c->printFuncValue, args, len(args), "");
@@ -695,16 +739,27 @@ void compileProgram(Context context, const char *executableName) {
 
     // The 'print' keyword
     {
-        const char printFmtStr[] = "%ld\n";
-        c.printFmtType = LLVMArrayType(LLVMInt8Type(), len(printFmtStr));
+        const char printSFmtStr[] = "%ld\n";
+        c.printSFmtType = LLVMArrayType(LLVMInt8Type(), len(printSFmtStr));
 
-        LLVMValueRef printFmtConst = LLVMConstString(printFmtStr, strlen(printFmtStr), false);
-        c.printFmtValue = LLVMAddGlobal(c.module, c.printFmtType, "");
+        LLVMValueRef printSFmtConst = LLVMConstString(printSFmtStr, strlen(printSFmtStr), false);
+        c.printSFmtValue = LLVMAddGlobal(c.module, c.printSFmtType, "");
 
-        LLVMSetInitializer(c.printFmtValue, printFmtConst);
-        LLVMSetGlobalConstant(c.printFmtValue, true);
-        LLVMSetLinkage(c.printFmtValue, LLVMPrivateLinkage);
-        LLVMSetUnnamedAddr(c.printFmtValue, LLVMGlobalUnnamedAddr);
+        LLVMSetInitializer(c.printSFmtValue, printSFmtConst);
+        LLVMSetGlobalConstant(c.printSFmtValue, true);
+        LLVMSetLinkage(c.printSFmtValue, LLVMPrivateLinkage);
+        LLVMSetUnnamedAddr(c.printSFmtValue, LLVMGlobalUnnamedAddr);
+
+        const char printUFmtStr[] = "%lu\n";
+        c.printUFmtType = LLVMArrayType(LLVMInt8Type(), len(printUFmtStr));
+
+        LLVMValueRef printUFmtConst = LLVMConstString(printUFmtStr, strlen(printUFmtStr), false);
+        c.printUFmtValue = LLVMAddGlobal(c.module, c.printUFmtType, "");
+
+        LLVMSetInitializer(c.printUFmtValue, printUFmtConst);
+        LLVMSetGlobalConstant(c.printUFmtValue, true);
+        LLVMSetLinkage(c.printUFmtValue, LLVMPrivateLinkage);
+        LLVMSetUnnamedAddr(c.printUFmtValue, LLVMGlobalUnnamedAddr);
 
         LLVMTypeRef printfArgs[] = {LLVMPointerType(LLVMInt8Type(), 0)};
         c.printFuncType = LLVMFunctionType(LLVMInt32Type(), printfArgs, len(printfArgs), true);

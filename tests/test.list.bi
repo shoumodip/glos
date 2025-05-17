@@ -1,4 +1,4 @@
-:i count 50
+:i count 52
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -45,6 +45,33 @@ integers/signed-types.glos
 4
 80085
 8
+
+:b stderr 0
+
+:b testcase 28
+integers/unsigned-types.glos
+:i returncode 0
+:b stdout 26
+69
+1
+420
+2
+1337
+4
+80085
+8
+
+:b stderr 0
+
+:b testcase 34
+integers/unsigned-comparisons.glos
+:i returncode 0
+:b stdout 29
+1
+0
+18446744073709551615
+1
+0
 
 :b stderr 0
 
@@ -476,7 +503,7 @@ type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integ
 :b stdout 0
 
 :b stderr 141
-type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos:1:14: ERROR: Cannot cast type 'bool' to type '&i64'
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos:3:14: ERROR: Cannot cast type 'bool' to type '&i64'
 
 :b testcase 86
 type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos
@@ -484,7 +511,7 @@ type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integer
 :b stdout 0
 
 :b stderr 139
-type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos:2:11: ERROR: Cannot cast type '&i64' to type 'bool'
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos:4:11: ERROR: Cannot cast type '&i64' to type 'bool'
 
 :b testcase 18
 sizeof/basics.glos

@@ -1,0 +1,12 @@
+fn main() {
+    var a =  1 as u64
+    var b =  0 as u64
+    var c = -1 as u64
+
+    print a
+    print b
+    print c
+
+    print a > b
+    print a > c
+}

@@ -11,7 +11,7 @@ Node *scopeFind(Scope s, Str name) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 8, "");
+static_assert(COUNT_TYPES == 12, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -44,6 +44,22 @@ const char *typeToString(Type type) {
 
     case TYPE_I64:
         tempSprintf("i64");
+        break;
+
+    case TYPE_U8:
+        tempSprintf("u8");
+        break;
+
+    case TYPE_U16:
+        tempSprintf("u16");
+        break;
+
+    case TYPE_U32:
+        tempSprintf("u32");
+        break;
+
+    case TYPE_U64:
+        tempSprintf("u64");
         break;
 
     case TYPE_FN: {
@@ -117,13 +133,35 @@ bool typeEq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 8, "");
+static_assert(COUNT_TYPES == 12, "");
+bool typeIsSigned(Type type) {
+    if (type.ref != 0) {
+        return false;
+    }
+
+    switch (type.kind) {
+    case TYPE_I8:
+    case TYPE_I16:
+    case TYPE_I32:
+    case TYPE_I64:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static_assert(COUNT_TYPES == 12, "");
 bool typeIsInteger(Type type) {
     switch (type.kind) {
     case TYPE_I8:
     case TYPE_I16:
     case TYPE_I32:
     case TYPE_I64:
+    case TYPE_U8:
+    case TYPE_U16:
+    case TYPE_U32:
+    case TYPE_U64:
         return true;
 
     default:

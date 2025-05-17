@@ -23,10 +23,17 @@ Node *scopeFind(Scope s, Str name);
 typedef enum {
     TYPE_UNIT,
     TYPE_BOOL,
+
     TYPE_I8,
     TYPE_I16,
     TYPE_I32,
     TYPE_I64,
+
+    TYPE_U8,
+    TYPE_U16,
+    TYPE_U32,
+    TYPE_U64,
+
     TYPE_FN,
     TYPE_RAWPTR,
     COUNT_TYPES
@@ -43,6 +50,7 @@ typedef struct {
 const char *typeToString(Type type);
 
 bool typeEq(Type a, Type b);
+bool typeIsSigned(Type type);
 bool typeIsInteger(Type type);
 bool typeIsPointer(Type type);
 

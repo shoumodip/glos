@@ -90,7 +90,7 @@ static Type typeAssertScalar(const Node *n) {
     return n->type;
 }
 
-static bool typeCastIllegal(Type from, Type to) {
+static bool isTypeCastIllegal(Type from, Type to) {
     // Function -> *
     // *        -> Function
     if (from.kind == TYPE_FN || to.kind == TYPE_FN) {
@@ -99,11 +99,12 @@ static bool typeCastIllegal(Type from, Type to) {
 
     // Not 64 Bit Integer -> Pointer
     // Pointer            -> Not 64 Bit Integer
-    if (!typeIsPointer(from) && typeIsPointer(to) && from.kind != TYPE_I64) {
+    if (!typeIsPointer(from) && typeIsPointer(to) && from.kind != TYPE_I64 &&
+        from.kind != TYPE_U64) {
         return true;
     }
 
-    if (!typeIsPointer(to) && typeIsPointer(from) && to.kind != TYPE_I64) {
+    if (!typeIsPointer(to) && typeIsPointer(from) && to.kind != TYPE_I64 && to.kind != TYPE_U64) {
         return true;
     }
 
@@ -135,7 +136,7 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
 
 static void checkExpr(Context *c, Node *n, bool ref);
 
-static_assert(COUNT_TYPES == 8, "");
+static_assert(COUNT_TYPES == 12, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -149,6 +150,14 @@ static void checkType(Context *c, Node *n) {
             n->type = (Type) {.kind = TYPE_I32};
         } else if (strMatch(n->token.str, "i64")) {
             n->type = (Type) {.kind = TYPE_I64};
+        } else if (strMatch(n->token.str, "u8")) {
+            n->type = (Type) {.kind = TYPE_U8};
+        } else if (strMatch(n->token.str, "u16")) {
+            n->type = (Type) {.kind = TYPE_U16};
+        } else if (strMatch(n->token.str, "u32")) {
+            n->type = (Type) {.kind = TYPE_U32};
+        } else if (strMatch(n->token.str, "u64")) {
+            n->type = (Type) {.kind = TYPE_U64};
         } else if (strMatch(n->token.str, "rawptr")) {
             n->type = (Type) {.kind = TYPE_RAWPTR};
         } else {
@@ -395,7 +404,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
             const Type from = typeAssertScalar(lhs);
             const Type to = typeAssertScalar(rhs);
-            if (typeCastIllegal(from, to)) {
+            if (isTypeCastIllegal(from, to)) {
                 fprintf(
                     stderr,
                     PosFmt "ERROR: Cannot cast type '%s' to type '%s'\n",
@@ -422,7 +431,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             checkType(c, operand);
         }
 
-        n->type = (Type) {.kind = TYPE_I64}; // TODO: Make this u64 later
+        n->type = (Type) {.kind = TYPE_U64};
     } break;
 
     case NODE_FN:

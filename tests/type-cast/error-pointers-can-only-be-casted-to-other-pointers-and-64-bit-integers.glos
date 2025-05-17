@@ -1,2 +1,4 @@
 var a &i64
-var _ = a as bool
+var b = a as i64
+var c = a as u64
+var d = a as bool
