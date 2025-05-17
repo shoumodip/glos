@@ -38,11 +38,12 @@ typedef enum {
     POWER_ADD,
     POWER_BOR,
     POWER_MUL,
+    POWER_AS,
     POWER_PRE,
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 36, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -79,6 +80,9 @@ static Power tokenKindPower(TokenKind kind) {
     case TOKEN_NE:
         return POWER_CMP;
 
+    case TOKEN_AS:
+        return POWER_AS;
+
     default:
         return POWER_NIL;
     }
@@ -93,7 +97,7 @@ static bool tokenKindIsStartOfType(TokenKind k) {
     return k == TOKEN_IDENT || k == TOKEN_BAND || k == TOKEN_LAND || k == TOKEN_FN;
 }
 
-static_assert(COUNT_TOKENS == 36, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -158,7 +162,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 36, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -221,6 +225,13 @@ static Node *parseExpr(Parser *p, Power mbp) {
             node = call;
         } break;
 
+        case TOKEN_AS: {
+            Node *binary = nodeNew(p, NODE_BINARY, token);
+            binary->as.binary.lhs = node;
+            binary->as.binary.rhs = parseType(p);
+            node = binary;
+        } break;
+
         default: {
             Node *binary = nodeNew(p, NODE_BINARY, token);
             binary->as.binary.lhs = node;
@@ -246,7 +257,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 36, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

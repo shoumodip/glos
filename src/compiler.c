@@ -113,6 +113,28 @@ static LLVMValueRef definitionLLVMValue(Node *n) {
     }
 }
 
+// LLVM cannot perform arithmetic operations on pointers directly
+static void beforeArith(Compiler *c, Type type, LLVMValueRef *lhs, LLVMValueRef *rhs) {
+    if (type.ref == 0) {
+        return;
+    }
+
+    LLVMTypeRef  typeTemp = LLVMInt64Type();
+    LLVMValueRef lhsTemp = LLVMBuildPtrToInt(c->builder, *lhs, typeTemp, "");
+    LLVMValueRef rhsTemp = LLVMBuildPtrToInt(c->builder, *rhs, typeTemp, "");
+
+    *lhs = lhsTemp;
+    *rhs = rhsTemp;
+}
+
+static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
+    if (type.ref == 0) {
+        return result;
+    }
+
+    return LLVMBuildIntToPtr(c->builder, result, type.llvm, "");
+}
+
 static void compileFn(Compiler *c, Node *n);
 
 static_assert(COUNT_NODES == 12, "");
@@ -121,7 +143,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -171,7 +193,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -209,54 +231,62 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildAdd(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildAdd(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_SUB: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildSub(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildSub(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_MUL: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildMul(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildMul(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_DIV: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildSDiv(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildSDiv(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_SHL: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildShl(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildShl(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_SHR: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildAShr(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildAShr(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_BOR: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildOr(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildOr(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_BAND: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            return LLVMBuildAnd(c->builder, lhsValue, rhsValue, "");
+            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+            beforeArith(c, n->type, &lhsValue, &rhsValue);
+            return afterArith(c, n->type, LLVMBuildAnd(c->builder, lhsValue, rhsValue, ""));
         }
 
         case TOKEN_SET: {
@@ -347,6 +377,52 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildICmp(c->builder, LLVMIntNE, lhsValue, rhsValue, "");
         }
 
+        case TOKEN_AS: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+
+            const Type from = lhs->type;
+            const Type to = n->type;
+            if (typeEq(from, to)) {
+                return lhsValue;
+            }
+
+            const LLVMTypeRef toLLVM = typeInMemory(to);
+            if (from.ref != 0) {
+                if (to.ref != 0) {
+                    // Pointer -> Pointer
+                    return LLVMBuildBitCast(c->builder, lhsValue, toLLVM, "");
+                } else {
+                    // Pointer -> Integer
+                    return LLVMBuildPtrToInt(c->builder, lhsValue, toLLVM, "");
+                }
+            }
+
+            if (from.kind == TYPE_BOOL) {
+                // Boolean -> Integer
+                return LLVMBuildZExt(c->builder, lhsValue, toLLVM, "");
+            }
+
+            static_assert(COUNT_TYPES == 4, "");
+            const size_t intSizes[COUNT_TYPES] = {
+                [TYPE_I64] = 64,
+            };
+
+            if (intSizes[from.kind]) {
+                if (to.ref != 0) {
+                    // Integer -> Pointer
+                    return LLVMBuildIntToPtr(c->builder, lhsValue, toLLVM, "");
+                }
+
+                if (to.kind == TYPE_BOOL) {
+                    // Integer -> Boolean
+                    const LLVMValueRef zero = LLVMConstNull(typeInMemory(from));
+                    return LLVMBuildICmp(c->builder, LLVMIntNE, lhsValue, zero, "");
+                }
+            }
+
+            unreachable();
+        }
+
         default:
             unreachable();
         }
@@ -426,7 +502,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             LLVMValueRef operandValue = NULL;

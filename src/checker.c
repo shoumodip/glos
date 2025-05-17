@@ -90,6 +90,26 @@ static Type typeAssertScalar(const Node *n) {
     return n->type;
 }
 
+static bool typeCastIllegal(Type from, Type to) {
+    // Function -> *
+    // *        -> Function
+    if (from.kind == TYPE_FN || to.kind == TYPE_FN) {
+        return true;
+    }
+
+    // Not 64 Bit Integer -> Pointer
+    // Pointer            -> Not 64 Bit Integer
+    if (from.ref == 0 && to.ref != 0 && from.kind != TYPE_I64) {
+        return true;
+    }
+
+    if (to.ref == 0 && from.ref != 0 && to.kind != TYPE_I64) {
+        return true;
+    }
+
+    return false;
+}
+
 static void errorUndefined(const Node *n, const char *label) {
     fprintf(
         stderr,
@@ -171,7 +191,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -250,7 +270,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -299,7 +319,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -344,6 +364,26 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             typeAssert(rhs, typeAssertArith(lhs));
             n->type = (Type) {.kind = TYPE_BOOL};
             break;
+
+        case TOKEN_AS: {
+            checkExpr(c, lhs, false);
+            checkType(c, rhs);
+
+            const Type from = typeAssertScalar(lhs);
+            const Type to = typeAssertScalar(rhs);
+            if (typeCastIllegal(from, to)) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Cannot cast type '%s' to type '%s'\n",
+                    PosArg(n->token.pos),
+                    typeToString(from),
+                    typeToString(to));
+
+                exit(1);
+            }
+
+            n->type = to;
+        } break;
 
         default:
             unreachable();
@@ -397,7 +437,7 @@ static bool executionEnds(Node *n) {
         return false;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -446,7 +486,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

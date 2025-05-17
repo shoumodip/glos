@@ -37,6 +37,10 @@ functions/error-cannot-call-pointer-to-function-without-dereferencing.glos
 functions/error-nested-functions-outside-identifier-used-inside.glos
 functions/error-nested-functions-inside-identifier-used-outside.glos
 pointers/basics.glos
+pointers/arithmetics.glos
 pointers/multiple-level-type-parse.glos
 pointers/error-cannot-take-reference.glos
 pointers/error-dereference-expected-pointer.glos
+type-cast/basics.glos
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos

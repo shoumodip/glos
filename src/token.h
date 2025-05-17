@@ -50,6 +50,8 @@ typedef enum {
     TOKEN_EQ,
     TOKEN_NE,
 
+    TOKEN_AS,
+
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_FOR,

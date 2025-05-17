@@ -1,4 +1,4 @@
-:i count 42
+:i count 46
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -402,6 +402,14 @@ pointers/basics.glos
 
 :b stderr 0
 
+:b testcase 25
+pointers/arithmetics.glos
+:i returncode 0
+:b stdout 2
+1
+
+:b stderr 0
+
 :b testcase 39
 pointers/multiple-level-type-parse.glos
 :i returncode 0
@@ -426,4 +434,32 @@ pointers/error-dereference-expected-pointer.glos
 
 :b stderr 94
 pointers/error-dereference-expected-pointer.glos:2:6: ERROR: Expected pointer type, got 'i64'
+
+:b testcase 21
+type-cast/basics.glos
+:i returncode 0
+:b stdout 10
+1
+0
+1
+0
+1
+
+:b stderr 0
+
+:b testcase 88
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 141
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos:1:14: ERROR: Cannot cast type 'bool' to type '&i64'
+
+:b testcase 86
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 139
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos:2:11: ERROR: Cannot cast type '&i64' to type 'bool'
 
