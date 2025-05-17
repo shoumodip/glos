@@ -50,7 +50,7 @@ static LLVMTypeRef typeInMemory(Type type) {
     return type.llvm;
 }
 
-static_assert(COUNT_TYPES == 5, "");
+static_assert(COUNT_TYPES == 8, "");
 static void compileType(Node *n) {
     if (typeIsPointer(n->type)) {
         n->type.llvm = LLVMPointerType(LLVMVoidType(), 0);
@@ -64,6 +64,18 @@ static void compileType(Node *n) {
 
     case TYPE_BOOL:
         n->type.llvm = LLVMInt1Type();
+        break;
+
+    case TYPE_I8:
+        n->type.llvm = LLVMInt8Type();
+        break;
+
+    case TYPE_I16:
+        n->type.llvm = LLVMInt16Type();
+        break;
+
+    case TYPE_I32:
+        n->type.llvm = LLVMInt32Type();
         break;
 
     case TYPE_I64:
@@ -402,8 +414,11 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
                 return LLVMBuildZExt(c->builder, lhsValue, toLLVM, "");
             }
 
-            static_assert(COUNT_TYPES == 5, "");
+            static_assert(COUNT_TYPES == 8, "");
             const size_t intSizes[COUNT_TYPES] = {
+                [TYPE_I8] = 8,
+                [TYPE_I16] = 16,
+                [TYPE_I32] = 32,
                 [TYPE_I64] = 64,
             };
 
@@ -417,6 +432,21 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
                     // Integer -> Boolean
                     const LLVMValueRef zero = LLVMConstNull(typeInMemory(from));
                     return LLVMBuildICmp(c->builder, LLVMIntNE, lhsValue, zero, "");
+                }
+
+                if (intSizes[to.kind]) {
+                    // Integer -> Integer
+                    const size_t fromSize = intSizes[from.kind];
+                    const size_t toSize = intSizes[to.kind];
+                    if (fromSize == toSize) {
+                        return lhsValue;
+                    }
+
+                    if (fromSize < toSize) {
+                        return LLVMBuildSExt(c->builder, lhsValue, toLLVM, "");
+                    }
+
+                    return LLVMBuildTrunc(c->builder, lhsValue, toLLVM, "");
                 }
             }
 

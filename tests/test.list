@@ -1,4 +1,5 @@
 integers/basics.glos
+integers/signed-types.glos
 booleans/basics.glos
 conditions/basics.glos
 conditions/error-expected-block-or-if.glos

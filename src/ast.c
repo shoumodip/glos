@@ -1,5 +1,4 @@
 #include "ast.h"
-#include "basic.h"
 
 Node *scopeFind(Scope s, Str name) {
     for (size_t i = s.length; i > 0; i--) {
@@ -12,7 +11,7 @@ Node *scopeFind(Scope s, Str name) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 5, "");
+static_assert(COUNT_TYPES == 8, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -29,6 +28,18 @@ const char *typeToString(Type type) {
 
     case TYPE_BOOL:
         tempSprintf("bool");
+        break;
+
+    case TYPE_I8:
+        tempSprintf("i8");
+        break;
+
+    case TYPE_I16:
+        tempSprintf("i16");
+        break;
+
+    case TYPE_I32:
+        tempSprintf("i32");
         break;
 
     case TYPE_I64:
@@ -103,6 +114,20 @@ bool typeEq(Type a, Type b) {
 
     default:
         return true;
+    }
+}
+
+static_assert(COUNT_TYPES == 8, "");
+bool typeIsInteger(Type type) {
+    switch (type.kind) {
+    case TYPE_I8:
+    case TYPE_I16:
+    case TYPE_I32:
+    case TYPE_I64:
+        return true;
+
+    default:
+        return false;
     }
 }
 

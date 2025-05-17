@@ -1,0 +1,18 @@
+fn main() {
+    var a = 69 as i8
+    var b = 420 as i16
+    var c = 1337 as i32
+    var d = 80085 as i64
+
+    print a
+    print sizeof{a}
+
+    print b
+    print sizeof{b}
+
+    print c
+    print sizeof{c}
+
+    print d
+    print sizeof{d}
+}

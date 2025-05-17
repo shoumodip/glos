@@ -65,7 +65,7 @@ static Type typeAssert(const Node *n, Type expected) {
 }
 
 static Type typeAssertArith(const Node *n) {
-    if (n->type.kind != TYPE_I64 && !typeIsPointer(n->type)) {
+    if (!typeIsInteger(n->type) && !typeIsPointer(n->type)) {
         fprintf(
             stderr,
             PosFmt "ERROR: Expected arithmetic type, got '%s'\n",
@@ -78,7 +78,7 @@ static Type typeAssertArith(const Node *n) {
 }
 
 static Type typeAssertScalar(const Node *n) {
-    if (n->type.kind != TYPE_I64 && n->type.kind != TYPE_BOOL && !typeIsPointer(n->type)) {
+    if (n->type.kind != TYPE_BOOL && !typeIsInteger(n->type) && !typeIsPointer(n->type)) {
         fprintf(
             stderr,
             PosFmt "ERROR: Expected scalar type, got '%s'\n",
@@ -135,12 +135,18 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
 
 static void checkExpr(Context *c, Node *n, bool ref);
 
-static_assert(COUNT_TYPES == 5, "");
+static_assert(COUNT_TYPES == 8, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
         if (strMatch(n->token.str, "bool")) {
             n->type = (Type) {.kind = TYPE_BOOL};
+        } else if (strMatch(n->token.str, "i8")) {
+            n->type = (Type) {.kind = TYPE_I8};
+        } else if (strMatch(n->token.str, "i16")) {
+            n->type = (Type) {.kind = TYPE_I16};
+        } else if (strMatch(n->token.str, "i32")) {
+            n->type = (Type) {.kind = TYPE_I32};
         } else if (strMatch(n->token.str, "i64")) {
             n->type = (Type) {.kind = TYPE_I64};
         } else if (strMatch(n->token.str, "rawptr")) {

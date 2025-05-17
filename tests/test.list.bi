@@ -1,4 +1,4 @@
-:i count 49
+:i count 50
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -30,6 +30,21 @@ integers/basics.glos
 420
 69
 420
+
+:b stderr 0
+
+:b testcase 26
+integers/signed-types.glos
+:i returncode 0
+:b stdout 26
+69
+1
+420
+2
+1337
+4
+80085
+8
 
 :b stderr 0
 
