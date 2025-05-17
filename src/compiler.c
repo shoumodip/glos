@@ -72,7 +72,6 @@ static void compileType(Node *n) {
     case TYPE_FN: {
         assert(n->type.spec);
         NodeFn *fn = &n->type.spec->as.fn;
-        assert(!fn->ret);
 
         LLVMTypeRef *argsLLVM = calloc(fn->arity, sizeof(LLVMTypeRef));
         for (Node *it = fn->args.head; it; it = it->next) {
@@ -80,7 +79,15 @@ static void compileType(Node *n) {
             argsLLVM[it->as.arg.index] = typeInMemory(it->type);
         }
 
-        n->type.llvm = LLVMFunctionType(LLVMVoidType(), argsLLVM, fn->arity, false);
+        LLVMTypeRef returnType = NULL;
+        if (fn->ret) {
+            compileType(fn->ret);
+            returnType = typeInMemory(fn->ret->type);
+        } else {
+            returnType = LLVMVoidType();
+        }
+
+        n->type.llvm = LLVMFunctionType(returnType, argsLLVM, fn->arity, false);
     } break;
 
     default:
@@ -334,12 +341,17 @@ static void compileStmt(Compiler *c, Node *n) {
         LLVMPositionBuilderAtEnd(c->builder, finalBlock);
     } break;
 
-    case NODE_FLOW:
+    case NODE_FLOW: {
+        Node *operand = n->as.flow.operand;
+
         static_assert(COUNT_TOKENS == 29, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
-            assert(!n->as.flow.operand);
-            LLVMBuildRetVoid(c->builder);
+            if (operand) {
+                LLVMBuildRet(c->builder, compileExpr(c, operand, false));
+            } else {
+                LLVMBuildRetVoid(c->builder);
+            }
 
             // TODO: This is a temporary hack till code reachability analysis is implemented
             LLVMBasicBlockRef deadBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
@@ -349,10 +361,9 @@ static void compileStmt(Compiler *c, Node *n) {
         default:
             unreachable();
         }
-        break;
+    } break;
 
     case NODE_FN: {
-        assert(!n->as.fn.ret);
         compileType(n);
         n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
 
@@ -379,7 +390,12 @@ static void compileStmt(Compiler *c, Node *n) {
             }
 
             compileStmt(c, n->as.fn.body);
-            LLVMBuildRetVoid(c->builder);
+
+            if (n->as.fn.ret) {
+                LLVMBuildRet(c->builder, LLVMConstNull(typeInMemory(n->as.fn.ret->type)));
+            } else {
+                LLVMBuildRetVoid(c->builder);
+            }
         }
         fnCompilerEnd(c, fnCompilerSave);
     } break;
@@ -451,7 +467,14 @@ static Node *getMain(Context context) {
         exit(1);
     }
 
-    assert(!mainFn.ret);
+    if (mainFn.ret) {
+        fprintf(
+            stderr,
+            PosFmt "ERROR: Function 'main' cannot return anything\n",
+            PosArg(main->token.pos));
+
+        exit(1);
+    }
     return main;
 }
 

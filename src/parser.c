@@ -74,6 +74,10 @@ static void errorUnexpected(Token token) {
     exit(1);
 }
 
+static bool tokenKindIsStartOfType(TokenKind k) {
+    return k == TOKEN_IDENT || k == TOKEN_BAND || k == TOKEN_FN;
+}
+
 static_assert(COUNT_TOKENS == 29, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
@@ -117,6 +121,11 @@ static Node *parseType(Parser *p) {
             if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
                 break;
             }
+        }
+
+        token = lexerPeek(&p->lexer);
+        if (!token.onNewline && tokenKindIsStartOfType(token.kind)) {
+            node->as.fn.ret = parseType(p);
         }
         break;
 
@@ -253,6 +262,11 @@ static Node *parseStmt(Parser *p) {
     case TOKEN_RETURN:
         localAssert(p, token, true);
         node = nodeNew(p, NODE_FLOW, token);
+
+        token = lexerPeek(&p->lexer);
+        if (!token.onNewline) {
+            node->as.flow.operand = parseExpr(p, POWER_SET);
+        }
         break;
 
     case TOKEN_FN:
@@ -272,6 +286,10 @@ static Node *parseStmt(Parser *p) {
                 if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
                     break;
                 }
+            }
+
+            if (lexerPeek(&p->lexer).kind != TOKEN_LBRACE) {
+                node->as.fn.ret = parseType(p);
             }
 
             lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));

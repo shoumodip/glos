@@ -106,7 +106,7 @@ typedef struct {
     LLVMValueRef llvm;
 } NodeFn;
 
-Type nodeFnReturnType(NodeFn fn);
+Type nodeFnReturnType(const NodeFn *fn);
 
 typedef struct {
     Node  *type;

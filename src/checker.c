@@ -140,7 +140,10 @@ static void checkType(Context *c, Node *n) {
             it->type = it->as.arg.type->type;
         }
 
-        assert(!n->as.fn.ret);
+        if (n->as.fn.ret) {
+            checkType(c, n->as.fn.ret);
+        }
+
         n->type = (Type) {.kind = TYPE_FN, .spec = n};
         break;
 
@@ -181,8 +184,8 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             if (definition) {
                 n->as.atom.definition = definition;
                 n->type = definition->type;
-                allowRef = true;
 
+                allowRef = definition->kind == NODE_ARG || definition->kind == NODE_VAR;
                 if (definition->kind == NODE_ARG && ref) {
                     definition->as.arg.memory = true;
                 }
@@ -239,7 +242,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             typeAssert(a, e->type);
         }
 
-        n->type = nodeFnReturnType(fn->type.spec->as.fn);
+        n->type = nodeFnReturnType(&fn->type.spec->as.fn);
     } break;
 
     case NODE_UNARY: {
@@ -334,6 +337,54 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 }
 
 static_assert(COUNT_NODES == 12, "");
+static bool executionEnds(Node *n) {
+    switch (n->kind) {
+    case NODE_CALL:
+        // TODO: Introduce a "No Return" return type
+        return false;
+
+    case NODE_BLOCK:
+        for (Node *it = n->as.block.head; it; it = it->next) {
+            if (executionEnds(it)) {
+                return true;
+            }
+        }
+        return false;
+
+    case NODE_IF:
+        if (!n->as.iff.antecedence) {
+            return false;
+        }
+
+        // TODO: Condition analysis
+        return executionEnds(n->as.iff.consequence) && executionEnds(n->as.iff.antecedence);
+
+    case NODE_FOR:
+        assert(!n->as.forr.init);
+        assert(!n->as.forr.update);
+
+        // TODO: Condition analysis
+        assert(n->as.forr.condition);
+
+        // NOTE: Check loop body only if loop is proven to be infinite
+        return false;
+
+    case NODE_FLOW:
+        static_assert(COUNT_TOKENS == 29, "");
+        switch (n->token.kind) {
+        case TOKEN_RETURN:
+            return true;
+
+        default:
+            unreachable();
+        }
+
+    default:
+        return false;
+    }
+}
+
+static_assert(COUNT_NODES == 12, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -365,21 +416,27 @@ static void checkStmt(Context *c, Node *n) {
         checkStmt(c, n->as.forr.body);
         break;
 
-    case NODE_FLOW:
+    case NODE_FLOW: {
+        Node *operand = n->as.flow.operand;
+
         static_assert(COUNT_TOKENS == 29, "");
         switch (n->token.kind) {
-        case TOKEN_RETURN:
-            assert(!n->as.flow.operand);
-            break;
+        case TOKEN_RETURN: {
+            n->type = (Type) {.kind = TYPE_UNIT};
+            if (operand) {
+                checkExpr(c, operand, false);
+                n->type = operand->type;
+            }
+
+            typeAssert(n, nodeFnReturnType(c->fnContext.fn));
+        } break;
 
         default:
             unreachable();
         }
-        break;
+    } break;
 
     case NODE_FN:
-        assert(!n->as.fn.ret);
-
         if (c->fnContext.fn) {
             scopePush(&c->locals, n);
         } else {
@@ -399,7 +456,20 @@ static void checkStmt(Context *c, Node *n) {
                 checkStmt(c, it);
             }
 
+            if (n->as.fn.ret) {
+                checkType(c, n->as.fn.ret);
+            }
+
             checkStmt(c, n->as.fn.body);
+            if (n->as.fn.ret && !executionEnds(n->as.fn.body)) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Expected return statement\n",
+                    PosArg(n->as.fn.body->token.pos));
+
+                exit(1);
+            }
+
             fnContextEnd(c, fnContextSave);
         }
         break;

@@ -1,6 +1,7 @@
 fn f() {}
 
 fn main() {
-    var f = &f
-    f()
+    var f = f
+    var g = &f
+    g()
 }

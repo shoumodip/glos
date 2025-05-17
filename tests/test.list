@@ -23,11 +23,15 @@ functions/no-arguments-no-return-basics.glos
 functions/no-arguments-no-return-first-class.glos
 functions/yes-arguments-no-return-basics.glos
 functions/yes-arguments-no-return-first-class.glos
+functions/yes-arguments-yes-return-basics.glos
+functions/yes-arguments-yes-return-first-class.glos
 functions/arguments-as-local-memory.glos
 functions/nested-functions.glos
 functions/return-unit.glos
+functions/return-not-unit.glos
 functions/error-argument-count-mismatch.glos
 functions/error-argument-type-mismatch.glos
+functions/error-function-literal-is-not-memory.glos
 functions/error-cannot-call-pointer-to-function-without-dereferencing.glos
 functions/error-nested-functions-outside-identifier-used-inside.glos
 functions/error-nested-functions-inside-identifier-used-outside.glos

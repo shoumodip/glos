@@ -1,0 +1,11 @@
+fn mapInt(x i64, f fn (i64) i64) i64 {
+    return f(x)
+}
+
+fn double(x i64) i64 {
+    return x * 2
+}
+
+fn main() {
+    print mapInt(210, double) // Absolute cinema
+}

@@ -1,4 +1,4 @@
-:i count 37
+:i count 41
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -249,6 +249,22 @@ functions/yes-arguments-no-return-first-class.glos
 
 :b stderr 0
 
+:b testcase 46
+functions/yes-arguments-yes-return-basics.glos
+:i returncode 0
+:b stdout 3
+69
+
+:b stderr 0
+
+:b testcase 51
+functions/yes-arguments-yes-return-first-class.glos
+:i returncode 0
+:b stdout 4
+420
+
+:b stderr 0
+
 :b testcase 40
 functions/arguments-as-local-memory.glos
 :i returncode 0
@@ -277,6 +293,14 @@ functions/return-unit.glos
 
 :b stderr 0
 
+:b testcase 30
+functions/return-not-unit.glos
+:i returncode 0
+:b stdout 3
+69
+
+:b stderr 0
+
 :b testcase 44
 functions/error-argument-count-mismatch.glos
 :i returncode 1
@@ -293,13 +317,21 @@ functions/error-argument-type-mismatch.glos
 :b stderr 88
 functions/error-argument-type-mismatch.glos:4:9: ERROR: Expected type 'i64', got 'bool'
 
+:b testcase 51
+functions/error-function-literal-is-not-memory.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 109
+functions/error-function-literal-is-not-memory.glos:4:6: ERROR: Cannot take reference to value not in memory
+
 :b testcase 74
 functions/error-cannot-call-pointer-to-function-without-dereferencing.glos
 :i returncode 1
 :b stdout 0
 
 :b stderr 144
-functions/error-cannot-call-pointer-to-function-without-dereferencing.glos:5:5: ERROR: Cannot call type '&fn ()' without dereferencing it first
+functions/error-cannot-call-pointer-to-function-without-dereferencing.glos:6:5: ERROR: Cannot call type '&fn ()' without dereferencing it first
 
 :b testcase 68
 functions/error-nested-functions-outside-identifier-used-inside.glos

@@ -54,7 +54,14 @@ const char *typeToString(Type type) {
         tempContinue();
         tempSprintf(")");
 
-        assert(!type.spec->as.fn.ret);
+        const Node *ret = type.spec->as.fn.ret;
+        if (ret) {
+            tempContinue();
+            tempSprintf(" ");
+
+            tempContinue();
+            typeToString(ret->type);
+        }
     } break;
 
     default:
@@ -72,23 +79,22 @@ bool typeEq(Type a, Type b) {
     switch (a.kind) {
     case TYPE_FN: {
         assert(a.spec);
-        const NodeFn aFn = a.spec->as.fn;
+        const NodeFn *aFn = &a.spec->as.fn;
 
         assert(b.spec);
-        const NodeFn bFn = b.spec->as.fn;
+        const NodeFn *bFn = &b.spec->as.fn;
 
-        if (aFn.arity != bFn.arity) {
+        if (aFn->arity != bFn->arity) {
             return false;
         }
 
-        for (const Node *a = aFn.args.head, *b = bFn.args.head; a; a = a->next, b = b->next) {
+        for (const Node *a = aFn->args.head, *b = bFn->args.head; a; a = a->next, b = b->next) {
             if (!typeEq(a->type, b->type)) {
                 return false;
             }
         }
 
-        assert(!aFn.ret && !bFn.ret);
-        return true;
+        return typeEq(nodeFnReturnType(aFn), nodeFnReturnType(bFn));
     };
 
     default:
@@ -96,7 +102,10 @@ bool typeEq(Type a, Type b) {
     }
 }
 
-Type nodeFnReturnType(NodeFn fn) {
-    assert(!fn.ret);
+Type nodeFnReturnType(const NodeFn *fn) {
+    if (fn->ret) {
+        return fn->ret->type;
+    }
+
     return (Type) {.kind = TYPE_UNIT};
 }
