@@ -43,7 +43,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 38, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -108,7 +108,7 @@ static bool tokenKindIsStartOfType(TokenKind k) {
 
 static Node *parseExpr(Parser *p, Power mbp);
 
-static_assert(COUNT_TOKENS == 38, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -173,7 +173,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 38, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -282,7 +282,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 38, "");
+static_assert(COUNT_TOKENS == 37, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -386,23 +386,12 @@ static Node *parseFn(Parser *p, Token name) {
             }
         }
 
-        Token bodyStart = lexerPeek(&p->lexer);
-        if (bodyStart.kind != TOKEN_LBRACE && bodyStart.kind != TOKEN_ARROW) {
+        if (lexerPeek(&p->lexer).kind != TOKEN_LBRACE) {
             node->as.fn.ret = parseType(p);
         }
 
-        bodyStart = lexerExpect(&p->lexer, TOKEN_LBRACE, TOKEN_ARROW);
-        if (bodyStart.kind == TOKEN_LBRACE) {
-            lexerBuffer(&p->lexer, bodyStart);
-            node->as.fn.body = parseStmt(p);
-        } else {
-            bodyStart.kind = TOKEN_RETURN;
-
-            Node *body = nodeNew(p, NODE_FLOW, bodyStart);
-            body->as.flow.operand = parseExpr(p, POWER_SET);
-
-            node->as.fn.body = body;
-        }
+        lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));
+        node->as.fn.body = parseStmt(p);
     }
 
     p->local = localSave;

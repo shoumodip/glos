@@ -92,7 +92,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 38, "");
+static_assert(COUNT_TOKENS == 37, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -261,9 +261,7 @@ Token lexerNext(Lexer *l) {
         break;
 
     case '=':
-        if (matchChar(l, '>')) {
-            token.kind = TOKEN_ARROW;
-        } else if (matchChar(l, '=')) {
+        if (matchChar(l, '=')) {
             token.kind = TOKEN_EQ;
         } else {
             token.kind = TOKEN_SET;

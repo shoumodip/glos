@@ -2,14 +2,20 @@ fn foo() {
     print 1337
 }
 
-fn map(x i64, f fn (i64) i64) i64 => f(x)
+fn map(x i64, f fn (i64) i64) i64 {
+    return f(x)
+}
 
 fn main() {
-    print (fn (x i64, y i64) i64 => x + y)(34, 35)
+    print (fn (x i64, y i64) i64 {
+        return x + y
+    })(34, 35)
 
     print map(210, fn (x i64) i64 {
         return x * 2
     })
 
-    (fn () => foo())()
+    (fn () {
+        foo()
+    })()
 }

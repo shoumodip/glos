@@ -160,7 +160,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -210,7 +210,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -248,7 +248,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -579,18 +579,13 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
-            LLVMValueRef operandValue = NULL;
             if (operand) {
-                operandValue = compileExpr(c, operand, false);
-            }
-
-            if (n->type.kind == TYPE_UNIT) {
-                LLVMBuildRetVoid(c->builder);
+                LLVMBuildRet(c->builder, compileExpr(c, operand, false));
             } else {
-                LLVMBuildRet(c->builder, operandValue);
+                LLVMBuildRetVoid(c->builder);
             }
 
             LLVMBasicBlockRef deadBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
