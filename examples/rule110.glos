@@ -1,0 +1,48 @@
+extern {
+    var stdout rawptr
+    fn fputc(ch i32, stream rawptr)
+
+    fn free(ptr rawptr)
+    fn malloc(size u64) rawptr
+}
+
+var BOARD_CAP = 30
+var board = <&i32> malloc(BOARD_CAP * sizeof<i32>)
+
+fn boardGet(index u64) i32 {
+    return *(board + <&i32> (index * sizeof<i32>))
+}
+
+fn boardSet(index u64, value i32) {
+    *(board + <&i32> (index * sizeof<i32>)) = value
+}
+
+fn main() {
+    boardSet(BOARD_CAP - 2, 1)
+
+    var i = 0
+    for i < BOARD_CAP - 2 {
+        var j = 0
+        for j < BOARD_CAP {
+            if <bool> boardGet(j) {
+                fputc(42, stdout)
+            } else {
+                fputc(32, stdout)
+            }
+            j = j + 1
+        }
+        fputc(10, stdout)
+
+        var pattern = (boardGet(0) << 1) | boardGet(1)
+
+        var j = 1
+        for j < BOARD_CAP - 1 {
+            pattern = ((pattern << 1) & 7) | boardGet(j + 1)
+            boardSet(j, (110 >> pattern) & 1)
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    free(<rawptr> board)
+}
