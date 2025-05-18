@@ -92,7 +92,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 39, "");
+static_assert(COUNT_TOKENS == 38, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -154,8 +154,6 @@ Token lexerNext(Lexer *l) {
             token.kind = TOKEN_AS;
         } else if (strMatch(token.str, "sizeof")) {
             token.kind = TOKEN_SIZEOF;
-        } else if (strMatch(token.str, "typeof")) {
-            token.kind = TOKEN_TYPEOF;
         } else if (strMatch(token.str, "if")) {
             token.kind = TOKEN_IF;
         } else if (strMatch(token.str, "else")) {

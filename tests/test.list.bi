@@ -1,4 +1,4 @@
-:i count 52
+:i count 51
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -526,18 +526,6 @@ sizeof/basics.glos
 8
 1
 8
-
-:b stderr 0
-
-:b testcase 18
-typeof/basics.glos
-:i returncode 0
-:b stdout 13
-69
-420
-0
-8
-1
 
 :b stderr 0
 
