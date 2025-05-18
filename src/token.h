@@ -14,11 +14,12 @@ typedef struct {
 
 typedef enum {
     TOKEN_EOF,
+    TOKEN_EOL,
+    TOKEN_COMMA,
+
     TOKEN_INT,
     TOKEN_BOOL,
     TOKEN_IDENT,
-
-    TOKEN_COMMA,
 
     TOKEN_LBRACE,
     TOKEN_RBRACE,

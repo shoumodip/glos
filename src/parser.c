@@ -42,7 +42,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -127,7 +127,7 @@ static Node *parseArgWithOptionalName(Parser *p, Node *fn) {
     return arg;
 }
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -173,7 +173,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -283,7 +283,11 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 37, "");
+static void consumeEols(Parser *p) {
+    while (lexerRead(&p->lexer, TOKEN_EOL));
+}
+
+static_assert(COUNT_TOKENS == 38, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -383,6 +387,7 @@ static Node *parseStmt(Parser *p) {
         break;
     }
 
+    consumeEols(p);
     return node;
 }
 
@@ -428,6 +433,11 @@ static Node *parseFn(Parser *p, Token name) {
 void parseFile(Parser *p, Lexer lexer) {
     p->lexer = lexer;
     while (!lexerRead(&p->lexer, TOKEN_EOF)) {
+        consumeEols(p);
+        if (lexerRead(&p->lexer, TOKEN_EOF)) {
+            break;
+        }
+
         nodesPush(&p->nodes, parseStmt(p));
     }
 }

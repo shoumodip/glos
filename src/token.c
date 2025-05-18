@@ -1,10 +1,16 @@
 #include "token.h"
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 38, "");
 const char *tokenKindName(TokenKind kind) {
     switch (kind) {
     case TOKEN_EOF:
         return "end of file";
+
+    case TOKEN_EOL:
+        return "';'";
+
+    case TOKEN_COMMA:
+        return "','";
 
     case TOKEN_INT:
         return "integer";
@@ -14,9 +20,6 @@ const char *tokenKindName(TokenKind kind) {
 
     case TOKEN_IDENT:
         return "identifier";
-
-    case TOKEN_COMMA:
-        return "','";
 
     case TOKEN_LBRACE:
         return "'{'";
