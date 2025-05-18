@@ -202,14 +202,14 @@ static Node *parseExpr(Parser *p, Power mbp) {
     case TOKEN_SIZEOF:
         node = nodeNew(p, NODE_SIZEOF, token);
 
-        token = lexerExpect(&p->lexer, TOKEN_LPAREN, TOKEN_LBRACE);
+        token = lexerExpect(&p->lexer, TOKEN_LPAREN, TOKEN_LT);
         if (token.kind == TOKEN_LPAREN) {
-            node->as.sizeoff.operand = parseType(p);
-            lexerExpect(&p->lexer, TOKEN_RPAREN);
-        } else {
             node->as.sizeoff.isExpr = true;
             node->as.sizeoff.operand = parseExpr(p, POWER_SET);
-            lexerExpect(&p->lexer, TOKEN_RBRACE);
+            lexerExpect(&p->lexer, TOKEN_RPAREN);
+        } else {
+            node->as.sizeoff.operand = parseType(p);
+            lexerExpect(&p->lexer, TOKEN_GT);
         }
         break;
 
