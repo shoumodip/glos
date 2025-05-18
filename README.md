@@ -1,5 +1,5 @@
 # Glos
-Compiler using LLVM.
+WIP Compiler using LLVM.
 
 **NOTE: This project is currently under heavy development and not ready for any usecase.**
 
@@ -11,6 +11,9 @@ $ ./build.sh
 $ cd tests
 $ ./rere.py replay test.list
 ```
+
+This compiler is being developed on x86-64 Linux, therefore that is the only
+tested platform for now.
 
 ## TODO
 - [X] Integers and Booleans
