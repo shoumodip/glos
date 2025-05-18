@@ -2,13 +2,13 @@ fn printInt(x i64)   { print x }
 fn printBool(x bool) { print x }
 
 fn main() {
-    var a &&i64 = 0 as &&i64
-    var b &bool = a as &bool
+    var a &&i64 = <&&i64> 0
+    var b &bool = <&bool> a
 
-    printInt(true as i64)
-    printInt(false as i64)
+    printInt(<i64> true)
+    printInt(<i64> false)
 
-    printBool(-69 as bool)
-    printBool(0 as bool)
-    printBool(420 as bool)
+    printBool(<bool> -69)
+    printBool(<bool> 0)
+    printBool(<bool> 420)
 }

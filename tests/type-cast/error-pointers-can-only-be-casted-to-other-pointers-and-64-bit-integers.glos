@@ -1,4 +1,4 @@
 var a &i64
-var b = a as i64
-var c = a as u64
-var d = a as bool
+var b = <i64> a
+var c = <u64> a
+var d = <bool> a

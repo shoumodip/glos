@@ -1,1 +1,1 @@
-var _ = *(0 as rawptr)
+var _ = *<rawptr> 0

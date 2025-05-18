@@ -483,7 +483,7 @@ pointers/error-cannot-dereference-raw-pointer.glos
 :b stdout 0
 
 :b stderr 95
-pointers/error-cannot-dereference-raw-pointer.glos:1:13: ERROR: Cannot dereference raw pointer
+pointers/error-cannot-dereference-raw-pointer.glos:1:10: ERROR: Cannot dereference raw pointer
 
 :b testcase 21
 type-cast/basics.glos
@@ -502,16 +502,16 @@ type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integ
 :i returncode 1
 :b stdout 0
 
-:b stderr 141
-type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos:3:14: ERROR: Cannot cast type 'bool' to type '&i64'
+:b stderr 140
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos:3:9: ERROR: Cannot cast type 'bool' to type '&i64'
 
 :b testcase 86
 type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 139
-type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos:4:11: ERROR: Cannot cast type '&i64' to type 'bool'
+:b stderr 138
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos:4:9: ERROR: Cannot cast type '&i64' to type 'bool'
 
 :b testcase 18
 sizeof/basics.glos

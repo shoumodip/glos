@@ -208,13 +208,13 @@ static void refPrevent(Node *n, bool ref) {
 
 static void checkFn(Context *c, Node *n);
 
-static_assert(COUNT_NODES == 13, "");
+static_assert(COUNT_NODES == 14, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -290,10 +290,33 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         n->type = nodeFnReturnType(&fn->type.spec->as.fn);
     } break;
 
+    case NODE_CAST: {
+        Node *from = n->as.cast.from;
+        checkExpr(c, from, false);
+
+        Node *to = n->as.cast.to;
+        checkType(c, to);
+
+        const Type fromType = typeAssertScalar(from);
+        const Type toType = typeAssertScalar(to);
+        if (isTypeCastIllegal(fromType, toType)) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Cannot cast type '%s' to type '%s'\n",
+                PosArg(n->token.pos),
+                typeToString(fromType),
+                typeToString(toType));
+
+            exit(1);
+        }
+
+        n->type = toType;
+    } break;
+
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -352,7 +375,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -398,26 +421,6 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             n->type = (Type) {.kind = TYPE_BOOL};
             break;
 
-        case TOKEN_AS: {
-            checkExpr(c, lhs, false);
-            checkType(c, rhs);
-
-            const Type from = typeAssertScalar(lhs);
-            const Type to = typeAssertScalar(rhs);
-            if (isTypeCastIllegal(from, to)) {
-                fprintf(
-                    stderr,
-                    PosFmt "ERROR: Cannot cast type '%s' to type '%s'\n",
-                    PosArg(n->token.pos),
-                    typeToString(from),
-                    typeToString(to));
-
-                exit(1);
-            }
-
-            n->type = to;
-        } break;
-
         default:
             unreachable();
         }
@@ -447,7 +450,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 13, "");
+static_assert(COUNT_NODES == 14, "");
 static bool executionEnds(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -481,7 +484,7 @@ static bool executionEnds(Node *n) {
         return false;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -495,7 +498,7 @@ static bool executionEnds(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 13, "");
+static_assert(COUNT_NODES == 14, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -530,7 +533,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

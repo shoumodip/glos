@@ -38,12 +38,11 @@ typedef enum {
     POWER_ADD,
     POWER_BOR,
     POWER_MUL,
-    POWER_AS,
     POWER_PRE,
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_LPAREN:
@@ -80,9 +79,6 @@ static Power tokenKindPower(TokenKind kind) {
     case TOKEN_NE:
         return POWER_CMP;
 
-    case TOKEN_AS:
-        return POWER_AS;
-
     default:
         return POWER_NIL;
     }
@@ -108,7 +104,7 @@ static bool tokenKindIsStartOfType(TokenKind k) {
 
 static Node *parseExpr(Parser *p, Power mbp);
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -173,7 +169,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -198,6 +194,14 @@ static Node *parseExpr(Parser *p, Power mbp) {
         node = parseExpr(p, POWER_SET);
         lexerExpect(&p->lexer, TOKEN_RPAREN);
         break;
+
+    case TOKEN_LT: {
+        node = nodeNew(p, NODE_CAST, token);
+        node->as.cast.to = parseType(p);
+
+        lexerExpect(&p->lexer, TOKEN_GT);
+        node->as.cast.from = parseExpr(p, POWER_PRE);
+    } break;
 
     case TOKEN_SIZEOF:
         node = nodeNew(p, NODE_SIZEOF, token);
@@ -250,13 +254,6 @@ static Node *parseExpr(Parser *p, Power mbp) {
             node = call;
         } break;
 
-        case TOKEN_AS: {
-            Node *binary = nodeNew(p, NODE_BINARY, token);
-            binary->as.binary.lhs = node;
-            binary->as.binary.rhs = parseType(p);
-            node = binary;
-        } break;
-
         default: {
             Node *binary = nodeNew(p, NODE_BINARY, token);
             binary->as.binary.lhs = node;
@@ -282,7 +279,7 @@ static void localAssert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 37, "");
+static_assert(COUNT_TOKENS == 36, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

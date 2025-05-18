@@ -113,7 +113,7 @@ static void compileType(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 13, "");
+static_assert(COUNT_NODES == 14, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -154,13 +154,13 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 
 static void compileFn(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 13, "");
+static_assert(COUNT_NODES == 14, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -207,10 +207,84 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         return LLVMBuildCall2(c->builder, fn->type.llvm, fnValue, argsLLVM, call.arity, "");
     };
 
+    case NODE_CAST: {
+        Node              *from = n->as.cast.from;
+        const LLVMValueRef fromValue = compileExpr(c, from, false);
+
+        const Type fromType = from->type;
+        const Type toType = n->type;
+        if (typeEq(fromType, toType)) {
+            return fromValue;
+        }
+
+        const LLVMTypeRef toLLVM = typeInMemory(toType);
+        if (typeIsPointer(fromType)) {
+            if (typeIsPointer(toType)) {
+                // Pointer -> Pointer
+                return LLVMBuildBitCast(c->builder, fromValue, toLLVM, "");
+            } else {
+                // Pointer -> Integer
+                return LLVMBuildPtrToInt(c->builder, fromValue, toLLVM, "");
+            }
+        }
+
+        if (fromType.kind == TYPE_BOOL) {
+            // Boolean -> Integer
+            return LLVMBuildZExt(c->builder, fromValue, toLLVM, "");
+        }
+
+        static_assert(COUNT_TYPES == 12, "");
+        const size_t intSizes[COUNT_TYPES] = {
+            [TYPE_I8] = 8,
+            [TYPE_I16] = 16,
+            [TYPE_I32] = 32,
+            [TYPE_I64] = 64,
+
+            [TYPE_U8] = 8,
+            [TYPE_U16] = 16,
+            [TYPE_U32] = 32,
+            [TYPE_U64] = 64,
+        };
+
+        if (intSizes[fromType.kind]) {
+            if (typeIsPointer(toType)) {
+                // Integer -> Pointer
+                return LLVMBuildIntToPtr(c->builder, fromValue, toLLVM, "");
+            }
+
+            if (toType.kind == TYPE_BOOL) {
+                // Integer -> Boolean
+                const LLVMValueRef zero = LLVMConstNull(typeInMemory(fromType));
+                return LLVMBuildICmp(c->builder, LLVMIntNE, fromValue, zero, "");
+            }
+
+            if (intSizes[toType.kind]) {
+                // Integer -> Integer
+                const size_t fromSize = intSizes[fromType.kind];
+                const size_t toSize = intSizes[toType.kind];
+                if (fromSize == toSize) {
+                    return fromValue;
+                }
+
+                if (fromSize > toSize) {
+                    return LLVMBuildTrunc(c->builder, fromValue, toLLVM, "");
+                }
+
+                if (typeIsSigned(fromType)) {
+                    return LLVMBuildSExt(c->builder, fromValue, toLLVM, "");
+                } else {
+                    return LLVMBuildZExt(c->builder, fromValue, toLLVM, "");
+                }
+            }
+        }
+
+        unreachable();
+    }
+
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -248,7 +322,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -416,79 +490,6 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildICmp(c->builder, LLVMIntNE, lhsValue, rhsValue, "");
         }
 
-        case TOKEN_AS: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-
-            const Type from = lhs->type;
-            const Type to = n->type;
-            if (typeEq(from, to)) {
-                return lhsValue;
-            }
-
-            const LLVMTypeRef toLLVM = typeInMemory(to);
-            if (typeIsPointer(from)) {
-                if (typeIsPointer(to)) {
-                    // Pointer -> Pointer
-                    return LLVMBuildBitCast(c->builder, lhsValue, toLLVM, "");
-                } else {
-                    // Pointer -> Integer
-                    return LLVMBuildPtrToInt(c->builder, lhsValue, toLLVM, "");
-                }
-            }
-
-            if (from.kind == TYPE_BOOL) {
-                // Boolean -> Integer
-                return LLVMBuildZExt(c->builder, lhsValue, toLLVM, "");
-            }
-
-            static_assert(COUNT_TYPES == 12, "");
-            const size_t intSizes[COUNT_TYPES] = {
-                [TYPE_I8] = 8,
-                [TYPE_I16] = 16,
-                [TYPE_I32] = 32,
-                [TYPE_I64] = 64,
-
-                [TYPE_U8] = 8,
-                [TYPE_U16] = 16,
-                [TYPE_U32] = 32,
-                [TYPE_U64] = 64,
-            };
-
-            if (intSizes[from.kind]) {
-                if (typeIsPointer(to)) {
-                    // Integer -> Pointer
-                    return LLVMBuildIntToPtr(c->builder, lhsValue, toLLVM, "");
-                }
-
-                if (to.kind == TYPE_BOOL) {
-                    // Integer -> Boolean
-                    const LLVMValueRef zero = LLVMConstNull(typeInMemory(from));
-                    return LLVMBuildICmp(c->builder, LLVMIntNE, lhsValue, zero, "");
-                }
-
-                if (intSizes[to.kind]) {
-                    // Integer -> Integer
-                    const size_t fromSize = intSizes[from.kind];
-                    const size_t toSize = intSizes[to.kind];
-                    if (fromSize == toSize) {
-                        return lhsValue;
-                    }
-
-                    if (fromSize > toSize) {
-                        return LLVMBuildTrunc(c->builder, lhsValue, toLLVM, "");
-                    }
-
-                    if (typeIsSigned(from)) {
-                        return LLVMBuildSExt(c->builder, lhsValue, toLLVM, "");
-                    } else {
-                        return LLVMBuildZExt(c->builder, lhsValue, toLLVM, "");
-                    }
-                }
-            }
-
-            unreachable();
-        }
-
         default:
             unreachable();
         }
@@ -514,7 +515,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 13, "");
+static_assert(COUNT_NODES == 14, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -579,7 +580,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 37, "");
+        static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {

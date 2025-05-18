@@ -1,8 +1,8 @@
 fn main() {
-    var a = 69 as u8
-    var b = 420 as u16
-    var c = 1337 as u32
-    var d = 80085 as u64
+    var a = <u8> 69
+    var b = <u16> 420
+    var c = <u32> 1337
+    var d = <u64> 80085
 
     print a
     print sizeof(a)

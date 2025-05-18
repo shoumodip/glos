@@ -57,6 +57,7 @@ bool typeIsPointer(Type type);
 typedef enum {
     NODE_ATOM,
     NODE_CALL,
+    NODE_CAST,
     NODE_UNARY,
     NODE_BINARY,
     NODE_SIZEOF,
@@ -84,6 +85,11 @@ typedef struct {
     Nodes  args;
     size_t arity;
 } NodeCall;
+
+typedef struct {
+    Node *from;
+    Node *to;
+} NodeCast;
 
 typedef struct {
     Node *operand;
@@ -157,6 +163,7 @@ struct Node {
     union {
         NodeAtom   atom;
         NodeCall   call;
+        NodeCast   cast;
         NodeUnary  unary;
         NodeBinary binary;
         NodeSizeof sizeoff;
