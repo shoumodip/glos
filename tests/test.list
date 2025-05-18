@@ -20,6 +20,7 @@ loops/basics.glos
 loops/init-expression.glos
 loops/init-variable-definition.glos
 loops/init-but-no-update.glos
+loops/infinite.glos
 loops/error-expected-condition-type-bool.glos
 loops/error-expected-condition-after-assignment-expression-init.glos
 loops/error-expected-condition-after-variable-definition-init.glos

@@ -1,0 +1,11 @@
+fn main() {
+    var i = 0
+    for {
+        if i == 10 {
+            return
+        }
+
+        print i
+        i = i + 1
+    }
+}

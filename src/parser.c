@@ -329,7 +329,7 @@ static Node *parseStmt(Parser *p) {
             p->dontConsumeEols = false;
 
             lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_EOL));
-        } else {
+        } else if (token.kind != TOKEN_LBRACE) {
             node->as.forr.condition = parseExpr(p, POWER_NIL);
 
             Node *cond = node->as.forr.condition;

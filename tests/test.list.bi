@@ -1,4 +1,4 @@
-:i count 59
+:i count 60
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -277,6 +277,23 @@ loops/init-variable-definition.glos
 
 :b testcase 29
 loops/init-but-no-update.glos
+:i returncode 0
+:b stdout 20
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+:b stderr 0
+
+:b testcase 19
+loops/infinite.glos
 :i returncode 0
 :b stdout 20
 0

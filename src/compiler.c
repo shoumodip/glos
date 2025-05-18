@@ -573,8 +573,12 @@ static void compileStmt(Compiler *c, Node *n) {
 
         // Condition
         LLVMPositionBuilderAtEnd(c->builder, condBlock);
-        const LLVMValueRef condValue = compileExpr(c, n->as.forr.condition, false);
-        LLVMBuildCondBr(c->builder, condValue, bodyBlock, finalBlock);
+        if (n->as.forr.condition) {
+            const LLVMValueRef condValue = compileExpr(c, n->as.forr.condition, false);
+            LLVMBuildCondBr(c->builder, condValue, bodyBlock, finalBlock);
+        } else {
+            LLVMBuildBr(c->builder, bodyBlock);
+        }
 
         // Body
         LLVMPositionBuilderAtEnd(c->builder, bodyBlock);

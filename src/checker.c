@@ -574,7 +574,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 }
 
 static_assert(COUNT_NODES == 15, "");
-static bool executionEnds(Node *n) {
+static bool alwaysReturns(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
         // TODO: Introduce a "No Return" return type
@@ -582,7 +582,7 @@ static bool executionEnds(Node *n) {
 
     case NODE_BLOCK:
         for (Node *it = n->as.block.head; it; it = it->next) {
-            if (executionEnds(it)) {
+            if (alwaysReturns(it)) {
                 return true;
             }
         }
@@ -594,18 +594,31 @@ static bool executionEnds(Node *n) {
         }
 
         // TODO: Condition analysis
-        return executionEnds(n->as.iff.consequence) && executionEnds(n->as.iff.antecedence);
+        return alwaysReturns(n->as.iff.consequence) && alwaysReturns(n->as.iff.antecedence);
 
-    case NODE_FOR:
-        if (n->as.forr.init && executionEnds(n->as.forr.init)) {
+    case NODE_FOR: {
+        if (n->as.forr.init && alwaysReturns(n->as.forr.init)) {
             return true;
         }
 
-        // TODO: Condition analysis
-        assert(n->as.forr.condition);
+        Node *cond = n->as.forr.condition;
+        bool  infinite = false;
 
-        // NOTE: Check loop body only if loop is proven to be infinite
+        if (!cond) {
+            infinite = true;
+        } else if (
+            // TODO: Constant evaluation
+            cond->kind == NODE_ATOM && cond->token.kind == TOKEN_BOOL && cond->token.as.boolean) {
+            infinite = true;
+        }
+
+        if (infinite) {
+            // Till we get break, an infinite loop "always returns"
+            return true;
+        }
+
         return false;
+    }
 
     case NODE_FLOW:
         static_assert(COUNT_TOKENS == 38, "");
@@ -649,9 +662,10 @@ static void checkStmt(Context *c, Node *n) {
             checkStmt(c, n->as.forr.init);
         }
 
-        assert(n->as.forr.condition);
-        checkExpr(c, n->as.forr.condition, false);
-        typeAssert(n->as.forr.condition, (Type) {.kind = TYPE_BOOL});
+        if (n->as.forr.condition) {
+            checkExpr(c, n->as.forr.condition, false);
+            typeAssert(n->as.forr.condition, (Type) {.kind = TYPE_BOOL});
+        }
 
         if (n->as.forr.update) {
             checkStmt(c, n->as.forr.update);
@@ -785,7 +799,7 @@ static void checkFn(Context *c, Node *n) {
 
         if (!c->inExtern) {
             checkStmt(c, n->as.fn.body);
-            if (n->as.fn.ret && !executionEnds(n->as.fn.body)) {
+            if (n->as.fn.ret && !alwaysReturns(n->as.fn.body)) {
                 fprintf(
                     stderr,
                     PosFmt "ERROR: Expected return statement\n",
