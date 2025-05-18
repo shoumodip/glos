@@ -9,6 +9,7 @@ typedef struct {
 } FnContext;
 
 typedef struct {
+    bool      inExtern;
     FnContext fnContext;
 
     Scope locals;

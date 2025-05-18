@@ -113,7 +113,7 @@ static void compileType(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 14, "");
+static_assert(COUNT_NODES == 15, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -154,13 +154,13 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 
 static void compileFn(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 14, "");
+static_assert(COUNT_NODES == 15, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(n);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -286,7 +286,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -324,7 +324,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -517,7 +517,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 14, "");
+static_assert(COUNT_NODES == 15, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -582,7 +582,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
@@ -605,10 +605,18 @@ static void compileStmt(Compiler *c, Node *n) {
         break;
 
     case NODE_VAR: {
-        if (n->as.var.local) {
-            // The type was already compiled in the function prelude
-            const LLVMTypeRef llvmType = typeInMemory(n->type);
+        if (!n->type.llvm) {
+            compileType(n);
+        }
+        const LLVMTypeRef llvmType = typeInMemory(n->type);
 
+        if (n->as.var.isExtern) {
+            n->as.var.llvm = LLVMAddGlobal(c->module, llvmType, tempStrToCstr(n->token.str));
+            LLVMSetLinkage(n->as.var.llvm, LLVMExternalLinkage);
+            return;
+        }
+
+        if (n->as.var.local) {
             LLVMValueRef assign = NULL;
             if (n->as.var.expr) {
                 assign = compileExpr(c, n->as.var.expr, false);
@@ -617,13 +625,16 @@ static void compileStmt(Compiler *c, Node *n) {
             }
             LLVMBuildStore(c->builder, assign, n->as.var.llvm);
         } else {
-            compileType(n);
-            const LLVMTypeRef llvmType = typeInMemory(n->type);
-
             n->as.var.llvm = LLVMAddGlobal(c->module, llvmType, ""); // TODO: Public variables
             LLVMSetInitializer(n->as.var.llvm, LLVMConstNull(llvmType));
         }
     } break;
+
+    case NODE_EXTERN:
+        for (Node *it = n->as.externn.definitions.head; it; it = it->next) {
+            compileStmt(c, it);
+        }
+        break;
 
     case NODE_PRINT: {
         LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
@@ -655,7 +666,14 @@ static void compileStmt(Compiler *c, Node *n) {
 
 static void compileFn(Compiler *c, Node *n) {
     compileType(n);
-    n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
+
+    if (n->as.fn.body) {
+        n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
+    } else {
+        assert(n->token.kind == TOKEN_IDENT);
+        n->as.fn.llvm = LLVMAddFunction(c->module, tempStrToCstr(n->token.str), n->type.llvm);
+        return;
+    }
 
     const FnCompiler fnCompilerSave = fnCompilerBegin(c, n);
     {

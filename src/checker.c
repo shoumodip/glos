@@ -52,7 +52,7 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static_assert(COUNT_NODES == 14, "");
+static_assert(COUNT_NODES == 15, "");
 static void castUntypedInt(Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -328,13 +328,13 @@ static void refPrevent(Node *n, bool ref) {
 
 static void checkFn(Context *c, Node *n);
 
-static_assert(COUNT_NODES == 14, "");
+static_assert(COUNT_NODES == 15, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -436,7 +436,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -495,7 +495,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -573,7 +573,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 14, "");
+static_assert(COUNT_NODES == 15, "");
 static bool executionEnds(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -607,7 +607,7 @@ static bool executionEnds(Node *n) {
         return false;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -621,7 +621,7 @@ static bool executionEnds(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 14, "");
+static_assert(COUNT_NODES == 15, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -656,7 +656,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 36, "");
+        static_assert(COUNT_TOKENS == 37, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};
@@ -678,11 +678,14 @@ static void checkStmt(Context *c, Node *n) {
         break;
 
     case NODE_ARG:
+        // TODO: Check for duplicate arguments
         checkType(c, n->as.arg.type);
         n->type = n->as.arg.type->type;
 
-        scopePush(&c->locals, n);
-        scopePush(&c->fnContext.fn->locals, n);
+        if (!c->inExtern) {
+            scopePush(&c->locals, n);
+            scopePush(&c->fnContext.fn->locals, n);
+        }
         break;
 
     case NODE_VAR:
@@ -727,6 +730,14 @@ static void checkStmt(Context *c, Node *n) {
         }
         break;
 
+    case NODE_EXTERN:
+        c->inExtern = true;
+        for (Node *it = n->as.externn.definitions.head; it; it = it->next) {
+            checkStmt(c, it);
+        }
+        c->inExtern = false;
+        break;
+
     case NODE_PRINT:
         checkExpr(c, n->as.print.operand, false);
         typeAssertScalar(n->as.print.operand);
@@ -764,14 +775,16 @@ static void checkFn(Context *c, Node *n) {
             checkType(c, n->as.fn.ret);
         }
 
-        checkStmt(c, n->as.fn.body);
-        if (n->as.fn.ret && !executionEnds(n->as.fn.body)) {
-            fprintf(
-                stderr,
-                PosFmt "ERROR: Expected return statement\n",
-                PosArg(n->as.fn.body->token.pos));
+        if (!c->inExtern) {
+            checkStmt(c, n->as.fn.body);
+            if (n->as.fn.ret && !executionEnds(n->as.fn.body)) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Expected return statement\n",
+                    PosArg(n->as.fn.body->token.pos));
 
-            exit(1);
+                exit(1);
+            }
         }
 
         fnContextEnd(c, fnContextSave);

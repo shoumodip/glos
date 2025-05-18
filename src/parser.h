@@ -12,6 +12,7 @@ typedef struct {
 typedef struct {
     Lexer lexer;
     bool  local;
+    bool  inExtern;
 
     Nodes    nodes;
     NodePool pool;

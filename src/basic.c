@@ -36,7 +36,7 @@ Str strStripSuffix(Str a, Str b) {
 }
 
 // Temporary String Builder
-static char   tempBuffer[16000];
+static char   tempBuffer[16 * 1000 * 1000];
 static size_t tempLength;
 
 static char *tempAlloc(size_t n) {

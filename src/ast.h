@@ -74,6 +74,7 @@ typedef enum {
     NODE_FN,
     NODE_ARG,
     NODE_VAR,
+    NODE_EXTERN,
 
     NODE_PRINT,
     COUNT_NODES
@@ -150,9 +151,14 @@ typedef struct {
     Node *expr;
     Node *type;
     bool  local;
+    bool  isExtern;
 
     LLVMValueRef llvm;
 } NodeVar;
+
+typedef struct {
+    Nodes definitions;
+} NodeExtern;
 
 typedef struct {
     Node *operand;
@@ -177,9 +183,10 @@ struct Node {
 
         NodeFlow flow;
 
-        NodeFn  fn;
-        NodeArg arg;
-        NodeVar var;
+        NodeFn     fn;
+        NodeArg    arg;
+        NodeVar    var;
+        NodeExtern externn;
 
         NodePrint print;
     } as;
