@@ -1,0 +1,28 @@
+# Glos
+Compiler using LLVM.
+
+**NOTE: This project is currently under heavy development and not ready for any usecase.**
+
+## Quick Start
+Install [LLVM](https://llvm.org/)
+
+```console
+$ ./build.sh
+$ cd tests
+$ ./rere.py replay test.list
+```
+
+## TODO
+- [X] Integers and Booleans
+- [X] Conditions
+- [X] Variables
+- [X] Loops
+- [X] Functions
+- [X] Pointers
+- [X] C FFI
+- [ ] Structures
+- [ ] Slices
+- [ ] Arrays
+- [ ] Strings
+
+More TODOs will be added as the project progresses
