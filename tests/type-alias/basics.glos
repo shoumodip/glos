@@ -1,0 +1,12 @@
+type usize u64
+type u64ptr &u64
+
+fn main() {
+    var a usize = 34
+    var b = 35
+    print a + b
+
+    var c u64ptr = <u64ptr> 200
+    var d = 220
+    print c + <u64ptr> d
+}

@@ -25,22 +25,22 @@ static void fnContextEnd(Context *c, FnContext save) {
     c->fnContext = save;
 }
 
-static Node *fnContextFind(FnContext f, Scope s, Str name) {
+static Node *fnContextFind(FnContext f, Scope s, Str name, bool isType) {
     assert(f.base <= s.length);
     s.data += f.base;
     s.length -= f.base;
-    return scopeFind(s, name);
+    return scopeFind(s, name, isType);
 }
 
-static Node *identFind(Context *c, Str name) {
+static Node *identFind(Context *c, Str name, bool isType) {
     if (c->fnContext.fn) {
-        Node *local = fnContextFind(c->fnContext, c->locals, name);
-        if (local) {
+        Node *local = fnContextFind(c->fnContext, c->locals, name, isType);
+        if (local && (local->kind == NODE_TYPE) == isType) {
             return local;
         }
     }
 
-    return scopeFind(c->globals, name);
+    return scopeFind(c->globals, name, isType);
 }
 
 static size_t blockBegin(Context *c) {
@@ -52,7 +52,7 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static_assert(COUNT_NODES == 15, "");
+static_assert(COUNT_NODES == 16, "");
 static void castUntypedInt(Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -60,7 +60,7 @@ static void castUntypedInt(Node *n, Type expected) {
         case TOKEN_INT: {
             n->type = expected;
 
-            static_assert(COUNT_TYPES == 13, "");
+            static_assert(COUNT_TYPES == 14, "");
             const size_t intLimits[COUNT_TYPES] = {
                 [TYPE_I8] = INT8_MAX,
                 [TYPE_I16] = INT16_MAX,
@@ -75,7 +75,8 @@ static void castUntypedInt(Node *n, Type expected) {
                 [TYPE_INT] = INT64_MAX,
             };
 
-            if (n->token.as.integer > intLimits[n->type.kind]) {
+            const Type resolved = typeResolve(n->type);
+            if (n->token.as.integer > intLimits[resolved.kind]) {
                 fprintf(
                     stderr,
                     PosFmt "ERROR: Integer literal '" StrFmt "' is too large for type '%s'\n",
@@ -137,14 +138,18 @@ static bool tryAutoCastUntypedInt(Node *n, Type expected) {
         return true;
     }
 
-    // Only untyped integers can be casted from/to typed integers
-    if (!typeKindIsInteger(expected.kind) || n->type.kind != TYPE_INT) {
-        return false;
-    }
-
     // The indirection level of the typed and untyped integers must match
     if (expected.ref != n->type.ref) {
         return false;
+    }
+
+    // Only untyped integers can be casted from/to only typed integers
+    {
+        Type expectedBase = expected;
+        expectedBase.ref = 0;
+        if (n->type.kind != TYPE_INT || !typeIsInteger(expectedBase)) {
+            return false;
+        }
     }
 
     if (expected.kind != TYPE_INT) {
@@ -256,7 +261,7 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
 
 static void checkExpr(Context *c, Node *n, bool ref);
 
-static_assert(COUNT_TYPES == 13, "");
+static_assert(COUNT_TYPES == 14, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -281,7 +286,12 @@ static void checkType(Context *c, Node *n) {
         } else if (strMatch(n->token.str, "rawptr")) {
             n->type = (Type) {.kind = TYPE_RAWPTR};
         } else {
-            errorUndefined(n, "type");
+            Node *definition = identFind(c, n->token.str, true);
+            if (!definition) {
+                errorUndefined(n, "type");
+            }
+
+            n->type = definition->type;
         }
         break;
 
@@ -328,13 +338,13 @@ static void refPrevent(Node *n, bool ref) {
 
 static void checkFn(Context *c, Node *n);
 
-static_assert(COUNT_NODES == 15, "");
+static_assert(COUNT_NODES == 16, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -345,7 +355,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             break;
 
         case TOKEN_IDENT: {
-            Node *definition = identFind(c, n->token.str);
+            Node *definition = identFind(c, n->token.str, false);
             if (definition) {
                 n->as.atom.definition = definition;
                 n->type = definition->type;
@@ -436,7 +446,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -495,7 +505,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -573,7 +583,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 15, "");
+static_assert(COUNT_NODES == 16, "");
 static bool alwaysReturns(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -621,7 +631,7 @@ static bool alwaysReturns(Node *n) {
     }
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -635,7 +645,7 @@ static bool alwaysReturns(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 15, "");
+static_assert(COUNT_NODES == 16, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -678,7 +688,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};
@@ -712,7 +722,7 @@ static void checkStmt(Context *c, Node *n) {
 
     case NODE_VAR:
         if (!n->as.var.local) {
-            const Node *previous = scopeFind(c->globals, n->token.str);
+            const Node *previous = scopeFind(c->globals, n->token.str, false);
             if (previous) {
                 errorRedefinition(n, previous, "identifier");
             }
@@ -752,6 +762,25 @@ static void checkStmt(Context *c, Node *n) {
         }
         break;
 
+    case NODE_TYPE:
+        if (!c->fnContext.fn) {
+            const Node *previous = scopeFind(c->globals, n->token.str, true);
+            if (previous) {
+                errorRedefinition(n, previous, "type");
+            }
+        }
+
+        checkType(c, n->as.type.definition);
+        n->as.type.real = typeResolve(n->as.type.definition->type);
+        n->type = (Type) {.kind = TYPE_ALIAS, .spec = n};
+
+        if (c->fnContext.fn) {
+            scopePush(&c->locals, n);
+        } else {
+            scopePush(&c->globals, n);
+        }
+        break;
+
     case NODE_EXTERN:
         c->inExtern = true;
         for (Node *it = n->as.externn.definitions.head; it; it = it->next) {
@@ -776,7 +805,7 @@ static void checkFn(Context *c, Node *n) {
         if (c->fnContext.fn) {
             scopePush(&c->locals, n);
         } else {
-            const Node *previous = scopeFind(c->globals, n->token.str);
+            const Node *previous = scopeFind(c->globals, n->token.str, false);
             if (previous) {
                 errorRedefinition(n, previous, "identifier");
             }

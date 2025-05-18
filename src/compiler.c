@@ -50,70 +50,87 @@ static LLVMTypeRef typeInMemory(Type type) {
     return type.llvm;
 }
 
-static_assert(COUNT_TYPES == 13, "");
-static void compileType(Node *n) {
-    if (typeIsPointer(n->type)) {
-        n->type.llvm = LLVMPointerType(LLVMVoidType(), 0);
+static_assert(COUNT_TYPES == 14, "");
+static void compileType(Type *type) {
+    if (type->kind == TYPE_ALIAS) {
+        assert(type->spec);
+
+        Type *real = &type->spec->as.type.real;
+        if (!real->llvm) {
+            compileType(real);
+        }
+
+        type->llvm = real->llvm;
+        if (!type->ref) {
+            return;
+        }
+    }
+
+    if (typeIsPointer(*type)) {
+        type->llvm = LLVMPointerType(LLVMVoidType(), 0);
         return;
     }
 
-    switch (n->type.kind) {
+    switch (type->kind) {
     case TYPE_UNIT:
-        n->type.llvm = LLVMVoidType();
+        type->llvm = LLVMVoidType();
         break;
 
     case TYPE_BOOL:
-        n->type.llvm = LLVMInt1Type();
+        type->llvm = LLVMInt1Type();
         break;
 
     case TYPE_I8:
     case TYPE_U8:
-        n->type.llvm = LLVMInt8Type();
+        type->llvm = LLVMInt8Type();
         break;
 
     case TYPE_I16:
     case TYPE_U16:
-        n->type.llvm = LLVMInt16Type();
+        type->llvm = LLVMInt16Type();
         break;
 
     case TYPE_I32:
     case TYPE_U32:
-        n->type.llvm = LLVMInt32Type();
+        type->llvm = LLVMInt32Type();
         break;
 
     case TYPE_I64:
     case TYPE_U64:
     case TYPE_INT:
-        n->type.llvm = LLVMInt64Type();
+        type->llvm = LLVMInt64Type();
         break;
 
     case TYPE_FN: {
-        assert(n->type.spec);
-        NodeFn *fn = &n->type.spec->as.fn;
+        assert(type->spec);
+        NodeFn *fn = &type->spec->as.fn;
 
         LLVMTypeRef *argsLLVM = calloc(fn->arity, sizeof(LLVMTypeRef));
         for (Node *it = fn->args.head; it; it = it->next) {
-            compileType(it);
+            compileType(&it->type);
             argsLLVM[it->as.arg.index] = typeInMemory(it->type);
         }
 
         LLVMTypeRef returnType = NULL;
         if (fn->ret) {
-            compileType(fn->ret);
+            compileType(&fn->ret->type);
             returnType = typeInMemory(fn->ret->type);
         } else {
             returnType = LLVMVoidType();
         }
 
-        n->type.llvm = LLVMFunctionType(returnType, argsLLVM, fn->arity, false);
+        type->llvm = LLVMFunctionType(returnType, argsLLVM, fn->arity, false);
     } break;
+
+    case TYPE_ALIAS:
+        break;
 
     default:
         unreachable();
     }
 }
 
-static_assert(COUNT_NODES == 15, "");
+static_assert(COUNT_NODES == 16, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -154,13 +171,13 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 
 static void compileFn(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 15, "");
+static_assert(COUNT_NODES == 16, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
-    compileType(n);
+    compileType(&n->type);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -211,8 +228,8 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node              *from = n->as.cast.from;
         const LLVMValueRef fromValue = compileExpr(c, from, false);
 
-        const Type fromType = from->type;
-        const Type toType = n->type;
+        const Type fromType = typeResolve(from->type);
+        const Type toType = typeResolve(n->type);
         if (typeEq(fromType, toType)) {
             return fromValue;
         }
@@ -233,7 +250,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildZExt(c->builder, fromValue, toLLVM, "");
         }
 
-        static_assert(COUNT_TYPES == 13, "");
+        static_assert(COUNT_TYPES == 14, "");
         const size_t intSizes[COUNT_TYPES] = {
             [TYPE_I8] = 8,
             [TYPE_I16] = 16,
@@ -286,7 +303,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -324,7 +341,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -499,7 +516,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     case NODE_SIZEOF: {
         Node *operand = n->as.sizeoff.operand;
-        compileType(operand);
+        compileType(&operand->type);
 
         if (operand->type.kind == TYPE_UNIT) {
             return LLVMConstNull(n->type.llvm);
@@ -517,7 +534,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 15, "");
+static_assert(COUNT_NODES == 16, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -600,7 +617,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 38, "");
+        static_assert(COUNT_TOKENS == 39, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
@@ -624,7 +641,7 @@ static void compileStmt(Compiler *c, Node *n) {
 
     case NODE_VAR: {
         if (!n->type.llvm) {
-            compileType(n);
+            compileType(&n->type);
         }
         const LLVMTypeRef llvmType = typeInMemory(n->type);
 
@@ -647,6 +664,10 @@ static void compileStmt(Compiler *c, Node *n) {
             LLVMSetInitializer(n->as.var.llvm, LLVMConstNull(llvmType));
         }
     } break;
+
+    case NODE_TYPE:
+        static_assert(COUNT_TYPES == 14, "");
+        break;
 
     case NODE_EXTERN:
         for (Node *it = n->as.externn.definitions.head; it; it = it->next) {
@@ -683,7 +704,7 @@ static void compileStmt(Compiler *c, Node *n) {
 }
 
 static void compileFn(Compiler *c, Node *n) {
-    compileType(n);
+    compileType(&n->type);
 
     if (n->as.fn.body) {
         n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
@@ -710,7 +731,7 @@ static void compileFn(Compiler *c, Node *n) {
         for (size_t i = 0; i < n->as.fn.locals.length; i++) {
             Node *it = n->as.fn.locals.data[i];
             if (it->kind == NODE_VAR) {
-                compileType(it);
+                compileType(&it->type);
                 it->as.var.llvm = LLVMBuildAlloca(c->builder, typeInMemory(it->type), "");
             }
         }
@@ -727,7 +748,7 @@ static void compileFn(Compiler *c, Node *n) {
 }
 
 static Node *getMain(Context context) {
-    Node *main = scopeFind(context.globals, strFromCstr("main"));
+    Node *main = scopeFind(context.globals, strFromCstr("main"), false);
     if (!main) {
         fprintf(stderr, "ERROR: Function 'main' is not defined\n");
         exit(1);

@@ -1,4 +1,4 @@
-:i count 60
+:i count 61
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -643,4 +643,13 @@ extern/basics.glos
 
 :b stderr 2
 E
+
+:b testcase 22
+type-alias/basics.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
 

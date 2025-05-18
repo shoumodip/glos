@@ -1,9 +1,9 @@
 #include "ast.h"
 
-Node *scopeFind(Scope s, Str name) {
+Node *scopeFind(Scope s, Str name, bool isType) {
     for (size_t i = s.length; i > 0; i--) {
         Node *it = s.data[i - 1];
-        if (strEq(it->token.str, name)) {
+        if (strEq(it->token.str, name) && (it->kind == NODE_TYPE) == isType) {
             return it;
         }
     }
@@ -11,7 +11,7 @@ Node *scopeFind(Scope s, Str name) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 13, "");
+static_assert(COUNT_TYPES == 14, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -99,6 +99,11 @@ const char *typeToString(Type type) {
         tempSprintf("rawptr");
         break;
 
+    case TYPE_ALIAS:
+        assert(type.spec);
+        tempStrToCstr(type.spec->token.str);
+        break;
+
     default:
         unreachable();
     }
@@ -137,7 +142,7 @@ bool typeEq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 13, "");
+static_assert(COUNT_TYPES == 14, "");
 bool typeIsSigned(Type type) {
     if (type.ref != 0) {
         return false;
@@ -151,26 +156,22 @@ bool typeIsSigned(Type type) {
     case TYPE_INT:
         return true;
 
+    case TYPE_ALIAS:
+        assert(type.spec);
+        return typeIsSigned(type.spec->as.type.real);
+
     default:
         return false;
     }
 }
 
-bool typeIsPointer(Type type) {
-    return type.kind == TYPE_RAWPTR || type.ref != 0;
-}
-
+static_assert(COUNT_TYPES == 14, "");
 bool typeIsInteger(Type type) {
     if (type.ref != 0) {
         return false;
     }
 
-    return typeKindIsInteger(type.kind);
-}
-
-static_assert(COUNT_TYPES == 13, "");
-bool typeKindIsInteger(TypeKind kind) {
-    switch (kind) {
+    switch (type.kind) {
     case TYPE_I8:
     case TYPE_I16:
     case TYPE_I32:
@@ -182,9 +183,31 @@ bool typeKindIsInteger(TypeKind kind) {
     case TYPE_INT:
         return true;
 
+    case TYPE_ALIAS:
+        assert(type.spec);
+        return typeIsInteger(type.spec->as.type.real);
+
     default:
         return false;
     }
+}
+
+bool typeIsPointer(Type type) {
+    if (type.kind == TYPE_ALIAS) {
+        assert(type.spec);
+        return typeIsPointer(type.spec->as.type.real);
+    }
+
+    return type.kind == TYPE_RAWPTR || type.ref != 0;
+}
+
+Type typeResolve(Type type) {
+    if (type.kind == TYPE_ALIAS) {
+        assert(type.spec);
+        return type.spec->as.type.real;
+    }
+
+    return type;
 }
 
 Type nodeFnReturnType(const NodeFn *fn) {

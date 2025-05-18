@@ -18,7 +18,7 @@ typedef struct {
     size_t capacity;
 } Scope;
 
-Node *scopeFind(Scope s, Str name);
+Node *scopeFind(Scope s, Str name, bool isType);
 
 typedef enum {
     TYPE_UNIT,
@@ -38,6 +38,9 @@ typedef enum {
 
     TYPE_FN,
     TYPE_RAWPTR,
+
+    TYPE_ALIAS,
+
     COUNT_TYPES
 } TypeKind;
 
@@ -53,9 +56,10 @@ const char *typeToString(Type type);
 
 bool typeEq(Type a, Type b);
 bool typeIsSigned(Type type);
-bool typeIsPointer(Type type);
 bool typeIsInteger(Type type);
-bool typeKindIsInteger(TypeKind kind);
+bool typeIsPointer(Type type);
+
+Type typeResolve(Type type);
 
 typedef enum {
     NODE_ATOM,
@@ -74,6 +78,7 @@ typedef enum {
     NODE_FN,
     NODE_ARG,
     NODE_VAR,
+    NODE_TYPE,
     NODE_EXTERN,
 
     NODE_PRINT,
@@ -157,6 +162,11 @@ typedef struct {
 } NodeVar;
 
 typedef struct {
+    Type  real;
+    Node *definition;
+} NodeType;
+
+typedef struct {
     Nodes definitions;
 } NodeExtern;
 
@@ -186,6 +196,7 @@ struct Node {
         NodeFn     fn;
         NodeArg    arg;
         NodeVar    var;
+        NodeType   type;
         NodeExtern externn;
 
         NodePrint print;
