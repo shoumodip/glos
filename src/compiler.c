@@ -556,12 +556,18 @@ static void compileStmt(Compiler *c, Node *n) {
     } break;
 
     case NODE_FOR: {
-        assert(!n->as.forr.init);
-        assert(!n->as.forr.update);
+        if (n->as.forr.init) {
+            compileStmt(c, n->as.forr.init);
+        }
 
         LLVMBasicBlockRef condBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
         LLVMBasicBlockRef bodyBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
         LLVMBasicBlockRef finalBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
+
+        LLVMBasicBlockRef updateBlock = NULL;
+        if (n->as.forr.update) {
+            updateBlock = LLVMAppendBasicBlock(c->fnCompiler.fn, "");
+        }
 
         LLVMBuildBr(c->builder, condBlock);
 
@@ -573,6 +579,14 @@ static void compileStmt(Compiler *c, Node *n) {
         // Body
         LLVMPositionBuilderAtEnd(c->builder, bodyBlock);
         compileStmt(c, n->as.forr.body);
+
+        // Update
+        if (n->as.forr.update) {
+            LLVMBuildBr(c->builder, updateBlock);
+            LLVMPositionBuilderAtEnd(c->builder, updateBlock);
+            compileExpr(c, n->as.forr.update, false);
+        }
+
         LLVMBuildBr(c->builder, condBlock);
 
         // Finally

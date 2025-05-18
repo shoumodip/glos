@@ -1,0 +1,6 @@
+fn main() {
+    var i i64
+    for i = 0 {
+        print i
+    }
+}

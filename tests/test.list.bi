@@ -1,4 +1,4 @@
-:i count 54
+:i count 59
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -241,6 +241,57 @@ loops/basics.glos
 
 :b stderr 0
 
+:b testcase 26
+loops/init-expression.glos
+:i returncode 0
+:b stdout 20
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+:b stderr 0
+
+:b testcase 35
+loops/init-variable-definition.glos
+:i returncode 0
+:b stdout 20
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+:b stderr 0
+
+:b testcase 29
+loops/init-but-no-update.glos
+:i returncode 0
+:b stdout 20
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+:b stderr 0
+
 :b testcase 45
 loops/error-expected-condition-type-bool.glos
 :i returncode 1
@@ -248,6 +299,22 @@ loops/error-expected-condition-type-bool.glos
 
 :b stderr 90
 loops/error-expected-condition-type-bool.glos:2:9: ERROR: Expected type 'bool', got 'i64'
+
+:b testcase 68
+loops/error-expected-condition-after-assignment-expression-init.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 104
+loops/error-expected-condition-after-assignment-expression-init.glos:3:15: ERROR: Expected ';', got '{'
+
+:b testcase 66
+loops/error-expected-condition-after-variable-definition-init.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 102
+loops/error-expected-condition-after-variable-definition-init.glos:2:19: ERROR: Expected ';', got '{'
 
 :b testcase 27
 local-variables/basics.glos

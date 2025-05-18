@@ -597,8 +597,9 @@ static bool executionEnds(Node *n) {
         return executionEnds(n->as.iff.consequence) && executionEnds(n->as.iff.antecedence);
 
     case NODE_FOR:
-        assert(!n->as.forr.init);
-        assert(!n->as.forr.update);
+        if (n->as.forr.init && executionEnds(n->as.forr.init)) {
+            return true;
+        }
 
         // TODO: Condition analysis
         assert(n->as.forr.condition);
@@ -642,16 +643,23 @@ static void checkStmt(Context *c, Node *n) {
         }
         break;
 
-    case NODE_FOR:
-        assert(!n->as.forr.init);
-        assert(!n->as.forr.update);
+    case NODE_FOR: {
+        const size_t blockSave = blockBegin(c);
+        if (n->as.forr.init) {
+            checkStmt(c, n->as.forr.init);
+        }
 
         assert(n->as.forr.condition);
         checkExpr(c, n->as.forr.condition, false);
         typeAssert(n->as.forr.condition, (Type) {.kind = TYPE_BOOL});
 
+        if (n->as.forr.update) {
+            checkStmt(c, n->as.forr.update);
+        }
+
         checkStmt(c, n->as.forr.body);
-        break;
+        blockRestore(c, blockSave);
+    } break;
 
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;

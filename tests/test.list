@@ -17,7 +17,12 @@ assignment/basics.glos
 assignment/error-type-mismatch.glos
 assignment/error-cannot-take-reference.glos
 loops/basics.glos
+loops/init-expression.glos
+loops/init-variable-definition.glos
+loops/init-but-no-update.glos
 loops/error-expected-condition-type-bool.glos
+loops/error-expected-condition-after-assignment-expression-init.glos
+loops/error-expected-condition-after-variable-definition-init.glos
 local-variables/basics.glos
 local-variables/shadowing.glos
 local-variables/error-assignment-definition-type-mismatch.glos

@@ -321,7 +321,33 @@ static Node *parseStmt(Parser *p) {
     case TOKEN_FOR:
         localAssert(p, token, true);
         node = nodeNew(p, NODE_FOR, token);
-        node->as.forr.condition = parseExpr(p, POWER_SET);
+
+        token = lexerPeek(&p->lexer);
+        if (token.kind == TOKEN_VAR) {
+            p->dontConsumeEols = true;
+            node->as.forr.condition = parseStmt(p);
+            p->dontConsumeEols = false;
+
+            lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_EOL));
+        } else {
+            node->as.forr.condition = parseExpr(p, POWER_NIL);
+
+            Node *cond = node->as.forr.condition;
+            if (cond->kind == NODE_BINARY && tokenKindPower(cond->token.kind) == POWER_SET) {
+                lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_EOL));
+            }
+        }
+
+        if (lexerRead(&p->lexer, TOKEN_EOL)) {
+            consumeEols(p);
+            node->as.forr.init = node->as.forr.condition;
+            node->as.forr.condition = parseExpr(p, POWER_SET);
+
+            if (lexerRead(&p->lexer, TOKEN_EOL)) {
+                consumeEols(p);
+                node->as.forr.update = parseExpr(p, POWER_NIL);
+            }
+        }
 
         lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));
         node->as.forr.body = parseStmt(p);
@@ -387,7 +413,9 @@ static Node *parseStmt(Parser *p) {
         break;
     }
 
-    consumeEols(p);
+    if (!p->dontConsumeEols) {
+        consumeEols(p);
+    }
     return node;
 }
 
