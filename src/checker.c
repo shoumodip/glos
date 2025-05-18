@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #include "checker.h"
 
 // Scope
@@ -50,8 +52,114 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static Type typeAssert(const Node *n, Type expected) {
+static_assert(COUNT_NODES == 14, "");
+static void castUntypedInt(Node *n, Type expected) {
+    switch (n->kind) {
+    case NODE_ATOM:
+        switch (n->token.kind) {
+        case TOKEN_INT: {
+            n->type = expected;
+
+            static_assert(COUNT_TYPES == 13, "");
+            const size_t intLimits[COUNT_TYPES] = {
+                [TYPE_I8] = INT8_MAX,
+                [TYPE_I16] = INT16_MAX,
+                [TYPE_I32] = INT32_MAX,
+                [TYPE_I64] = INT64_MAX,
+
+                [TYPE_U8] = UINT8_MAX,
+                [TYPE_U16] = UINT16_MAX,
+                [TYPE_U32] = UINT32_MAX,
+                [TYPE_U64] = UINT64_MAX,
+
+                [TYPE_INT] = INT64_MAX,
+            };
+
+            if (n->token.as.integer > intLimits[n->type.kind]) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Integer literal '" StrFmt "' is too large for type '%s'\n",
+                    PosArg(n->token.pos),
+                    StrArg(n->token.str),
+                    typeToString(n->type));
+
+                exit(1);
+            }
+        } break;
+
+        case TOKEN_IDENT:
+            castUntypedInt(n->as.atom.definition, expected);
+            n->type = expected;
+            break;
+
+        default:
+            unreachable();
+        }
+        break;
+
+    case NODE_UNARY:
+        castUntypedInt(n->as.unary.operand, expected);
+        n->type = expected;
+        break;
+
+    case NODE_BINARY:
+        castUntypedInt(n->as.binary.lhs, expected);
+        castUntypedInt(n->as.binary.rhs, expected);
+        n->type = expected;
+        break;
+
+    case NODE_VAR: {
+        Node *expr = n->as.var.expr;
+        assert(expr);
+
+        castUntypedInt(expr, expected);
+        n->type = expr->type;
+    } break;
+
+    case NODE_FLOW: {
+        assert(n->token.kind == TOKEN_RETURN);
+
+        Node *operand = n->as.flow.operand;
+        assert(operand);
+
+        castUntypedInt(operand, expected);
+        n->type = operand->type;
+    } break;
+
+    default:
+        unreachable();
+    }
+}
+
+static bool tryAutoCastUntypedInt(Node *n, Type expected) {
+    // If the types are already equal, consider it a succesful auto cast
+    if (typeEq(n->type, expected)) {
+        return true;
+    }
+
+    // Only untyped integers can be casted from/to typed integers
+    if (!typeKindIsInteger(expected.kind) || n->type.kind != TYPE_INT) {
+        return false;
+    }
+
+    // The indirection level of the typed and untyped integers must match
+    if (expected.ref != n->type.ref) {
+        return false;
+    }
+
+    if (expected.kind != TYPE_INT) {
+        castUntypedInt(n, expected);
+    }
+
+    return true;
+}
+
+static Type typeAssert(Node *n, Type expected) {
     if (!typeEq(n->type, expected)) {
+        if (tryAutoCastUntypedInt(n, expected)) {
+            return expected;
+        }
+
         fprintf(
             stderr,
             PosFmt "ERROR: Expected type '%s', got '%s'\n",
@@ -62,6 +170,16 @@ static Type typeAssert(const Node *n, Type expected) {
         exit(1);
     }
     return n->type;
+}
+
+static Type typeAssertNode(Node *a, Node *b) {
+    // Try auto casting 'b' to 'a'
+    if (tryAutoCastUntypedInt(b, a->type)) {
+        return a->type;
+    }
+
+    // Errors will be reported on the position of 'a'
+    return typeAssert(a, b->type);
 }
 
 static Type typeAssertArith(const Node *n) {
@@ -90,7 +208,10 @@ static Type typeAssertScalar(const Node *n) {
     return n->type;
 }
 
-static bool isTypeCastIllegal(Type from, Type to) {
+static bool isTypeCastIllegal(Node *fromNode, Node *toNode) {
+    const Type from = fromNode->type;
+    const Type to = toNode->type;
+
     // Function -> *
     // *        -> Function
     if (from.kind == TYPE_FN || to.kind == TYPE_FN) {
@@ -99,13 +220,12 @@ static bool isTypeCastIllegal(Type from, Type to) {
 
     // Not 64 Bit Integer -> Pointer
     // Pointer            -> Not 64 Bit Integer
-    if (!typeIsPointer(from) && typeIsPointer(to) && from.kind != TYPE_I64 &&
-        from.kind != TYPE_U64) {
-        return true;
+    if (!typeIsPointer(from) && typeIsPointer(to)) {
+        return !tryAutoCastUntypedInt(fromNode, (Type) {.kind = TYPE_U64});
     }
 
-    if (!typeIsPointer(to) && typeIsPointer(from) && to.kind != TYPE_I64 && to.kind != TYPE_U64) {
-        return true;
+    if (!typeIsPointer(to) && typeIsPointer(from)) {
+        return !tryAutoCastUntypedInt(toNode, (Type) {.kind = TYPE_U64});
     }
 
     return false;
@@ -136,7 +256,7 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
 
 static void checkExpr(Context *c, Node *n, bool ref);
 
-static_assert(COUNT_TYPES == 12, "");
+static_assert(COUNT_TYPES == 13, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -217,7 +337,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         static_assert(COUNT_TOKENS == 36, "");
         switch (n->token.kind) {
         case TOKEN_INT:
-            n->type = (Type) {.kind = TYPE_I64};
+            n->type = (Type) {.kind = TYPE_INT};
             break;
 
         case TOKEN_BOOL:
@@ -284,7 +404,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         for (Node *a = actual.args.head, *e = expected.args.head; a; a = a->next, e = e->next) {
             checkExpr(c, a, false);
-            typeAssert(a, e->type);
+            typeAssertNode(a, e);
         }
 
         n->type = nodeFnReturnType(&fn->type.spec->as.fn);
@@ -299,7 +419,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         const Type fromType = typeAssertScalar(from);
         const Type toType = typeAssertScalar(to);
-        if (isTypeCastIllegal(fromType, toType)) {
+        if (isTypeCastIllegal(from, to)) {
             fprintf(
                 stderr,
                 PosFmt "ERROR: Cannot cast type '%s' to type '%s'\n",
@@ -383,7 +503,8 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         case TOKEN_DIV:
             checkExpr(c, lhs, false);
             checkExpr(c, rhs, false);
-            n->type = typeAssert(rhs, typeAssertArith(lhs));
+            typeAssertArith(lhs);
+            n->type = typeAssertNode(rhs, lhs);
             break;
 
         case TOKEN_SHL:
@@ -392,13 +513,14 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         case TOKEN_BAND:
             checkExpr(c, lhs, false);
             checkExpr(c, rhs, false);
-            n->type = typeAssert(rhs, typeAssertArith(lhs));
+            typeAssertArith(lhs);
+            n->type = typeAssertNode(rhs, lhs);
             break;
 
         case TOKEN_SET:
             checkExpr(c, lhs, true);
             checkExpr(c, rhs, false);
-            typeAssert(rhs, lhs->type);
+            typeAssertNode(rhs, lhs);
             n->type = (Type) {.kind = TYPE_UNIT};
             break;
 
@@ -417,7 +539,8 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         case TOKEN_NE:
             checkExpr(c, lhs, false);
             checkExpr(c, rhs, false);
-            typeAssert(rhs, typeAssertArith(lhs));
+            typeAssertArith(lhs);
+            typeAssertNode(rhs, lhs);
             n->type = (Type) {.kind = TYPE_BOOL};
             break;
 
@@ -592,6 +715,7 @@ static void checkStmt(Context *c, Node *n) {
 
             if (n->as.var.type) {
                 typeAssert(expr, n->as.var.type->type);
+                n->type = expr->type;
             }
         }
 

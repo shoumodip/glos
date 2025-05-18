@@ -1,4 +1,4 @@
-:i count 51
+:i count 53
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -74,6 +74,29 @@ integers/unsigned-comparisons.glos
 0
 
 :b stderr 0
+
+:b testcase 39
+integers/untyped-literal-auto-cast.glos
+:i returncode 0
+:b stdout 36
+69
+420
+1337
+80085
+69
+420
+1337
+80085
+
+:b stderr 0
+
+:b testcase 55
+integers/error-untyped-literal-auto-cast-too-large.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 118
+integers/error-untyped-literal-auto-cast-too-large.glos:1:12: ERROR: Integer literal '420' is too large for type 'i8'
 
 :b testcase 20
 booleans/basics.glos
@@ -497,21 +520,21 @@ type-cast/basics.glos
 
 :b stderr 0
 
-:b testcase 88
-type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos
+:b testcase 85
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-u64-integers.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 140
-type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos:3:9: ERROR: Cannot cast type 'bool' to type '&i64'
+:b stderr 137
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-u64-integers.glos:3:9: ERROR: Cannot cast type 'bool' to type '&i64'
 
-:b testcase 86
-type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos
+:b testcase 83
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-u64-integers.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 138
-type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos:4:9: ERROR: Cannot cast type '&i64' to type 'bool'
+:b stderr 135
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-u64-integers.glos:3:9: ERROR: Cannot cast type '&i64' to type 'bool'
 
 :b testcase 18
 sizeof/basics.glos

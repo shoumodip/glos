@@ -34,6 +34,8 @@ typedef enum {
     TYPE_U32,
     TYPE_U64,
 
+    TYPE_INT, // Untyped literal, defaults to i64
+
     TYPE_FN,
     TYPE_RAWPTR,
     COUNT_TYPES
@@ -51,8 +53,9 @@ const char *typeToString(Type type);
 
 bool typeEq(Type a, Type b);
 bool typeIsSigned(Type type);
-bool typeIsInteger(Type type);
 bool typeIsPointer(Type type);
+bool typeIsInteger(Type type);
+bool typeKindIsInteger(TypeKind kind);
 
 typedef enum {
     NODE_ATOM,

@@ -6,7 +6,6 @@
 
 // NOTE: This is temporary
 #include <llvm-c/Analysis.h>
-#include <stdbool.h>
 
 typedef struct {
     LLVMValueRef      fn;
@@ -51,7 +50,7 @@ static LLVMTypeRef typeInMemory(Type type) {
     return type.llvm;
 }
 
-static_assert(COUNT_TYPES == 12, "");
+static_assert(COUNT_TYPES == 13, "");
 static void compileType(Node *n) {
     if (typeIsPointer(n->type)) {
         n->type.llvm = LLVMPointerType(LLVMVoidType(), 0);
@@ -84,6 +83,7 @@ static void compileType(Node *n) {
 
     case TYPE_I64:
     case TYPE_U64:
+    case TYPE_INT:
         n->type.llvm = LLVMInt64Type();
         break;
 
@@ -233,7 +233,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildZExt(c->builder, fromValue, toLLVM, "");
         }
 
-        static_assert(COUNT_TYPES == 12, "");
+        static_assert(COUNT_TYPES == 13, "");
         const size_t intSizes[COUNT_TYPES] = {
             [TYPE_I8] = 8,
             [TYPE_I16] = 16,
@@ -244,6 +244,8 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             [TYPE_U16] = 16,
             [TYPE_U32] = 32,
             [TYPE_U64] = 64,
+
+            [TYPE_INT] = 64,
         };
 
         if (intSizes[fromType.kind]) {

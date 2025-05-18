@@ -1,0 +1,21 @@
+fn a(x i8)  { print x }
+fn b(x i16) { print x }
+fn c(x i32) { print x }
+fn d(x i64) { print x }
+
+fn e(x u8)  { print x }
+fn f(x u16) { print x }
+fn g(x u32) { print x }
+fn h(x u64) { print x }
+
+fn main() {
+    a(69)
+    b(420)
+    c(1337)
+    d(80085)
+
+    e(69)
+    f(420)
+    g(1337)
+    h(80085)
+}

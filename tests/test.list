@@ -2,6 +2,8 @@ integers/basics.glos
 integers/signed-types.glos
 integers/unsigned-types.glos
 integers/unsigned-comparisons.glos
+integers/untyped-literal-auto-cast.glos
+integers/error-untyped-literal-auto-cast-too-large.glos
 booleans/basics.glos
 conditions/basics.glos
 conditions/error-expected-block-or-if.glos
@@ -46,6 +48,6 @@ pointers/error-cannot-take-reference.glos
 pointers/error-dereference-expected-pointer.glos
 pointers/error-cannot-dereference-raw-pointer.glos
 type-cast/basics.glos
-type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-64-bit-integers.glos
-type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-64-bit-integers.glos
+type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-u64-integers.glos
+type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-u64-integers.glos
 sizeof/basics.glos

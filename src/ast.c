@@ -11,7 +11,7 @@ Node *scopeFind(Scope s, Str name) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 12, "");
+static_assert(COUNT_TYPES == 13, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -60,6 +60,10 @@ const char *typeToString(Type type) {
 
     case TYPE_U64:
         tempSprintf("u64");
+        break;
+
+    case TYPE_INT:
+        tempSprintf("i64");
         break;
 
     case TYPE_FN: {
@@ -133,7 +137,7 @@ bool typeEq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 12, "");
+static_assert(COUNT_TYPES == 13, "");
 bool typeIsSigned(Type type) {
     if (type.ref != 0) {
         return false;
@@ -144,24 +148,7 @@ bool typeIsSigned(Type type) {
     case TYPE_I16:
     case TYPE_I32:
     case TYPE_I64:
-        return true;
-
-    default:
-        return false;
-    }
-}
-
-static_assert(COUNT_TYPES == 12, "");
-bool typeIsInteger(Type type) {
-    switch (type.kind) {
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
-    case TYPE_U8:
-    case TYPE_U16:
-    case TYPE_U32:
-    case TYPE_U64:
+    case TYPE_INT:
         return true;
 
     default:
@@ -171,6 +158,33 @@ bool typeIsInteger(Type type) {
 
 bool typeIsPointer(Type type) {
     return type.kind == TYPE_RAWPTR || type.ref != 0;
+}
+
+bool typeIsInteger(Type type) {
+    if (type.ref != 0) {
+        return false;
+    }
+
+    return typeKindIsInteger(type.kind);
+}
+
+static_assert(COUNT_TYPES == 13, "");
+bool typeKindIsInteger(TypeKind kind) {
+    switch (kind) {
+    case TYPE_I8:
+    case TYPE_I16:
+    case TYPE_I32:
+    case TYPE_I64:
+    case TYPE_U8:
+    case TYPE_U16:
+    case TYPE_U32:
+    case TYPE_U64:
+    case TYPE_INT:
+        return true;
+
+    default:
+        return false;
+    }
 }
 
 Type nodeFnReturnType(const NodeFn *fn) {
