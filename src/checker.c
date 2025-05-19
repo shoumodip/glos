@@ -293,8 +293,6 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
     exit(1);
 }
 
-static void checkExpr(Context *c, Node *n, bool ref);
-
 static_assert(COUNT_TYPES == 15, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
@@ -331,14 +329,9 @@ static void checkType(Context *c, Node *n) {
 
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
-        if (n->token.kind == TOKEN_BAND) {
-            checkType(c, operand);
-            n->type = operand->type;
-            n->type.ref++;
-        } else {
-            checkExpr(c, operand, false);
-            n->type = operand->type;
-        }
+        checkType(c, operand);
+        n->type = operand->type;
+        n->type.ref++;
     } break;
 
     case NODE_FN:
