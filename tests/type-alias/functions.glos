@@ -1,0 +1,10 @@
+type Arith fn (i64, i64) i64
+
+fn add(x i64, y i64) i64 {
+    return x + y
+}
+
+fn main() {
+    var arith = <Arith> add
+    print arith(34, 35)
+}

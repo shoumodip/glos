@@ -1,0 +1,10 @@
+type Func fn ()
+
+fn foo() {
+    print 69
+}
+
+fn main() {
+    var fooRaw = <rawptr> foo
+    (<Func> fooRaw)()
+}

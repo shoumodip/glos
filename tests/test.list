@@ -54,9 +54,12 @@ pointers/error-cannot-take-reference.glos
 pointers/error-dereference-expected-pointer.glos
 pointers/error-cannot-dereference-raw-pointer.glos
 type-cast/basics.glos
+type-cast/functions-to-and-from-rawptr.glos
 type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-u64-integers.glos
 type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-u64-integers.glos
+type-cast/error-function-signature-mismatch.glos
 sizeof/basics.glos
 extern/basics.glos
 type-alias/basics.glos
 type-alias/equivalence.glos
+type-alias/functions.glos

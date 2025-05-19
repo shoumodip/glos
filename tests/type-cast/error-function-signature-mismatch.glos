@@ -1,0 +1,7 @@
+fn foo() {
+    print 69
+}
+
+fn main() {
+    var bar fn (i64) = foo
+}

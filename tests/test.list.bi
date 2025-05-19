@@ -1,4 +1,4 @@
-:i count 62
+:i count 65
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -604,6 +604,14 @@ type-cast/basics.glos
 
 :b stderr 0
 
+:b testcase 43
+type-cast/functions-to-and-from-rawptr.glos
+:i returncode 0
+:b stdout 3
+69
+
+:b stderr 0
+
 :b testcase 85
 type-cast/error-pointers-can-only-be-casted-from-other-pointers-and-u64-integers.glos
 :i returncode 1
@@ -619,6 +627,14 @@ type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-u64-integers.g
 
 :b stderr 135
 type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-u64-integers.glos:3:9: ERROR: Cannot cast type '&i64' to type 'bool'
+
+:b testcase 48
+type-cast/error-function-signature-mismatch.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 100
+type-cast/error-function-signature-mismatch.glos:6:24: ERROR: Expected type 'fn (i64)', got 'fn ()'
 
 :b testcase 18
 sizeof/basics.glos
@@ -666,6 +682,14 @@ type-alias/equivalence.glos
 1
 0
 1
+
+:b stderr 0
+
+:b testcase 25
+type-alias/functions.glos
+:i returncode 0
+:b stdout 3
+69
 
 :b stderr 0
 
