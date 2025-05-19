@@ -2,6 +2,16 @@
 
 #include "checker.h"
 
+static Node *nodesFind(Nodes ns, Str name) {
+    for (Node *it = ns.head; it; it = it->next) {
+        if (strEq(it->token.str, name)) {
+            return it;
+        }
+    }
+
+    return NULL;
+}
+
 // Scope
 static void scopePush(Scope *s, Node *n) {
     if (s->length >= s->capacity) {
@@ -378,7 +388,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -481,7 +491,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -540,8 +550,34 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
+        case TOKEN_DOT: {
+            checkExpr(c, lhs, true);
+
+            const Type lhsType = typeResolve(lhs->type);
+            if (lhsType.kind != TYPE_STRUCT) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Expected structure, got '%s'\n",
+                    PosArg(lhs->token.pos),
+                    typeToString(lhs->type));
+
+                exit(1);
+            }
+            const NodeStruct structt = lhsType.spec->as.structt;
+
+            Node *definition = nodesFind(structt.fields, rhs->token.str);
+            if (!definition) {
+                errorUndefined(rhs, "field");
+            }
+
+            rhs->as.atom.definition = definition;
+            n->type = definition->type;
+
+            allowRef = true;
+        } break;
+
         case TOKEN_ADD:
         case TOKEN_SUB:
         case TOKEN_MUL:
@@ -666,7 +702,7 @@ static bool alwaysReturns(Node *n) {
     }
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -723,7 +759,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

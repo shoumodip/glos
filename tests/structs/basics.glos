@@ -1,13 +1,16 @@
-type IVec2 struct {
+type Vec2 struct {
     x i64
     y i64
 }
 
-fn printIVec2Size(v IVec2) {
-    print sizeof(v)
+fn printVec2(v Vec2) {
+    print v.x
+    print v.y
 }
 
 fn main() {
-    var pos IVec2
-    printIVec2Size(pos)
+    var pos Vec2
+    pos.x = 69
+    pos.y = 420
+    printVec2(pos)
 }

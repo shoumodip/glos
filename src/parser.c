@@ -42,9 +42,10 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 40, "");
+static_assert(COUNT_TOKENS == 41, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
+    case TOKEN_DOT:
     case TOKEN_LPAREN:
         return POWER_DOT;
 
@@ -128,7 +129,7 @@ static Node *parseArgWithOptionalName(Parser *p, Node *fn) {
     return arg;
 }
 
-static_assert(COUNT_TOKENS == 40, "");
+static_assert(COUNT_TOKENS == 41, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -186,7 +187,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 40, "");
+static_assert(COUNT_TOKENS == 41, "");
 static Node *parseExpr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -255,6 +256,13 @@ static Node *parseExpr(Parser *p, Power mbp) {
         lexerUnbuffer(&p->lexer);
 
         switch (token.kind) {
+        case TOKEN_DOT: {
+            Node *binary = nodeNew(p, NODE_BINARY, token);
+            binary->as.binary.lhs = node;
+            binary->as.binary.rhs = nodeNew(p, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_IDENT));
+            node = binary;
+        } break;
+
         case TOKEN_LPAREN: {
             Node *call = nodeNew(p, NODE_CALL, token);
             call->as.call.fn = node;
@@ -300,7 +308,7 @@ static void consumeEols(Parser *p) {
     while (lexerRead(&p->lexer, TOKEN_EOL));
 }
 
-static_assert(COUNT_TOKENS == 40, "");
+static_assert(COUNT_TOKENS == 41, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

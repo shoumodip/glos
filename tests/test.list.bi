@@ -696,8 +696,9 @@ type-alias/functions.glos
 :b testcase 19
 structs/basics.glos
 :i returncode 0
-:b stdout 3
-16
+:b stdout 7
+69
+420
 
 :b stderr 0
 

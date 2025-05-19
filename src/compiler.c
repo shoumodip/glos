@@ -191,7 +191,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -317,7 +317,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -355,8 +355,25 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
+        case TOKEN_DOT: {
+            const LLVMValueRef lhsValue = compileExpr(c, lhs, true);
+
+            assert(rhs->kind == NODE_ATOM);
+            assert(rhs->as.atom.definition->kind == NODE_FIELD);
+            const size_t index = rhs->as.atom.definition->as.field.index;
+
+            const LLVMValueRef fieldValue =
+                LLVMBuildStructGEP2(c->builder, lhs->type.llvm, lhsValue, index, "");
+
+            if (ref) {
+                return fieldValue;
+            }
+
+            return LLVMBuildLoad2(c->builder, typeInMemory(n->type), fieldValue, "");
+        }
+
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             LLVMValueRef rhsValue = compileExpr(c, rhs, false);
@@ -631,7 +648,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 40, "");
+        static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
