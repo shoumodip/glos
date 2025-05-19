@@ -1,4 +1,4 @@
-:i count 69
+:i count 71
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -486,6 +486,15 @@ functions/anonymous.glos
 
 :b stderr 0
 
+:b testcase 42
+functions/error-argument-redefinition.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 152
+functions/error-argument-redefinition.glos:1:15: ERROR: Redefinition of argument 'x'
+functions/error-argument-redefinition.glos:1:8: NOTE: Defined here
+
 :b testcase 44
 functions/error-argument-count-mismatch.glos
 :i returncode 1
@@ -721,6 +730,15 @@ structs/temporary-struct-field-access.glos
 420
 
 :b stderr 0
+
+:b testcase 37
+structs/error-field-redefinition.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 138
+structs/error-field-redefinition.glos:3:5: ERROR: Redefinition of field 'x'
+structs/error-field-redefinition.glos:2:5: NOTE: Defined here
 
 :b testcase 54
 structs/error-temporary-struct-is-not-real-memory.glos

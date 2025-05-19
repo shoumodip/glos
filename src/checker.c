@@ -2,8 +2,8 @@
 
 #include "checker.h"
 
-static Node *nodesFind(Nodes ns, Str name) {
-    for (Node *it = ns.head; it; it = it->next) {
+static Node *nodesFind(Nodes ns, Str name, Node *until) {
+    for (Node *it = ns.head; it && it != until; it = it->next) {
         if (strEq(it->token.str, name)) {
             return it;
         }
@@ -336,6 +336,13 @@ static void checkType(Context *c, Node *n) {
 
     case NODE_FN:
         for (Node *it = n->as.fn.args.head; it; it = it->next) {
+            if (it->token.kind == TOKEN_IDENT) {
+                const Node *previous = nodesFind(n->as.fn.args, it->token.str, it);
+                if (previous) {
+                    errorRedefinition(it, previous, "argument");
+                }
+            }
+
             checkType(c, it->as.arg.type);
             it->type = it->as.arg.type->type;
         }
@@ -350,8 +357,12 @@ static void checkType(Context *c, Node *n) {
     case NODE_STRUCT:
         assert(!n->as.structt.literalType);
 
-        // TODO: Check for duplicate fields
         for (Node *it = n->as.structt.fields.head; it; it = it->next) {
+            const Node *previous = nodesFind(n->as.structt.fields, it->token.str, it);
+            if (previous) {
+                errorRedefinition(it, previous, "field");
+            }
+
             checkType(c, it->as.field.type);
             it->type = it->as.field.type->type;
         }
@@ -657,7 +668,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         const NodeStruct structt = lhsType.spec->as.structt;
 
-        Node *definition = nodesFind(structt.fields, rhs->token.str);
+        Node *definition = nodesFind(structt.fields, rhs->token.str, NULL);
         if (!definition) {
             errorUndefined(rhs, "field");
         }
@@ -700,7 +711,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         const NodeStruct structt = lhsType.spec->as.structt;
         for (Node *it = n->as.structt.fields.head; it; it = it->next) {
             assert(it->kind == NODE_BINARY);
-            Node *definition = nodesFind(structt.fields, it->token.str);
+            Node *definition = nodesFind(structt.fields, it->token.str, NULL);
             if (!definition) {
                 errorUndefined(it, "field");
             }
@@ -849,7 +860,6 @@ static void checkStmt(Context *c, Node *n) {
         break;
 
     case NODE_ARG:
-        // TODO: Check for duplicate arguments
         checkType(c, n->as.arg.type);
         n->type = n->as.arg.type->type;
 
@@ -958,6 +968,11 @@ static void checkFn(Context *c, Node *n) {
     {
         const FnContext fnContextSave = fnContextBegin(c, &n->as.fn);
         for (Node *it = n->as.fn.args.head; it; it = it->next) {
+            const Node *previous = nodesFind(n->as.fn.args, it->token.str, it);
+            if (previous) {
+                errorRedefinition(it, previous, "argument");
+            }
+
             checkStmt(c, it);
         }
 

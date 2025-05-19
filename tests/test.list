@@ -41,6 +41,7 @@ functions/nested-functions.glos
 functions/return-unit.glos
 functions/return-not-unit.glos
 functions/anonymous.glos
+functions/error-argument-redefinition.glos
 functions/error-argument-count-mismatch.glos
 functions/error-argument-type-mismatch.glos
 functions/error-function-literal-is-not-memory.glos
@@ -66,4 +67,5 @@ type-alias/functions.glos
 structs/basics.glos
 structs/literals.glos
 structs/temporary-struct-field-access.glos
+structs/error-field-redefinition.glos
 structs/error-temporary-struct-is-not-real-memory.glos
