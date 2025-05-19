@@ -27,6 +27,7 @@ static_assert(COUNT_TOKENS == 41, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_DOT:
+    case TOKEN_LBRACE:
     case TOKEN_LPAREN:
         return POWER_DOT;
 
@@ -86,7 +87,6 @@ static bool tokenKindIsStartOfType(TokenKind k) {
 }
 
 static Node *parseType(Parser *p);
-static Node *parseExpr(Parser *p, Power mbp);
 
 static Node *parseArgWithOptionalName(Parser *p, Node *fn) {
     const Token argToken = lexerNext(&p->lexer);
@@ -156,6 +156,8 @@ static Node *parseType(Parser *p) {
             field->as.field.type = parseType(p);
             field->as.field.index = node->as.structt.fieldsCount++;
             nodesPush(&node->as.structt.fields, field);
+
+            lexerRead(&p->lexer, TOKEN_COMMA);
         }
         break;
 
@@ -169,7 +171,7 @@ static Node *parseType(Parser *p) {
 static Node *parseFn(Parser *p, Token name);
 
 static_assert(COUNT_TOKENS == 41, "");
-static Node *parseExpr(Parser *p, Power mbp) {
+static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
 
@@ -186,11 +188,11 @@ static Node *parseExpr(Parser *p, Power mbp) {
     case TOKEN_LNOT:
     case TOKEN_BAND:
         node = nodeAlloc(p->nodeAlloc, NODE_UNARY, token);
-        node->as.unary.operand = parseExpr(p, POWER_PRE);
+        node->as.unary.operand = parseExpr(p, POWER_PRE, noStruct);
         break;
 
     case TOKEN_LPAREN:
-        node = parseExpr(p, POWER_SET);
+        node = parseExpr(p, POWER_SET, false);
         lexerExpect(&p->lexer, TOKEN_RPAREN);
         break;
 
@@ -199,7 +201,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
         node->as.cast.to = parseType(p);
 
         lexerExpect(&p->lexer, TOKEN_GT);
-        node->as.cast.from = parseExpr(p, POWER_PRE);
+        node->as.cast.from = parseExpr(p, POWER_PRE, noStruct);
     } break;
 
     case TOKEN_SIZEOF:
@@ -208,7 +210,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
         token = lexerExpect(&p->lexer, TOKEN_LPAREN, TOKEN_LT);
         if (token.kind == TOKEN_LPAREN) {
             node->as.sizeoff.isExpr = true;
-            node->as.sizeoff.operand = parseExpr(p, POWER_SET);
+            node->as.sizeoff.operand = parseExpr(p, POWER_SET, false);
             lexerExpect(&p->lexer, TOKEN_RPAREN);
         } else {
             node->as.sizeoff.operand = parseType(p);
@@ -218,6 +220,11 @@ static Node *parseExpr(Parser *p, Power mbp) {
 
     case TOKEN_FN:
         node = parseFn(p, token);
+        break;
+
+    case TOKEN_STRUCT:
+        lexerBuffer(&p->lexer, token);
+        node = parseType(p);
         break;
 
     default:
@@ -240,9 +247,45 @@ static Node *parseExpr(Parser *p, Power mbp) {
         case TOKEN_DOT: {
             Node *dot = nodeAlloc(p->nodeAlloc, NODE_MEMBER, token);
             dot->as.member.lhs = node;
-            dot->as.member.rhs =
-                nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_IDENT));
+
+            token = lexerExpect(&p->lexer, TOKEN_IDENT);
+            dot->as.member.rhs = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
+
             node = dot;
+        } break;
+
+        case TOKEN_LBRACE: {
+            bool ok = false;
+            if (!noStruct) {
+                if (node->kind == NODE_ATOM && node->token.kind == TOKEN_IDENT) {
+                    ok = true;
+                } else if (node->kind == NODE_STRUCT && !node->as.structt.literalType) {
+                    ok = true;
+                }
+            }
+
+            if (!ok) {
+                lexerBuffer(&p->lexer, token);
+                return node;
+            }
+
+            Node *structt = nodeAlloc(p->nodeAlloc, NODE_STRUCT, token);
+            structt->as.structt.literalType = node;
+
+            while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
+                token = lexerExpect(&p->lexer, TOKEN_IDENT);
+                Node *assign = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
+
+                lexerExpect(&p->lexer, TOKEN_SET);
+                assign->as.binary.rhs = parseExpr(p, POWER_SET, false);
+
+                nodesPush(&structt->as.structt.fields, assign);
+                if (lexerExpect(&p->lexer, TOKEN_RBRACE, TOKEN_COMMA).kind == TOKEN_RBRACE) {
+                    break;
+                }
+            }
+
+            node = structt;
         } break;
 
         case TOKEN_LPAREN: {
@@ -250,7 +293,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
             call->as.call.fn = node;
 
             while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
-                nodesPush(&call->as.call.args, parseExpr(p, POWER_SET));
+                nodesPush(&call->as.call.args, parseExpr(p, POWER_SET, false));
                 call->as.call.arity++;
 
                 if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
@@ -264,7 +307,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
         default: {
             Node *binary = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
             binary->as.binary.lhs = node;
-            binary->as.binary.rhs = parseExpr(p, lbp);
+            binary->as.binary.rhs = parseExpr(p, lbp, noStruct);
             node = binary;
         } break;
         }
@@ -310,7 +353,7 @@ static Node *parseStmt(Parser *p) {
     case TOKEN_IF:
         localAssert(p, token, true);
         node = nodeAlloc(p->nodeAlloc, NODE_IF, token);
-        node->as.iff.condition = parseExpr(p, POWER_SET);
+        node->as.iff.condition = parseExpr(p, POWER_SET, true);
 
         lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));
         node->as.iff.consequence = parseStmt(p);
@@ -333,7 +376,7 @@ static Node *parseStmt(Parser *p) {
 
             lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_EOL));
         } else if (token.kind != TOKEN_LBRACE) {
-            node->as.forr.condition = parseExpr(p, POWER_NIL);
+            node->as.forr.condition = parseExpr(p, POWER_NIL, true);
 
             Node *cond = node->as.forr.condition;
             if (cond->kind == NODE_BINARY && tokenKindPower(cond->token.kind) == POWER_SET) {
@@ -344,11 +387,11 @@ static Node *parseStmt(Parser *p) {
         if (lexerRead(&p->lexer, TOKEN_EOL)) {
             consumeEols(p);
             node->as.forr.init = node->as.forr.condition;
-            node->as.forr.condition = parseExpr(p, POWER_SET);
+            node->as.forr.condition = parseExpr(p, POWER_SET, true);
 
             if (lexerRead(&p->lexer, TOKEN_EOL)) {
                 consumeEols(p);
-                node->as.forr.update = parseExpr(p, POWER_NIL);
+                node->as.forr.update = parseExpr(p, POWER_NIL, true);
             }
         }
 
@@ -362,7 +405,7 @@ static Node *parseStmt(Parser *p) {
 
         token = lexerPeek(&p->lexer);
         if (!token.onNewline) {
-            node->as.flow.operand = parseExpr(p, POWER_SET);
+            node->as.flow.operand = parseExpr(p, POWER_SET, false);
         }
         break;
 
@@ -383,7 +426,7 @@ static Node *parseStmt(Parser *p) {
             }
 
             if (lexerRead(&p->lexer, TOKEN_SET)) {
-                node->as.var.expr = parseExpr(p, POWER_SET);
+                node->as.var.expr = parseExpr(p, POWER_SET, false);
             }
         }
 
@@ -411,13 +454,13 @@ static Node *parseStmt(Parser *p) {
     case TOKEN_PRINT:
         localAssert(p, token, true);
         node = nodeAlloc(p->nodeAlloc, NODE_PRINT, token);
-        node->as.print.operand = parseExpr(p, POWER_SET);
+        node->as.print.operand = parseExpr(p, POWER_SET, false);
         break;
 
     default:
         localAssert(p, token, true);
         lexerBuffer(&p->lexer, token);
-        node = parseExpr(p, POWER_NIL);
+        node = parseExpr(p, POWER_NIL, false);
         break;
     }
 

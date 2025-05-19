@@ -143,7 +143,27 @@ bool typeEq(Type a, Type b) {
         }
 
         return typeEq(nodeFnReturnType(aFn), nodeFnReturnType(bFn));
-    };
+    }
+
+    case TYPE_STRUCT: {
+        assert(a.spec);
+        const NodeStruct *aS = &a.spec->as.structt;
+
+        assert(b.spec);
+        const NodeStruct *bS = &b.spec->as.structt;
+
+        if (aS->fieldsCount != bS->fieldsCount) {
+            return false;
+        }
+
+        for (const Node *a = aS->fields.head, *b = bS->fields.head; a; a = a->next, b = b->next) {
+            if (!strEq(a->token.str, b->token.str) || !typeEq(a->type, b->type)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     default:
         return true;

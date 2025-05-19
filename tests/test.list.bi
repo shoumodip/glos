@@ -1,4 +1,4 @@
-:i count 68
+:i count 69
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -699,6 +699,17 @@ structs/basics.glos
 :b stdout 7
 69
 420
+
+:b stderr 0
+
+:b testcase 21
+structs/literals.glos
+:i returncode 0
+:b stdout 18
+69
+420
+1337
+80085
 
 :b stderr 0
 

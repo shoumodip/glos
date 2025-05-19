@@ -1,0 +1,22 @@
+type Vec2 struct {
+    x i64
+    y i64
+}
+
+fn printVec2(v Vec2) {
+    print v.x
+    print v.y
+}
+
+var vec = Vec2 {
+    x = 69,
+    y = 420
+}
+
+fn main() {
+    printVec2(vec)
+    printVec2(Vec2 {
+        x = 1337,
+        y = 80085,
+    })
+}

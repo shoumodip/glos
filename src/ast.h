@@ -185,8 +185,25 @@ typedef struct {
 } NodeField;
 
 typedef struct {
-    Nodes  fields;
+    // If it is a type definition:
+    //
+    //   fields = Nodes<NodeField>
+    //
+    // If it is a struct literal:
+    //
+    //   fields = Nodes<NodeBinary {
+    //      token: @FieldName,
+    //      lhs:   @FieldDefinition,
+    //      rhs:   @AssignmentValue,
+    //   }>
+    //
+    Nodes fields;
+
     size_t fieldsCount;
+
+    // For literals
+    Node *literalType;
+    Node *literalTemp;
 
     LLVMValueRef llvm;
 } NodeStruct;

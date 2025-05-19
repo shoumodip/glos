@@ -348,6 +348,8 @@ static void checkType(Context *c, Node *n) {
         break;
 
     case NODE_STRUCT:
+        assert(!n->as.structt.literalType);
+
         // TODO: Check for duplicate fields
         for (Node *it = n->as.structt.fields.head; it; it = it->next) {
             checkType(c, it->as.field.type);
@@ -375,10 +377,10 @@ static void refPrevent(Node *n, bool ref) {
 
 static void checkFn(Context *c, Node *n);
 
-static Node *createTemp(Context *c, Node *n) {
+static Node *createTemp(Context *c, Node *expr, Type type) {
     Node *tempVar = nodeAlloc(c->nodeAlloc, NODE_VAR, (Token) {0});
-    tempVar->type = n->type;
-    tempVar->as.var.expr = n;
+    tempVar->type = type;
+    tempVar->as.var.expr = expr;
     tempVar->as.var.local = true;
 
     if (c->fnContext.fn) {
@@ -617,13 +619,17 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *rhs = n->as.member.rhs;
 
         switch (lhs->kind) {
+        case NODE_CALL:
+            checkExpr(c, lhs, false);
+            break;
+
         case NODE_MEMBER:
             checkExpr(c, lhs, false);
             n->as.member.isTemporary = lhs->as.member.isTemporary;
             allowRef = !n->as.member.isTemporary;
             break;
 
-        case NODE_CALL:
+        case NODE_STRUCT:
             checkExpr(c, lhs, false);
             break;
 
@@ -646,7 +652,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         if (lhs->kind == NODE_CALL && lhsType.ref == 0) {
             n->as.member.isTemporary = true;
-            n->as.member.lhs = createTemp(c, lhs);
+            n->as.member.lhs = createTemp(c, lhs, lhs->type);
         }
 
         const NodeStruct structt = lhsType.spec->as.structt;
@@ -674,6 +680,38 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_FN:
         checkFn(c, n);
         break;
+
+    case NODE_STRUCT: {
+        Node *lhs = n->as.structt.literalType;
+        assert(lhs);
+        checkType(c, lhs);
+
+        const Type lhsType = typeResolve(lhs->type);
+        if (lhsType.kind != TYPE_STRUCT) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Expected structure, got '%s'\n",
+                PosArg(lhs->token.pos),
+                typeToString(lhs->type));
+
+            exit(1);
+        }
+
+        const NodeStruct structt = lhsType.spec->as.structt;
+        for (Node *it = n->as.structt.fields.head; it; it = it->next) {
+            assert(it->kind == NODE_BINARY);
+            Node *definition = nodesFind(structt.fields, it->token.str);
+            if (!definition) {
+                errorUndefined(it, "field");
+            }
+
+            it->as.binary.lhs = definition;
+            checkExpr(c, it->as.binary.rhs, false);
+        }
+
+        n->as.structt.literalTemp = createTemp(c, NULL, lhs->type);
+        n->type = lhs->type;
+    } break;
 
     default:
         unreachable();

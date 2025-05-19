@@ -132,8 +132,7 @@ static void compileType(Type *type) {
             fieldsLLVM[it->as.field.index] = typeInMemory(it->type);
         }
 
-        type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), "");
-        LLVMStructSetBody(type->llvm, fieldsLLVM, structt->fieldsCount, false);
+        type->llvm = LLVMStructType(fieldsLLVM, structt->fieldsCount, false);
     } break;
 
     case TYPE_ALIAS:
@@ -568,6 +567,32 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         // Temporary values
         compileStmt(c, n);
         return n->as.var.llvm;
+
+    case NODE_STRUCT: {
+        assert(n->as.structt.literalType);
+
+        Node *temp = n->as.structt.literalTemp;
+        assert(temp);
+
+        LLVMValueRef tempValue = compileExpr(c, temp, false);
+        for (Node *it = n->as.structt.fields.head; it; it = it->next) {
+            assert(it->kind == NODE_BINARY);
+            assert(it->as.binary.lhs->kind == NODE_FIELD);
+
+            const size_t       index = it->as.binary.lhs->as.field.index;
+            const LLVMValueRef fieldValue =
+                LLVMBuildStructGEP2(c->builder, temp->type.llvm, tempValue, index, "");
+
+            const LLVMValueRef assign = compileExpr(c, it->as.binary.rhs, false);
+            LLVMBuildStore(c->builder, assign, fieldValue);
+        }
+
+        if (ref) {
+            return tempValue;
+        }
+
+        return LLVMBuildLoad2(c->builder, typeInMemory(n->type), tempValue, "");
+    };
 
     default:
         unreachable();
