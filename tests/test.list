@@ -64,3 +64,5 @@ type-alias/basics.glos
 type-alias/equivalence.glos
 type-alias/functions.glos
 structs/basics.glos
+structs/temporary-struct-field-access.glos
+structs/error-temporary-struct-is-not-real-memory.glos

@@ -144,7 +144,7 @@ static void compileType(Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 18, "");
+static_assert(COUNT_NODES == 19, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -184,8 +184,9 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 }
 
 static void compileFn(Compiler *c, Node *n);
+static void compileStmt(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 18, "");
+static_assert(COUNT_NODES == 19, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(&n->type);
 
@@ -357,23 +358,6 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
         static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
-        case TOKEN_DOT: {
-            const LLVMValueRef lhsValue = compileExpr(c, lhs, true);
-
-            assert(rhs->kind == NODE_ATOM);
-            assert(rhs->as.atom.definition->kind == NODE_FIELD);
-            const size_t index = rhs->as.atom.definition->as.field.index;
-
-            const LLVMValueRef fieldValue =
-                LLVMBuildStructGEP2(c->builder, lhs->type.llvm, lhsValue, index, "");
-
-            if (ref) {
-                return fieldValue;
-            }
-
-            return LLVMBuildLoad2(c->builder, typeInMemory(n->type), fieldValue, "");
-        }
-
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
             LLVMValueRef rhsValue = compileExpr(c, rhs, false);
@@ -545,6 +529,26 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_MEMBER: {
+        Node *lhs = n->as.binary.lhs;
+        Node *rhs = n->as.binary.rhs;
+
+        const LLVMValueRef lhsValue = compileExpr(c, lhs, true);
+
+        assert(rhs->kind == NODE_ATOM);
+        assert(rhs->as.atom.definition->kind == NODE_FIELD);
+        const size_t index = rhs->as.atom.definition->as.field.index;
+
+        const LLVMValueRef fieldValue =
+            LLVMBuildStructGEP2(c->builder, lhs->type.llvm, lhsValue, index, "");
+
+        if (ref) {
+            return fieldValue;
+        }
+
+        return LLVMBuildLoad2(c->builder, typeInMemory(n->type), fieldValue, "");
+    }
+
     case NODE_SIZEOF: {
         Node *operand = n->as.sizeoff.operand;
         compileType(&operand->type);
@@ -560,12 +564,17 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         compileFn(c, n);
         return n->as.fn.llvm;
 
+    case NODE_VAR:
+        // Temporary values
+        compileStmt(c, n);
+        return n->as.var.llvm;
+
     default:
         unreachable();
     }
 }
 
-static_assert(COUNT_NODES == 18, "");
+static_assert(COUNT_NODES == 19, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -866,6 +875,16 @@ void compileProgram(Context context, const char *executableName) {
 
         LLVMBasicBlockRef cMainEntry = LLVMAppendBasicBlock(cMainFunc, "entry");
         LLVMPositionBuilderAtEnd(c.builder, cMainEntry);
+
+        {
+            for (size_t i = 0; i < context.globalTemps.length; i++) {
+                Node *it = context.globalTemps.data[i];
+                assert(it->kind == NODE_VAR);
+
+                compileType(&it->type);
+                it->as.var.llvm = LLVMBuildAlloca(c.builder, typeInMemory(it->type), "");
+            }
+        }
 
         // Initialize the global variables
         for (size_t i = 0; i < context.globals.length; i++) {

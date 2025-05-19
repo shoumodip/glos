@@ -1,4 +1,4 @@
-:i count 66
+:i count 68
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -701,4 +701,21 @@ structs/basics.glos
 420
 
 :b stderr 0
+
+:b testcase 42
+structs/temporary-struct-field-access.glos
+:i returncode 0
+:b stdout 7
+69
+420
+
+:b stderr 0
+
+:b testcase 54
+structs/error-temporary-struct-is-not-real-memory.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 114
+structs/error-temporary-struct-is-not-real-memory.glos:14:22: ERROR: Cannot take reference to value not in memory
 

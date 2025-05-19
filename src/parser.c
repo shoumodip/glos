@@ -1,24 +1,5 @@
 #include "parser.h"
 
-static Node *nodeNew(Parser *p, NodeKind kind, Token token) {
-#define NODE_POOL_CAP 16000
-
-    if (!p->pool.data) {
-        p->pool.data = malloc(NODE_POOL_CAP * sizeof(*p->pool.data));
-        assert(p->pool.data);
-    }
-    assert(p->pool.length < NODE_POOL_CAP);
-
-#undef NODE_POOL_CAP
-
-    Node *node = &p->pool.data[p->pool.length++];
-    *node = (Node) {
-        .kind = kind,
-        .token = token,
-    };
-    return node;
-}
-
 static void nodesPush(Nodes *ns, Node *node) {
     if (ns->tail) {
         ns->tail->next = node;
@@ -110,12 +91,12 @@ static Node *parseExpr(Parser *p, Power mbp);
 static Node *parseArgWithOptionalName(Parser *p, Node *fn) {
     const Token argToken = lexerNext(&p->lexer);
 
-    Node *arg = nodeNew(p, NODE_ARG, argToken);
+    Node *arg = nodeAlloc(p->nodeAlloc, NODE_ARG, argToken);
     if (argToken.kind == TOKEN_IDENT) {
         const Token peek = lexerPeek(&p->lexer);
         if (peek.kind == TOKEN_COMMA || peek.kind == TOKEN_RPAREN) {
             arg->token = fn->token;
-            arg->as.arg.type = nodeNew(p, NODE_ATOM, argToken);
+            arg->as.arg.type = nodeAlloc(p->nodeAlloc, NODE_ATOM, argToken);
         } else {
             arg->as.arg.type = parseType(p);
         }
@@ -136,21 +117,21 @@ static Node *parseType(Parser *p) {
 
     switch (token.kind) {
     case TOKEN_IDENT:
-        node = nodeNew(p, NODE_ATOM, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
         break;
 
     case TOKEN_BAND:
-        node = nodeNew(p, NODE_UNARY, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_UNARY, token);
         node->as.unary.operand = parseType(p);
         break;
 
     case TOKEN_LAND:
-        node = nodeNew(p, NODE_UNARY, lexerSplitToken(&p->lexer, token));
+        node = nodeAlloc(p->nodeAlloc, NODE_UNARY, lexerSplitToken(&p->lexer, token));
         node->as.unary.operand = parseType(p);
         break;
 
     case TOKEN_FN:
-        node = nodeNew(p, NODE_FN, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_FN, token);
         lexerExpect(&p->lexer, TOKEN_LPAREN);
 
         while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
@@ -167,11 +148,11 @@ static Node *parseType(Parser *p) {
         break;
 
     case TOKEN_STRUCT:
-        node = nodeNew(p, NODE_STRUCT, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_STRUCT, token);
         lexerExpect(&p->lexer, TOKEN_LBRACE);
 
         while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
-            Node *field = nodeNew(p, NODE_FIELD, lexerExpect(&p->lexer, TOKEN_IDENT));
+            Node *field = nodeAlloc(p->nodeAlloc, NODE_FIELD, lexerExpect(&p->lexer, TOKEN_IDENT));
             field->as.field.type = parseType(p);
             field->as.field.index = node->as.structt.fieldsCount++;
             nodesPush(&node->as.structt.fields, field);
@@ -196,7 +177,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
     case TOKEN_INT:
     case TOKEN_BOOL:
     case TOKEN_IDENT:
-        node = nodeNew(p, NODE_ATOM, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
         break;
 
     case TOKEN_SUB:
@@ -204,7 +185,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
     case TOKEN_BNOT:
     case TOKEN_LNOT:
     case TOKEN_BAND:
-        node = nodeNew(p, NODE_UNARY, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_UNARY, token);
         node->as.unary.operand = parseExpr(p, POWER_PRE);
         break;
 
@@ -214,7 +195,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
         break;
 
     case TOKEN_LT: {
-        node = nodeNew(p, NODE_CAST, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_CAST, token);
         node->as.cast.to = parseType(p);
 
         lexerExpect(&p->lexer, TOKEN_GT);
@@ -222,7 +203,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
     } break;
 
     case TOKEN_SIZEOF:
-        node = nodeNew(p, NODE_SIZEOF, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_SIZEOF, token);
 
         token = lexerExpect(&p->lexer, TOKEN_LPAREN, TOKEN_LT);
         if (token.kind == TOKEN_LPAREN) {
@@ -257,14 +238,15 @@ static Node *parseExpr(Parser *p, Power mbp) {
 
         switch (token.kind) {
         case TOKEN_DOT: {
-            Node *binary = nodeNew(p, NODE_BINARY, token);
-            binary->as.binary.lhs = node;
-            binary->as.binary.rhs = nodeNew(p, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_IDENT));
-            node = binary;
+            Node *dot = nodeAlloc(p->nodeAlloc, NODE_MEMBER, token);
+            dot->as.member.lhs = node;
+            dot->as.member.rhs =
+                nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_IDENT));
+            node = dot;
         } break;
 
         case TOKEN_LPAREN: {
-            Node *call = nodeNew(p, NODE_CALL, token);
+            Node *call = nodeAlloc(p->nodeAlloc, NODE_CALL, token);
             call->as.call.fn = node;
 
             while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
@@ -280,7 +262,7 @@ static Node *parseExpr(Parser *p, Power mbp) {
         } break;
 
         default: {
-            Node *binary = nodeNew(p, NODE_BINARY, token);
+            Node *binary = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
             binary->as.binary.lhs = node;
             binary->as.binary.rhs = parseExpr(p, lbp);
             node = binary;
@@ -316,7 +298,7 @@ static Node *parseStmt(Parser *p) {
     switch (token.kind) {
     case TOKEN_LBRACE:
         localAssert(p, token, true);
-        node = nodeNew(p, NODE_BLOCK, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_BLOCK, token);
         while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
             nodesPush(&node->as.block, parseStmt(p));
         }
@@ -327,7 +309,7 @@ static Node *parseStmt(Parser *p) {
 
     case TOKEN_IF:
         localAssert(p, token, true);
-        node = nodeNew(p, NODE_IF, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_IF, token);
         node->as.iff.condition = parseExpr(p, POWER_SET);
 
         lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_LBRACE));
@@ -341,7 +323,7 @@ static Node *parseStmt(Parser *p) {
 
     case TOKEN_FOR:
         localAssert(p, token, true);
-        node = nodeNew(p, NODE_FOR, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_FOR, token);
 
         token = lexerPeek(&p->lexer);
         if (token.kind == TOKEN_VAR) {
@@ -376,7 +358,7 @@ static Node *parseStmt(Parser *p) {
 
     case TOKEN_RETURN:
         localAssert(p, token, true);
-        node = nodeNew(p, NODE_FLOW, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_FLOW, token);
 
         token = lexerPeek(&p->lexer);
         if (!token.onNewline) {
@@ -389,7 +371,7 @@ static Node *parseStmt(Parser *p) {
         break;
 
     case TOKEN_VAR:
-        node = nodeNew(p, NODE_VAR, lexerExpect(&p->lexer, TOKEN_IDENT));
+        node = nodeAlloc(p->nodeAlloc, NODE_VAR, lexerExpect(&p->lexer, TOKEN_IDENT));
 
         if (p->inExtern) {
             node->as.var.isExtern = true;
@@ -409,13 +391,13 @@ static Node *parseStmt(Parser *p) {
         break;
 
     case TOKEN_TYPE:
-        node = nodeNew(p, NODE_TYPE, lexerExpect(&p->lexer, TOKEN_IDENT));
+        node = nodeAlloc(p->nodeAlloc, NODE_TYPE, lexerExpect(&p->lexer, TOKEN_IDENT));
         node->as.type.definition = parseType(p);
         break;
 
     case TOKEN_EXTERN: {
         assert(!p->inExtern);
-        node = nodeNew(p, NODE_EXTERN, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_EXTERN, token);
         lexerExpect(&p->lexer, TOKEN_LBRACE);
 
         p->inExtern = true;
@@ -428,7 +410,7 @@ static Node *parseStmt(Parser *p) {
 
     case TOKEN_PRINT:
         localAssert(p, token, true);
-        node = nodeNew(p, NODE_PRINT, token);
+        node = nodeAlloc(p->nodeAlloc, NODE_PRINT, token);
         node->as.print.operand = parseExpr(p, POWER_SET);
         break;
 
@@ -446,7 +428,7 @@ static Node *parseStmt(Parser *p) {
 }
 
 static Node *parseFn(Parser *p, Token name) {
-    Node *node = nodeNew(p, NODE_FN, name);
+    Node *node = nodeAlloc(p->nodeAlloc, NODE_FN, name);
 
     const bool localSave = p->local;
     p->local = true;
@@ -458,7 +440,7 @@ static Node *parseFn(Parser *p, Token name) {
             if (p->inExtern) {
                 arg = parseArgWithOptionalName(p, node);
             } else {
-                arg = nodeNew(p, NODE_ARG, lexerExpect(&p->lexer, TOKEN_IDENT));
+                arg = nodeAlloc(p->nodeAlloc, NODE_ARG, lexerExpect(&p->lexer, TOKEN_IDENT));
                 arg->as.arg.type = parseType(p);
                 arg->as.arg.index = node->as.fn.arity++;
             }
@@ -485,6 +467,8 @@ static Node *parseFn(Parser *p, Token name) {
 }
 
 void parseFile(Parser *p, Lexer lexer) {
+    assert(p->nodeAlloc);
+
     p->lexer = lexer;
     while (!lexerRead(&p->lexer, TOKEN_EOF)) {
         consumeEols(p);

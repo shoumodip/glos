@@ -68,6 +68,7 @@ typedef enum {
     NODE_CAST,
     NODE_UNARY,
     NODE_BINARY,
+    NODE_MEMBER,
     NODE_SIZEOF,
 
     NODE_BLOCK,
@@ -111,6 +112,13 @@ typedef struct {
     Node *lhs;
     Node *rhs;
 } NodeBinary;
+
+typedef struct {
+    Node *lhs;
+    Node *rhs;
+
+    bool isTemporary;
+} NodeMember;
 
 typedef struct {
     Node *operand;
@@ -202,6 +210,7 @@ struct Node {
         NodeCast   cast;
         NodeUnary  unary;
         NodeBinary binary;
+        NodeMember member;
         NodeSizeof sizeoff;
 
         Nodes   block;
@@ -223,5 +232,12 @@ struct Node {
 
     Node *next;
 };
+
+typedef struct {
+    Node  *data;
+    size_t length;
+} NodeAlloc;
+
+Node *nodeAlloc(NodeAlloc *a, NodeKind kind, Token token);
 
 #endif // AST_H

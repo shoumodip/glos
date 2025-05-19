@@ -5,18 +5,13 @@
 #include "lexer.h"
 
 typedef struct {
-    Node  *data;
-    size_t length;
-} NodePool;
-
-typedef struct {
     Lexer lexer;
     bool  local;
     bool  inExtern;
     bool  dontConsumeEols;
 
-    Nodes    nodes;
-    NodePool pool;
+    Nodes      nodes;
+    NodeAlloc *nodeAlloc;
 } Parser;
 
 void parseFile(Parser *p, Lexer lexer);

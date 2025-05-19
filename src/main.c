@@ -70,10 +70,12 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    Parser p = {0};
+    NodeAlloc alloc = {0};
+
+    Parser p = {.nodeAlloc = &alloc};
     parseFile(&p, l);
 
-    Context c = {0};
+    Context c = {.nodeAlloc = &alloc};
     checkNodes(&c, p.nodes);
 
     if (run) {

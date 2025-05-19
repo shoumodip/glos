@@ -1,0 +1,31 @@
+type Vec2 struct {
+    x i64
+    y i64
+}
+
+fn makeVec2(x i64, y i64) Vec2 {
+    var vec Vec2
+    vec.x = x
+    vec.y = y
+    return vec
+}
+
+type Mat4 struct {
+    v1 Vec2
+    v2 Vec2
+}
+
+fn makeMat4(v1 Vec2, v2 Vec2) Mat4 {
+    var mat Mat4
+    mat.v1 = v1
+    mat.v2 = v2
+    return mat
+}
+
+var x = makeMat4(makeVec2(69, 420), makeVec2(1337, 80085)).v1.x
+
+fn main() {
+    var y = makeMat4(makeVec2(69, 420), makeVec2(1337, 80085)).v1.y
+    print x
+    print y
+}

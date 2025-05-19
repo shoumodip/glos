@@ -1,0 +1,15 @@
+type Vec2 struct {
+    x i64
+    y i64
+}
+
+fn makeVec2(x i64, y i64) Vec2 {
+    var vec Vec2
+    vec.x = x
+    vec.y = y
+    return vec
+}
+
+fn main() {
+    makeVec2(69, 420).y = 1337
+}

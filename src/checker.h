@@ -14,6 +14,9 @@ typedef struct {
 
     Scope locals;
     Scope globals;
+    Scope globalTemps;
+
+    NodeAlloc *nodeAlloc;
 } Context;
 
 void checkNodes(Context *c, Nodes nodes);

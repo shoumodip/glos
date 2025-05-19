@@ -228,3 +228,22 @@ Type nodeFnReturnType(const NodeFn *fn) {
 
     return (Type) {.kind = TYPE_UNIT};
 }
+
+Node *nodeAlloc(NodeAlloc *a, NodeKind kind, Token token) {
+#define NODE_POOL_CAP 16000
+
+    if (!a->data) {
+        a->data = malloc(NODE_POOL_CAP * sizeof(*a->data));
+        assert(a->data);
+    }
+    assert(a->length < NODE_POOL_CAP);
+
+#undef NODE_POOL_CAP
+
+    Node *node = &a->data[a->length++];
+    *node = (Node) {
+        .kind = kind,
+        .token = token,
+    };
+    return node;
+}

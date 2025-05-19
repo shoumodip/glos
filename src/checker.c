@@ -62,7 +62,7 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static_assert(COUNT_NODES == 18, "");
+static_assert(COUNT_NODES == 19, "");
 static void castUntypedInt(Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -375,7 +375,22 @@ static void refPrevent(Node *n, bool ref) {
 
 static void checkFn(Context *c, Node *n);
 
-static_assert(COUNT_NODES == 18, "");
+static Node *createTemp(Context *c, Node *n) {
+    Node *tempVar = nodeAlloc(c->nodeAlloc, NODE_VAR, (Token) {0});
+    tempVar->type = n->type;
+    tempVar->as.var.expr = n;
+    tempVar->as.var.local = true;
+
+    if (c->fnContext.fn) {
+        scopePush(&c->fnContext.fn->locals, tempVar);
+    } else {
+        scopePush(&c->globalTemps, tempVar);
+    }
+
+    return tempVar;
+}
+
+static_assert(COUNT_NODES == 19, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
@@ -545,32 +560,6 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         static_assert(COUNT_TOKENS == 41, "");
         switch (n->token.kind) {
-        case TOKEN_DOT: {
-            checkExpr(c, lhs, true);
-
-            const Type lhsType = typeResolve(lhs->type);
-            if (lhsType.kind != TYPE_STRUCT) {
-                fprintf(
-                    stderr,
-                    PosFmt "ERROR: Expected structure, got '%s'\n",
-                    PosArg(lhs->token.pos),
-                    typeToString(lhs->type));
-
-                exit(1);
-            }
-            const NodeStruct structt = lhsType.spec->as.structt;
-
-            Node *definition = nodesFind(structt.fields, rhs->token.str);
-            if (!definition) {
-                errorUndefined(rhs, "field");
-            }
-
-            rhs->as.atom.definition = definition;
-            n->type = definition->type;
-
-            allowRef = true;
-        } break;
-
         case TOKEN_ADD:
         case TOKEN_SUB:
         case TOKEN_MUL:
@@ -623,6 +612,54 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_MEMBER: {
+        Node *lhs = n->as.member.lhs;
+        Node *rhs = n->as.member.rhs;
+
+        switch (lhs->kind) {
+        case NODE_MEMBER:
+            checkExpr(c, lhs, false);
+            n->as.member.isTemporary = lhs->as.member.isTemporary;
+            allowRef = !n->as.member.isTemporary;
+            break;
+
+        case NODE_CALL:
+            checkExpr(c, lhs, false);
+            break;
+
+        default:
+            checkExpr(c, lhs, true);
+            allowRef = true;
+            break;
+        }
+
+        const Type lhsType = typeResolve(lhs->type);
+        if (lhsType.kind != TYPE_STRUCT) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Expected structure, got '%s'\n",
+                PosArg(lhs->token.pos),
+                typeToString(lhs->type));
+
+            exit(1);
+        }
+
+        if (lhs->kind == NODE_CALL && lhsType.ref == 0) {
+            n->as.member.isTemporary = true;
+            n->as.member.lhs = createTemp(c, lhs);
+        }
+
+        const NodeStruct structt = lhsType.spec->as.structt;
+
+        Node *definition = nodesFind(structt.fields, rhs->token.str);
+        if (!definition) {
+            errorUndefined(rhs, "field");
+        }
+
+        rhs->as.atom.definition = definition;
+        n->type = definition->type;
+    } break;
+
     case NODE_SIZEOF: {
         Node *operand = n->as.sizeoff.operand;
         if (n->as.sizeoff.isExpr) {
@@ -647,7 +684,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 18, "");
+static_assert(COUNT_NODES == 19, "");
 static bool alwaysReturns(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -709,7 +746,7 @@ static bool alwaysReturns(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 18, "");
+static_assert(COUNT_NODES == 19, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -907,6 +944,7 @@ static void checkFn(Context *c, Node *n) {
 }
 
 void checkNodes(Context *c, Nodes nodes) {
+    assert(c->nodeAlloc);
     for (Node *it = nodes.head; it; it = it->next) {
         checkStmt(c, it);
     }
