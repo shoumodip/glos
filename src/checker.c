@@ -52,7 +52,7 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static_assert(COUNT_NODES == 16, "");
+static_assert(COUNT_NODES == 18, "");
 static void castUntypedInt(Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -60,7 +60,7 @@ static void castUntypedInt(Node *n, Type expected) {
         case TOKEN_INT: {
             n->type = expected;
 
-            static_assert(COUNT_TYPES == 14, "");
+            static_assert(COUNT_TYPES == 15, "");
             const size_t intLimits[COUNT_TYPES] = {
                 [TYPE_I8] = INT8_MAX,
                 [TYPE_I16] = INT16_MAX,
@@ -285,12 +285,14 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
 
 static void checkExpr(Context *c, Node *n, bool ref);
 
-static_assert(COUNT_TYPES == 14, "");
+static_assert(COUNT_TYPES == 15, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
         if (strMatch(n->token.str, "bool")) {
             n->type = (Type) {.kind = TYPE_BOOL};
+        } else if (strMatch(n->token.str, "rawptr")) {
+            n->type = (Type) {.kind = TYPE_RAWPTR};
         } else if (strMatch(n->token.str, "i8")) {
             n->type = (Type) {.kind = TYPE_I8};
         } else if (strMatch(n->token.str, "i16")) {
@@ -307,8 +309,6 @@ static void checkType(Context *c, Node *n) {
             n->type = (Type) {.kind = TYPE_U32};
         } else if (strMatch(n->token.str, "u64")) {
             n->type = (Type) {.kind = TYPE_U64};
-        } else if (strMatch(n->token.str, "rawptr")) {
-            n->type = (Type) {.kind = TYPE_RAWPTR};
         } else {
             Node *definition = identFind(c, n->token.str, true);
             if (!definition) {
@@ -344,6 +344,16 @@ static void checkType(Context *c, Node *n) {
         n->type = (Type) {.kind = TYPE_FN, .spec = n};
         break;
 
+    case NODE_STRUCT:
+        // TODO: Check for duplicate fields
+        for (Node *it = n->as.structt.fields.head; it; it = it->next) {
+            checkType(c, it->as.field.type);
+            it->type = it->as.field.type->type;
+        }
+
+        n->type = (Type) {.kind = TYPE_STRUCT, .spec = n};
+        break;
+
     default:
         unreachable();
     }
@@ -362,13 +372,13 @@ static void refPrevent(Node *n, bool ref) {
 
 static void checkFn(Context *c, Node *n);
 
-static_assert(COUNT_NODES == 16, "");
+static_assert(COUNT_NODES == 18, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -471,7 +481,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -530,7 +540,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -608,7 +618,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 16, "");
+static_assert(COUNT_NODES == 18, "");
 static bool alwaysReturns(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -656,7 +666,7 @@ static bool alwaysReturns(Node *n) {
     }
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -670,7 +680,7 @@ static bool alwaysReturns(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 16, "");
+static_assert(COUNT_NODES == 18, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -713,7 +723,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

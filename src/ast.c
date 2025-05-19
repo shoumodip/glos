@@ -11,7 +11,7 @@ Node *scopeFind(Scope s, Str name, bool isType) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 14, "");
+static_assert(COUNT_TYPES == 15, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -28,6 +28,10 @@ const char *typeToString(Type type) {
 
     case TYPE_BOOL:
         tempSprintf("bool");
+        break;
+
+    case TYPE_RAWPTR:
+        tempSprintf("rawptr");
         break;
 
     case TYPE_I8:
@@ -95,11 +99,12 @@ const char *typeToString(Type type) {
         }
     } break;
 
-    case TYPE_RAWPTR:
-        tempSprintf("rawptr");
+    case TYPE_ALIAS:
+        assert(type.spec);
+        tempStrToCstr(type.spec->token.str);
         break;
 
-    case TYPE_ALIAS:
+    case TYPE_STRUCT:
         assert(type.spec);
         tempStrToCstr(type.spec->token.str);
         break;
@@ -145,7 +150,7 @@ bool typeEq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 14, "");
+static_assert(COUNT_TYPES == 15, "");
 bool typeIsSigned(Type type) {
     if (type.ref != 0) {
         return false;
@@ -168,7 +173,7 @@ bool typeIsSigned(Type type) {
     }
 }
 
-static_assert(COUNT_TYPES == 14, "");
+static_assert(COUNT_TYPES == 15, "");
 bool typeIsInteger(Type type) {
     if (type.ref != 0) {
         return false;
@@ -207,7 +212,10 @@ bool typeIsPointer(Type type) {
 Type typeResolve(Type type) {
     if (type.kind == TYPE_ALIAS) {
         assert(type.spec);
-        return type.spec->as.type.real;
+        Type resolved = type.spec->as.type.real;
+
+        resolved.ref += type.ref;
+        return resolved;
     }
 
     return type;

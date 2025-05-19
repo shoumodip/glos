@@ -1,4 +1,4 @@
-:i count 65
+:i count 66
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -690,6 +690,14 @@ type-alias/functions.glos
 :i returncode 0
 :b stdout 3
 69
+
+:b stderr 0
+
+:b testcase 19
+structs/basics.glos
+:i returncode 0
+:b stdout 3
+16
 
 :b stderr 0
 

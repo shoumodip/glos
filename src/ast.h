@@ -23,6 +23,7 @@ Node *scopeFind(Scope s, Str name, bool isType);
 typedef enum {
     TYPE_UNIT,
     TYPE_BOOL,
+    TYPE_RAWPTR,
 
     TYPE_I8,
     TYPE_I16,
@@ -37,7 +38,7 @@ typedef enum {
     TYPE_INT, // Untyped literal, defaults to i64
 
     TYPE_FN,
-    TYPE_RAWPTR,
+    TYPE_STRUCT,
 
     TYPE_ALIAS,
 
@@ -79,6 +80,8 @@ typedef enum {
     NODE_ARG,
     NODE_VAR,
     NODE_TYPE,
+    NODE_FIELD,
+    NODE_STRUCT,
     NODE_EXTERN,
 
     NODE_PRINT,
@@ -167,6 +170,20 @@ typedef struct {
 } NodeType;
 
 typedef struct {
+    Node  *type;
+    size_t index;
+
+    LLVMValueRef llvm;
+} NodeField;
+
+typedef struct {
+    Nodes  fields;
+    size_t fieldsCount;
+
+    LLVMValueRef llvm;
+} NodeStruct;
+
+typedef struct {
     Nodes definitions;
 } NodeExtern;
 
@@ -197,6 +214,8 @@ struct Node {
         NodeArg    arg;
         NodeVar    var;
         NodeType   type;
+        NodeField  field;
+        NodeStruct structt;
         NodeExtern externn;
 
         NodePrint print;

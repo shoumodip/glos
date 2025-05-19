@@ -61,6 +61,7 @@ typedef enum {
     TOKEN_FN,
     TOKEN_VAR,
     TOKEN_TYPE,
+    TOKEN_STRUCT,
     TOKEN_EXTERN,
 
     TOKEN_PRINT,

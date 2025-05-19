@@ -1,0 +1,13 @@
+type IVec2 struct {
+    x i64
+    y i64
+}
+
+fn printIVec2Size(v IVec2) {
+    print sizeof(v)
+}
+
+fn main() {
+    var pos IVec2
+    printIVec2Size(pos)
+}

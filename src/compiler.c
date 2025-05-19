@@ -50,7 +50,7 @@ static LLVMTypeRef typeInMemory(Type type) {
     return type.llvm;
 }
 
-static_assert(COUNT_TYPES == 14, "");
+static_assert(COUNT_TYPES == 15, "");
 static void compileType(Type *type) {
     if (type->kind == TYPE_ALIAS) {
         assert(type->spec);
@@ -122,6 +122,20 @@ static void compileType(Type *type) {
         type->llvm = LLVMFunctionType(returnType, argsLLVM, fn->arity, false);
     } break;
 
+    case TYPE_STRUCT: {
+        assert(type->spec);
+        NodeStruct *structt = &type->spec->as.structt;
+
+        LLVMTypeRef *fieldsLLVM = calloc(structt->fieldsCount, sizeof(LLVMTypeRef));
+        for (Node *it = structt->fields.head; it; it = it->next) {
+            compileType(&it->type);
+            fieldsLLVM[it->as.field.index] = typeInMemory(it->type);
+        }
+
+        type->llvm = LLVMStructCreateNamed(LLVMGetGlobalContext(), "");
+        LLVMStructSetBody(type->llvm, fieldsLLVM, structt->fieldsCount, false);
+    } break;
+
     case TYPE_ALIAS:
         break;
 
@@ -130,7 +144,7 @@ static void compileType(Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 16, "");
+static_assert(COUNT_NODES == 18, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -171,13 +185,13 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 
 static void compileFn(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 16, "");
+static_assert(COUNT_NODES == 18, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(&n->type);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, true);
@@ -250,7 +264,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildZExt(c->builder, fromValue, toLLVM, "");
         }
 
-        static_assert(COUNT_TYPES == 14, "");
+        static_assert(COUNT_TYPES == 15, "");
         const size_t intSizes[COUNT_TYPES] = {
             [TYPE_I8] = 8,
             [TYPE_I16] = 16,
@@ -303,7 +317,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -341,7 +355,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -534,7 +548,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 16, "");
+static_assert(COUNT_NODES == 18, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -617,7 +631,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 39, "");
+        static_assert(COUNT_TOKENS == 40, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
@@ -666,7 +680,7 @@ static void compileStmt(Compiler *c, Node *n) {
     } break;
 
     case NODE_TYPE:
-        static_assert(COUNT_TYPES == 14, "");
+        static_assert(COUNT_TYPES == 15, "");
         break;
 
     case NODE_EXTERN:
