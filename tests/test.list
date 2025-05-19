@@ -59,3 +59,4 @@ type-cast/error-pointers-can-only-be-casted-to-other-pointers-and-u64-integers.g
 sizeof/basics.glos
 extern/basics.glos
 type-alias/basics.glos
+type-alias/equivalence.glos

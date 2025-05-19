@@ -112,6 +112,9 @@ const char *typeToString(Type type) {
 }
 
 bool typeEq(Type a, Type b) {
+    a = typeResolve(a);
+    b = typeResolve(b);
+
     if (a.kind != b.kind || a.ref != b.ref) {
         return false;
     }

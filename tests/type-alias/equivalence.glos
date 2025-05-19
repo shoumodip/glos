@@ -1,0 +1,24 @@
+type First bool
+type Second bool
+
+fn foo(f bool) { print f }
+fn bar(f First) { print f }
+fn baz(f Second) { print f }
+
+fn main() {
+    var x bool = true
+    var y First = false
+    var z Second = true
+
+    foo(x)
+    foo(y)
+    foo(z)
+
+    bar(x)
+    bar(y)
+    bar(z)
+
+    baz(x)
+    baz(y)
+    baz(z)
+}

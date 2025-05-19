@@ -1,4 +1,4 @@
-:i count 61
+:i count 62
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -650,6 +650,22 @@ type-alias/basics.glos
 :b stdout 7
 69
 420
+
+:b stderr 0
+
+:b testcase 27
+type-alias/equivalence.glos
+:i returncode 0
+:b stdout 18
+1
+0
+1
+1
+0
+1
+1
+0
+1
 
 :b stderr 0
 

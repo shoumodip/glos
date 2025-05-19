@@ -6,7 +6,7 @@ fn main() {
     var b = 35
     print a + b
 
-    var c u64ptr = <u64ptr> 200
+    var c = <u64ptr> 200
     var d = 220
     print c + <u64ptr> d
 }

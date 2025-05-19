@@ -178,13 +178,26 @@ static Type typeAssert(Node *n, Type expected) {
 }
 
 static Type typeAssertNode(Node *a, Node *b) {
-    // Try auto casting 'b' to 'a'
+    if (typeEq(a->type, b->type)) {
+        return a->type;
+    }
+
     if (tryAutoCastUntypedInt(b, a->type)) {
         return a->type;
     }
 
-    // Errors will be reported on the position of 'a'
-    return typeAssert(a, b->type);
+    if (tryAutoCastUntypedInt(a, b->type)) {
+        return b->type;
+    }
+
+    fprintf(
+        stderr,
+        PosFmt "ERROR: Expected type '%s', got '%s'\n",
+        PosArg(a->token.pos),
+        typeToString(b->type),
+        typeToString(a->type));
+
+    exit(1);
 }
 
 static Type typeAssertArith(const Node *n) {
@@ -201,7 +214,8 @@ static Type typeAssertArith(const Node *n) {
 }
 
 static Type typeAssertScalar(const Node *n) {
-    if (n->type.kind != TYPE_BOOL && !typeIsInteger(n->type) && !typeIsPointer(n->type)) {
+    if (!typeIsInteger(n->type) && !typeIsPointer(n->type) &&
+        !typeEq(n->type, (Type) {.kind = TYPE_BOOL})) {
         fprintf(
             stderr,
             PosFmt "ERROR: Expected scalar type, got '%s'\n",
