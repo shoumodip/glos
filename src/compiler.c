@@ -1,3 +1,5 @@
+// TODO: Ensure that the LLVM type is compiled even after typeResolve
+
 #include "compiler.h"
 
 #include <llvm-c/Core.h>
