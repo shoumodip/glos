@@ -1,4 +1,4 @@
-:i count 71
+:i count 72
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -728,6 +728,16 @@ structs/temporary-struct-field-access.glos
 :b stdout 7
 69
 420
+
+:b stderr 0
+
+:b testcase 29
+structs/auto-dereference.glos
+:i returncode 0
+:b stdout 9
+67
+68
+69
 
 :b stderr 0
 

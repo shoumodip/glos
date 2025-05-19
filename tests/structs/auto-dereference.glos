@@ -1,0 +1,23 @@
+type Iota struct {
+    x i64
+}
+
+fn single(i &Iota) {
+    i.x = i.x + 1
+}
+
+fn double(i &&Iota) {
+    i.x = i.x + 1
+}
+
+fn main() {
+    var iota = Iota {x = 67}
+    var ptr = &iota
+    print iota.x
+
+    single(ptr)
+    print iota.x
+
+    double(&ptr)
+    print iota.x
+}

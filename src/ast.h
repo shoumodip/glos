@@ -61,6 +61,7 @@ bool typeIsInteger(Type type);
 bool typeIsPointer(Type type);
 
 Type typeResolve(Type type);
+Type typeRemoveRef(Type type);
 
 typedef enum {
     NODE_ATOM,

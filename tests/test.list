@@ -67,5 +67,6 @@ type-alias/functions.glos
 structs/basics.glos
 structs/literals.glos
 structs/temporary-struct-field-access.glos
+structs/auto-dereference.glos
 structs/error-field-redefinition.glos
 structs/error-temporary-struct-is-not-real-memory.glos

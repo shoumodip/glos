@@ -221,12 +221,16 @@ bool typeIsInteger(Type type) {
 }
 
 bool typeIsPointer(Type type) {
+    if (type.kind == TYPE_RAWPTR || type.ref != 0) {
+        return true;
+    }
+
     if (type.kind == TYPE_ALIAS) {
         assert(type.spec);
         return typeIsPointer(type.spec->as.type.real);
     }
 
-    return type.kind == TYPE_RAWPTR || type.ref != 0;
+    return false;
 }
 
 Type typeResolve(Type type) {
@@ -238,6 +242,11 @@ Type typeResolve(Type type) {
         return resolved;
     }
 
+    return type;
+}
+
+Type typeRemoveRef(Type type) {
+    type.ref = 0;
     return type;
 }
 

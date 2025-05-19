@@ -142,11 +142,6 @@ static void castUntypedInt(Node *n, Type expected) {
     }
 }
 
-static Type typeRemoveRef(Type type) {
-    type.ref = 0;
-    return type;
-}
-
 static bool tryAutoCastUntypedInt(Node *n, Type expected) {
     // If the types are already equal, consider it a succesful auto cast
     if (typeEq(n->type, expected)) {
@@ -718,6 +713,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
             it->as.binary.lhs = definition;
             checkExpr(c, it->as.binary.rhs, false);
+            typeAssert(it->as.binary.rhs, definition->type);
         }
 
         n->as.structt.literalTemp = createTemp(c, NULL, lhs->type);

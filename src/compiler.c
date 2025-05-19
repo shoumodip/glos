@@ -44,8 +44,8 @@ static void fnCompilerEnd(Compiler *c, FnCompiler save) {
 // Eg: fn () -> ptr
 static LLVMTypeRef typeInMemory(Type type) {
     type = typeResolve(type);
-    if (type.kind == TYPE_FN) {
-        return LLVMPointerType(type.llvm, 0);
+    if (type.ref || type.kind == TYPE_FN) {
+        return LLVMPointerType(LLVMVoidType(), 0);
     }
     return type.llvm;
 }
@@ -532,14 +532,25 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        const LLVMValueRef lhsValue = compileExpr(c, lhs, true);
+        const Type   lhsType = typeResolve(lhs->type);
+        LLVMValueRef lhsValue = compileExpr(c, lhs, true);
 
         assert(rhs->kind == NODE_ATOM);
         assert(rhs->as.atom.definition->kind == NODE_FIELD);
         const size_t index = rhs->as.atom.definition->as.field.index;
 
-        const LLVMValueRef fieldValue =
-            LLVMBuildStructGEP2(c->builder, lhs->type.llvm, lhsValue, index, "");
+        if (lhsType.ref) {
+            const LLVMTypeRef voidPtr = LLVMPointerType(LLVMVoidType(), 0);
+            for (size_t i = 0; i < lhsType.ref; i++) {
+                lhsValue = LLVMBuildLoad2(c->builder, voidPtr, lhsValue, "");
+            }
+        }
+
+        Type structType = typeRemoveRef(lhsType);
+        compileType(&structType);
+
+        LLVMValueRef fieldValue =
+            LLVMBuildStructGEP2(c->builder, structType.llvm, lhsValue, index, "");
 
         if (ref) {
             return fieldValue;
