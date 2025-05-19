@@ -43,10 +43,10 @@ static void fnCompilerEnd(Compiler *c, FnCompiler save) {
 // How the type should actually be represented in memory.
 // Eg: fn () -> ptr
 static LLVMTypeRef typeInMemory(Type type) {
+    type = typeResolve(type);
     if (type.kind == TYPE_FN) {
         return LLVMPointerType(type.llvm, 0);
     }
-
     return type.llvm;
 }
 
@@ -230,7 +230,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
         const Type fromType = typeResolve(from->type);
         const Type toType = typeResolve(n->type);
-        if (typeEq(fromType, toType)) {
+        if (typeEq(fromType, toType) || fromType.kind == TYPE_FN || toType.kind == TYPE_FN) {
             return fromValue;
         }
 

@@ -132,31 +132,32 @@ static void castUntypedInt(Node *n, Type expected) {
     }
 }
 
+static Type typeRemoveRef(Type type) {
+    type.ref = 0;
+    return type;
+}
+
 static bool tryAutoCastUntypedInt(Node *n, Type expected) {
     // If the types are already equal, consider it a succesful auto cast
     if (typeEq(n->type, expected)) {
         return true;
     }
 
-    // The indirection level of the typed and untyped integers must match
-    if (expected.ref != n->type.ref) {
-        return false;
-    }
-
-    // Only untyped integers can be casted from/to only typed integers
-    {
-        Type expectedBase = expected;
-        expectedBase.ref = 0;
-        if (n->type.kind != TYPE_INT || !typeIsInteger(expectedBase)) {
+    // Untyped integer -> Typed integer
+    if (typeIsInteger(typeRemoveRef(expected)) && n->type.kind == TYPE_INT) {
+        // The indirection level of the typed and untyped integers must match
+        if (expected.ref != n->type.ref) {
             return false;
         }
+
+        if (expected.kind != TYPE_INT) {
+            castUntypedInt(n, expected);
+        }
+
+        return true;
     }
 
-    if (expected.kind != TYPE_INT) {
-        castUntypedInt(n, expected);
-    }
-
-    return true;
+    return false;
 }
 
 static Type typeAssert(Node *n, Type expected) {
@@ -214,35 +215,44 @@ static Type typeAssertArith(const Node *n) {
 }
 
 static Type typeAssertScalar(const Node *n) {
-    if (!typeIsInteger(n->type) && !typeIsPointer(n->type) &&
-        !typeEq(n->type, (Type) {.kind = TYPE_BOOL})) {
-        fprintf(
-            stderr,
-            PosFmt "ERROR: Expected scalar type, got '%s'\n",
-            PosArg(n->token.pos),
-            typeToString(n->type));
-
-        exit(1);
+    if (typeIsInteger(n->type) || typeIsPointer(n->type)) {
+        return n->type;
     }
-    return n->type;
+
+    const Type resolved = typeResolve(n->type);
+    if (resolved.kind == TYPE_BOOL || resolved.kind == TYPE_FN) {
+        return n->type;
+    }
+
+    fprintf(
+        stderr,
+        PosFmt "ERROR: Expected scalar type, got '%s'\n",
+        PosArg(n->token.pos),
+        typeToString(n->type));
+
+    exit(1);
 }
 
 static bool isTypeCastIllegal(Node *fromNode, Node *toNode) {
-    const Type from = fromNode->type;
-    const Type to = toNode->type;
+    const Type from = typeResolve(fromNode->type);
+    const Type to = typeResolve(toNode->type);
 
-    // Function -> *
-    // *        -> Function
-    if (from.kind == TYPE_FN || to.kind == TYPE_FN) {
-        return true;
+    // Function -> Not rawptr
+    if (from.kind == TYPE_FN) {
+        return !typeEq(to, (Type) {.kind = TYPE_RAWPTR});
+    }
+
+    // Not rawptr -> Function
+    if (to.kind == TYPE_FN) {
+        return !typeEq(from, (Type) {.kind = TYPE_RAWPTR});
     }
 
     // Not 64 Bit Integer -> Pointer
-    // Pointer            -> Not 64 Bit Integer
     if (!typeIsPointer(from) && typeIsPointer(to)) {
         return !tryAutoCastUntypedInt(fromNode, (Type) {.kind = TYPE_U64});
     }
 
+    // Pointer -> Not 64 Bit Integer
     if (!typeIsPointer(to) && typeIsPointer(from)) {
         return !tryAutoCastUntypedInt(toNode, (Type) {.kind = TYPE_U64});
     }
@@ -392,7 +402,8 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *fn = n->as.call.fn;
         checkExpr(c, fn, false);
 
-        if (fn->type.kind != TYPE_FN) {
+        const Type resolved = typeResolve(fn->type);
+        if (resolved.kind != TYPE_FN) {
             fprintf(
                 stderr,
                 PosFmt "ERROR: Cannot call type '%s'\n",
@@ -402,7 +413,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             exit(1);
         }
 
-        if (fn->type.ref != 0) {
+        if (resolved.ref != 0) {
             fprintf(
                 stderr,
                 PosFmt "ERROR: Cannot call type '%s' without dereferencing it first\n",
@@ -413,7 +424,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         }
 
         const NodeCall actual = n->as.call;
-        const NodeFn   expected = fn->type.spec->as.fn;
+        const NodeFn   expected = resolved.spec->as.fn;
         if (actual.arity != expected.arity) {
             fprintf(
                 stderr,
@@ -431,7 +442,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             typeAssertNode(a, e);
         }
 
-        n->type = nodeFnReturnType(&fn->type.spec->as.fn);
+        n->type = nodeFnReturnType(&resolved.spec->as.fn);
     } break;
 
     case NODE_CAST: {
@@ -443,7 +454,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         const Type fromType = typeAssertScalar(from);
         const Type toType = typeAssertScalar(to);
-        if (isTypeCastIllegal(from, to)) {
+        if (!typeEq(fromType, toType) && isTypeCastIllegal(from, to)) {
             fprintf(
                 stderr,
                 PosFmt "ERROR: Cannot cast type '%s' to type '%s'\n",
@@ -469,7 +480,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         case TOKEN_MUL:
             checkExpr(c, operand, false);
-            if (operand->type.kind == TYPE_RAWPTR) {
+            if (typeEq(operand->type, (Type) {.kind = TYPE_RAWPTR})) {
                 fprintf(
                     stderr,
                     PosFmt "ERROR: Cannot dereference raw pointer\n",
@@ -478,7 +489,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
                 exit(1);
             }
 
-            if (operand->type.ref == 0) {
+            if (!typeIsPointer(operand->type)) {
                 fprintf(
                     stderr,
                     PosFmt "ERROR: Expected pointer type, got '%s'\n",
