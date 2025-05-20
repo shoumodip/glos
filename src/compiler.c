@@ -92,7 +92,6 @@ static void compileType(Compiler *c, Type *type) {
         assert(type->spec);
         NodeFn *fn = &type->spec->as.fn;
 
-        // TODO: LLVM copies this, so free it
         LLVMTypeRef *argsLLVM = calloc(fn->arity, sizeof(LLVMTypeRef));
         for (Node *it = fn->args.head; it; it = it->next) {
             compileType(c, &it->type);
@@ -108,6 +107,7 @@ static void compileType(Compiler *c, Type *type) {
         }
 
         type->llvm = LLVMFunctionType(returnType, argsLLVM, fn->arity, false);
+        free(argsLLVM);
     } break;
 
     case TYPE_ARRAY: {
@@ -126,7 +126,6 @@ static void compileType(Compiler *c, Type *type) {
         assert(type->spec);
         NodeStruct *structt = &type->spec->as.structt;
 
-        // TODO: LLVM copies this, so free it
         LLVMTypeRef *fieldsLLVM = calloc(structt->fieldsCount, sizeof(LLVMTypeRef));
         for (Node *it = structt->fields.head; it; it = it->next) {
             compileType(c, &it->type);
@@ -134,6 +133,7 @@ static void compileType(Compiler *c, Type *type) {
         }
 
         type->llvm = LLVMStructType(fieldsLLVM, structt->fieldsCount, false);
+        free(fieldsLLVM);
     } break;
 
     default:
@@ -225,7 +225,6 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node        *fn = call.fn;
         LLVMValueRef fnValue = compileExpr(c, fn, false);
 
-        // TODO: LLVM copies this, so free it
         LLVMValueRef *argsLLVM = calloc(call.arity, sizeof(LLVMValueRef));
         {
             size_t i = 0;
@@ -234,7 +233,11 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             }
         }
 
-        return LLVMBuildCall2(c->builder, fn->type.llvm, fnValue, argsLLVM, call.arity, "");
+        LLVMValueRef result =
+            LLVMBuildCall2(c->builder, fn->type.llvm, fnValue, argsLLVM, call.arity, "");
+
+        free(argsLLVM);
+        return result;
     };
 
     case NODE_CAST: {
