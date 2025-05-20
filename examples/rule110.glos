@@ -5,22 +5,14 @@ extern {
 }
 
 var BOARD_CAP = 30
-var board = <&i32> malloc(BOARD_CAP * sizeof<i32>)
-
-fn boardGet(index u64) i32 {
-    return *(board + <&i32> (index * sizeof<i32>))
-}
-
-fn boardSet(index u64, value i32) {
-    *(board + <&i32> (index * sizeof<i32>)) = value
-}
+var board = (<&i32> malloc(BOARD_CAP * sizeof<i32>))[0..BOARD_CAP]
 
 fn main() {
-    boardSet(BOARD_CAP - 2, 1)
+    board[BOARD_CAP - 2] = 1
 
     for var i = 0; i < BOARD_CAP - 2; i = i + 1 {
         for var j = 0; j < BOARD_CAP; j = j + 1 {
-            if <bool> boardGet(j) {
+            if <bool> board[j] {
                 fputc(42, stdout)
             } else {
                 fputc(32, stdout)
@@ -28,10 +20,10 @@ fn main() {
         }
         fputc(10, stdout)
 
-        var pattern = (boardGet(0) << 1) | boardGet(1)
+        var pattern = (board[0] << 1) | board[1]
         for var j = 1; j < BOARD_CAP - 1; j = j + 1 {
-            pattern = ((pattern << 1) & 7) | boardGet(j + 1)
-            boardSet(j, (110 >> pattern) & 1)
+            pattern = ((pattern << 1) & 7) | board[j + 1]
+            board[j] = (110 >> pattern) & 1
         }
     }
 }

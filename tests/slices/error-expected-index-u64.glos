@@ -1,0 +1,4 @@
+fn main() {
+    var xs [u32]
+    xs[true]
+}

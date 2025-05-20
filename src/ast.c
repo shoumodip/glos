@@ -11,7 +11,7 @@ Node *scopeFind(Scope s, Str name, bool isType) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 15, "");
+static_assert(COUNT_TYPES == 16, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -99,12 +99,23 @@ const char *typeToString(Type type) {
         }
     } break;
 
-    case TYPE_ALIAS:
+    case TYPE_SLICE:
+        assert(type.spec);
+        tempSprintf("[");
+
+        tempContinue();
+        typeToString(type.spec->type);
+
+        tempContinue();
+        tempSprintf("]");
+        break;
+
+    case TYPE_STRUCT:
         assert(type.spec);
         tempStrToCstr(type.spec->token.str);
         break;
 
-    case TYPE_STRUCT:
+    case TYPE_ALIAS:
         assert(type.spec);
         tempStrToCstr(type.spec->token.str);
         break;
@@ -170,7 +181,7 @@ bool typeEq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 15, "");
+static_assert(COUNT_TYPES == 16, "");
 bool typeIsSigned(Type type) {
     if (type.ref != 0) {
         return false;
@@ -193,7 +204,7 @@ bool typeIsSigned(Type type) {
     }
 }
 
-static_assert(COUNT_TYPES == 15, "");
+static_assert(COUNT_TYPES == 16, "");
 bool typeIsInteger(Type type) {
     if (type.ref != 0) {
         return false;

@@ -24,7 +24,7 @@ tested platform for now.
 - [X] Pointers
 - [X] C FFI
 - [X] Structures
-- [ ] Slices
+- [X] Slices
 - [ ] Arrays
 - [ ] Strings
 

@@ -70,3 +70,9 @@ structs/temporary-struct-field-access.glos
 structs/auto-dereference.glos
 structs/error-field-redefinition.glos
 structs/error-temporary-struct-is-not-real-memory.glos
+slices/basics.glos
+slices/error-expected-index-u64.glos
+slices/error-expected-range-end-u64.glos
+slices/error-can-only-index-slice.glos
+slices/error-can-only-construct-slice-from-pointer-or-another-slice.glos
+slices/error-cannot-construct-slice-from-raw-pointer.glos

@@ -1,0 +1,4 @@
+fn main() {
+    var xs rawptr
+    var slice = xs[0..10]
+}

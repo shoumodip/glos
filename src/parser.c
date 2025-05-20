@@ -23,12 +23,13 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 41, "");
+static_assert(COUNT_TOKENS == 44, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_DOT:
-    case TOKEN_LBRACE:
     case TOKEN_LPAREN:
+    case TOKEN_LBRACE:
+    case TOKEN_LBRACKET:
         return POWER_DOT;
 
     case TOKEN_ADD:
@@ -75,6 +76,7 @@ static void errorUnexpected(Token token) {
 static bool tokenKindIsStartOfType(TokenKind k) {
     switch (k) {
     case TOKEN_IDENT:
+    case TOKEN_LBRACKET:
     case TOKEN_BAND:
     case TOKEN_LAND:
     case TOKEN_FN:
@@ -110,7 +112,7 @@ static Node *parseArgWithOptionalName(Parser *p, Node *fn) {
     return arg;
 }
 
-static_assert(COUNT_TOKENS == 41, "");
+static_assert(COUNT_TOKENS == 44, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -118,6 +120,12 @@ static Node *parseType(Parser *p) {
     switch (token.kind) {
     case TOKEN_IDENT:
         node = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
+        break;
+
+    case TOKEN_LBRACKET:
+        node = nodeAlloc(p->nodeAlloc, NODE_INDEX, token);
+        node->as.index.base = parseType(p);
+        lexerExpect(&p->lexer, TOKEN_RBRACKET);
         break;
 
     case TOKEN_BAND:
@@ -170,7 +178,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 41, "");
+static_assert(COUNT_TOKENS == 44, "");
 static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -254,6 +262,22 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
             node = dot;
         } break;
 
+        case TOKEN_LPAREN: {
+            Node *call = nodeAlloc(p->nodeAlloc, NODE_CALL, token);
+            call->as.call.fn = node;
+
+            while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
+                nodesPush(&call->as.call.args, parseExpr(p, POWER_SET, false));
+                call->as.call.arity++;
+
+                if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
+                    break;
+                }
+            }
+
+            node = call;
+        } break;
+
         case TOKEN_LBRACE: {
             bool ok = false;
             if (!noStruct) {
@@ -288,20 +312,18 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
             node = structt;
         } break;
 
-        case TOKEN_LPAREN: {
-            Node *call = nodeAlloc(p->nodeAlloc, NODE_CALL, token);
-            call->as.call.fn = node;
+        case TOKEN_LBRACKET: {
+            Node *index = nodeAlloc(p->nodeAlloc, NODE_INDEX, token);
+            index->as.index.base = node;
+            index->as.index.at = parseExpr(p, POWER_SET, false);
 
-            while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
-                nodesPush(&call->as.call.args, parseExpr(p, POWER_SET, false));
-                call->as.call.arity++;
-
-                if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
-                    break;
-                }
+            token = lexerExpect(&p->lexer, TOKEN_RANGE, TOKEN_RBRACKET);
+            if (token.kind == TOKEN_RANGE) {
+                index->as.index.to = parseExpr(p, POWER_SET, false);
+                lexerExpect(&p->lexer, TOKEN_RBRACKET);
             }
 
-            node = call;
+            node = index;
         } break;
 
         default: {
@@ -333,7 +355,7 @@ static void consumeEols(Parser *p) {
     while (lexerRead(&p->lexer, TOKEN_EOL));
 }
 
-static_assert(COUNT_TOKENS == 41, "");
+static_assert(COUNT_TOKENS == 44, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

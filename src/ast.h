@@ -38,6 +38,7 @@ typedef enum {
     TYPE_INT, // Untyped literal, defaults to i64
 
     TYPE_FN,
+    TYPE_SLICE,
     TYPE_STRUCT,
 
     TYPE_ALIAS,
@@ -68,6 +69,7 @@ typedef enum {
     NODE_CALL,
     NODE_CAST,
     NODE_UNARY,
+    NODE_INDEX,
     NODE_BINARY,
     NODE_MEMBER,
     NODE_SIZEOF,
@@ -108,6 +110,12 @@ typedef struct {
 typedef struct {
     Node *operand;
 } NodeUnary;
+
+typedef struct {
+    Node *base;
+    Node *at;
+    Node *to; // For a ranged index
+} NodeIndex;
 
 typedef struct {
     Node *lhs;
@@ -227,6 +235,7 @@ struct Node {
         NodeCall   call;
         NodeCast   cast;
         NodeUnary  unary;
+        NodeIndex  index;
         NodeBinary binary;
         NodeMember member;
         NodeSizeof sizeoff;

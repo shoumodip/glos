@@ -92,7 +92,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 41, "");
+static_assert(COUNT_TOKENS == 44, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -185,11 +185,23 @@ Token lexerNext(Lexer *l) {
         break;
 
     case '.':
-        token.kind = TOKEN_DOT;
+        if (matchChar(l, '.')) {
+            token.kind = TOKEN_RANGE;
+        } else {
+            token.kind = TOKEN_DOT;
+        }
         break;
 
     case ',':
         token.kind = TOKEN_COMMA;
+        break;
+
+    case '(':
+        token.kind = TOKEN_LPAREN;
+        break;
+
+    case ')':
+        token.kind = TOKEN_RPAREN;
         break;
 
     case '{':
@@ -200,12 +212,12 @@ Token lexerNext(Lexer *l) {
         token.kind = TOKEN_RBRACE;
         break;
 
-    case '(':
-        token.kind = TOKEN_LPAREN;
+    case '[':
+        token.kind = TOKEN_LBRACKET;
         break;
 
-    case ')':
-        token.kind = TOKEN_RPAREN;
+    case ']':
+        token.kind = TOKEN_RBRACKET;
         break;
 
     case '+':

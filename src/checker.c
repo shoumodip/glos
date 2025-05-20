@@ -62,7 +62,7 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static_assert(COUNT_NODES == 19, "");
+static_assert(COUNT_NODES == 20, "");
 static void castUntypedInt(Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -70,7 +70,7 @@ static void castUntypedInt(Node *n, Type expected) {
         case TOKEN_INT: {
             n->type = expected;
 
-            static_assert(COUNT_TYPES == 15, "");
+            static_assert(COUNT_TYPES == 16, "");
             const size_t intLimits[COUNT_TYPES] = {
                 [TYPE_I8] = INT8_MAX,
                 [TYPE_I16] = INT16_MAX,
@@ -288,7 +288,7 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
     exit(1);
 }
 
-static_assert(COUNT_TYPES == 15, "");
+static_assert(COUNT_TYPES == 16, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -327,6 +327,12 @@ static void checkType(Context *c, Node *n) {
         checkType(c, operand);
         n->type = operand->type;
         n->type.ref++;
+    } break;
+
+    case NODE_INDEX: {
+        Node *base = n->as.index.base;
+        checkType(c, base);
+        n->type = (Type) {.kind = TYPE_SLICE, .spec = base};
     } break;
 
     case NODE_FN:
@@ -398,13 +404,13 @@ static Node *createTemp(Context *c, Node *expr, Type type) {
     return tempVar;
 }
 
-static_assert(COUNT_NODES == 19, "");
+static_assert(COUNT_NODES == 20, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 41, "");
+        static_assert(COUNT_TOKENS == 44, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -507,7 +513,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 41, "");
+        static_assert(COUNT_TOKENS == 44, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -562,11 +568,91 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_INDEX: {
+        Node *base = n->as.index.base;
+        Node *at = n->as.index.at;
+        Node *to = n->as.index.to;
+
+        checkExpr(c, base, false);
+        const Type sliceType = typeResolve(base->type);
+
+        if (to) {
+            // Ranged: The "slice" can be a slice or a pointer
+            if (!typeIsPointer(base->type) && sliceType.kind != TYPE_SLICE) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Expected slice or pointer, got '%s'\n",
+                    PosArg(base->token.pos),
+                    typeToString(base->type));
+
+                exit(1);
+            }
+
+            if (typeEq(sliceType, (Type) {.kind = TYPE_RAWPTR})) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Cannot construct slice from raw pointer\n",
+                    PosArg(base->token.pos));
+
+                exit(1);
+            }
+        } else {
+            // Index: The "slice" must be a slice
+            if (sliceType.kind != TYPE_SLICE) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Expected slice, got '%s'\n",
+                    PosArg(base->token.pos),
+                    typeToString(base->type));
+
+                exit(1);
+            }
+        }
+
+        if (sliceType.kind == TYPE_SLICE && sliceType.ref) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Cannot index type '%s' without dereferencing it first\n",
+                PosArg(base->token.pos),
+                typeToString(base->type));
+
+            exit(1);
+        }
+
+        checkExpr(c, at, false);
+        typeAssert(at, (Type) {.kind = TYPE_U64});
+
+        if (to) {
+            checkExpr(c, to, false);
+            typeAssert(to, (Type) {.kind = TYPE_U64});
+
+            if (sliceType.kind == TYPE_SLICE) {
+                n->type = base->type;
+            } else {
+                Type elementType;
+                if (base->type.ref) {
+                    elementType = base->type;
+                } else {
+                    elementType = sliceType;
+                }
+                elementType.ref--;
+
+                Node *elementNode = nodeAlloc(c->nodeAlloc, NODE_ATOM, (Token) {0});
+                elementNode->type = elementType;
+                n->type = (Type) {.kind = TYPE_SLICE, .spec = elementNode};
+            }
+        } else {
+            assert(sliceType.spec);
+            n->type = sliceType.spec->type;
+            allowRef = true;
+        }
+    } break;
+
     case NODE_BINARY: {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 41, "");
+        static_assert(COUNT_TOKENS == 44, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -626,6 +712,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         switch (lhs->kind) {
         case NODE_CALL:
+        case NODE_INDEX:
             checkExpr(c, lhs, false);
             break;
 
@@ -646,30 +733,48 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         }
 
         const Type lhsType = typeResolve(lhs->type);
-        if (lhsType.kind != TYPE_STRUCT) {
+        if (lhsType.kind != TYPE_STRUCT && lhsType.kind != TYPE_SLICE) {
             fprintf(
                 stderr,
-                PosFmt "ERROR: Expected structure, got '%s'\n",
+                PosFmt "ERROR: Expected slice or structure, got '%s'\n",
                 PosArg(lhs->token.pos),
                 typeToString(lhs->type));
 
             exit(1);
         }
 
-        if (lhs->kind == NODE_CALL && lhsType.ref == 0) {
+        bool allocTemp = false;
+        allocTemp = allocTemp || (lhs->kind == NODE_CALL && lhsType.ref == 0);
+        allocTemp = allocTemp || (lhs->kind == NODE_INDEX && lhsType.kind == TYPE_SLICE);
+        if (allocTemp) {
             n->as.member.isTemporary = true;
             n->as.member.lhs = createTemp(c, lhs, lhs->type);
         }
 
-        const NodeStruct structt = lhsType.spec->as.structt;
+        if (lhsType.kind == TYPE_STRUCT) {
+            const NodeStruct structt = lhsType.spec->as.structt;
 
-        Node *definition = nodesFind(structt.fields, rhs->token.str, NULL);
-        if (!definition) {
-            errorUndefined(rhs, "field");
+            Node *definition = nodesFind(structt.fields, rhs->token.str, NULL);
+            if (!definition) {
+                errorUndefined(rhs, "field");
+            }
+
+            rhs->as.atom.definition = definition;
+            n->type = definition->type;
+        } else if (lhsType.kind == TYPE_SLICE) {
+            if (strMatch(rhs->token.str, "data")) {
+                rhs->token.as.integer = 0;
+                n->type = lhsType.spec->type;
+                n->type.ref++;
+            } else if (strMatch(rhs->token.str, "length")) {
+                rhs->token.as.integer = 1;
+                n->type = (Type) {.kind = TYPE_U64};
+            } else {
+                errorUndefined(rhs, "field");
+            }
+        } else {
+            unreachable();
         }
-
-        rhs->as.atom.definition = definition;
-        n->type = definition->type;
     } break;
 
     case NODE_SIZEOF: {
@@ -729,7 +834,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 19, "");
+static_assert(COUNT_NODES == 20, "");
 static bool alwaysReturns(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -777,7 +882,7 @@ static bool alwaysReturns(Node *n) {
     }
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 41, "");
+        static_assert(COUNT_TOKENS == 44, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -791,7 +896,7 @@ static bool alwaysReturns(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 19, "");
+static_assert(COUNT_NODES == 20, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -834,7 +939,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 41, "");
+        static_assert(COUNT_TOKENS == 44, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

@@ -1,4 +1,4 @@
-:i count 72
+:i count 78
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -757,4 +757,56 @@ structs/error-temporary-struct-is-not-real-memory.glos
 
 :b stderr 114
 structs/error-temporary-struct-is-not-real-memory.glos:14:22: ERROR: Cannot take reference to value not in memory
+
+:b testcase 18
+slices/basics.glos
+:i returncode 0
+:b stdout 10
+0
+2
+4
+6
+8
+
+:b stderr 0
+
+:b testcase 36
+slices/error-expected-index-u64.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 81
+slices/error-expected-index-u64.glos:3:8: ERROR: Expected type 'u64', got 'bool'
+
+:b testcase 40
+slices/error-expected-range-end-u64.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 86
+slices/error-expected-range-end-u64.glos:3:11: ERROR: Expected type 'u64', got 'bool'
+
+:b testcase 38
+slices/error-can-only-index-slice.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 77
+slices/error-can-only-index-slice.glos:2:5: ERROR: Expected slice, got 'i64'
+
+:b testcase 72
+slices/error-can-only-construct-slice-from-pointer-or-another-slice.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 122
+slices/error-can-only-construct-slice-from-pointer-or-another-slice.glos:2:5: ERROR: Expected slice or pointer, got 'i64'
+
+:b testcase 57
+slices/error-cannot-construct-slice-from-raw-pointer.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 111
+slices/error-cannot-construct-slice-from-raw-pointer.glos:3:17: ERROR: Cannot construct slice from raw pointer
 
