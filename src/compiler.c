@@ -351,7 +351,28 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     } break;
 
     case NODE_ARRAY: {
-        todo();
+        Node *temp = n->as.array.literalTemp;
+        assert(temp);
+
+        LLVMValueRef tempValue = compileExpr(c, temp, false);
+
+        compileType(c, &n->as.array.base->type);
+        const LLVMTypeRef elementType = typeInMemory(n->as.array.base->type);
+
+        for (Node *it = n->as.array.literalInits.head; it; it = it->next) {
+            LLVMValueRef index = compileExpr(c, it->as.binary.lhs, false);
+            LLVMValueRef pointer =
+                LLVMBuildInBoundsGEP2(c->builder, elementType, tempValue, &index, 1, "");
+
+            LLVMValueRef assign = compileExpr(c, it->as.binary.rhs, false);
+            LLVMBuildStore(c->builder, assign, pointer);
+        }
+
+        if (ref) {
+            return tempValue;
+        }
+
+        return LLVMBuildLoad2(c->builder, n->type.llvm, tempValue, "");
     }
 
     case NODE_INDEX: {
@@ -994,7 +1015,7 @@ static void preCompile(Node *n) {
         preCompile(n->as.array.base);
         preCompile(n->as.array.length);
 
-        for (Node *it = n->as.array.inits.head; it; it = it->next) {
+        for (Node *it = n->as.array.literalInits.head; it; it = it->next) {
             preCompile(it);
         }
         break;

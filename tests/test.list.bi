@@ -1,4 +1,4 @@
-:i count 81
+:i count 84
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -842,4 +842,31 @@ arrays/basics.glos
 10
 
 :b stderr 0
+
+:b testcase 20
+arrays/literals.glos
+:i returncode 0
+:b stdout 18
+69
+420
+1337
+80085
+
+:b stderr 0
+
+:b testcase 49
+arrays/error-literal-expected-index-type-u64.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 94
+arrays/error-literal-expected-index-type-u64.glos:2:5: ERROR: Expected type 'u64', got 'bool'
+
+:b testcase 39
+arrays/error-literal-type-mismatch.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 84
+arrays/error-literal-type-mismatch.glos:2:8: ERROR: Expected type 'i64', got 'bool'
 

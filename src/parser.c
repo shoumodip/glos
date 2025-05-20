@@ -154,7 +154,7 @@ static Node *parseType(Parser *p) {
 
         while (!lexerRead(&p->lexer, TOKEN_RPAREN)) {
             nodesPush(&node->as.fn.args, parseArgWithOptionalName(p, node));
-            if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
+            if (lexerExpect(&p->lexer, TOKEN_COMMA, TOKEN_RPAREN).kind == TOKEN_RPAREN) {
                 break;
             }
         }
@@ -207,6 +207,30 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     case TOKEN_BAND:
         node = nodeAlloc(p->nodeAlloc, NODE_UNARY, token);
         node->as.unary.operand = parseExpr(p, POWER_PRE, noStruct);
+        break;
+
+    case TOKEN_LBRACKET:
+        node = nodeAlloc(p->nodeAlloc, NODE_ARRAY, token);
+        node->as.array.base = parseType(p);
+
+        lexerExpect(&p->lexer, TOKEN_EOL);
+        node->as.array.length = parseConst(p);
+        lexerExpect(&p->lexer, TOKEN_RBRACKET);
+
+        lexerExpect(&p->lexer, TOKEN_LBRACE);
+        while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
+            Node *index = parseExpr(p, POWER_SET, false);
+            token = lexerExpect(&p->lexer, TOKEN_COLON);
+
+            Node *assign = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
+            assign->as.binary.lhs = index;
+            assign->as.binary.rhs = parseExpr(p, POWER_SET, false);
+
+            nodesPush(&node->as.array.literalInits, assign);
+            if (lexerExpect(&p->lexer, TOKEN_COMMA, TOKEN_RBRACE).kind == TOKEN_RBRACE) {
+                break;
+            }
+        }
         break;
 
     case TOKEN_LPAREN:
@@ -280,7 +304,7 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
                 nodesPush(&call->as.call.args, parseExpr(p, POWER_SET, false));
                 call->as.call.arity++;
 
-                if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
+                if (lexerExpect(&p->lexer, TOKEN_COMMA, TOKEN_RPAREN).kind == TOKEN_RPAREN) {
                     break;
                 }
             }
@@ -314,7 +338,7 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
                 assign->as.binary.rhs = parseExpr(p, POWER_SET, false);
 
                 nodesPush(&structt->as.structt.fields, assign);
-                if (lexerExpect(&p->lexer, TOKEN_RBRACE, TOKEN_COMMA).kind == TOKEN_RBRACE) {
+                if (lexerExpect(&p->lexer, TOKEN_COMMA, TOKEN_RBRACE).kind == TOKEN_RBRACE) {
                     break;
                 }
             }
@@ -530,7 +554,7 @@ static Node *parseFn(Parser *p, Token name) {
             }
             nodesPush(&node->as.fn.args, arg);
 
-            if (lexerExpect(&p->lexer, TOKEN_RPAREN, TOKEN_COMMA).kind == TOKEN_RPAREN) {
+            if (lexerExpect(&p->lexer, TOKEN_COMMA, TOKEN_RPAREN).kind == TOKEN_RPAREN) {
                 break;
             }
         }

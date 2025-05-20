@@ -79,3 +79,6 @@ slices/error-can-only-construct-slice-from-pointer-or-another-slice.glos
 slices/error-cannot-construct-slice-from-raw-pointer.glos
 slices/error-cannot-infer-range-end-of-pointer.glos
 arrays/basics.glos
+arrays/literals.glos
+arrays/error-literal-expected-index-type-u64.glos
+arrays/error-literal-type-mismatch.glos

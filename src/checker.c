@@ -588,7 +588,18 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     } break;
 
     case NODE_ARRAY: {
-        todo();
+        checkType(c, n);
+
+        NodeArray *array = &n->as.array;
+        for (Node *it = array->literalInits.head; it; it = it->next) {
+            checkExpr(c, it->as.binary.lhs, false);
+            typeAssert(it->as.binary.lhs, (Type) {.kind = TYPE_U64});
+
+            checkExpr(c, it->as.binary.rhs, false);
+            typeAssert(it->as.binary.rhs, array->base->type);
+        }
+
+        n->as.array.literalTemp = createTemp(c, NULL, n->type);
     } break;
 
     case NODE_INDEX: {
@@ -695,7 +706,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
                 n->type = sliceType.spec->type;
             }
 
-            allowRef = true;
+            allowRef = base->kind != NODE_ARRAY;
         }
     } break;
 

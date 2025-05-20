@@ -116,7 +116,9 @@ typedef struct {
 typedef struct {
     Node *base;
     Node *length;
-    Nodes inits;
+
+    Node *literalTemp;
+    Nodes literalInits;
 
     size_t lengthComputed;
 } NodeArray;

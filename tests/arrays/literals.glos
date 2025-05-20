@@ -1,0 +1,16 @@
+fn printI64s(xs [i64]) {
+    for var i = 0; i < xs.length; i = i + 1 {
+        print xs[i]
+    }
+}
+
+var xs = [i64; 4] {
+    0: 69,
+    1: 420,
+    2: 1337,
+    3: 80085
+}
+
+fn main() {
+    printI64s(xs[..])
+}

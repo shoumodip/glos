@@ -25,7 +25,7 @@ tested platform for now.
 - [X] C FFI
 - [X] Structures
 - [X] Slices
-- [ ] Arrays
+- [X] Arrays
 - [ ] Strings
 
 More TODOs will be added as the project progresses
