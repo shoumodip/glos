@@ -366,6 +366,15 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             pointer = LLVMBuildExtractValue(c->builder, pointer, 0, "");
         }
 
+        assert(n->type.kind == TYPE_SLICE);
+        assert(n->type.spec);
+
+        Type *elementType = &n->type.spec->type;
+        compileType(c, elementType);
+
+        pointer =
+            LLVMBuildInBoundsGEP2(c->builder, typeInMemory(*elementType), pointer, &atValue, 1, "");
+
         const LLVMValueRef toValue = compileExpr(c, to, false);
         const LLVMValueRef length = LLVMBuildSub(c->builder, toValue, atValue, "");
 
