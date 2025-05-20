@@ -112,6 +112,11 @@ static Node *parseArgWithOptionalName(Parser *p, Node *fn) {
     return arg;
 }
 
+// TODO: Proper constant parsing
+static Node *parseConst(Parser *p) {
+    return nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_INT));
+}
+
 static_assert(COUNT_TOKENS == 44, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
@@ -122,11 +127,16 @@ static Node *parseType(Parser *p) {
         node = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
         break;
 
-    case TOKEN_LBRACKET:
-        node = nodeAlloc(p->nodeAlloc, NODE_INDEX, token);
-        node->as.index.base = parseType(p);
-        lexerExpect(&p->lexer, TOKEN_RBRACKET);
-        break;
+    case TOKEN_LBRACKET: {
+        node = nodeAlloc(p->nodeAlloc, NODE_ARRAY, token);
+        node->as.array.base = parseType(p);
+
+        token = lexerExpect(&p->lexer, TOKEN_EOL, TOKEN_RBRACKET);
+        if (token.kind == TOKEN_EOL) {
+            node->as.array.length = parseConst(p);
+            lexerExpect(&p->lexer, TOKEN_RBRACKET);
+        }
+    } break;
 
     case TOKEN_BAND:
         node = nodeAlloc(p->nodeAlloc, NODE_UNARY, token);
@@ -319,7 +329,7 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
 
             token = lexerExpect(&p->lexer, TOKEN_RANGE, TOKEN_RBRACKET);
             if (token.kind == TOKEN_RANGE) {
-                index->as.index.to = parseExpr(p, POWER_SET, false);
+                index->as.index.end = parseExpr(p, POWER_SET, false);
                 lexerExpect(&p->lexer, TOKEN_RBRACKET);
             }
 

@@ -1,4 +1,4 @@
-:i count 78
+:i count 79
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -791,16 +791,16 @@ slices/error-can-only-index-slice.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 77
-slices/error-can-only-index-slice.glos:2:5: ERROR: Expected slice, got 'i64'
+:b stderr 86
+slices/error-can-only-index-slice.glos:2:5: ERROR: Expected array or slice, got 'i64'
 
 :b testcase 72
 slices/error-can-only-construct-slice-from-pointer-or-another-slice.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 122
-slices/error-can-only-construct-slice-from-pointer-or-another-slice.glos:2:5: ERROR: Expected slice or pointer, got 'i64'
+:b stderr 131
+slices/error-can-only-construct-slice-from-pointer-or-another-slice.glos:2:5: ERROR: Expected array or slice or pointer, got 'i64'
 
 :b testcase 57
 slices/error-cannot-construct-slice-from-raw-pointer.glos
@@ -809,4 +809,17 @@ slices/error-cannot-construct-slice-from-raw-pointer.glos
 
 :b stderr 111
 slices/error-cannot-construct-slice-from-raw-pointer.glos:3:17: ERROR: Cannot construct slice from raw pointer
+
+:b testcase 18
+arrays/basics.glos
+:i returncode 0
+:b stdout 13
+0
+2
+4
+6
+8
+10
+
+:b stderr 0
 

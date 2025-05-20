@@ -11,7 +11,7 @@ Node *scopeFind(Scope s, Str name, bool isType) {
     return NULL;
 }
 
-static_assert(COUNT_TYPES == 16, "");
+static_assert(COUNT_TYPES == 17, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
     tempContinue();
@@ -99,6 +99,24 @@ const char *typeToString(Type type) {
         }
     } break;
 
+    case TYPE_ARRAY: {
+        assert(type.spec);
+        const NodeArray array = type.spec->as.array;
+        tempSprintf("[");
+
+        tempContinue();
+        typeToString(array.base->type);
+
+        tempContinue();
+        tempSprintf("; ");
+
+        tempContinue();
+        tempSprintf("%zu", array.lengthComputed);
+
+        tempContinue();
+        tempSprintf("]");
+    } break;
+
     case TYPE_SLICE:
         assert(type.spec);
         tempSprintf("[");
@@ -156,6 +174,26 @@ bool typeEq(Type a, Type b) {
         return typeEq(nodeFnReturnType(aFn), nodeFnReturnType(bFn));
     }
 
+    case TYPE_ARRAY: {
+        assert(a.spec);
+        const NodeArray *aA = &a.spec->as.array;
+
+        assert(b.spec);
+        const NodeArray *bA = &b.spec->as.array;
+
+        if (!typeEq(aA->base->type, bA->base->type)) {
+            return false;
+        }
+
+        return aA->lengthComputed == bA->lengthComputed;
+    }
+
+    case TYPE_SLICE: {
+        assert(a.spec);
+        assert(b.spec);
+        return typeEq(a.spec->type, b.spec->type);
+    }
+
     case TYPE_STRUCT: {
         assert(a.spec);
         const NodeStruct *aS = &a.spec->as.structt;
@@ -181,7 +219,7 @@ bool typeEq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 16, "");
+static_assert(COUNT_TYPES == 17, "");
 bool typeIsSigned(Type type) {
     if (type.ref != 0) {
         return false;
@@ -204,7 +242,7 @@ bool typeIsSigned(Type type) {
     }
 }
 
-static_assert(COUNT_TYPES == 16, "");
+static_assert(COUNT_TYPES == 17, "");
 bool typeIsInteger(Type type) {
     if (type.ref != 0) {
         return false;

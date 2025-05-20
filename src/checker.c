@@ -62,7 +62,7 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static void castUntypedInt(Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -70,7 +70,7 @@ static void castUntypedInt(Node *n, Type expected) {
         case TOKEN_INT: {
             n->type = expected;
 
-            static_assert(COUNT_TYPES == 16, "");
+            static_assert(COUNT_TYPES == 17, "");
             const size_t intLimits[COUNT_TYPES] = {
                 [TYPE_I8] = INT8_MAX,
                 [TYPE_I16] = INT16_MAX,
@@ -288,7 +288,13 @@ static void errorRedefinition(const Node *n, const Node *previous, const char *l
     exit(1);
 }
 
-static_assert(COUNT_TYPES == 16, "");
+static void checkConst(Context *c, Node *n) {
+    unused(c);
+    assert(n->kind == NODE_ATOM && n->token.kind == TOKEN_INT); // TODO: Proper constant evaluation
+    n->type = (Type) {.kind = TYPE_INT};
+}
+
+static_assert(COUNT_TYPES == 17, "");
 static void checkType(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -329,10 +335,23 @@ static void checkType(Context *c, Node *n) {
         n->type.ref++;
     } break;
 
-    case NODE_INDEX: {
-        Node *base = n->as.index.base;
+    case NODE_ARRAY: {
+        Node *base = n->as.array.base;
         checkType(c, base);
-        n->type = (Type) {.kind = TYPE_SLICE, .spec = base};
+
+        Node *arraySize = n->as.array.length;
+        if (arraySize) {
+            checkConst(c, arraySize);
+            typeAssert(arraySize, (Type) {.kind = TYPE_U64});
+
+            // TODO: Proper constant evaluation
+            assert(arraySize->kind == NODE_ATOM && arraySize->token.kind == TOKEN_INT);
+            n->as.array.lengthComputed = arraySize->token.as.integer;
+
+            n->type = (Type) {.kind = TYPE_ARRAY, .spec = n};
+        } else {
+            n->type = (Type) {.kind = TYPE_SLICE, .spec = base};
+        }
     } break;
 
     case NODE_FN:
@@ -404,7 +423,7 @@ static Node *createTemp(Context *c, Node *expr, Type type) {
     return tempVar;
 }
 
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
@@ -568,20 +587,25 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_ARRAY: {
+        todo();
+    } break;
+
     case NODE_INDEX: {
         Node *base = n->as.index.base;
         Node *at = n->as.index.at;
-        Node *to = n->as.index.to;
+        Node *end = n->as.index.end;
 
         checkExpr(c, base, false);
         const Type sliceType = typeResolve(base->type);
 
-        if (to) {
-            // Ranged: The "slice" can be a slice or a pointer
-            if (!typeIsPointer(base->type) && sliceType.kind != TYPE_SLICE) {
+        if (end) {
+            // Ranged: The "slice" can be an array or a slice or a pointer
+            if (!typeIsPointer(base->type) && sliceType.kind != TYPE_ARRAY &&
+                sliceType.kind != TYPE_SLICE) {
                 fprintf(
                     stderr,
-                    PosFmt "ERROR: Expected slice or pointer, got '%s'\n",
+                    PosFmt "ERROR: Expected array or slice or pointer, got '%s'\n",
                     PosArg(base->token.pos),
                     typeToString(base->type));
 
@@ -597,11 +621,11 @@ static void checkExpr(Context *c, Node *n, bool ref) {
                 exit(1);
             }
         } else {
-            // Index: The "slice" must be a slice
-            if (sliceType.kind != TYPE_SLICE) {
+            // Index: The "slice" can be an array or a slice
+            if (sliceType.kind != TYPE_ARRAY && sliceType.kind != TYPE_SLICE) {
                 fprintf(
                     stderr,
-                    PosFmt "ERROR: Expected slice, got '%s'\n",
+                    PosFmt "ERROR: Expected array or slice, got '%s'\n",
                     PosArg(base->token.pos),
                     typeToString(base->type));
 
@@ -609,7 +633,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             }
         }
 
-        if (sliceType.kind == TYPE_SLICE && sliceType.ref) {
+        if ((sliceType.kind == TYPE_ARRAY || sliceType.kind == TYPE_SLICE) && sliceType.ref) {
             fprintf(
                 stderr,
                 PosFmt "ERROR: Cannot index type '%s' without dereferencing it first\n",
@@ -622,11 +646,17 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         checkExpr(c, at, false);
         typeAssert(at, (Type) {.kind = TYPE_U64});
 
-        if (to) {
-            checkExpr(c, to, false);
-            typeAssert(to, (Type) {.kind = TYPE_U64});
+        if (end) {
+            checkExpr(c, end, false);
+            typeAssert(end, (Type) {.kind = TYPE_U64});
 
-            if (sliceType.kind == TYPE_SLICE) {
+            if (sliceType.kind == TYPE_ARRAY) {
+                assert(sliceType.spec);
+                n->type = (Type) {
+                    .kind = TYPE_SLICE,
+                    .spec = sliceType.spec->as.array.base,
+                };
+            } else if (sliceType.kind == TYPE_SLICE) {
                 n->type = base->type;
             } else {
                 Type elementType;
@@ -643,7 +673,12 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             }
         } else {
             assert(sliceType.spec);
-            n->type = sliceType.spec->type;
+            if (sliceType.kind == TYPE_ARRAY) {
+                n->type = sliceType.spec->as.array.base->type;
+            } else {
+                n->type = sliceType.spec->type;
+            }
+
             allowRef = true;
         }
     } break;
@@ -733,10 +768,11 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         }
 
         const Type lhsType = typeResolve(lhs->type);
-        if (lhsType.kind != TYPE_STRUCT && lhsType.kind != TYPE_SLICE) {
+        if (lhsType.kind != TYPE_STRUCT && lhsType.kind != TYPE_ARRAY &&
+            lhsType.kind != TYPE_SLICE) {
             fprintf(
                 stderr,
-                PosFmt "ERROR: Expected slice or structure, got '%s'\n",
+                PosFmt "ERROR: Expected array or slice or structure, got '%s'\n",
                 PosArg(lhs->token.pos),
                 typeToString(lhs->type));
 
@@ -761,7 +797,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
             rhs->as.atom.definition = definition;
             n->type = definition->type;
-        } else if (lhsType.kind == TYPE_SLICE) {
+        } else if (lhsType.kind == TYPE_ARRAY || lhsType.kind == TYPE_SLICE) {
             if (strMatch(rhs->token.str, "data")) {
                 rhs->token.as.integer = 0;
                 n->type = lhsType.spec->type;
@@ -834,7 +870,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static bool alwaysReturns(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -896,7 +932,7 @@ static bool alwaysReturns(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {

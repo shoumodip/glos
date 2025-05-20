@@ -51,7 +51,7 @@ static LLVMTypeRef typeInMemory(Type type) {
     return type.llvm;
 }
 
-static_assert(COUNT_TYPES == 16, "");
+static_assert(COUNT_TYPES == 17, "");
 static void compileType(Compiler *c, Type *type) {
     if (typeIsPointer(*type)) {
         type->llvm = LLVMPointerType(LLVMVoidType(), 0);
@@ -110,6 +110,14 @@ static void compileType(Compiler *c, Type *type) {
         type->llvm = LLVMFunctionType(returnType, argsLLVM, fn->arity, false);
     } break;
 
+    case TYPE_ARRAY: {
+        assert(type->spec);
+        NodeArray *array = &type->spec->as.array;
+
+        compileType(c, &array->base->type);
+        type->llvm = LLVMArrayType2(typeInMemory(array->base->type), array->lengthComputed);
+    } break;
+
     case TYPE_SLICE:
         type->llvm = c->sliceType;
         break;
@@ -133,7 +141,7 @@ static void compileType(Compiler *c, Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -175,7 +183,7 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 static void compileFn(Compiler *c, Node *n);
 static void compileStmt(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(c, &n->type);
 
@@ -255,7 +263,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildZExt(c->builder, fromValue, toLLVM, "");
         }
 
-        static_assert(COUNT_TYPES == 16, "");
+        static_assert(COUNT_TYPES == 17, "");
         const size_t intSizes[COUNT_TYPES] = {
             [TYPE_I8] = 8,
             [TYPE_I16] = 16,
@@ -342,18 +350,26 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_ARRAY: {
+        todo();
+    }
+
     case NODE_INDEX: {
         Node *base = n->as.index.base;
         Node *at = n->as.index.at;
-        Node *to = n->as.index.to;
+        Node *to = n->as.index.end;
 
-        LLVMValueRef pointer = compileExpr(c, base, false);
+        const bool   isArray = base->type.kind == TYPE_ARRAY && base->type.ref == 0;
+        LLVMValueRef pointer = compileExpr(c, base, isArray);
         LLVMValueRef atValue = compileExpr(c, at, false);
         if (!to) { // Index
-            const LLVMTypeRef elementType = typeInMemory(n->type);
+            if (!isArray) {
+                pointer = LLVMBuildExtractValue(c->builder, pointer, 0, "");
+            }
 
-            pointer = LLVMBuildExtractValue(c->builder, pointer, 0, "");
+            const LLVMTypeRef elementType = typeInMemory(n->type);
             pointer = LLVMBuildInBoundsGEP2(c->builder, elementType, pointer, &atValue, 1, "");
+
             if (ref) {
                 return pointer;
             }
@@ -565,7 +581,6 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.member.lhs;
         Node *rhs = n->as.member.rhs;
 
-        const Type   lhsType = lhs->type;
         LLVMValueRef lhsValue = compileExpr(c, lhs, true);
 
         size_t index = 0;
@@ -576,13 +591,22 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             index = rhs->as.atom.definition->as.field.index;
         } else if (lhs->type.kind == TYPE_SLICE) {
             index = rhs->token.as.integer;
+        } else if (lhs->type.kind == TYPE_ARRAY) {
+            if (rhs->token.as.integer) {
+                // Length
+                assert(lhs->type.spec);
+                return LLVMConstInt(n->type.llvm, lhs->type.spec->as.array.lengthComputed, false);
+            } else {
+                // Data
+                return lhsValue;
+            }
         } else {
             unreachable();
         }
 
-        if (lhsType.ref) {
+        if (lhs->type.ref) {
             const LLVMTypeRef voidPtr = LLVMPointerType(LLVMVoidType(), 0);
-            for (size_t i = 0; i < lhsType.ref; i++) {
+            for (size_t i = 0; i < lhs->type.ref; i++) {
                 lhsValue = LLVMBuildLoad2(c->builder, voidPtr, lhsValue, "");
             }
         }
@@ -663,7 +687,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -795,7 +819,7 @@ static void compileStmt(Compiler *c, Node *n) {
     } break;
 
     case NODE_TYPE:
-        static_assert(COUNT_TYPES == 16, ""); // Pass
+        static_assert(COUNT_TYPES == 17, ""); // Pass
         break;
 
     case NODE_EXTERN:
@@ -913,7 +937,7 @@ static Node *getMain(Context context) {
     return main;
 }
 
-static_assert(COUNT_NODES == 20, "");
+static_assert(COUNT_NODES == 21, "");
 static void preCompile(Node *n) {
     if (!n) {
         return;
@@ -943,11 +967,21 @@ static void preCompile(Node *n) {
         preCompile(n->as.unary.operand);
         break;
 
+    case NODE_ARRAY:
+        n->type = typeResolve(n->type);
+        preCompile(n->as.array.base);
+        preCompile(n->as.array.length);
+
+        for (Node *it = n->as.array.inits.head; it; it = it->next) {
+            preCompile(it);
+        }
+        break;
+
     case NODE_INDEX:
         n->type = typeResolve(n->type);
         preCompile(n->as.index.base);
         preCompile(n->as.index.at);
-        preCompile(n->as.index.to);
+        preCompile(n->as.index.end);
         break;
 
     case NODE_BINARY:
