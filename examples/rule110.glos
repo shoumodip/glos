@@ -8,10 +8,10 @@ var BOARD_CAP = 30
 var board = (<&i32> malloc(BOARD_CAP * sizeof<i32>))[0..BOARD_CAP]
 
 fn main() {
-    board[BOARD_CAP - 2] = 1
+    board[board.length - 2] = 1
 
-    for var i = 0; i < BOARD_CAP - 2; i = i + 1 {
-        for var j = 0; j < BOARD_CAP; j = j + 1 {
+    for var i = 0; i < board.length - 2; i = i + 1 {
+        for var j = 0; j < board.length; j = j + 1 {
             if <bool> board[j] {
                 fputc(42, stdout)
             } else {
@@ -21,7 +21,7 @@ fn main() {
         fputc(10, stdout)
 
         var pattern = (board[0] << 1) | board[1]
-        for var j = 1; j < BOARD_CAP - 1; j = j + 1 {
+        for var j = 1; j < board.length - 1; j = j + 1 {
             pattern = ((pattern << 1) & 7) | board[j + 1]
             board[j] = (110 >> pattern) & 1
         }
