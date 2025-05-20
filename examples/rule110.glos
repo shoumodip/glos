@@ -1,13 +1,10 @@
 extern {
     var stdout rawptr
     fn fputc(ch i32, stream rawptr)
-    fn malloc(size u64) rawptr
 }
 
-var BOARD_CAP = 30
-var board = (<&i32> malloc(BOARD_CAP * sizeof<i32>))[0..BOARD_CAP]
-
 fn main() {
+    var board [i32; 30]
     board[board.length - 2] = 1
 
     for var i = 0; i < board.length - 2; i = i + 1 {
