@@ -23,7 +23,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 44, "");
+static_assert(COUNT_TOKENS == 45, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_DOT:
@@ -117,7 +117,7 @@ static Node *parseConst(Parser *p) {
     return nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_INT));
 }
 
-static_assert(COUNT_TOKENS == 44, "");
+static_assert(COUNT_TOKENS == 45, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -188,7 +188,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 44, "");
+static_assert(COUNT_TOKENS == 45, "");
 static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -310,7 +310,7 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
                 token = lexerExpect(&p->lexer, TOKEN_IDENT);
                 Node *assign = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
 
-                lexerExpect(&p->lexer, TOKEN_SET);
+                lexerExpect(&p->lexer, TOKEN_COLON);
                 assign->as.binary.rhs = parseExpr(p, POWER_SET, false);
 
                 nodesPush(&structt->as.structt.fields, assign);
@@ -374,7 +374,7 @@ static void consumeEols(Parser *p) {
     while (lexerRead(&p->lexer, TOKEN_EOL));
 }
 
-static_assert(COUNT_TOKENS == 44, "");
+static_assert(COUNT_TOKENS == 45, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

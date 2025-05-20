@@ -92,7 +92,7 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 44, "");
+static_assert(COUNT_TOKENS == 45, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -194,6 +194,10 @@ Token lexerNext(Lexer *l) {
 
     case ',':
         token.kind = TOKEN_COMMA;
+        break;
+
+    case ':':
+        token.kind = TOKEN_COLON;
         break;
 
     case '(':

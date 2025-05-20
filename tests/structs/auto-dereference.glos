@@ -11,7 +11,7 @@ fn double(i &&Iota) {
 }
 
 fn main() {
-    var iota = Iota {x = 67}
+    var iota = Iota {x: 67}
     var ptr = &iota
     print iota.x
 
