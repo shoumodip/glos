@@ -1,5 +1,3 @@
-// TODO: Ensure that the LLVM type is compiled even after typeResolve
-
 #include "compiler.h"
 
 #include <llvm-c/Core.h>
@@ -45,8 +43,7 @@ static void fnCompilerEnd(Compiler *c, FnCompiler save) {
 // How the type should actually be represented in memory.
 // Eg: fn () -> ptr
 static LLVMTypeRef typeInMemory(Type type) {
-    type = typeResolve(type);
-    if (type.ref || type.kind == TYPE_FN) {
+    if (type.kind == TYPE_FN) {
         return LLVMPointerType(LLVMVoidType(), 0);
     }
     return type.llvm;
@@ -54,20 +51,6 @@ static LLVMTypeRef typeInMemory(Type type) {
 
 static_assert(COUNT_TYPES == 15, "");
 static void compileType(Type *type) {
-    if (type->kind == TYPE_ALIAS) {
-        assert(type->spec);
-
-        Type *real = &type->spec->as.type.real;
-        if (!real->llvm) {
-            compileType(real);
-        }
-
-        type->llvm = real->llvm;
-        if (!type->ref) {
-            return;
-        }
-    }
-
     if (typeIsPointer(*type)) {
         type->llvm = LLVMPointerType(LLVMVoidType(), 0);
         return;
@@ -136,9 +119,6 @@ static void compileType(Type *type) {
 
         type->llvm = LLVMStructType(fieldsLLVM, structt->fieldsCount, false);
     } break;
-
-    case TYPE_ALIAS:
-        break;
 
     default:
         unreachable();
@@ -244,8 +224,8 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node              *from = n->as.cast.from;
         const LLVMValueRef fromValue = compileExpr(c, from, false);
 
-        const Type fromType = typeResolve(from->type);
-        const Type toType = typeResolve(n->type);
+        const Type fromType = from->type;
+        const Type toType = n->type;
         if (typeEq(fromType, toType) || fromType.kind == TYPE_FN || toType.kind == TYPE_FN) {
             return fromValue;
         }
@@ -531,10 +511,10 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     } break;
 
     case NODE_MEMBER: {
-        Node *lhs = n->as.binary.lhs;
-        Node *rhs = n->as.binary.rhs;
+        Node *lhs = n->as.member.lhs;
+        Node *rhs = n->as.member.rhs;
 
-        const Type   lhsType = typeResolve(lhs->type);
+        const Type   lhsType = lhs->type;
         LLVMValueRef lhsValue = compileExpr(c, lhs, true);
 
         assert(rhs->kind == NODE_ATOM);
@@ -548,11 +528,15 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             }
         }
 
-        Type structType = typeRemoveRef(lhsType);
-        compileType(&structType);
+        assert(lhs->type.kind == TYPE_STRUCT);
+        assert(lhs->type.spec->kind == NODE_STRUCT);
+        Type *structType = &lhs->type.spec->type;
+        if (!structType->llvm) {
+            compileType(structType);
+        }
 
         LLVMValueRef fieldValue =
-            LLVMBuildStructGEP2(c->builder, structType.llvm, lhsValue, index, "");
+            LLVMBuildStructGEP2(c->builder, structType->llvm, lhsValue, index, "");
 
         if (ref) {
             return fieldValue;
@@ -744,7 +728,7 @@ static void compileStmt(Compiler *c, Node *n) {
     } break;
 
     case NODE_TYPE:
-        static_assert(COUNT_TYPES == 15, "");
+        static_assert(COUNT_TYPES == 15, ""); // Pass
         break;
 
     case NODE_EXTERN:
@@ -862,6 +846,138 @@ static Node *getMain(Context context) {
     return main;
 }
 
+static_assert(COUNT_NODES == 19, "");
+static void preCompile(Node *n) {
+    if (!n) {
+        return;
+    }
+
+    switch (n->kind) {
+    case NODE_ATOM:
+        n->type = typeResolve(n->type);
+        break;
+
+    case NODE_CALL:
+        n->type = typeResolve(n->type);
+
+        preCompile(n->as.call.fn);
+        for (Node *it = n->as.call.args.head; it; it = it->next) {
+            preCompile(it);
+        }
+        break;
+
+    case NODE_CAST:
+        n->type = typeResolve(n->type);
+        preCompile(n->as.cast.from);
+        break;
+
+    case NODE_UNARY:
+        n->type = typeResolve(n->type);
+        preCompile(n->as.unary.operand);
+        break;
+
+    case NODE_BINARY:
+        n->type = typeResolve(n->type);
+        preCompile(n->as.binary.lhs);
+        preCompile(n->as.binary.rhs);
+        break;
+
+    case NODE_MEMBER:
+        n->type = typeResolve(n->type);
+        preCompile(n->as.member.lhs);
+        break;
+
+    case NODE_SIZEOF:
+        n->as.sizeoff.operand->type = typeResolve(n->as.sizeoff.operand->type);
+        break;
+
+    case NODE_BLOCK:
+        for (Node *it = n->as.block.head; it; it = it->next) {
+            preCompile(it);
+        }
+        break;
+
+    case NODE_IF:
+        preCompile(n->as.iff.condition);
+        preCompile(n->as.iff.consequence);
+        preCompile(n->as.iff.antecedence);
+        break;
+
+    case NODE_FOR:
+        preCompile(n->as.forr.init);
+        preCompile(n->as.forr.condition);
+        preCompile(n->as.forr.update);
+        preCompile(n->as.forr.body);
+        break;
+
+    case NODE_FLOW:
+        static_assert(COUNT_TOKENS == 41, "");
+        switch (n->token.kind) {
+        case TOKEN_RETURN:
+            preCompile(n->as.flow.operand);
+            break;
+
+        default:
+            unreachable();
+        }
+        break;
+
+    case NODE_FN:
+        for (Node *it = n->as.fn.args.head; it; it = it->next) {
+            preCompile(it);
+        }
+        preCompile(n->as.fn.ret);
+
+        for (size_t i = 0; i < n->as.fn.locals.length; i++) {
+            preCompile(n->as.fn.locals.data[i]);
+        }
+        preCompile(n->as.fn.body);
+        break;
+
+    case NODE_ARG:
+        n->type = typeResolve(n->type);
+        break;
+
+    case NODE_VAR:
+        n->type = typeResolve(n->type);
+        preCompile(n->as.var.expr);
+        preCompile(n->as.var.type);
+        break;
+
+    case NODE_TYPE:
+        preCompile(n->as.type.definition);
+        break;
+
+    case NODE_FIELD:
+        n->type = typeResolve(n->type);
+        preCompile(n->as.field.type);
+        break;
+
+    case NODE_STRUCT: {
+        n->type = typeResolve(n->type);
+        preCompile(n->as.structt.literalType);
+
+        for (Node *it = n->as.structt.fields.head; it; it = it->next) {
+            preCompile(it);
+        }
+        preCompile(n->as.structt.literalTemp);
+    } break;
+
+    case NODE_EXTERN:
+        for (Node *it = n->as.externn.definitions.head; it; it = it->next) {
+            preCompile(it);
+        }
+        break;
+
+    case NODE_PRINT:
+        preCompile(n->as.print.operand);
+        break;
+
+    default:
+        unreachable();
+    }
+}
+
 void compileProgram(Context context, const char *executableName) {
     Node *mainFn = getMain(context);
 
@@ -897,6 +1013,17 @@ void compileProgram(Context context, const char *executableName) {
         LLVMTypeRef printfArgs[] = {LLVMPointerType(LLVMInt8Type(), 0)};
         c.printFuncType = LLVMFunctionType(LLVMInt32Type(), printfArgs, len(printfArgs), true);
         c.printFuncValue = LLVMAddFunction(c.module, "printf", c.printFuncType);
+    }
+
+    // Pre Compile
+    {
+        for (size_t i = 0; i < context.globals.length; i++) {
+            preCompile(context.globals.data[i]);
+        }
+
+        for (size_t i = 0; i < context.globalTemps.length; i++) {
+            preCompile(context.globalTemps.data[i]);
+        }
     }
 
     // The globals
