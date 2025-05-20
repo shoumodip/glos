@@ -23,7 +23,7 @@ tested platform for now.
 - [X] Functions
 - [X] Pointers
 - [X] C FFI
-- [ ] Structures
+- [X] Structures
 - [ ] Slices
 - [ ] Arrays
 - [ ] Strings
