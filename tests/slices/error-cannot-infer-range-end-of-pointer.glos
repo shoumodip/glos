@@ -1,0 +1,4 @@
+fn main() {
+    var ptr &i64
+    ptr[..]
+}

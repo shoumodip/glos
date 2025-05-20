@@ -361,8 +361,15 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
         const bool   isArray = base->type.kind == TYPE_ARRAY && base->type.ref == 0;
         LLVMValueRef pointer = compileExpr(c, base, isArray);
-        LLVMValueRef atValue = compileExpr(c, at, false);
-        if (!to) { // Index
+
+        LLVMValueRef atValue = NULL;
+        if (at) {
+            atValue = compileExpr(c, at, false);
+        } else {
+            atValue = LLVMConstNull(LLVMInt64Type());
+        }
+
+        if (!n->as.index.isRanged) {
             if (!isArray) {
                 pointer = LLVMBuildExtractValue(c->builder, pointer, 0, "");
             }
@@ -377,7 +384,20 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             return LLVMBuildLoad2(c->builder, elementType, pointer, "");
         }
 
-        // Slice
+        LLVMValueRef toValue = NULL;
+        if (!to) {
+            assert(!base->type.ref);
+            if (base->type.kind == TYPE_ARRAY) {
+                assert(base->type.spec);
+                toValue =
+                    LLVMConstInt(LLVMInt64Type(), base->type.spec->as.array.lengthComputed, false);
+            } else if (base->type.kind == TYPE_SLICE) {
+                toValue = LLVMBuildExtractValue(c->builder, pointer, 1, "");
+            } else {
+                unreachable();
+            }
+        }
+
         if (base->type.kind == TYPE_SLICE) {
             pointer = LLVMBuildExtractValue(c->builder, pointer, 0, "");
         }
@@ -391,9 +411,11 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         pointer =
             LLVMBuildInBoundsGEP2(c->builder, typeInMemory(*elementType), pointer, &atValue, 1, "");
 
-        const LLVMValueRef toValue = compileExpr(c, to, false);
-        const LLVMValueRef length = LLVMBuildSub(c->builder, toValue, atValue, "");
+        if (to) {
+            toValue = compileExpr(c, to, false);
+        }
 
+        LLVMValueRef length = LLVMBuildSub(c->builder, toValue, atValue, "");
         LLVMValueRef sliceValue = LLVMGetUndef(c->sliceType);
         sliceValue = LLVMBuildInsertValue(c->builder, sliceValue, pointer, 0, "");
         sliceValue = LLVMBuildInsertValue(c->builder, sliceValue, length, 1, "");

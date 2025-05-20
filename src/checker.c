@@ -599,7 +599,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         checkExpr(c, base, false);
         const Type sliceType = typeResolve(base->type);
 
-        if (end) {
+        if (n->as.index.isRanged) {
             // Ranged: The "slice" can be an array or a slice or a pointer
             if (!typeIsPointer(base->type) && sliceType.kind != TYPE_ARRAY &&
                 sliceType.kind != TYPE_SLICE) {
@@ -643,13 +643,29 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             exit(1);
         }
 
-        checkExpr(c, at, false);
-        typeAssert(at, (Type) {.kind = TYPE_U64});
+        if (sliceType.ref) {
+            if (!end) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Cannot infer range end of type '%s'\n",
+                    PosArg(base->token.pos),
+                    typeToString(base->type));
+
+                exit(1);
+            }
+        }
+
+        if (at) {
+            checkExpr(c, at, false);
+            typeAssert(at, (Type) {.kind = TYPE_U64});
+        }
 
         if (end) {
             checkExpr(c, end, false);
             typeAssert(end, (Type) {.kind = TYPE_U64});
+        }
 
+        if (n->as.index.isRanged) {
             if (sliceType.kind == TYPE_ARRAY) {
                 assert(sliceType.spec);
                 n->type = (Type) {

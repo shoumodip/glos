@@ -1,4 +1,4 @@
-:i count 79
+:i count 81
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -770,6 +770,18 @@ slices/basics.glos
 
 :b stderr 0
 
+:b testcase 30
+slices/infer-range-bounds.glos
+:i returncode 0
+:b stdout 11
+2
+4
+6
+8
+10
+
+:b stderr 0
+
 :b testcase 36
 slices/error-expected-index-u64.glos
 :i returncode 1
@@ -809,6 +821,14 @@ slices/error-cannot-construct-slice-from-raw-pointer.glos
 
 :b stderr 111
 slices/error-cannot-construct-slice-from-raw-pointer.glos:3:17: ERROR: Cannot construct slice from raw pointer
+
+:b testcase 51
+slices/error-cannot-infer-range-end-of-pointer.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 102
+slices/error-cannot-infer-range-end-of-pointer.glos:3:5: ERROR: Cannot infer range end of type '&i64'
 
 :b testcase 18
 arrays/basics.glos

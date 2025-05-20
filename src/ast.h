@@ -124,7 +124,9 @@ typedef struct {
 typedef struct {
     Node *base;
     Node *at;
-    Node *end; // For a ranged index
+    Node *end;
+
+    bool isRanged;
 } NodeIndex;
 
 typedef struct {

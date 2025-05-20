@@ -325,12 +325,21 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
         case TOKEN_LBRACKET: {
             Node *index = nodeAlloc(p->nodeAlloc, NODE_INDEX, token);
             index->as.index.base = node;
-            index->as.index.at = parseExpr(p, POWER_SET, false);
 
-            token = lexerExpect(&p->lexer, TOKEN_RANGE, TOKEN_RBRACKET);
+            if (lexerRead(&p->lexer, TOKEN_RANGE)) {
+                token = p->lexer.buffer;
+                assert(token.kind == TOKEN_RANGE);
+            } else {
+                index->as.index.at = parseExpr(p, POWER_SET, false);
+                token = lexerExpect(&p->lexer, TOKEN_RANGE, TOKEN_RBRACKET);
+            }
+
             if (token.kind == TOKEN_RANGE) {
-                index->as.index.end = parseExpr(p, POWER_SET, false);
-                lexerExpect(&p->lexer, TOKEN_RBRACKET);
+                index->as.index.isRanged = true;
+                if (!lexerRead(&p->lexer, TOKEN_RBRACKET)) {
+                    index->as.index.end = parseExpr(p, POWER_SET, false);
+                    lexerExpect(&p->lexer, TOKEN_RBRACKET);
+                }
             }
 
             node = index;
