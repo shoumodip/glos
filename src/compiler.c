@@ -1073,21 +1073,14 @@ static Type typeResolveForced(Type type) {
 }
 
 static_assert(COUNT_NODES == 21, "");
-static bool preCompile(Node *n) {
+static void preCompile(Node *n) {
     if (!n) {
-        return false;
+        return;
     }
 
     switch (n->kind) {
     case NODE_ATOM:
         n->type = typeResolveForced(n->type);
-        if (n->token.kind == TOKEN_IDENT && n->as.atom.definition) {
-            // Definition was poisoned from autocast
-            if (n->type.kind != n->as.atom.definition->type.kind) {
-                n->type.kind = n->as.atom.definition->type.kind;
-                return true;
-            }
-        }
         break;
 
     case NODE_CALL:
@@ -1106,10 +1099,7 @@ static bool preCompile(Node *n) {
 
     case NODE_UNARY:
         n->type = typeResolveForced(n->type);
-        if (preCompile(n->as.unary.operand)) {
-            n->type.kind = n->as.unary.operand->type.kind;
-            return true;
-        }
+        preCompile(n->as.unary.operand);
         break;
 
     case NODE_ARRAY:
@@ -1129,23 +1119,11 @@ static bool preCompile(Node *n) {
         preCompile(n->as.index.end);
         break;
 
-    case NODE_BINARY: {
-        bool poisoned = false;
-
+    case NODE_BINARY:
         n->type = typeResolveForced(n->type);
-        if (preCompile(n->as.binary.lhs)) {
-            poisoned = true;
-            n->type.kind = n->as.binary.lhs->type.kind;
-        }
-
-        if (preCompile(n->as.binary.rhs)) {
-            poisoned = true;
-            n->type.kind = n->as.binary.rhs->type.kind;
-        }
-
-        // TODO: The tree is not fixed from RHS
-        return poisoned;
-    } break;
+        preCompile(n->as.binary.lhs);
+        preCompile(n->as.binary.rhs);
+        break;
 
     case NODE_MEMBER:
         n->type = typeResolveForced(n->type);
@@ -1241,8 +1219,6 @@ static bool preCompile(Node *n) {
     default:
         unreachable();
     }
-
-    return false;
 }
 
 void compileProgram(Context context, const char *executableName) {
