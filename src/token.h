@@ -19,6 +19,7 @@ typedef enum {
     TOKEN_COMMA,
     TOKEN_COLON,
     TOKEN_RANGE,
+    TOKEN_WALRUS, // The ':=' operator from Go
 
     TOKEN_INT,
     TOKEN_BOOL,

@@ -1,0 +1,4 @@
+fn main() {
+    n := 69
+    print n
+}

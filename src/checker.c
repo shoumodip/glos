@@ -43,9 +43,14 @@ static Node *fnContextFind(FnContext f, Scope s, Str name, bool isType) {
 }
 
 static Node *identFind(Context *c, Str name, bool isType) {
-    if (c->fnContext.fn) {
+    if (isType) {
+        Node *local = scopeFind(c->locals, name, isType);
+        if (local) {
+            return local;
+        }
+    } else if (c->fnContext.fn) {
         Node *local = fnContextFind(c->fnContext, c->locals, name, isType);
-        if (local && (local->kind == NODE_TYPE) == isType) {
+        if (local) {
             return local;
         }
     }
@@ -433,7 +438,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 48, "");
+        static_assert(COUNT_TOKENS == 49, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -548,7 +553,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 48, "");
+        static_assert(COUNT_TOKENS == 49, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -730,7 +735,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 48, "");
+        static_assert(COUNT_TOKENS == 49, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -967,7 +972,7 @@ static bool alwaysReturns(Node *n) {
     }
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 48, "");
+        static_assert(COUNT_TOKENS == 49, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -1024,7 +1029,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 48, "");
+        static_assert(COUNT_TOKENS == 49, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};

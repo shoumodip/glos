@@ -10,6 +10,7 @@ conditions/basics.glos
 conditions/error-expected-block-or-if.glos
 conditions/error-expected-condition-type-bool.glos
 global-variables/basics.glos
+global-variables/walrus-operator.glos
 global-variables/error-undefined.glos
 global-variables/error-redefinition.glos
 global-variables/error-assignment-definition-type-mismatch.glos
@@ -27,6 +28,7 @@ loops/error-expected-condition-after-assignment-expression-init.glos
 loops/error-expected-condition-after-variable-definition-init.glos
 local-variables/basics.glos
 local-variables/shadowing.glos
+local-variables/walrus-operator.glos
 local-variables/error-assignment-definition-type-mismatch.glos
 local-variables/error-undefined-outside-scope.glos
 local-variables/error-undefined-outside-scope-despite-same-depth.glos

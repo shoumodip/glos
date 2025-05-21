@@ -1,4 +1,4 @@
-:i count 92
+:i count 94
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -171,6 +171,14 @@ global-variables/basics.glos
 69
 420
 1337
+
+:b stderr 0
+
+:b testcase 37
+global-variables/walrus-operator.glos
+:i returncode 0
+:b stdout 3
+69
 
 :b stderr 0
 
@@ -357,6 +365,14 @@ local-variables/shadowing.glos
 :b stdout 7
 69
 420
+
+:b stderr 0
+
+:b testcase 36
+local-variables/walrus-operator.glos
+:i returncode 0
+:b stdout 3
+69
 
 :b stderr 0
 

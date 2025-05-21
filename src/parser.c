@@ -23,7 +23,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 48, "");
+static_assert(COUNT_TOKENS == 49, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_DOT:
@@ -49,6 +49,7 @@ static Power tokenKindPower(TokenKind kind) {
         return POWER_BOR;
 
     case TOKEN_SET:
+    case TOKEN_WALRUS:
         return POWER_SET;
 
     case TOKEN_LOR:
@@ -117,7 +118,7 @@ static Node *parseConst(Parser *p) {
     return nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_INT));
 }
 
-static_assert(COUNT_TOKENS == 48, "");
+static_assert(COUNT_TOKENS == 49, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -188,7 +189,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 48, "");
+static_assert(COUNT_TOKENS == 49, "");
 static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -299,6 +300,16 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
             node = dot;
         } break;
 
+        case TOKEN_WALRUS:
+            if (node->kind != NODE_ATOM || node->token.kind != TOKEN_IDENT) {
+                errorUnexpected(token);
+            }
+
+            node->kind = NODE_VAR;
+            node->as.var.expr = parseExpr(p, POWER_SET, false);
+            node->as.var.local = true;
+            return node;
+
         case TOKEN_LPAREN: {
             Node *call = nodeAlloc(p->nodeAlloc, NODE_CALL, token);
             call->as.call.fn = node;
@@ -377,6 +388,10 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
             binary->as.binary.lhs = node;
             binary->as.binary.rhs = parseExpr(p, lbp, noStruct);
             node = binary;
+
+            if (token.kind == TOKEN_SET) {
+                return node;
+            }
         } break;
         }
     }
@@ -401,7 +416,7 @@ static void consumeEols(Parser *p) {
     while (lexerRead(&p->lexer, TOKEN_EOL));
 }
 
-static_assert(COUNT_TOKENS == 48, "");
+static_assert(COUNT_TOKENS == 49, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -534,9 +549,18 @@ static Node *parseStmt(Parser *p) {
         break;
 
     default:
-        localAssert(p, token, true);
-        lexerBuffer(&p->lexer, token);
-        node = parseExpr(p, POWER_NIL, false);
+        if (!p->local && token.kind == TOKEN_IDENT) {
+            if (!lexerRead(&p->lexer, TOKEN_WALRUS)) {
+                localAssert(p, token, true);
+            }
+
+            node = nodeAlloc(p->nodeAlloc, NODE_VAR, token);
+            node->as.var.expr = parseExpr(p, POWER_SET, false);
+        } else {
+            localAssert(p, token, true);
+            lexerBuffer(&p->lexer, token);
+            node = parseExpr(p, POWER_NIL, false);
+        }
         break;
     }
 

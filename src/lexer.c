@@ -129,7 +129,7 @@ static char lexChar(Lexer *l, const char *label) {
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 48, "");
+static_assert(COUNT_TOKENS == 49, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -243,7 +243,11 @@ Token lexerNext(Lexer *l) {
         break;
 
     case ':':
-        token.kind = TOKEN_COLON;
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_WALRUS;
+        } else {
+            token.kind = TOKEN_COLON;
+        }
         break;
 
     case '"':
