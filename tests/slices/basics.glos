@@ -1,9 +1,9 @@
-fn allocI64s(n u64) [i64] {
+fn allocI64s(n i64) [i64] {
     extern {
         fn malloc(size u64) rawptr
     }
 
-    var ptr = <&i64> malloc(n * sizeof<i64>)
+    var ptr = <&i64> malloc(<u64> (n * sizeof<i64>))
     return ptr[0..n]
 }
 

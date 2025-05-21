@@ -103,11 +103,6 @@ static void castUntypedInt(Node *n, Type expected) {
             }
         } break;
 
-        case TOKEN_IDENT:
-            castUntypedInt(n->as.atom.definition, expected);
-            n->type = expected;
-            break;
-
         default:
             unreachable();
         }
@@ -123,14 +118,6 @@ static void castUntypedInt(Node *n, Type expected) {
         castUntypedInt(n->as.binary.rhs, expected);
         n->type = expected;
         break;
-
-    case NODE_VAR: {
-        Node *expr = n->as.var.expr;
-        assert(expr);
-
-        castUntypedInt(expr, expected);
-        n->type = expr->type;
-    } break;
 
     case NODE_FLOW: {
         assert(n->token.kind == TOKEN_RETURN);
@@ -243,6 +230,19 @@ static Type typeAssertScalar(const Node *n) {
     exit(1);
 }
 
+static Type typeAssertInteger(const Node *n) {
+    if (!typeIsInteger(n->type)) {
+        fprintf(
+            stderr,
+            PosFmt "ERROR: Expected integer type, got '%s'\n",
+            PosArg(n->token.pos),
+            typeToString(n->type));
+
+        exit(1);
+    }
+    return n->type;
+}
+
 static bool isTypeCastIllegal(Node *fromNode, Node *toNode) {
     const Type from = typeResolve(fromNode->type);
     const Type to = typeResolve(toNode->type);
@@ -259,12 +259,12 @@ static bool isTypeCastIllegal(Node *fromNode, Node *toNode) {
 
     // Not 64 Bit Integer -> Pointer
     if (!typeIsPointer(from) && typeIsPointer(to)) {
-        return !tryAutoCastUntypedInt(fromNode, (Type) {.kind = TYPE_U64});
+        return from.kind != TYPE_I64 && from.kind != TYPE_U64 && from.kind != TYPE_INT;
     }
 
     // Pointer -> Not 64 Bit Integer
     if (!typeIsPointer(to) && typeIsPointer(from)) {
-        return !tryAutoCastUntypedInt(toNode, (Type) {.kind = TYPE_U64});
+        return to.kind != TYPE_I64 && to.kind != TYPE_U64 && to.kind != TYPE_INT;
     }
 
     return false;
@@ -351,7 +351,7 @@ static void checkType(Context *c, Node *n) {
         Node *arraySize = n->as.array.length;
         if (arraySize) {
             checkConst(c, arraySize);
-            typeAssert(arraySize, (Type) {.kind = TYPE_U64});
+            typeAssertInteger(arraySize);
 
             // TODO: Proper constant evaluation
             assert(arraySize->kind == NODE_ATOM && arraySize->token.kind == TOKEN_INT);
@@ -614,7 +614,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         NodeArray *array = &n->as.array;
         for (Node *it = array->literalInits.head; it; it = it->next) {
             checkExpr(c, it->as.binary.lhs, false);
-            typeAssert(it->as.binary.lhs, (Type) {.kind = TYPE_U64});
+            typeAssertInteger(it->as.binary.lhs);
 
             checkExpr(c, it->as.binary.rhs, false);
             typeAssert(it->as.binary.rhs, array->base->type);
@@ -689,12 +689,12 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         if (at) {
             checkExpr(c, at, false);
-            typeAssert(at, (Type) {.kind = TYPE_U64});
+            typeAssertInteger(at);
         }
 
         if (end) {
             checkExpr(c, end, false);
-            typeAssert(end, (Type) {.kind = TYPE_U64});
+            typeAssertInteger(end);
         }
 
         if (n->as.index.isRanged) {
@@ -880,7 +880,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
                 n->type.ref++;
             } else if (strMatch(rhs->token.str, "length")) {
                 rhs->token.as.integer = 1;
-                n->type = (Type) {.kind = TYPE_U64};
+                n->type = (Type) {.kind = TYPE_I64};
             } else {
                 errorUndefined(rhs, "field");
             }
@@ -897,7 +897,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             checkType(c, operand);
         }
 
-        n->type = (Type) {.kind = TYPE_U64};
+        n->type = (Type) {.kind = TYPE_I64};
     } break;
 
     case NODE_FN:
@@ -1113,6 +1113,10 @@ static void checkStmt(Context *c, Node *n) {
             if (n->as.var.type) {
                 typeAssert(expr, n->as.var.type->type);
                 n->type = expr->type;
+            }
+
+            if (n->type.kind == TYPE_INT) {
+                n->type.kind = TYPE_I64;
             }
         }
 

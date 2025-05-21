@@ -7,7 +7,7 @@ extern {
 
 fn writeString(file FILE, str string) {
     extern fn fwrite(data rawptr, size u64, count u64, stream FILE) u64
-    fwrite(<rawptr> str.data, sizeof(*str.data), str.length, file)
+    fwrite(<rawptr> str.data, <u64> sizeof(*str.data), <u64> str.length, file)
 }
 
 fn main() {

@@ -843,16 +843,16 @@ slices/error-expected-index-u64.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 81
-slices/error-expected-index-u64.glos:3:8: ERROR: Expected type 'u64', got 'bool'
+:b stderr 83
+slices/error-expected-index-u64.glos:3:8: ERROR: Expected integer type, got 'bool'
 
 :b testcase 40
 slices/error-expected-range-end-u64.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 86
-slices/error-expected-range-end-u64.glos:3:11: ERROR: Expected type 'u64', got 'bool'
+:b stderr 88
+slices/error-expected-range-end-u64.glos:3:11: ERROR: Expected integer type, got 'bool'
 
 :b testcase 38
 slices/error-can-only-index-slice.glos
@@ -915,8 +915,8 @@ arrays/error-literal-expected-index-type-u64.glos
 :i returncode 1
 :b stdout 0
 
-:b stderr 94
-arrays/error-literal-expected-index-type-u64.glos:2:5: ERROR: Expected type 'u64', got 'bool'
+:b stderr 96
+arrays/error-literal-expected-index-type-u64.glos:2:5: ERROR: Expected integer type, got 'bool'
 
 :b testcase 39
 arrays/error-literal-type-mismatch.glos

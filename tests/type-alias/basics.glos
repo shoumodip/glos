@@ -3,7 +3,7 @@ type u64ptr &u64
 
 fn main() {
     var a usize = 34
-    var b = 35
+    var b usize = 35
     print a + b
 
     var c = <u64ptr> 200
