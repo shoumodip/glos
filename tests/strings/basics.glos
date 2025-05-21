@@ -1,0 +1,11 @@
+fn puts(str [u8]) {
+    extern {
+        fn puts(str &i8) i32
+    }
+
+    puts(<&i8> str.data)
+}
+
+fn main() {
+    puts("Hello, world!")
+}

@@ -429,7 +429,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -437,6 +437,10 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
         case TOKEN_BOOL:
             n->type = (Type) {.kind = TYPE_BOOL};
+            break;
+
+        case TOKEN_STR:
+            n->type = c->strType;
             break;
 
         case TOKEN_CHAR:
@@ -536,7 +540,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -718,7 +722,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -777,9 +781,18 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *rhs = n->as.member.rhs;
 
         switch (lhs->kind) {
+        case NODE_ATOM:
+            allowRef = lhs->token.kind != TOKEN_STR;
+            checkExpr(c, lhs, allowRef);
+            break;
+
         case NODE_CALL:
-        case NODE_INDEX:
             checkExpr(c, lhs, false);
+            break;
+
+        case NODE_INDEX:
+            allowRef = !lhs->as.index.isRanged;
+            checkExpr(c, lhs, allowRef);
             break;
 
         case NODE_MEMBER:
@@ -810,10 +823,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             exit(1);
         }
 
-        bool allocTemp = false;
-        allocTemp = allocTemp || (lhs->kind == NODE_CALL && lhsType.ref == 0);
-        allocTemp = allocTemp || (lhs->kind == NODE_INDEX && lhsType.kind == TYPE_SLICE);
-        if (allocTemp) {
+        if (lhs->kind == NODE_CALL && lhsType.ref == 0) {
             n->as.member.isTemporary = true;
             n->as.member.lhs = createTemp(c, lhs, lhs->type);
         }
@@ -949,7 +959,7 @@ static bool alwaysReturns(Node *n) {
     }
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -1006,7 +1016,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};
@@ -1166,6 +1176,17 @@ static void checkFn(Context *c, Node *n) {
 
 void checkNodes(Context *c, Nodes nodes) {
     assert(c->nodeAlloc);
+
+    if (c->strType.kind != TYPE_SLICE) {
+        Node *element = nodeAlloc(c->nodeAlloc, NODE_ATOM, (Token) {0});
+        element->type = (Type) {.kind = TYPE_U8};
+
+        c->strType = (Type) {
+            .kind = TYPE_SLICE,
+            .spec = element,
+        };
+    }
+
     for (Node *it = nodes.head; it; it = it->next) {
         checkStmt(c, it);
     }

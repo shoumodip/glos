@@ -16,6 +16,8 @@ typedef struct {
     Scope globals;
     Scope globalTemps;
 
+    Type strType;
+
     NodeAlloc *nodeAlloc;
 } Context;
 

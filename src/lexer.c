@@ -40,9 +40,9 @@ static void nextChar(Lexer *l) {
     l->str.length--;
 }
 
-static char peekChar(Lexer *l) {
-    if (l->str.length > 1) {
-        return l->str.data[1];
+static char peekChar(Lexer *l, size_t n) {
+    if (l->str.length > n) {
+        return l->str.data[n];
     }
 
     return 0;
@@ -77,7 +77,7 @@ static void skipWhitespace(Lexer *l) {
             break;
 
         case '/':
-            if (peekChar(l) == '/') {
+            if (peekChar(l, 1) == '/') {
                 while (l->str.length && *l->str.data != '\n') {
                     nextChar(l);
                 }
@@ -119,36 +119,7 @@ static char lexChar(Lexer *l, const char *label) {
         }
 
         ch = *l->str.data;
-        switch (ch) {
-        case 'r':
-            ch = '\r';
-            break;
-
-        case 'n':
-            ch = '\n';
-            break;
-
-        case 't':
-            ch = '\t';
-            break;
-
-        case '0':
-            ch = '\0';
-            break;
-
-        case '"':
-            ch = '"';
-            break;
-
-        case '\'':
-            ch = '\'';
-            break;
-
-        case '\\':
-            ch = '\\';
-            break;
-
-        default:
+        if (!resolveEscapeChar(&ch)) {
             errorInvalid(l->pos, ch, "escape character");
         }
 
@@ -158,7 +129,7 @@ static char lexChar(Lexer *l, const char *label) {
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 46, "");
+static_assert(COUNT_TOKENS == 47, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -264,6 +235,17 @@ Token lexerNext(Lexer *l) {
 
     case ':':
         token.kind = TOKEN_COLON;
+        break;
+
+    case '"':
+        token.as.integer = 0;
+        while (peekChar(l, 0) != '"') {
+            lexChar(l, "string");
+            token.as.integer++;
+        }
+        nextChar(l); // The terminating quote
+
+        token.kind = TOKEN_STR;
         break;
 
     case '\'':

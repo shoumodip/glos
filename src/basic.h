@@ -15,6 +15,9 @@
 #define todo()        (fprintf(stderr, "%s:%d: TODO\n", __FILE__, __LINE__), abort())
 #define unreachable() (fprintf(stderr, "%s:%d: Unreachable\n", __FILE__, __LINE__), abort())
 
+// Character
+bool resolveEscapeChar(char *ch);
+
 // String View
 typedef struct {
     const char *data;
@@ -32,7 +35,10 @@ Str strFromCstr(const char *cstr);
 Str strStripSuffix(Str a, Str b);
 
 // Temporary String Builder
-void  tempContinue(void);
+char *tempAlloc(size_t n);
+void  tempReset(const char *p);
+
+void  tempRemoveNull(void);
 char *tempSprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 char *tempStrToCstr(Str s);
 

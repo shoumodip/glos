@@ -11,6 +11,44 @@
         goto defer;                                                                                \
     } while (0)
 
+// Character
+bool resolveEscapeChar(char *ch) {
+    switch (*ch) {
+    case 'r':
+        *ch = '\r';
+        break;
+
+    case 'n':
+        *ch = '\n';
+        break;
+
+    case 't':
+        *ch = '\t';
+        break;
+
+    case '0':
+        *ch = '\0';
+        break;
+
+    case '"':
+        *ch = '"';
+        break;
+
+    case '\'':
+        *ch = '\'';
+        break;
+
+    case '\\':
+        *ch = '\\';
+        break;
+
+    default:
+        return false;
+    }
+
+    return true;
+}
+
 // String View
 bool strEq(Str a, Str b) {
     return a.length == b.length && memcmp(a.data, b.data, b.length) == 0;
@@ -39,14 +77,19 @@ Str strStripSuffix(Str a, Str b) {
 static char   tempBuffer[16 * 1000 * 1000];
 static size_t tempLength;
 
-static char *tempAlloc(size_t n) {
-    assert(tempLength + n + 1 <= len(tempBuffer));
+char *tempAlloc(size_t n) {
+    assert(tempLength + n <= len(tempBuffer));
     char *result = &tempBuffer[tempLength];
-    tempLength += n + 1;
+    tempLength += n;
     return result;
 }
 
-void tempContinue(void) {
+void tempReset(const char *p) {
+    assert(p >= tempBuffer && p < &tempBuffer[sizeof(tempBuffer)]);
+    tempLength = p - tempBuffer;
+}
+
+void tempRemoveNull(void) {
     assert(tempLength);
     assert(tempBuffer[tempLength - 1] == '\0');
     tempLength--;
@@ -59,7 +102,7 @@ char *tempSprintf(const char *fmt, ...) {
     va_end(args);
 
     assert(n >= 0);
-    char *result = tempAlloc(n);
+    char *result = tempAlloc(n + 1);
 
     va_start(args, fmt);
     vsnprintf(result, n + 1, fmt, args);
@@ -69,7 +112,7 @@ char *tempSprintf(const char *fmt, ...) {
 }
 
 char *tempStrToCstr(Str s) {
-    return memcpy(tempAlloc(s.length), s.data, s.length);
+    return memcpy(tempAlloc(s.length + 1), s.data, s.length);
 }
 
 // OS

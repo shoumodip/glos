@@ -183,13 +183,28 @@ static LLVMValueRef afterArith(Compiler *c, Type type, LLVMValueRef result) {
 static void compileFn(Compiler *c, Node *n);
 static void compileStmt(Compiler *c, Node *n);
 
+static void encodeString(char *buffer, Str str) {
+    str.data++;
+    str.length--;
+
+    for (size_t i = 0; i < str.length; i++) {
+        char ch = str.data[i];
+        if (ch == '\\') {
+            ch = str.data[++i];
+            resolveEscapeChar(&ch);
+        }
+
+        *buffer++ = ch;
+    }
+}
+
 static_assert(COUNT_NODES == 21, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(c, &n->type);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_INT:
         case TOKEN_CHAR:
@@ -197,6 +212,26 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
         case TOKEN_BOOL:
             return LLVMConstInt(n->type.llvm, n->token.as.integer, false);
+
+        case TOKEN_STR: {
+            const size_t length = n->token.as.integer;
+
+            char *buffer = tempAlloc(length);
+            encodeString(buffer, n->token.str);
+
+            LLVMTypeRef  strType = LLVMArrayType2(LLVMInt8Type(), length + 1);
+            LLVMValueRef strGlobal = LLVMAddGlobal(c->module, strType, "");
+            LLVMSetInitializer(strGlobal, LLVMConstString(buffer, length, false));
+
+            LLVMValueRef strValue = LLVMGetUndef(c->sliceType);
+            strValue = LLVMBuildInsertValue(c->builder, strValue, strGlobal, 0, "");
+
+            LLVMValueRef lengthValue = LLVMConstInt(LLVMInt64Type(), length, false);
+            strValue = LLVMBuildInsertValue(c->builder, strValue, lengthValue, 1, "");
+
+            tempReset(buffer);
+            return strValue;
+        }
 
         case TOKEN_IDENT: {
             Node *definition = n->as.atom.definition;
@@ -320,7 +355,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -451,7 +486,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -638,6 +673,11 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             index = rhs->as.atom.definition->as.field.index;
         } else if (lhs->type.kind == TYPE_SLICE) {
             index = rhs->token.as.integer;
+
+            if ((lhs->kind == NODE_INDEX && lhs->as.index.isRanged) ||
+                (lhs->kind == NODE_ATOM && lhs->token.kind == TOKEN_STR)) {
+                return LLVMBuildExtractValue(c->builder, lhsValue, index, "");
+            }
         } else if (lhs->type.kind == TYPE_ARRAY) {
             if (rhs->token.as.integer) {
                 // Length
@@ -823,7 +863,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
@@ -1072,7 +1112,7 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 46, "");
+        static_assert(COUNT_TOKENS == 47, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             preCompile(n->as.flow.operand);

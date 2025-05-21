@@ -23,7 +23,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 46, "");
+static_assert(COUNT_TOKENS == 47, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_DOT:
@@ -117,7 +117,7 @@ static Node *parseConst(Parser *p) {
     return nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_INT));
 }
 
-static_assert(COUNT_TOKENS == 46, "");
+static_assert(COUNT_TOKENS == 47, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -188,7 +188,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 46, "");
+static_assert(COUNT_TOKENS == 47, "");
 static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -196,6 +196,7 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     switch (token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
+    case TOKEN_STR:
     case TOKEN_CHAR:
     case TOKEN_IDENT:
         node = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
@@ -221,7 +222,7 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
         lexerExpect(&p->lexer, TOKEN_LBRACE);
         while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
             Node *index = parseExpr(p, POWER_SET, false);
-            token = lexerExpect(&p->lexer, TOKEN_COLON);
+            token = lexerExpect(&p->lexer, TOKEN_COLON); // TODO: non-designated initialization
 
             Node *assign = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
             assign->as.binary.lhs = index;
@@ -399,7 +400,7 @@ static void consumeEols(Parser *p) {
     while (lexerRead(&p->lexer, TOKEN_EOL));
 }
 
-static_assert(COUNT_TOKENS == 46, "");
+static_assert(COUNT_TOKENS == 47, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -507,7 +508,7 @@ static Node *parseStmt(Parser *p) {
     case TOKEN_EXTERN: {
         assert(!p->inExtern);
         node = nodeAlloc(p->nodeAlloc, NODE_EXTERN, token);
-        lexerExpect(&p->lexer, TOKEN_LBRACE);
+        lexerExpect(&p->lexer, TOKEN_LBRACE); // TODO: Implement single extern definition
 
         p->inExtern = true;
         while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {

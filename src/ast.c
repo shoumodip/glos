@@ -14,11 +14,11 @@ Node *scopeFind(Scope s, Str name, bool isType) {
 static_assert(COUNT_TYPES == 17, "");
 const char *typeToString(Type type) {
     const char *start = tempSprintf("");
-    tempContinue();
+    tempRemoveNull();
 
     for (size_t i = 0; i < type.ref; i++) {
         tempSprintf("&");
-        tempContinue();
+        tempRemoveNull();
     }
 
     switch (type.kind) {
@@ -77,24 +77,24 @@ const char *typeToString(Type type) {
             const NodeFn fn = type.spec->as.fn;
             for (Node *arg = fn.args.head; arg; arg = arg->next) {
                 if (arg != fn.args.head) {
-                    tempContinue();
+                    tempRemoveNull();
                     tempSprintf(", ");
                 }
 
-                tempContinue();
+                tempRemoveNull();
                 typeToString(arg->type);
             }
         }
 
-        tempContinue();
+        tempRemoveNull();
         tempSprintf(")");
 
         const Node *ret = type.spec->as.fn.ret;
         if (ret) {
-            tempContinue();
+            tempRemoveNull();
             tempSprintf(" ");
 
-            tempContinue();
+            tempRemoveNull();
             typeToString(ret->type);
         }
     } break;
@@ -104,16 +104,16 @@ const char *typeToString(Type type) {
         const NodeArray array = type.spec->as.array;
         tempSprintf("[");
 
-        tempContinue();
+        tempRemoveNull();
         typeToString(array.base->type);
 
-        tempContinue();
+        tempRemoveNull();
         tempSprintf("; ");
 
-        tempContinue();
+        tempRemoveNull();
         tempSprintf("%zu", array.lengthComputed);
 
-        tempContinue();
+        tempRemoveNull();
         tempSprintf("]");
     } break;
 
@@ -121,10 +121,10 @@ const char *typeToString(Type type) {
         assert(type.spec);
         tempSprintf("[");
 
-        tempContinue();
+        tempRemoveNull();
         typeToString(type.spec->type);
 
-        tempContinue();
+        tempRemoveNull();
         tempSprintf("]");
         break;
 

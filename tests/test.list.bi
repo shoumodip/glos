@@ -1,4 +1,4 @@
-:i count 89
+:i count 90
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -909,4 +909,12 @@ characters/error-unterminated-escape-character.glos
 
 :b stderr 94
 characters/error-unterminated-escape-character.glos:1:3: ERROR: Unterminated escape character
+
+:b testcase 19
+strings/basics.glos
+:i returncode 0
+:b stdout 14
+Hello, world!
+
+:b stderr 0
 
