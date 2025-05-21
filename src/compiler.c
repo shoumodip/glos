@@ -1143,6 +1143,7 @@ static bool preCompile(Node *n) {
             n->type.kind = n->as.binary.rhs->type.kind;
         }
 
+        // TODO: The tree is not fixed from RHS
         return poisoned;
     } break;
 
