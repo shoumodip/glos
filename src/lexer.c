@@ -154,6 +154,10 @@ Token lexerNext(Lexer *l) {
         }
         token.str.length -= l->str.length;
 
+        if (l->str.length && isIdent(*l->str.data)) {
+            errorInvalid(l->pos, *l->str.data, "digit");
+        }
+
         char buffer[32] = {0};
         if (token.str.length < sizeof(buffer) - 1) {
             memcpy(buffer, token.str.data, token.str.length);

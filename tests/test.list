@@ -3,6 +3,7 @@ integers/signed-types.glos
 integers/unsigned-types.glos
 integers/unsigned-comparisons.glos
 integers/untyped-literal-auto-cast.glos
+integers/error-invalid-digit.glos
 integers/error-untyped-literal-auto-cast-too-large.glos
 booleans/basics.glos
 conditions/basics.glos

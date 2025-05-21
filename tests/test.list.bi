@@ -1,4 +1,4 @@
-:i count 90
+:i count 91
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -89,6 +89,14 @@ integers/untyped-literal-auto-cast.glos
 80085
 
 :b stderr 0
+
+:b testcase 33
+integers/error-invalid-digit.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 64
+integers/error-invalid-digit.glos:1:3: ERROR: Invalid digit 'g'
 
 :b testcase 55
 integers/error-untyped-literal-auto-cast-too-large.glos
