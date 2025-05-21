@@ -27,5 +27,7 @@ tested platform for now.
 - [X] Slices
 - [X] Arrays
 - [X] Strings
+- [ ] Switch
+- [ ] Modules
 
 More TODOs will be added as the project progresses
