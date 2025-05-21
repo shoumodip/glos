@@ -949,16 +949,14 @@ static void compileStmt(Compiler *c, Node *n) {
         LLVMValueRef fmtPtr = NULL;
         if (typeIsSigned(operand->type)) {
             if (operand->type.kind != TYPE_I64) {
-                operandValue =
-                    LLVMBuildSExt(c->builder, operandValue, typeInMemory(operand->type), "");
+                operandValue = LLVMBuildSExt(c->builder, operandValue, LLVMInt64Type(), "");
             }
 
             fmtPtr = LLVMBuildInBoundsGEP2(
                 c->builder, c->printSFmtType, c->printSFmtValue, indices, len(indices), "");
         } else {
             if (operand->type.kind != TYPE_U64) {
-                operandValue =
-                    LLVMBuildZExt(c->builder, operandValue, typeInMemory(operand->type), "");
+                operandValue = LLVMBuildZExt(c->builder, operandValue, LLVMInt64Type(), "");
             }
 
             fmtPtr = LLVMBuildInBoundsGEP2(
