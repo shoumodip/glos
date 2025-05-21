@@ -195,13 +195,46 @@ static void encodeString(char *buffer, Str str) {
     }
 }
 
+typedef LLVMValueRef (*ArithOpFunc)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
+
+typedef struct {
+    ArithOpFunc s;
+    ArithOpFunc u;
+} ArithOp;
+
+static_assert(COUNT_TOKENS == 57, "");
+static const ArithOp arithOps[COUNT_TOKENS] = {
+    [TOKEN_ADD] = {LLVMBuildAdd, NULL},
+    [TOKEN_SUB] = {LLVMBuildSub, NULL},
+    [TOKEN_MUL] = {LLVMBuildMul, NULL},
+    [TOKEN_DIV] = {LLVMBuildSDiv, LLVMBuildUDiv},
+    [TOKEN_SHL] = {LLVMBuildShl, NULL},
+    [TOKEN_SHR] = {LLVMBuildAShr, LLVMBuildLShr},
+    [TOKEN_BOR] = {LLVMBuildOr, NULL},
+    [TOKEN_BAND] = {LLVMBuildAnd, NULL},
+};
+
+static LLVMValueRef
+compileArithOp(Compiler *c, Type type, ArithOp op, LLVMValueRef *lhs, LLVMValueRef *rhs) {
+    beforeArith(c, type, lhs, rhs);
+
+    LLVMValueRef result = NULL;
+    if (op.u && !typeIsSigned(type)) {
+        result = op.u(c->builder, *lhs, *rhs, "");
+    } else {
+        result = op.s(c->builder, *lhs, *rhs, "");
+    }
+
+    return afterArith(c, type, result);
+}
+
 static_assert(COUNT_NODES == 21, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(c, &n->type);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 49, "");
+        static_assert(COUNT_TOKENS == 57, "");
         switch (n->token.kind) {
         case TOKEN_INT:
         case TOKEN_CHAR:
@@ -366,7 +399,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 49, "");
+        static_assert(COUNT_TOKENS == 57, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -497,78 +530,46 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 49, "");
+        // Basic arithmetic operations
+        {
+            const ArithOp op = arithOps[n->token.kind];
+            if (op.s) {
+                LLVMValueRef lhsValue = compileExpr(c, lhs, false);
+                LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+                return compileArithOp(c, lhs->type, op, &lhsValue, &rhsValue);
+            }
+        }
+
+        // Assignment arithmetic operations
+        {
+            static_assert(COUNT_TOKENS == 57, "");
+            static const TokenKind opTokenKinds[COUNT_TOKENS] = {
+                [TOKEN_ADD_SET] = TOKEN_ADD,
+                [TOKEN_SUB_SET] = TOKEN_SUB,
+                [TOKEN_MUL_SET] = TOKEN_MUL,
+                [TOKEN_DIV_SET] = TOKEN_DIV,
+                [TOKEN_SHL_SET] = TOKEN_SHL,
+                [TOKEN_SHR_SET] = TOKEN_SHR,
+                [TOKEN_BOR_SET] = TOKEN_BOR,
+                [TOKEN_BAND_SET] = TOKEN_BAND,
+            };
+
+            const TokenKind opTokenKind = opTokenKinds[n->token.kind];
+            if (opTokenKind) {
+                const ArithOp op = arithOps[opTokenKind];
+                assert(op.s);
+
+                LLVMValueRef lhsPointer = compileExpr(c, lhs, true);
+                LLVMValueRef lhsValue = LLVMBuildLoad2(c->builder, lhs->type.llvm, lhsPointer, "");
+                LLVMValueRef rhsValue = compileExpr(c, rhs, false);
+
+                LLVMValueRef result = compileArithOp(c, lhs->type, op, &lhsValue, &rhsValue);
+                return LLVMBuildStore(c->builder, result, lhsPointer);
+            }
+        }
+
+        static_assert(COUNT_TOKENS == 57, "");
         switch (n->token.kind) {
-        case TOKEN_ADD: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildAdd(c->builder, lhsValue, rhsValue, ""));
-        }
-
-        case TOKEN_SUB: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildSub(c->builder, lhsValue, rhsValue, ""));
-        }
-
-        case TOKEN_MUL: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildMul(c->builder, lhsValue, rhsValue, ""));
-        }
-
-        case TOKEN_DIV: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-
-            LLVMValueRef result = NULL;
-            if (typeIsSigned(n->type)) {
-                result = LLVMBuildSDiv(c->builder, lhsValue, rhsValue, "");
-            } else {
-                result = LLVMBuildUDiv(c->builder, lhsValue, rhsValue, "");
-            }
-            return afterArith(c, n->type, result);
-        }
-
-        case TOKEN_SHL: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildShl(c->builder, lhsValue, rhsValue, ""));
-        }
-
-        case TOKEN_SHR: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-
-            LLVMValueRef result = NULL;
-            if (typeIsSigned(n->type)) {
-                result = LLVMBuildAShr(c->builder, lhsValue, rhsValue, "");
-            } else {
-                result = LLVMBuildLShr(c->builder, lhsValue, rhsValue, "");
-            }
-            return afterArith(c, n->type, result);
-        }
-
-        case TOKEN_BOR: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildOr(c->builder, lhsValue, rhsValue, ""));
-        }
-
-        case TOKEN_BAND: {
-            LLVMValueRef lhsValue = compileExpr(c, lhs, false);
-            LLVMValueRef rhsValue = compileExpr(c, rhs, false);
-            beforeArith(c, n->type, &lhsValue, &rhsValue);
-            return afterArith(c, n->type, LLVMBuildAnd(c->builder, lhsValue, rhsValue, ""));
-        }
-
         case TOKEN_SET: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, true);
             const LLVMValueRef rhsValue = compileExpr(c, rhs, false);
@@ -880,7 +881,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 49, "");
+        static_assert(COUNT_TOKENS == 57, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
@@ -939,15 +940,27 @@ static void compileStmt(Compiler *c, Node *n) {
         break;
 
     case NODE_PRINT: {
+        Node *operand = n->as.print.operand;
+
         LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, 0);
         LLVMValueRef indices[] = {zero, zero};
-        LLVMValueRef operandValue = compileExpr(c, n->as.print.operand, false);
+        LLVMValueRef operandValue = compileExpr(c, operand, false);
 
         LLVMValueRef fmtPtr = NULL;
-        if (typeIsSigned(n->as.print.operand->type)) {
+        if (typeIsSigned(operand->type)) {
+            if (operand->type.kind != TYPE_I64) {
+                operandValue =
+                    LLVMBuildSExt(c->builder, operandValue, typeInMemory(operand->type), "");
+            }
+
             fmtPtr = LLVMBuildInBoundsGEP2(
                 c->builder, c->printSFmtType, c->printSFmtValue, indices, len(indices), "");
         } else {
+            if (operand->type.kind != TYPE_U64) {
+                operandValue =
+                    LLVMBuildZExt(c->builder, operandValue, typeInMemory(operand->type), "");
+            }
+
             fmtPtr = LLVMBuildInBoundsGEP2(
                 c->builder, c->printUFmtType, c->printUFmtValue, indices, len(indices), "");
         }
@@ -1060,14 +1073,21 @@ static Type typeResolveForced(Type type) {
 }
 
 static_assert(COUNT_NODES == 21, "");
-static void preCompile(Node *n) {
+static bool preCompile(Node *n) {
     if (!n) {
-        return;
+        return false;
     }
 
     switch (n->kind) {
     case NODE_ATOM:
         n->type = typeResolveForced(n->type);
+        if (n->token.kind == TOKEN_IDENT && n->as.atom.definition) {
+            // Definition was poisoned from autocast
+            if (n->type.kind != n->as.atom.definition->type.kind) {
+                n->type.kind = n->as.atom.definition->type.kind;
+                return true;
+            }
+        }
         break;
 
     case NODE_CALL:
@@ -1086,7 +1106,10 @@ static void preCompile(Node *n) {
 
     case NODE_UNARY:
         n->type = typeResolveForced(n->type);
-        preCompile(n->as.unary.operand);
+        if (preCompile(n->as.unary.operand)) {
+            n->type.kind = n->as.unary.operand->type.kind;
+            return true;
+        }
         break;
 
     case NODE_ARRAY:
@@ -1106,11 +1129,22 @@ static void preCompile(Node *n) {
         preCompile(n->as.index.end);
         break;
 
-    case NODE_BINARY:
+    case NODE_BINARY: {
+        bool poisoned = false;
+
         n->type = typeResolveForced(n->type);
-        preCompile(n->as.binary.lhs);
-        preCompile(n->as.binary.rhs);
-        break;
+        if (preCompile(n->as.binary.lhs)) {
+            poisoned = true;
+            n->type.kind = n->as.binary.lhs->type.kind;
+        }
+
+        if (preCompile(n->as.binary.rhs)) {
+            poisoned = true;
+            n->type.kind = n->as.binary.rhs->type.kind;
+        }
+
+        return poisoned;
+    } break;
 
     case NODE_MEMBER:
         n->type = typeResolveForced(n->type);
@@ -1141,7 +1175,7 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 49, "");
+        static_assert(COUNT_TOKENS == 57, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             preCompile(n->as.flow.operand);
@@ -1206,6 +1240,8 @@ static void preCompile(Node *n) {
     default:
         unreachable();
     }
+
+    return false;
 }
 
 void compileProgram(Context context, const char *executableName) {

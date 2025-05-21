@@ -1,24 +1,28 @@
-extern {
-    var stdout rawptr
-    fn fputc(ch i32, stream rawptr)
+fn putc(char u8) {
+    extern {
+        var stdout rawptr
+        fn fputc(char i32, stream rawptr)
+    }
+
+    fputc(<i32> char, stdout)
 }
 
 fn main() {
     var board [i32; 30]
     board[board.length - 2] = 1
 
-    for var i = 0; i < board.length - 2; i = i + 1 {
-        for var j = 0; j < board.length; j = j + 1 {
+    for var i = 0; i < board.length - 2; i += 1 {
+        for var j = 0; j < board.length; j += 1 {
             if <bool> board[j] {
-                fputc(42, stdout)
+                putc('*')
             } else {
-                fputc(32, stdout)
+                putc(' ')
             }
         }
-        fputc(10, stdout)
+        putc('\n')
 
         var pattern = (board[0] << 1) | board[1]
-        for var j = 1; j < board.length - 1; j = j + 1 {
+        for var j = 1; j < board.length - 1; j += 1 {
             pattern = ((pattern << 1) & 7) | board[j + 1]
             board[j] = (110 >> pattern) & 1
         }

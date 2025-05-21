@@ -129,7 +129,7 @@ static char lexChar(Lexer *l, const char *label) {
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 49, "");
+static_assert(COUNT_TOKENS == 57, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -296,24 +296,42 @@ Token lexerNext(Lexer *l) {
         break;
 
     case '+':
-        token.kind = TOKEN_ADD;
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_ADD_SET;
+        } else {
+            token.kind = TOKEN_ADD;
+        }
         break;
 
     case '-':
-        token.kind = TOKEN_SUB;
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_SUB_SET;
+        } else {
+            token.kind = TOKEN_SUB;
+        }
         break;
 
     case '*':
-        token.kind = TOKEN_MUL;
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_MUL_SET;
+        } else {
+            token.kind = TOKEN_MUL;
+        }
         break;
 
     case '/':
-        token.kind = TOKEN_DIV;
+        if (matchChar(l, '=')) {
+            token.kind = TOKEN_DIV_SET;
+        } else {
+            token.kind = TOKEN_DIV;
+        }
         break;
 
     case '|':
         if (matchChar(l, '|')) {
             token.kind = TOKEN_LOR;
+        } else if (matchChar(l, '=')) {
+            token.kind = TOKEN_BOR_SET;
         } else {
             token.kind = TOKEN_BOR;
         }
@@ -322,6 +340,8 @@ Token lexerNext(Lexer *l) {
     case '&':
         if (matchChar(l, '&')) {
             token.kind = TOKEN_LAND;
+        } else if (matchChar(l, '=')) {
+            token.kind = TOKEN_BAND_SET;
         } else {
             token.kind = TOKEN_BAND;
         }
@@ -341,7 +361,11 @@ Token lexerNext(Lexer *l) {
 
     case '>':
         if (matchChar(l, '>')) {
-            token.kind = TOKEN_SHR;
+            if (matchChar(l, '=')) {
+                token.kind = TOKEN_SHR_SET;
+            } else {
+                token.kind = TOKEN_SHR;
+            }
         } else if (matchChar(l, '=')) {
             token.kind = TOKEN_GE;
         } else {
@@ -351,7 +375,11 @@ Token lexerNext(Lexer *l) {
 
     case '<':
         if (matchChar(l, '<')) {
-            token.kind = TOKEN_SHL;
+            if (matchChar(l, '=')) {
+                token.kind = TOKEN_SHL_SET;
+            } else {
+                token.kind = TOKEN_SHL;
+            }
         } else if (matchChar(l, '=')) {
             token.kind = TOKEN_LE;
         } else {

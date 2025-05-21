@@ -1,4 +1,4 @@
-:i count 94
+:i count 95
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -221,6 +221,22 @@ assignment/basics.glos
 :b stdout 7
 69
 420
+
+:b stderr 0
+
+:b testcase 47
+assignment/arithmetic-assignment-operators.glos
+:i returncode 0
+:b stdout 27
+42
+52
+47
+94
+31
+62
+15
+15
+15
 
 :b stderr 0
 

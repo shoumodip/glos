@@ -23,7 +23,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 49, "");
+static_assert(COUNT_TOKENS == 57, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_DOT:
@@ -49,6 +49,14 @@ static Power tokenKindPower(TokenKind kind) {
         return POWER_BOR;
 
     case TOKEN_SET:
+    case TOKEN_ADD_SET:
+    case TOKEN_SUB_SET:
+    case TOKEN_MUL_SET:
+    case TOKEN_DIV_SET:
+    case TOKEN_SHL_SET:
+    case TOKEN_SHR_SET:
+    case TOKEN_BOR_SET:
+    case TOKEN_BAND_SET:
     case TOKEN_WALRUS:
         return POWER_SET;
 
@@ -118,7 +126,7 @@ static Node *parseConst(Parser *p) {
     return nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_INT));
 }
 
-static_assert(COUNT_TOKENS == 49, "");
+static_assert(COUNT_TOKENS == 57, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -189,7 +197,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 49, "");
+static_assert(COUNT_TOKENS == 57, "");
 static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -383,15 +391,27 @@ static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
             node = index;
         } break;
 
+        case TOKEN_SET:
+        case TOKEN_ADD_SET:
+        case TOKEN_SUB_SET:
+        case TOKEN_MUL_SET:
+        case TOKEN_DIV_SET:
+        case TOKEN_SHL_SET:
+        case TOKEN_SHR_SET:
+        case TOKEN_BOR_SET:
+        case TOKEN_BAND_SET: {
+            Node *binary = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
+            binary->as.binary.lhs = node;
+            binary->as.binary.rhs = parseExpr(p, lbp, noStruct);
+            node = binary;
+            return node;
+        }
+
         default: {
             Node *binary = nodeAlloc(p->nodeAlloc, NODE_BINARY, token);
             binary->as.binary.lhs = node;
             binary->as.binary.rhs = parseExpr(p, lbp, noStruct);
             node = binary;
-
-            if (token.kind == TOKEN_SET) {
-                return node;
-            }
         } break;
         }
     }
@@ -416,7 +436,7 @@ static void consumeEols(Parser *p) {
     while (lexerRead(&p->lexer, TOKEN_EOL));
 }
 
-static_assert(COUNT_TOKENS == 49, "");
+static_assert(COUNT_TOKENS == 57, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 

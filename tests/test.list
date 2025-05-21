@@ -16,6 +16,7 @@ global-variables/error-redefinition.glos
 global-variables/error-assignment-definition-type-mismatch.glos
 global-variables/error-cannot-define-with-type-unit.glos
 assignment/basics.glos
+assignment/arithmetic-assignment-operators.glos
 assignment/error-type-mismatch.glos
 assignment/error-cannot-take-reference.glos
 loops/basics.glos
