@@ -23,7 +23,7 @@ typedef enum {
     POWER_DOT
 } Power;
 
-static_assert(COUNT_TOKENS == 57, "");
+static_assert(COUNT_TOKENS == 58, "");
 static Power tokenKindPower(TokenKind kind) {
     switch (kind) {
     case TOKEN_DOT:
@@ -126,7 +126,7 @@ static Node *parseConst(Parser *p) {
     return nodeAlloc(p->nodeAlloc, NODE_ATOM, lexerExpect(&p->lexer, TOKEN_INT));
 }
 
-static_assert(COUNT_TOKENS == 57, "");
+static_assert(COUNT_TOKENS == 58, "");
 static Node *parseType(Parser *p) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -197,7 +197,7 @@ static Node *parseType(Parser *p) {
 
 static Node *parseFn(Parser *p, Token name);
 
-static_assert(COUNT_TOKENS == 57, "");
+static_assert(COUNT_TOKENS == 58, "");
 static Node *parseExpr(Parser *p, Power mbp, bool noStruct) {
     Node *node = NULL;
     Token token = lexerNext(&p->lexer);
@@ -436,7 +436,7 @@ static void consumeEols(Parser *p) {
     while (lexerRead(&p->lexer, TOKEN_EOL));
 }
 
-static_assert(COUNT_TOKENS == 57, "");
+static_assert(COUNT_TOKENS == 58, "");
 static Node *parseStmt(Parser *p) {
     Node *node = NULL;
 
@@ -548,16 +548,36 @@ static Node *parseStmt(Parser *p) {
         assert(!p->inExtern);
         node = nodeAlloc(p->nodeAlloc, NODE_EXTERN, token);
 
+        lexerExpect(&p->lexer, TOKEN_LBRACE);
         p->inExtern = true;
-        token = lexerExpect(&p->lexer, TOKEN_LBRACE, TOKEN_FN, TOKEN_VAR);
-        if (token.kind == TOKEN_LBRACE) {
-            while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
-                lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_FN, TOKEN_VAR));
+        while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
+            token = lexerExpect(&p->lexer, TOKEN_FN, TOKEN_VAR, TOKEN_PROP);
+            if (token.kind != TOKEN_PROP) {
+                lexerBuffer(&p->lexer, token);
                 nodesPush(&node->as.externn.definitions, parseStmt(p));
+                continue;
             }
-        } else {
-            lexerBuffer(&p->lexer, token);
-            nodesPush(&node->as.externn.definitions, parseStmt(p));
+
+            static_assert(COUNT_PROPS == 1, "");
+            switch (token.as.property) {
+            case PROP_NAME: {
+                Str name = lexerExpect(&p->lexer, TOKEN_STR).str;
+                name.data++;
+                name.length -= 2;
+
+                Node *stmt = parseStmt(p);
+                if (stmt->kind == NODE_FN) {
+                    stmt->as.fn.linkName = name;
+                } else {
+                    stmt->as.var.linkName = name;
+                }
+
+                nodesPush(&node->as.externn.definitions, stmt);
+            } break;
+
+            default:
+                unreachable();
+            }
         }
         p->inExtern = false;
     } break;

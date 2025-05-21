@@ -69,6 +69,7 @@ typedef enum {
     NODE_ATOM,
     NODE_CALL,
     NODE_CAST,
+    NODE_PROP,
     NODE_UNARY,
     NODE_ARRAY,
     NODE_INDEX,
@@ -112,6 +113,10 @@ typedef struct {
 typedef struct {
     Node *operand;
 } NodeUnary;
+
+typedef struct {
+    Nodes children;
+} NodeProp;
 
 typedef struct {
     Node *base;
@@ -170,9 +175,9 @@ typedef struct {
     Node  *body;
     Nodes  args;
     size_t arity;
+    Scope  locals;
 
-    Scope locals;
-
+    Str          linkName;
     LLVMValueRef llvm;
 } NodeFn;
 
@@ -192,6 +197,7 @@ typedef struct {
     bool  local;
     bool  isExtern;
 
+    Str          linkName;
     LLVMValueRef llvm;
 } NodeVar;
 
@@ -250,6 +256,7 @@ struct Node {
         NodeAtom   atom;
         NodeCall   call;
         NodeCast   cast;
+        NodeProp   prop;
         NodeUnary  unary;
         NodeArray  array;
         NodeIndex  index;

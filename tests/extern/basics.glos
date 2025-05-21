@@ -1,13 +1,10 @@
 fn main() {
-    // Multiple definitions
     extern {
         var stderr rawptr
 
+        fn exit(i32)
         fn fputc(ch i32, stream rawptr)
     }
-
-    // Single definition
-    extern fn exit(i32)
 
     fputc(69, stderr)
     fputc(10, stderr)

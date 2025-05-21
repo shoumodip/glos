@@ -1,4 +1,4 @@
-:i count 95
+:i count 96
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -964,6 +964,14 @@ strings/basics.glos
 :b stdout 28
 Hello, world!
 LETS GOOOOOO!
+
+:b stderr 0
+
+:b testcase 25
+properties/link-name.glos
+:i returncode 0
+:b stdout 2
+E
 
 :b stderr 0
 

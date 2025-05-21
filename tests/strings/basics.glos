@@ -1,16 +1,19 @@
-type FILE = rawptr
-
 extern {
-    var stdout FILE
     fn puts(s cstring) i32
 }
 
-fn writeString(file FILE, str string) {
-    extern fn fwrite(data rawptr, size u64, count u64, stream FILE) u64
-    fwrite(<rawptr> str.data, <u64> sizeof(*str.data), <u64> str.length, file)
+fn writeString(str string) {
+    type FILE = rawptr
+
+    extern {
+        var stdout FILE
+        fn fwrite(data rawptr, size u64, count u64, stream FILE) u64
+    }
+
+    fwrite(<rawptr> str.data, <u64> sizeof(*str.data), <u64> str.length, stdout)
 }
 
 fn main() {
-    writeString(stdout, "Hello, world!\n")
+    writeString("Hello, world!\n")
     puts(c"LETS GOOOOOO!")
 }

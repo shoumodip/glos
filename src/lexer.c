@@ -129,7 +129,7 @@ static char lexChar(Lexer *l, const char *label) {
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 57, "");
+static_assert(COUNT_TOKENS == 58, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -268,6 +268,35 @@ Token lexerNext(Lexer *l) {
         token.as.integer = lexChar(l, "character");
         if (!matchChar(l, '\'')) {
             errorUnterminated(l->pos, "character");
+        }
+        break;
+
+    case '@':
+        if (!l->str.length) {
+            fprintf(stderr, PosFmt "ERROR: Unexpected end of file\n", PosArg(l->pos));
+            exit(1);
+        }
+
+        if (!isalpha(*l->str.data)) {
+            errorInvalid(l->pos, *l->str.data, "property name");
+        }
+
+        while (l->str.length > 0 && isIdent(*l->str.data)) {
+            nextChar(l);
+        }
+        token.str.length -= l->str.length;
+
+        token.kind = TOKEN_PROP;
+        if (strMatch(token.str, "@name")) {
+            token.as.property = PROP_NAME;
+        } else {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Invalid property '" StrFmt "'\n",
+                PosArg(token.pos),
+                StrArg(token.str));
+
+            exit(1);
         }
         break;
 

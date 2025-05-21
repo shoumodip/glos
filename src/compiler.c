@@ -141,7 +141,7 @@ static void compileType(Compiler *c, Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 21, "");
+static_assert(COUNT_NODES == 22, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -202,7 +202,7 @@ typedef struct {
     ArithOpFunc u;
 } ArithOp;
 
-static_assert(COUNT_TOKENS == 57, "");
+static_assert(COUNT_TOKENS == 58, "");
 static const ArithOp arithOps[COUNT_TOKENS] = {
     [TOKEN_ADD] = {LLVMBuildAdd, NULL},
     [TOKEN_SUB] = {LLVMBuildSub, NULL},
@@ -228,13 +228,13 @@ compileArithOp(Compiler *c, Type type, ArithOp op, LLVMValueRef *lhs, LLVMValueR
     return afterArith(c, type, result);
 }
 
-static_assert(COUNT_NODES == 21, "");
+static_assert(COUNT_NODES == 22, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(c, &n->type);
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 57, "");
+        static_assert(COUNT_TOKENS == 58, "");
         switch (n->token.kind) {
         case TOKEN_INT:
         case TOKEN_CHAR:
@@ -399,7 +399,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 57, "");
+        static_assert(COUNT_TOKENS == 58, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -542,7 +542,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
         // Assignment arithmetic operations
         {
-            static_assert(COUNT_TOKENS == 57, "");
+            static_assert(COUNT_TOKENS == 58, "");
             static const TokenKind opTokenKinds[COUNT_TOKENS] = {
                 [TOKEN_ADD_SET] = TOKEN_ADD,
                 [TOKEN_SUB_SET] = TOKEN_SUB,
@@ -568,7 +568,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             }
         }
 
-        static_assert(COUNT_TOKENS == 57, "");
+        static_assert(COUNT_TOKENS == 58, "");
         switch (n->token.kind) {
         case TOKEN_SET: {
             const LLVMValueRef lhsValue = compileExpr(c, lhs, true);
@@ -798,7 +798,7 @@ static const char *tempNameCstr(Str s) {
     return p;
 }
 
-static_assert(COUNT_NODES == 21, "");
+static_assert(COUNT_NODES == 22, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -881,7 +881,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 57, "");
+        static_assert(COUNT_TOKENS == 58, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
@@ -983,8 +983,14 @@ static void compileFn(Compiler *c, Node *n) {
     if (n->as.fn.body) {
         n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
     } else {
-        assert(n->token.kind == TOKEN_IDENT);
-        n->as.fn.llvm = LLVMAddFunction(c->module, tempNameCstr(n->token.str), n->type.llvm);
+        const char *name = NULL;
+        if (n->as.fn.linkName.length) {
+            name = tempNameCstr(n->as.fn.linkName);
+        } else {
+            name = tempNameCstr(n->token.str);
+        }
+
+        n->as.fn.llvm = LLVMAddFunction(c->module, name, n->type.llvm);
         return;
     }
 
@@ -1070,7 +1076,7 @@ static Type typeResolveForced(Type type) {
     return type;
 }
 
-static_assert(COUNT_NODES == 21, "");
+static_assert(COUNT_NODES == 22, "");
 static void preCompile(Node *n) {
     if (!n) {
         return;
@@ -1152,7 +1158,7 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 57, "");
+        static_assert(COUNT_TOKENS == 58, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             preCompile(n->as.flow.operand);

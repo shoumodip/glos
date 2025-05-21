@@ -26,6 +26,7 @@ typedef enum {
     TOKEN_STR,
     TOKEN_CSTR,
     TOKEN_CHAR,
+    TOKEN_PROP,
     TOKEN_IDENT,
 
     TOKEN_LPAREN,
@@ -87,6 +88,11 @@ typedef enum {
 
 const char *tokenKindName(TokenKind kind);
 
+typedef enum {
+    PROP_NAME,
+    COUNT_PROPS
+} PropKind;
+
 typedef struct {
     TokenKind kind;
 
@@ -95,8 +101,9 @@ typedef struct {
     bool onNewline;
 
     union {
-        bool   boolean;
-        size_t integer;
+        bool     boolean;
+        size_t   integer;
+        PropKind property;
     } as;
 } Token;
 

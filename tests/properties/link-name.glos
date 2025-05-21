@@ -1,0 +1,9 @@
+extern {
+    @name "putchar"
+    fn printChar(ch i32) i32
+}
+
+fn main() {
+    printChar(<i32> 'E')
+    printChar(<i32> '\n')
+}
