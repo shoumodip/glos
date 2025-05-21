@@ -652,7 +652,13 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
         if (lhs->type.ref) {
             const LLVMTypeRef voidPtr = LLVMPointerType(LLVMVoidType(), 0);
-            for (size_t i = 0; i < lhs->type.ref; i++) {
+
+            size_t count = lhs->type.ref;
+            if (lhs->kind == NODE_CALL) {
+                count--;
+            }
+
+            for (size_t i = 0; i < count; i++) {
                 lhsValue = LLVMBuildLoad2(c->builder, voidPtr, lhsValue, "");
             }
         }

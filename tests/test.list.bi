@@ -1,4 +1,4 @@
-:i count 84
+:i count 85
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -737,6 +737,14 @@ structs/auto-dereference.glos
 :b stdout 9
 67
 68
+69
+
+:b stderr 0
+
+:b testcase 54
+structs/access-member-in-pointer-result-from-call.glos
+:i returncode 0
+:b stdout 3
 69
 
 :b stderr 0

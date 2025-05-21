@@ -68,6 +68,7 @@ structs/basics.glos
 structs/literals.glos
 structs/temporary-struct-field-access.glos
 structs/auto-dereference.glos
+structs/access-member-in-pointer-result-from-call.glos
 structs/error-field-redefinition.glos
 structs/error-temporary-struct-is-not-real-memory.glos
 slices/basics.glos

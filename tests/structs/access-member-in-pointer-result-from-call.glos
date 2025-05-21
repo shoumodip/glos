@@ -1,0 +1,13 @@
+type State struct {
+    x i64
+}
+
+var global = State {x: 69}
+
+fn f() &State {
+    return &global
+}
+
+fn main() {
+    print f().x
+}
