@@ -318,6 +318,8 @@ static void checkType(Context *c, Node *n) {
             n->type = (Type) {.kind = TYPE_U32};
         } else if (strMatch(n->token.str, "u64")) {
             n->type = (Type) {.kind = TYPE_U64};
+        } else if (strMatch(n->token.str, "string")) {
+            n->type = c->strType;
         } else {
             Node *definition = identFind(c, n->token.str, true);
             if (!definition) {
@@ -1178,13 +1180,19 @@ void checkNodes(Context *c, Nodes nodes) {
     assert(c->nodeAlloc);
 
     if (c->strType.kind != TYPE_SLICE) {
-        Node *element = nodeAlloc(c->nodeAlloc, NODE_ATOM, (Token) {0});
-        element->type = (Type) {.kind = TYPE_U8};
+        Node *u8TypeNode = nodeAlloc(c->nodeAlloc, NODE_ATOM, (Token) {0});
+        u8TypeNode->type = (Type) {.kind = TYPE_U8};
 
-        c->strType = (Type) {
+        Type strSliceType = (Type) {
             .kind = TYPE_SLICE,
-            .spec = element,
+            .spec = u8TypeNode,
         };
+
+        Node *strTypeNode =
+            nodeAlloc(c->nodeAlloc, NODE_TYPE, (Token) {.str = strFromCstr("string")});
+        strTypeNode->as.type.real = strSliceType;
+
+        c->strType = (Type) {.kind = TYPE_ALIAS, .spec = strTypeNode};
     }
 
     for (Node *it = nodes.head; it; it = it->next) {

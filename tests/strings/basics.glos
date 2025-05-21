@@ -1,4 +1,4 @@
-fn puts(str [u8]) {
+fn puts(str string) {
     extern fn puts(str &i8) i32
     puts(<&i8> str.data)
 }
