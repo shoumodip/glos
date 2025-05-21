@@ -129,7 +129,7 @@ static char lexChar(Lexer *l, const char *label) {
     return ch;
 }
 
-static_assert(COUNT_TOKENS == 47, "");
+static_assert(COUNT_TOKENS == 48, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -177,6 +177,11 @@ Token lexerNext(Lexer *l) {
             StrArg(token.str));
 
         exit(1);
+    }
+
+    if (*l->str.data == 'c' && peekChar(l, 1) == '"') {
+        token.kind = TOKEN_CSTR;
+        nextChar(l);
     }
 
     if (isIdent(*l->str.data)) {
@@ -249,7 +254,9 @@ Token lexerNext(Lexer *l) {
         }
         nextChar(l); // The terminating quote
 
-        token.kind = TOKEN_STR;
+        if (token.kind != TOKEN_CSTR) {
+            token.kind = TOKEN_STR;
+        }
         break;
 
     case '\'':

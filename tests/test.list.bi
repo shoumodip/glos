@@ -921,8 +921,9 @@ characters/error-unterminated-escape-character.glos:1:3: ERROR: Unterminated esc
 :b testcase 19
 strings/basics.glos
 :i returncode 0
-:b stdout 14
+:b stdout 28
 Hello, world!
+LETS GOOOOOO!
 
 :b stderr 0
 

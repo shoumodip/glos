@@ -26,6 +26,6 @@ tested platform for now.
 - [X] Structures
 - [X] Slices
 - [X] Arrays
-- [ ] Strings
+- [X] Strings
 
 More TODOs will be added as the project progresses

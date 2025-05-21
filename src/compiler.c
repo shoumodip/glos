@@ -184,9 +184,6 @@ static void compileFn(Compiler *c, Node *n);
 static void compileStmt(Compiler *c, Node *n);
 
 static void encodeString(char *buffer, Str str) {
-    str.data++;
-    str.length--;
-
     for (size_t i = 0; i < str.length; i++) {
         char ch = str.data[i];
         if (ch == '\\') {
@@ -204,7 +201,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_INT:
         case TOKEN_CHAR:
@@ -217,11 +214,12 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             const size_t length = n->token.as.integer;
 
             char *buffer = tempAlloc(length);
-            encodeString(buffer, n->token.str);
+            encodeString(buffer, (Str) {.data = n->token.str.data + 1, .length = length});
 
             LLVMTypeRef  strType = LLVMArrayType2(LLVMInt8Type(), length + 1);
             LLVMValueRef strGlobal = LLVMAddGlobal(c->module, strType, "");
             LLVMSetInitializer(strGlobal, LLVMConstString(buffer, length, false));
+            tempReset(buffer);
 
             LLVMValueRef strValue = LLVMGetUndef(c->sliceType);
             strValue = LLVMBuildInsertValue(c->builder, strValue, strGlobal, 0, "");
@@ -229,9 +227,22 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             LLVMValueRef lengthValue = LLVMConstInt(LLVMInt64Type(), length, false);
             strValue = LLVMBuildInsertValue(c->builder, strValue, lengthValue, 1, "");
 
-            tempReset(buffer);
             return strValue;
         }
+
+        case TOKEN_CSTR: {
+            const size_t length = n->token.as.integer;
+
+            char *buffer = tempAlloc(length);
+            encodeString(buffer, (Str) {.data = n->token.str.data + 2, .length = length});
+
+            LLVMTypeRef  strType = LLVMArrayType2(LLVMInt8Type(), length + 1);
+            LLVMValueRef strGlobal = LLVMAddGlobal(c->module, strType, "");
+            LLVMSetInitializer(strGlobal, LLVMConstString(buffer, length, false));
+            tempReset(buffer);
+
+            return strGlobal;
+        };
 
         case TOKEN_IDENT: {
             Node *definition = n->as.atom.definition;
@@ -355,7 +366,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             const LLVMValueRef operandValue = compileExpr(c, operand, false);
@@ -486,7 +497,7 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_ADD: {
             LLVMValueRef lhsValue = compileExpr(c, lhs, false);
@@ -780,6 +791,12 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     }
 }
 
+static const char *tempNameCstr(Str s) {
+    const char *p = tempStrToCstr(s);
+    tempReset(p);
+    return p;
+}
+
 static_assert(COUNT_NODES == 21, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
@@ -863,7 +880,7 @@ static void compileStmt(Compiler *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             if (operand) {
@@ -892,7 +909,7 @@ static void compileStmt(Compiler *c, Node *n) {
         const LLVMTypeRef llvmType = typeInMemory(n->type);
 
         if (n->as.var.isExtern) {
-            n->as.var.llvm = LLVMAddGlobal(c->module, llvmType, tempStrToCstr(n->token.str));
+            n->as.var.llvm = LLVMAddGlobal(c->module, llvmType, tempNameCstr(n->token.str));
             LLVMSetLinkage(n->as.var.llvm, LLVMExternalLinkage);
             return;
         }
@@ -956,7 +973,7 @@ static void compileFn(Compiler *c, Node *n) {
         n->as.fn.llvm = LLVMAddFunction(c->module, "", n->type.llvm); // TODO: Public functions
     } else {
         assert(n->token.kind == TOKEN_IDENT);
-        n->as.fn.llvm = LLVMAddFunction(c->module, tempStrToCstr(n->token.str), n->type.llvm);
+        n->as.fn.llvm = LLVMAddFunction(c->module, tempNameCstr(n->token.str), n->type.llvm);
         return;
     }
 
@@ -1112,7 +1129,7 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             preCompile(n->as.flow.operand);

@@ -112,7 +112,9 @@ char *tempSprintf(const char *fmt, ...) {
 }
 
 char *tempStrToCstr(Str s) {
-    return memcpy(tempAlloc(s.length + 1), s.data, s.length);
+    char *p = memcpy(tempAlloc(s.length + 1), s.data, s.length);
+    p[s.length] = '\0';
+    return p;
 }
 
 // OS

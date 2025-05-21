@@ -319,7 +319,9 @@ static void checkType(Context *c, Node *n) {
         } else if (strMatch(n->token.str, "u64")) {
             n->type = (Type) {.kind = TYPE_U64};
         } else if (strMatch(n->token.str, "string")) {
-            n->type = c->strType;
+            n->type = c->stringType;
+        } else if (strMatch(n->token.str, "cstring")) {
+            n->type = c->cstringType;
         } else {
             Node *definition = identFind(c, n->token.str, true);
             if (!definition) {
@@ -431,7 +433,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_INT};
@@ -442,7 +444,11 @@ static void checkExpr(Context *c, Node *n, bool ref) {
             break;
 
         case TOKEN_STR:
-            n->type = c->strType;
+            n->type = c->stringType;
+            break;
+
+        case TOKEN_CSTR:
+            n->type = c->cstringType;
             break;
 
         case TOKEN_CHAR:
@@ -542,7 +548,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node *operand = n->as.unary.operand;
 
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             checkExpr(c, operand, false);
@@ -724,7 +730,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
         Node *lhs = n->as.binary.lhs;
         Node *rhs = n->as.binary.rhs;
 
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -961,7 +967,7 @@ static bool alwaysReturns(Node *n) {
     }
 
     case NODE_FLOW:
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_RETURN:
             return true;
@@ -1018,7 +1024,7 @@ static void checkStmt(Context *c, Node *n) {
     case NODE_FLOW: {
         Node *operand = n->as.flow.operand;
 
-        static_assert(COUNT_TOKENS == 47, "");
+        static_assert(COUNT_TOKENS == 48, "");
         switch (n->token.kind) {
         case TOKEN_RETURN: {
             n->type = (Type) {.kind = TYPE_UNIT};
@@ -1179,20 +1185,32 @@ static void checkFn(Context *c, Node *n) {
 void checkNodes(Context *c, Nodes nodes) {
     assert(c->nodeAlloc);
 
-    if (c->strType.kind != TYPE_SLICE) {
-        Node *u8TypeNode = nodeAlloc(c->nodeAlloc, NODE_ATOM, (Token) {0});
-        u8TypeNode->type = (Type) {.kind = TYPE_U8};
+    if (!c->stringTypesSet) {
+        // type string [u8]
+        {
+            Node *u8TypeNode = nodeAlloc(c->nodeAlloc, NODE_ATOM, (Token) {0});
+            u8TypeNode->type = (Type) {.kind = TYPE_U8};
 
-        Type strSliceType = (Type) {
-            .kind = TYPE_SLICE,
-            .spec = u8TypeNode,
-        };
+            const Type  u8SliceType = (Type) {.kind = TYPE_SLICE, .spec = u8TypeNode};
+            const Token stringTypeToken = (Token) {.str = strFromCstr("string")};
 
-        Node *strTypeNode =
-            nodeAlloc(c->nodeAlloc, NODE_TYPE, (Token) {.str = strFromCstr("string")});
-        strTypeNode->as.type.real = strSliceType;
+            Node *stringTypeNode = nodeAlloc(c->nodeAlloc, NODE_TYPE, stringTypeToken);
+            stringTypeNode->as.type.real = u8SliceType;
 
-        c->strType = (Type) {.kind = TYPE_ALIAS, .spec = strTypeNode};
+            c->stringType = (Type) {.kind = TYPE_ALIAS, .spec = stringTypeNode};
+        }
+
+        // type cstring &i8
+        {
+            const Token cstringTypeToken = (Token) {.str = strFromCstr("cstring")};
+
+            Node *cstringTypeNode = nodeAlloc(c->nodeAlloc, NODE_TYPE, cstringTypeToken);
+            cstringTypeNode->as.type.real = (Type) {.kind = TYPE_I8, .ref = 1};
+
+            c->cstringType = (Type) {.kind = TYPE_ALIAS, .spec = cstringTypeNode};
+        }
+
+        c->stringTypesSet = true;
     }
 
     for (Node *it = nodes.head; it; it = it->next) {

@@ -1,8 +1,16 @@
-fn puts(str string) {
-    extern fn puts(str &i8) i32
-    puts(<&i8> str.data)
+type FILE &struct {}
+
+extern {
+    var stdout FILE
+    fn puts(s cstring) i32
+}
+
+fn writeString(file FILE, str string) {
+    extern fn fwrite(data rawptr, size u64, count u64, stream FILE) u64
+    fwrite(<rawptr> str.data, sizeof(*str.data), str.length, file)
 }
 
 fn main() {
-    puts("Hello, world!")
+    writeString(stdout, "Hello, world!\n")
+    puts(c"LETS GOOOOOO!")
 }
