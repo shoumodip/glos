@@ -503,6 +503,9 @@ static Node *parseStmt(Parser *p) {
 
     case TOKEN_TYPE:
         node = nodeAlloc(p->nodeAlloc, NODE_TYPE, lexerExpect(&p->lexer, TOKEN_IDENT));
+        if (lexerRead(&p->lexer, TOKEN_SET)) {
+            node->as.type.distinct = true;
+        }
         node->as.type.definition = parseType(p);
         break;
 

@@ -1,4 +1,4 @@
-:i count 91
+:i count 92
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -709,6 +709,14 @@ type-alias/functions.glos
 69
 
 :b stderr 0
+
+:b testcase 24
+type-alias/distinct.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 74
+type-alias/distinct.glos:5:16: ERROR: Expected type 'Second', got 'First'
 
 :b testcase 19
 structs/basics.glos

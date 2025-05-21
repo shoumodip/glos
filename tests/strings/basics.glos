@@ -1,4 +1,4 @@
-type FILE &struct {}
+type FILE = rawptr
 
 extern {
     var stdout FILE

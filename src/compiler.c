@@ -1047,6 +1047,18 @@ static Node *getMain(Context context) {
     return main;
 }
 
+// Like typeResolve, but doesn't care about distinct type
+static Type typeResolveForced(Type type) {
+    if (type.kind == TYPE_ALIAS) {
+        assert(type.spec);
+        Type resolved = type.spec->as.type.real;
+        resolved.ref += type.ref;
+        return resolved;
+    }
+
+    return type;
+}
+
 static_assert(COUNT_NODES == 21, "");
 static void preCompile(Node *n) {
     if (!n) {
@@ -1055,11 +1067,11 @@ static void preCompile(Node *n) {
 
     switch (n->kind) {
     case NODE_ATOM:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         break;
 
     case NODE_CALL:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
 
         preCompile(n->as.call.fn);
         for (Node *it = n->as.call.args.head; it; it = it->next) {
@@ -1068,17 +1080,17 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_CAST:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.cast.from);
         break;
 
     case NODE_UNARY:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.unary.operand);
         break;
 
     case NODE_ARRAY:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.array.base);
         preCompile(n->as.array.length);
 
@@ -1088,25 +1100,25 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_INDEX:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.index.base);
         preCompile(n->as.index.at);
         preCompile(n->as.index.end);
         break;
 
     case NODE_BINARY:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.binary.lhs);
         preCompile(n->as.binary.rhs);
         break;
 
     case NODE_MEMBER:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.member.lhs);
         break;
 
     case NODE_SIZEOF:
-        n->as.sizeoff.operand->type = typeResolve(n->as.sizeoff.operand->type);
+        n->as.sizeoff.operand->type = typeResolveForced(n->as.sizeoff.operand->type);
         break;
 
     case NODE_BLOCK:
@@ -1153,11 +1165,11 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_ARG:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         break;
 
     case NODE_VAR:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.var.expr);
         preCompile(n->as.var.type);
         break;
@@ -1167,12 +1179,12 @@ static void preCompile(Node *n) {
         break;
 
     case NODE_FIELD:
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.field.type);
         break;
 
     case NODE_STRUCT: {
-        n->type = typeResolve(n->type);
+        n->type = typeResolveForced(n->type);
         preCompile(n->as.structt.literalType);
 
         for (Node *it = n->as.structt.fields.head; it; it = it->next) {

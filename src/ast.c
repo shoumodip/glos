@@ -214,6 +214,10 @@ bool typeEq(Type a, Type b) {
         return true;
     }
 
+    case TYPE_ALIAS:
+        // Types got resolved already, therefore they must be distinct
+        return a.spec == b.spec;
+
     default:
         return true;
     }
@@ -285,8 +289,11 @@ bool typeIsPointer(Type type) {
 Type typeResolve(Type type) {
     if (type.kind == TYPE_ALIAS) {
         assert(type.spec);
-        Type resolved = type.spec->as.type.real;
+        if (type.spec->as.type.distinct) {
+            return type;
+        }
 
+        Type resolved = type.spec->as.type.real;
         resolved.ref += type.ref;
         return resolved;
     }

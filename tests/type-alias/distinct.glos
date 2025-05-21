@@ -1,0 +1,5 @@
+type First = u64
+type Second = u64
+
+var x First
+var y Second = x

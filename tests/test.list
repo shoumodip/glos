@@ -65,6 +65,7 @@ extern/basics.glos
 type-alias/basics.glos
 type-alias/equivalence.glos
 type-alias/functions.glos
+type-alias/distinct.glos
 structs/basics.glos
 structs/literals.glos
 structs/temporary-struct-field-access.glos

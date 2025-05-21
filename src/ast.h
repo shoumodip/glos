@@ -198,6 +198,8 @@ typedef struct {
 typedef struct {
     Type  real;
     Node *definition;
+
+    bool distinct;
 } NodeType;
 
 typedef struct {
