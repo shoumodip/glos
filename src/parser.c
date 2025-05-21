@@ -508,11 +508,16 @@ static Node *parseStmt(Parser *p) {
     case TOKEN_EXTERN: {
         assert(!p->inExtern);
         node = nodeAlloc(p->nodeAlloc, NODE_EXTERN, token);
-        lexerExpect(&p->lexer, TOKEN_LBRACE); // TODO: Implement single extern definition
 
         p->inExtern = true;
-        while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
-            lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_FN, TOKEN_VAR));
+        token = lexerExpect(&p->lexer, TOKEN_LBRACE, TOKEN_FN, TOKEN_VAR);
+        if (token.kind == TOKEN_LBRACE) {
+            while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
+                lexerBuffer(&p->lexer, lexerExpect(&p->lexer, TOKEN_FN, TOKEN_VAR));
+                nodesPush(&node->as.externn.definitions, parseStmt(p));
+            }
+        } else {
+            lexerBuffer(&p->lexer, token);
             nodesPush(&node->as.externn.definitions, parseStmt(p));
         }
         p->inExtern = false;
