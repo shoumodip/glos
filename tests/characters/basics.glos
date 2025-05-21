@@ -1,0 +1,12 @@
+extern {
+    fn putchar(char i32) i32
+}
+
+fn putc(char u8) {
+    putchar(<i32> char)
+}
+
+fn main() {
+    putc('E')
+    putc('\n')
+}

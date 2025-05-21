@@ -83,3 +83,7 @@ arrays/basics.glos
 arrays/literals.glos
 arrays/error-literal-expected-index-type-u64.glos
 arrays/error-literal-type-mismatch.glos
+characters/basics.glos
+characters/error-unterminated.glos
+characters/error-invalid-escape-character.glos
+characters/error-unterminated-escape-character.glos

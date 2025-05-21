@@ -92,7 +92,73 @@ static void skipWhitespace(Lexer *l) {
     }
 }
 
-static_assert(COUNT_TOKENS == 45, "");
+static void errorInvalid(Pos pos, char ch, const char *label) {
+    if (isprint(ch)) {
+        fprintf(stderr, PosFmt "ERROR: Invalid %s '%c'\n", PosArg(pos), label, ch);
+    } else {
+        fprintf(stderr, PosFmt "ERROR: Invalid %s (%d)\n", PosArg(pos), label, ch);
+    }
+
+    exit(1);
+}
+
+static void errorUnterminated(Pos pos, const char *label) {
+    fprintf(stderr, PosFmt "ERROR: Unterminated %s\n", PosArg(pos), label);
+    exit(1);
+}
+
+static char lexChar(Lexer *l, const char *label) {
+    if (!l->str.length) {
+        errorUnterminated(l->pos, label);
+    }
+
+    char ch = readChar(l);
+    if (ch == '\\') {
+        if (!l->str.length) {
+            errorUnterminated(l->pos, "escape character");
+        }
+
+        ch = *l->str.data;
+        switch (ch) {
+        case 'r':
+            ch = '\r';
+            break;
+
+        case 'n':
+            ch = '\n';
+            break;
+
+        case 't':
+            ch = '\t';
+            break;
+
+        case '0':
+            ch = '\0';
+            break;
+
+        case '"':
+            ch = '"';
+            break;
+
+        case '\'':
+            ch = '\'';
+            break;
+
+        case '\\':
+            ch = '\\';
+            break;
+
+        default:
+            errorInvalid(l->pos, ch, "escape character");
+        }
+
+        nextChar(l);
+    }
+
+    return ch;
+}
+
+static_assert(COUNT_TOKENS == 46, "");
 Token lexerNext(Lexer *l) {
     if (l->peeked) {
         lexerUnbuffer(l);
@@ -200,6 +266,14 @@ Token lexerNext(Lexer *l) {
         token.kind = TOKEN_COLON;
         break;
 
+    case '\'':
+        token.kind = TOKEN_CHAR;
+        token.as.integer = lexChar(l, "character");
+        if (!matchChar(l, '\'')) {
+            errorUnterminated(l->pos, "character");
+        }
+        break;
+
     case '(':
         token.kind = TOKEN_LPAREN;
         break;
@@ -297,21 +371,7 @@ Token lexerNext(Lexer *l) {
         break;
 
     default:
-        if (isprint(*token.str.data)) {
-            fprintf(
-                stderr,
-                PosFmt "ERROR: Invalid character '%c'\n",
-                PosArg(token.pos),
-                *token.str.data);
-        } else {
-            fprintf(
-                stderr,
-                PosFmt "ERROR: Invalid character (%d)\n",
-                PosArg(token.pos),
-                *token.str.data);
-        }
-
-        exit(1);
+        errorInvalid(token.pos, *token.str.data, "character");
     }
 
     token.str.length -= l->str.length;

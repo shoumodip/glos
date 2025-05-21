@@ -1,4 +1,4 @@
-:i count 85
+:i count 89
 :b testcase 20
 integers/basics.glos
 :i returncode 0
@@ -877,4 +877,36 @@ arrays/error-literal-type-mismatch.glos
 
 :b stderr 84
 arrays/error-literal-type-mismatch.glos:2:8: ERROR: Expected type 'i64', got 'bool'
+
+:b testcase 22
+characters/basics.glos
+:i returncode 0
+:b stdout 2
+E
+
+:b stderr 0
+
+:b testcase 34
+characters/error-unterminated.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 70
+characters/error-unterminated.glos:1:3: ERROR: Unterminated character
+
+:b testcase 46
+characters/error-invalid-escape-character.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 88
+characters/error-invalid-escape-character.glos:1:3: ERROR: Invalid escape character 'f'
+
+:b testcase 51
+characters/error-unterminated-escape-character.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 94
+characters/error-unterminated-escape-character.glos:1:3: ERROR: Unterminated escape character
 
