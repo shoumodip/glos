@@ -286,8 +286,10 @@ Token lexerNext(Lexer *l) {
         }
         token.str.length -= l->str.length;
 
-        token.kind = TOKEN_PROP;
-        if (strMatch(token.str, "@name")) {
+        static_assert(COUNT_PROPS == 2, "");
+        if (strMatch(token.str, "@link")) {
+            token.as.property = PROP_LINK;
+        } else if (strMatch(token.str, "@name")) {
             token.as.property = PROP_NAME;
         } else {
             fprintf(
@@ -298,6 +300,8 @@ Token lexerNext(Lexer *l) {
 
             exit(1);
         }
+
+        token.kind = TOKEN_PROP;
         break;
 
     case '(':

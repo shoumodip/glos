@@ -141,7 +141,7 @@ static void compileType(Compiler *c, Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static LLVMValueRef definitionLLVMValue(Node *n) {
     switch (n->kind) {
     case NODE_FN:
@@ -228,7 +228,7 @@ compileArithOp(Compiler *c, Type type, ArithOp op, LLVMValueRef *lhs, LLVMValueR
     return afterArith(c, type, result);
 }
 
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
     compileType(c, &n->type);
 
@@ -247,11 +247,17 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             const size_t length = n->token.as.integer;
 
             char *buffer = tempAlloc(length);
-            encodeString(buffer, (Str) {.data = n->token.str.data + 1, .length = length});
+            encodeString(
+                buffer,
+                (Str) {
+                    .data = n->token.str.data + 1,
+                    .length = n->token.str.length - 2,
+                });
 
             LLVMTypeRef  strType = LLVMArrayType2(LLVMInt8Type(), length + 1);
             LLVMValueRef strGlobal = LLVMAddGlobal(c->module, strType, "");
             LLVMSetInitializer(strGlobal, LLVMConstString(buffer, length, false));
+            LLVMSetLinkage(strGlobal, LLVMPrivateLinkage);
             tempReset(buffer);
 
             LLVMValueRef strValue = LLVMGetUndef(c->sliceType);
@@ -267,11 +273,17 @@ static LLVMValueRef compileExpr(Compiler *c, Node *n, bool ref) {
             const size_t length = n->token.as.integer;
 
             char *buffer = tempAlloc(length);
-            encodeString(buffer, (Str) {.data = n->token.str.data + 2, .length = length});
+            encodeString(
+                buffer,
+                (Str) {
+                    .data = n->token.str.data + 2,
+                    .length = n->token.str.length - 3,
+                });
 
             LLVMTypeRef  strType = LLVMArrayType2(LLVMInt8Type(), length + 1);
             LLVMValueRef strGlobal = LLVMAddGlobal(c->module, strType, "");
             LLVMSetInitializer(strGlobal, LLVMConstString(buffer, length, false));
+            LLVMSetLinkage(strGlobal, LLVMPrivateLinkage);
             tempReset(buffer);
 
             return strGlobal;
@@ -798,7 +810,7 @@ static const char *tempNameCstr(Str s) {
     return p;
 }
 
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static void compileStmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK:
@@ -930,7 +942,7 @@ static void compileStmt(Compiler *c, Node *n) {
     } break;
 
     case NODE_TYPE:
-        static_assert(COUNT_TYPES == 17, ""); // Pass
+        // Pass
         break;
 
     case NODE_EXTERN:
@@ -948,14 +960,14 @@ static void compileStmt(Compiler *c, Node *n) {
 
         LLVMValueRef fmtPtr = NULL;
         if (typeIsSigned(operand->type)) {
-            if (operand->type.kind != TYPE_I64) {
+            if (operand->type.kind != TYPE_I64 && operand->type.ref == 0) {
                 operandValue = LLVMBuildSExt(c->builder, operandValue, LLVMInt64Type(), "");
             }
 
             fmtPtr = LLVMBuildInBoundsGEP2(
                 c->builder, c->printSFmtType, c->printSFmtValue, indices, len(indices), "");
         } else {
-            if (operand->type.kind != TYPE_U64) {
+            if (operand->type.kind != TYPE_U64 && operand->type.ref == 0) {
                 operandValue = LLVMBuildZExt(c->builder, operandValue, LLVMInt64Type(), "");
             }
 
@@ -1076,7 +1088,7 @@ static Type typeResolveForced(Type type) {
     return type;
 }
 
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static void preCompile(Node *n) {
     if (!n) {
         return;
@@ -1225,7 +1237,7 @@ static void preCompile(Node *n) {
     }
 }
 
-void compileProgram(Context context, const char *executableName) {
+void compileProgram(Cmd *cmd, Context context, const char *executableName) {
     Node *mainFn = getMain(context);
 
     Compiler c = {0};
@@ -1361,15 +1373,22 @@ void compileProgram(Context context, const char *executableName) {
 
     // Linking
     {
-        const char *args[] = {
-            "cc",
-            "-o",
-            executableName,
-            objectFileName,
-            NULL,
-        };
+        cmdPush(cmd, "cc");
+        cmdPush(cmd, "-o");
+        cmdPush(cmd, executableName);
+        cmdPush(cmd, objectFileName);
+        for (size_t i = 0; i < context.linkFlags.length; i++) {
+            Str flag = context.linkFlags.data[i]->token.str;
+            flag.data++;
+            flag.length -= 2;
 
-        if (runCommand(args)) {
+            char *buffer = tempAlloc(flag.length + 1);
+            encodeString(buffer, flag);
+            buffer[flag.length] = '\0';
+            cmdPush(cmd, buffer);
+        }
+
+        if (cmdRun(cmd)) {
             fprintf(stderr, "ERROR: Could not link executable\n");
             exit(1);
         }

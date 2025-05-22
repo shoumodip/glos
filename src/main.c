@@ -78,6 +78,7 @@ int main(int argc, char **argv) {
     Context c = {.nodeAlloc = &alloc};
     checkNodes(&c, p.nodes);
 
+    Cmd cmd = {0};
     if (run) {
         char tmpPath[] = "/tmp/glos_run_XXXXXX";
 
@@ -100,17 +101,14 @@ int main(int argc, char **argv) {
             exePath = tempSprintf("./%s", outputPath);
         }
 
-        compileProgram(c, exePath);
+        compileProgram(&cmd, c, exePath);
 
-        const char **args = calloc(argc + 2, sizeof(*args));
-        assert(args);
-
-        args[0] = exePath;
+        cmdPush(&cmd, exePath);
         for (int i = 0; i < argc; i++) {
-            args[i + 1] = argv[i];
+            cmdPush(&cmd, argv[i]);
         }
 
-        const int result = runCommand(args);
+        const int result = cmdRun(&cmd);
 
         // If the user provided an output path along with the run flag, assume that the user needs
         // the executable to persist.
@@ -125,6 +123,6 @@ int main(int argc, char **argv) {
         outputPath = tempStrToCstr(strStripSuffix(strFromCstr(inputPath), strFromCstr(".glos")));
     }
 
-    compileProgram(c, outputPath);
+    compileProgram(&cmd, c, outputPath);
     return 0;
 }

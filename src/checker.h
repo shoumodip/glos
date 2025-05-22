@@ -15,6 +15,7 @@ typedef struct {
     Scope locals;
     Scope globals;
     Scope globalTemps;
+    Scope linkFlags;
 
     Type stringType;
     Type cstringType;

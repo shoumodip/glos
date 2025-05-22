@@ -165,16 +165,29 @@ bool removeFile(const char *path) {
     return remove(path) >= 0;
 }
 
-int runCommand(const char **args) {
+void cmdPush(Cmd *s, const char *arg) {
+    if (s->length >= s->capacity) {
+        s->capacity = s->capacity ? s->capacity * 2 : 128;
+        s->data = realloc(s->data, s->capacity * sizeof(*s->data));
+        assert(s->data);
+    }
+
+    s->data[s->length++] = arg;
+}
+
+int cmdRun(Cmd *c) {
     const pid_t pid = fork();
     if (pid < 0) {
         return 1;
     }
 
     if (pid == 0) {
-        execvp(*args, (char *const *) args);
+        cmdPush(c, NULL);
+        execvp(*c->data, (char *const *) c->data);
         exit(1);
     }
+
+    c->length = 0;
 
     int status = 0;
     if (waitpid(pid, &status, 0) < 0) {

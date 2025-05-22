@@ -69,7 +69,6 @@ typedef enum {
     NODE_ATOM,
     NODE_CALL,
     NODE_CAST,
-    NODE_PROP,
     NODE_UNARY,
     NODE_ARRAY,
     NODE_INDEX,
@@ -113,10 +112,6 @@ typedef struct {
 typedef struct {
     Node *operand;
 } NodeUnary;
-
-typedef struct {
-    Nodes children;
-} NodeProp;
 
 typedef struct {
     Node *base;
@@ -240,6 +235,8 @@ typedef struct {
 } NodeStruct;
 
 typedef struct {
+    bool  local;
+    Nodes linkFlags;
     Nodes definitions;
 } NodeExtern;
 
@@ -256,7 +253,6 @@ struct Node {
         NodeAtom   atom;
         NodeCall   call;
         NodeCast   cast;
-        NodeProp   prop;
         NodeUnary  unary;
         NodeArray  array;
         NodeIndex  index;

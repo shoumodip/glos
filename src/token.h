@@ -89,6 +89,7 @@ typedef enum {
 const char *tokenKindName(TokenKind kind);
 
 typedef enum {
+    PROP_LINK,
     PROP_NAME,
     COUNT_PROPS
 } PropKind;

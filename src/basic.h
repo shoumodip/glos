@@ -42,9 +42,18 @@ void  tempRemoveNull(void);
 char *tempSprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 char *tempStrToCstr(Str s);
 
-// OS
+// IO
 bool readFile(Str *out, const char *path);
 bool removeFile(const char *path);
-int  runCommand(const char **args);
+
+// Commands
+typedef struct {
+    const char **data;
+    size_t       length;
+    size_t       capacity;
+} Cmd;
+
+void cmdPush(Cmd *c, const char *arg);
+int  cmdRun(Cmd *c);
 
 #endif // BASIC_H

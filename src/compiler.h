@@ -3,6 +3,6 @@
 
 #include "checker.h"
 
-void compileProgram(Context context, const char *executableName);
+void compileProgram(Cmd *cmd, Context context, const char *executableName);
 
 #endif // COMPILER_H

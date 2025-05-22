@@ -67,7 +67,7 @@ static void blockRestore(Context *c, size_t save) {
 }
 
 // Checker
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static void castUntypedInt(Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM:
@@ -432,7 +432,7 @@ static Node *createTemp(Context *c, Node *expr, Type type) {
     return tempVar;
 }
 
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static void checkExpr(Context *c, Node *n, bool ref) {
     bool allowRef = false;
 
@@ -946,7 +946,7 @@ static void checkExpr(Context *c, Node *n, bool ref) {
     }
 }
 
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static bool alwaysReturns(Node *n) {
     switch (n->kind) {
     case NODE_CALL:
@@ -1008,7 +1008,7 @@ static bool alwaysReturns(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 22, "");
+static_assert(COUNT_NODES == 21, "");
 static void checkStmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_BLOCK: {
@@ -1153,6 +1153,10 @@ static void checkStmt(Context *c, Node *n) {
             checkStmt(c, it);
         }
         c->inExtern = false;
+
+        for (Node *it = n->as.externn.linkFlags.head; it; it = it->next) {
+            scopePush(&c->linkFlags, it);
+        }
         break;
 
     case NODE_PRINT:

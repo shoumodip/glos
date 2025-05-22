@@ -547,6 +547,7 @@ static Node *parseStmt(Parser *p) {
     case TOKEN_EXTERN: {
         assert(!p->inExtern);
         node = nodeAlloc(p->nodeAlloc, NODE_EXTERN, token);
+        node->as.externn.local = p->local;
 
         lexerExpect(&p->lexer, TOKEN_LBRACE);
         p->inExtern = true;
@@ -558,7 +559,7 @@ static Node *parseStmt(Parser *p) {
                 continue;
             }
 
-            static_assert(COUNT_PROPS == 1, "");
+            static_assert(COUNT_PROPS == 2, "");
             switch (token.as.property) {
             case PROP_NAME: {
                 Str name = lexerExpect(&p->lexer, TOKEN_STR).str;
@@ -574,6 +575,26 @@ static Node *parseStmt(Parser *p) {
 
                 nodesPush(&node->as.externn.definitions, stmt);
             } break;
+
+            case PROP_LINK:
+                token = lexerExpect(&p->lexer, TOKEN_STR, TOKEN_LBRACE);
+                if (token.kind == TOKEN_STR) {
+                    Node *flag = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
+                    nodesPush(&node->as.externn.linkFlags, flag);
+                } else {
+                    while (!lexerRead(&p->lexer, TOKEN_RBRACE)) {
+                        token = lexerExpect(&p->lexer, TOKEN_STR);
+
+                        Node *flag = nodeAlloc(p->nodeAlloc, NODE_ATOM, token);
+                        nodesPush(&node->as.externn.linkFlags, flag);
+
+                        if (lexerExpect(&p->lexer, TOKEN_COMMA, TOKEN_RBRACE).kind ==
+                            TOKEN_RBRACE) {
+                            break;
+                        }
+                    }
+                }
+                break;
 
             default:
                 unreachable();
