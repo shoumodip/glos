@@ -1,5 +1,20 @@
 #include "checker.h"
 
+static Type type_assert(Node *n, Type expected) {
+    if (type_eq(n->type, expected)) {
+        return n->type;
+    }
+
+    fprintf(
+        stderr,
+        PosFmt "ERROR: Expected type '%s', got '%s'\n",
+        PosArg(n->token.pos),
+        type_to_cstr(expected),
+        type_to_cstr(n->type));
+
+    exit(1);
+}
+
 static Type type_assert_node(Node *a, Node *b) {
     if (type_eq(a->type, b->type)) {
         return a->type;
@@ -16,13 +31,12 @@ static Type type_assert_node(Node *a, Node *b) {
 }
 
 static Type type_assert_arith(const Node *n) {
-    if (!type_is_integer(n->type)) {
-        fprintf(
-            stderr, PosFmt "ERROR: Expected arithmetic type, got '%s'\n", PosArg(n->token.pos), type_to_cstr(n->type));
-
-        exit(1);
+    if (type_is_integer(n->type)) {
+        return n->type;
     }
-    return n->type;
+
+    fprintf(stderr, PosFmt "ERROR: Expected arithmetic type, got '%s'\n", PosArg(n->token.pos), type_to_cstr(n->type));
+    exit(1);
 }
 
 static Type type_assert_scalar(const Node *n) {
@@ -38,7 +52,7 @@ static Type type_assert_scalar(const Node *n) {
     exit(1);
 }
 
-static_assert(COUNT_NODES == 6, "");
+static_assert(COUNT_NODES == 7, "");
 static void check_expr(Node *n) {
     if (!n) {
         return;
@@ -46,7 +60,7 @@ static void check_expr(Node *n) {
 
     switch (n->kind) {
     case NODE_ATOM: {
-        static_assert(COUNT_TOKENS == 15, "");
+        static_assert(COUNT_TOKENS == 17, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -64,7 +78,7 @@ static void check_expr(Node *n) {
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 15, "");
+        static_assert(COUNT_TOKENS == 17, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             check_expr(unary->operand);
@@ -79,7 +93,7 @@ static void check_expr(Node *n) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 15, "");
+        static_assert(COUNT_TOKENS == 17, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -107,13 +121,22 @@ static void error_redefinition(const Node *n, const Node *previous, const char *
     exit(1);
 }
 
-static_assert(COUNT_NODES == 6, "");
+static_assert(COUNT_NODES == 7, "");
 static void check_stmt(Context *c, Node *n) {
     if (!n) {
         return;
     }
 
     switch (n->kind) {
+    case NODE_IF: {
+        NodeIf *iff = (NodeIf *) n;
+        check_expr(iff->condition);
+        type_assert(iff->condition, (Type) {.kind = TYPE_BOOL});
+
+        check_stmt(c, iff->consequence);
+        check_stmt(c, iff->antecedence);
+    } break;
+
     case NODE_BLOCK: {
         NodeBlock *block = (NodeBlock *) n;
         for (Node *it = block->body.head; it; it = it->next) {

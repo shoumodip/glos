@@ -13,7 +13,7 @@ static inline void sb_indent(Compiler *c) {
     }
 }
 
-static_assert(COUNT_NODES == 6, "");
+static_assert(COUNT_NODES == 7, "");
 static void compile_expr(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -21,7 +21,7 @@ static void compile_expr(Compiler *c, Node *n) {
 
     switch (n->kind) {
     case NODE_ATOM: {
-        static_assert(COUNT_TOKENS == 15, "");
+        static_assert(COUNT_TOKENS == 17, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             sb_sprintf(&c->sb, "%zuL", n->token.as.integer);
@@ -39,7 +39,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 15, "");
+        static_assert(COUNT_TOKENS == 17, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             sb_sprintf(&c->sb, "-(");
@@ -55,7 +55,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 15, "");
+        static_assert(COUNT_TOKENS == 17, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
             sb_sprintf(&c->sb, "(");
@@ -99,13 +99,26 @@ static void compile_expr(Compiler *c, Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 6, "");
+static_assert(COUNT_NODES == 7, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
     }
 
     switch (n->kind) {
+    case NODE_IF: {
+        NodeIf *iff = (NodeIf *) n;
+        sb_sprintf(&c->sb, "if (");
+        compile_expr(c, iff->condition);
+        sb_sprintf(&c->sb, ") ");
+        compile_stmt(c, iff->consequence);
+
+        if (iff->antecedence) {
+            sb_sprintf(&c->sb, " else ");
+            compile_stmt(c, iff->antecedence);
+        }
+    } break;
+
     case NODE_BLOCK: {
         NodeBlock *block = (NodeBlock *) n;
         sb_sprintf(&c->sb, "{\n");
