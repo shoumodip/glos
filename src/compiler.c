@@ -13,7 +13,29 @@ static inline void sb_indent(Compiler *c) {
     }
 }
 
-static_assert(COUNT_NODES == 7, "");
+#define GlobalFmt "__glos_g%zu"
+
+static_assert(COUNT_NODES == 8, "");
+static void compile_type(Compiler *c, Type *type) {
+    if (!type) {
+        return;
+    }
+
+    switch (type->kind) {
+    case TYPE_BOOL:
+        sb_sprintf(&c->sb, "_Bool");
+        break;
+
+    case TYPE_I64:
+        sb_sprintf(&c->sb, "long");
+        break;
+
+    default:
+        unreachable();
+    }
+}
+
+static_assert(COUNT_NODES == 8, "");
 static void compile_expr(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -21,7 +43,9 @@ static void compile_expr(Compiler *c, Node *n) {
 
     switch (n->kind) {
     case NODE_ATOM: {
-        static_assert(COUNT_TOKENS == 17, "");
+        NodeAtom *atom = (NodeAtom *) n;
+
+        static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             sb_sprintf(&c->sb, "%zuL", n->token.as.integer);
@@ -29,6 +53,10 @@ static void compile_expr(Compiler *c, Node *n) {
 
         case TOKEN_BOOL:
             sb_sprintf(&c->sb, "%dL", n->token.as.boolean);
+            break;
+
+        case TOKEN_IDENT:
+            sb_sprintf(&c->sb, GlobalFmt, atom->definition->data);
             break;
 
         default:
@@ -39,7 +67,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 17, "");
+        static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             sb_sprintf(&c->sb, "-(");
@@ -55,7 +83,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 17, "");
+        static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
             sb_sprintf(&c->sb, "(");
@@ -89,6 +117,10 @@ static void compile_expr(Compiler *c, Node *n) {
             sb_sprintf(&c->sb, ")");
             break;
 
+        case TOKEN_SET:
+            todo();
+            break;
+
         default:
             unreachable();
         }
@@ -99,7 +131,7 @@ static void compile_expr(Compiler *c, Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 7, "");
+static_assert(COUNT_NODES == 8, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -136,9 +168,20 @@ static void compile_stmt(Compiler *c, Node *n) {
         NodeFn *fn = (NodeFn *) n;
         n->data = ++c->globals;
 
-        sb_sprintf(&c->sb, "void __glos_g%zu(void) ", n->data);
+        sb_sprintf(&c->sb, "\nvoid " GlobalFmt "(void) ", n->data);
         compile_stmt(c, fn->body);
         sb_sprintf(&c->sb, "\n");
+    } break;
+
+    case NODE_VAR: {
+        NodeVar *var = (NodeVar *) n;
+        if (var->local) {
+            todo();
+        } else {
+            n->data = ++c->globals;
+            compile_type(c, &n->type);
+            sb_sprintf(&c->sb, " " GlobalFmt ";", n->data);
+        }
     } break;
 
     case NODE_PRINT: {
@@ -150,6 +193,7 @@ static void compile_stmt(Compiler *c, Node *n) {
 
     default:
         compile_expr(c, n);
+        sb_sprintf(&c->sb, ";");
         break;
     }
 }
@@ -165,17 +209,37 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
     sb_sprintf(&c.sb, "extern int printf(const char *fmt, ...);\n");
 
     for (size_t i = 0; i < context->globals.count; i++) {
+        sb_sprintf(&c.sb, "\n");
         compile_stmt(&c, context->globals.data[i]);
     }
 
-    sb_sprintf(&c.sb, "int main(void) {\n");
+    sb_sprintf(&c.sb, "\nint main(void) {\n");
     c.indent++;
+
+    for (size_t i = 0; i < context->globals.count; i++) {
+        Node *it = context->globals.data[i];
+        if (it->kind == NODE_VAR) {
+            NodeVar *var = (NodeVar *) it;
+            if (var->expr) {
+                sb_indent(&c);
+                sb_sprintf(&c.sb, GlobalFmt " = ", it->data);
+                compile_expr(&c, var->expr);
+                sb_sprintf(&c.sb, ";\n");
+            }
+        }
+    }
+
     sb_indent(&c);
-    sb_sprintf(&c.sb, "__glos_g%zu();\n", main->data);
+    sb_sprintf(&c.sb, GlobalFmt "();\n", main->data);
     sb_indent(&c);
     sb_sprintf(&c.sb, "return 0;\n");
     c.indent--;
     sb_sprintf(&c.sb, "}\n");
+
+#if 0
+    fwrite(c.sb.data, c.sb.count, 1, stdout);
+    exit(0);
+#endif
 
     da_push(cmd, "cc");
     da_push(cmd, "-g");

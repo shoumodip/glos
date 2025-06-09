@@ -1,0 +1,7 @@
+var first = 69
+var second i64 = 420
+
+fn main() {
+    print first
+    print second
+}

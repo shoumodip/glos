@@ -93,7 +93,7 @@ static void error_invalid(Pos pos, char ch, const char *label) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 17, "");
+static_assert(COUNT_TOKENS == 19, "");
 Token lexer_next(Lexer *l) {
     if (l->peeked) {
         lexer_unbuffer(l);
@@ -152,6 +152,8 @@ Token lexer_next(Lexer *l) {
             token.as.boolean = 0;
         } else if (sv_match(token.sv, "fn")) {
             token.kind = TOKEN_FN;
+        } else if (sv_match(token.sv, "var")) {
+            token.kind = TOKEN_VAR;
         } else if (sv_match(token.sv, "if")) {
             token.kind = TOKEN_IF;
         } else if (sv_match(token.sv, "else")) {
@@ -200,6 +202,10 @@ Token lexer_next(Lexer *l) {
 
     case '/':
         token.kind = TOKEN_DIV;
+        break;
+
+    case '=':
+        token.kind = TOKEN_SET;
         break;
 
     default:

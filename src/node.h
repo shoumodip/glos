@@ -34,6 +34,7 @@ typedef enum {
     NODE_BLOCK,
 
     NODE_FN,
+    NODE_VAR,
 
     NODE_PRINT,
     COUNT_NODES
@@ -49,7 +50,8 @@ struct Node {
 };
 
 typedef struct {
-    Node node;
+    Node  node;
+    Node *definition;
 } NodeAtom;
 
 typedef struct {
@@ -79,6 +81,13 @@ typedef struct {
     Node  node;
     Node *body;
 } NodeFn;
+
+typedef struct {
+    Node  node;
+    Node *expr;
+    Node *type;
+    bool  local;
+} NodeVar;
 
 typedef struct {
     Node  node;

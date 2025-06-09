@@ -18,7 +18,7 @@ typedef enum {
     POWER_PRE,
 } Power;
 
-static_assert(COUNT_TOKENS == 17, "");
+static_assert(COUNT_TOKENS == 19, "");
 static Power token_kind_to_power(TokenKind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -29,12 +29,15 @@ static Power token_kind_to_power(TokenKind kind) {
     case TOKEN_DIV:
         return POWER_MUL;
 
+    case TOKEN_SET:
+        return POWER_SET;
+
     default:
         return POWER_NIL;
     }
 }
 
-static_assert(COUNT_NODES == 7, "");
+static_assert(COUNT_NODES == 8, "");
 static void *node_alloc(Parser *p, NodeKind kind, Token token) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(NodeAtom),
@@ -45,6 +48,7 @@ static void *node_alloc(Parser *p, NodeKind kind, Token token) {
         [NODE_BLOCK] = sizeof(NodeBlock),
 
         [NODE_FN] = sizeof(NodeFn),
+        [NODE_VAR] = sizeof(NodeVar),
 
         [NODE_PRINT] = sizeof(NodePrint),
     };
@@ -63,7 +67,25 @@ static void error_unexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 17, "");
+static_assert(COUNT_TOKENS == 19, "");
+static Node *parse_type(Parser *p) {
+    Node *node = NULL;
+    Token token = lexer_next(&p->lexer);
+
+    switch (token.kind) {
+    case TOKEN_IDENT:
+        node = node_alloc(p, NODE_ATOM, token);
+        break;
+
+    default:
+        error_unexpected(token);
+        break;
+    }
+
+    return node;
+}
+
+static_assert(COUNT_TOKENS == 19, "");
 static Node *parse_expr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexer_next(&p->lexer);
@@ -71,6 +93,7 @@ static Node *parse_expr(Parser *p, Power mbp) {
     switch (token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
+    case TOKEN_IDENT:
         node = node_alloc(p, NODE_ATOM, token);
         break;
 
@@ -127,7 +150,7 @@ static void local_assert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 17, "");
+static_assert(COUNT_TOKENS == 19, "");
 static Node *parse_stmt(Parser *p) {
     Node *node = NULL;
 
@@ -179,6 +202,21 @@ static Node *parse_stmt(Parser *p) {
         p->local = local_save;
 
         node = (Node *) fn;
+    } break;
+
+    case TOKEN_VAR: {
+        NodeVar *var = node_alloc(p, NODE_VAR, lexer_expect(&p->lexer, TOKEN_IDENT));
+        token = lexer_peek(&p->lexer);
+        if (token.kind != TOKEN_SET) {
+            var->type = parse_type(p);
+        }
+
+        if (lexer_read(&p->lexer, TOKEN_SET)) {
+            var->expr = parse_expr(p, POWER_SET);
+        }
+
+        var->local = p->local;
+        node = (Node *) var;
     } break;
 
     case TOKEN_PRINT: {

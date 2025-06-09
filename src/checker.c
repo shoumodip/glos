@@ -52,15 +52,44 @@ static Type type_assert_scalar(const Node *n) {
     exit(1);
 }
 
-static_assert(COUNT_NODES == 7, "");
-static void check_expr(Node *n) {
+static void error_undefined(const Node *n, const char *label) {
+    fprintf(stderr, PosFmt "ERROR: Undefined %s '" SVFmt "'\n", PosArg(n->token.pos), label, SVArg(n->token.sv));
+    exit(1);
+}
+
+static_assert(COUNT_NODES == 8, "");
+static void check_type(Node *n) {
+    if (!n) {
+        return;
+    }
+
+    switch (n->kind) {
+    case NODE_ATOM:
+        if (sv_match(n->token.sv, "bool")) {
+            n->type = (Type) {.kind = TYPE_BOOL};
+        } else if (sv_match(n->token.sv, "i64")) {
+            n->type = (Type) {.kind = TYPE_I64};
+        } else {
+            error_undefined(n, "type");
+        }
+        break;
+
+    default:
+        unreachable();
+    }
+}
+
+static_assert(COUNT_NODES == 8, "");
+static void check_expr(Context *c, Node *n) {
     if (!n) {
         return;
     }
 
     switch (n->kind) {
     case NODE_ATOM: {
-        static_assert(COUNT_TOKENS == 17, "");
+        NodeAtom *atom = (NodeAtom *) n;
+
+        static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -68,6 +97,15 @@ static void check_expr(Node *n) {
 
         case TOKEN_BOOL:
             n->type = (Type) {.kind = TYPE_BOOL};
+            break;
+
+        case TOKEN_IDENT:
+            atom->definition = scope_find(c->globals, n->token.sv);
+            if (atom->definition) {
+                n->type = atom->definition->type;
+            } else {
+                error_undefined(n, "identifier");
+            }
             break;
 
         default:
@@ -78,10 +116,10 @@ static void check_expr(Node *n) {
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 17, "");
+        static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
-            check_expr(unary->operand);
+            check_expr(c, unary->operand);
             n->type = type_assert_arith(unary->operand);
             break;
 
@@ -93,16 +131,20 @@ static void check_expr(Node *n) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 17, "");
+        static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
         case TOKEN_MUL:
         case TOKEN_DIV:
-            check_expr(binary->lhs);
-            check_expr(binary->rhs);
+            check_expr(c, binary->lhs);
+            check_expr(c, binary->rhs);
             type_assert_arith(binary->lhs);
             n->type = type_assert_node(binary->rhs, binary->lhs);
+            break;
+
+        case TOKEN_SET:
+            todo();
             break;
 
         default:
@@ -121,7 +163,7 @@ static void error_redefinition(const Node *n, const Node *previous, const char *
     exit(1);
 }
 
-static_assert(COUNT_NODES == 7, "");
+static_assert(COUNT_NODES == 8, "");
 static void check_stmt(Context *c, Node *n) {
     if (!n) {
         return;
@@ -130,7 +172,7 @@ static void check_stmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_IF: {
         NodeIf *iff = (NodeIf *) n;
-        check_expr(iff->condition);
+        check_expr(c, iff->condition);
         type_assert(iff->condition, (Type) {.kind = TYPE_BOOL});
 
         check_stmt(c, iff->consequence);
@@ -155,14 +197,45 @@ static void check_stmt(Context *c, Node *n) {
         check_stmt(c, fn->body);
     } break;
 
+    case NODE_VAR: {
+        NodeVar *var = (NodeVar *) n;
+        if (!var->local) {
+            const Node *previous = scope_find(c->globals, n->token.sv);
+            if (previous) {
+                error_redefinition(n, previous, "identifier");
+            }
+        }
+
+        if (var->type) {
+            check_type(var->type);
+            n->type = var->type->type;
+        }
+
+        if (var->expr) {
+            check_expr(c, var->expr);
+            n->type = var->expr->type;
+
+            if (var->type) {
+                type_assert(var->expr, var->type->type);
+                n->type = var->expr->type;
+            }
+        }
+
+        if (var->local) {
+            todo();
+        } else {
+            da_push(&c->globals, n);
+        }
+    } break;
+
     case NODE_PRINT: {
         NodePrint *print = (NodePrint *) n;
-        check_expr(print->operand);
+        check_expr(c, print->operand);
         type_assert_scalar(print->operand);
     } break;
 
     default:
-        check_expr(n);
+        check_expr(c, n);
         break;
     }
 }
