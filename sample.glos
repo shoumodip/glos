@@ -1,0 +1,4 @@
+fn main() {
+    print 17 * 2 + 35
+    print 800 / 2 - -20
+}
