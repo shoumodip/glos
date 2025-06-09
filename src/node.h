@@ -30,6 +30,7 @@ typedef enum {
     NODE_UNARY,
     NODE_BINARY,
 
+    NODE_IF,
     NODE_BLOCK,
 
     NODE_FN,
@@ -61,6 +62,13 @@ typedef struct {
     Node *lhs;
     Node *rhs;
 } NodeBinary;
+
+typedef struct {
+    Node  node;
+    Node *condition;
+    Node *consequence;
+    Node *antecedence;
+} NodeIf;
 
 typedef struct {
     Node  node;

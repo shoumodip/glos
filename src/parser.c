@@ -18,7 +18,7 @@ typedef enum {
     POWER_PRE,
 } Power;
 
-static_assert(COUNT_TOKENS == 15, "");
+static_assert(COUNT_TOKENS == 17, "");
 static Power token_kind_to_power(TokenKind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -34,13 +34,14 @@ static Power token_kind_to_power(TokenKind kind) {
     }
 }
 
-static_assert(COUNT_NODES == 6, "");
+static_assert(COUNT_NODES == 7, "");
 static void *node_alloc(Parser *p, NodeKind kind, Token token) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(NodeAtom),
         [NODE_UNARY] = sizeof(NodeUnary),
         [NODE_BINARY] = sizeof(NodeBinary),
 
+        [NODE_IF] = sizeof(NodeIf),
         [NODE_BLOCK] = sizeof(NodeBlock),
 
         [NODE_FN] = sizeof(NodeFn),
@@ -62,7 +63,7 @@ static void error_unexpected(Token token) {
     exit(1);
 }
 
-static_assert(COUNT_TOKENS == 15, "");
+static_assert(COUNT_TOKENS == 17, "");
 static Node *parse_expr(Parser *p, Power mbp) {
     Node *node = NULL;
     Token token = lexer_next(&p->lexer);
@@ -126,7 +127,7 @@ static void local_assert(Parser *p, Token token, bool local) {
     }
 }
 
-static_assert(COUNT_TOKENS == 15, "");
+static_assert(COUNT_TOKENS == 17, "");
 static Node *parse_stmt(Parser *p) {
     Node *node = NULL;
 
@@ -143,6 +144,23 @@ static Node *parse_stmt(Parser *p) {
         block->node.token = p->lexer.buffer;
 
         node = (Node *) block;
+    } break;
+
+    case TOKEN_IF: {
+        local_assert(p, token, true);
+
+        NodeIf *iff = node_alloc(p, NODE_IF, token);
+        iff->condition = parse_expr(p, POWER_SET);
+
+        lexer_buffer(&p->lexer, lexer_expect(&p->lexer, TOKEN_LBRACE));
+        iff->consequence = parse_stmt(p);
+
+        if (lexer_read(&p->lexer, TOKEN_ELSE)) {
+            lexer_buffer(&p->lexer, lexer_expect(&p->lexer, TOKEN_LBRACE, TOKEN_IF));
+            iff->antecedence = parse_stmt(p);
+        }
+
+        node = (Node *) iff;
     } break;
 
     case TOKEN_FN: {

@@ -30,6 +30,9 @@ typedef enum {
     TOKEN_MUL,
     TOKEN_DIV,
 
+    TOKEN_IF,
+    TOKEN_ELSE,
+
     TOKEN_FN,
 
     TOKEN_PRINT,
