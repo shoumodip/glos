@@ -11,6 +11,7 @@ typedef struct {
 } Nodes;
 
 typedef enum {
+    TYPE_UNIT,
     TYPE_BOOL,
     TYPE_I64,
     COUNT_TYPES

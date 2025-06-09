@@ -33,9 +33,10 @@
 :b testcase 23
 003-variables/main.glos
 :i returncode 0
-:b stdout 7
+:b stdout 12
 69
 420
+1337
 
 :b stderr 0
 

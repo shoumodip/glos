@@ -118,7 +118,11 @@ static void compile_expr(Compiler *c, Node *n) {
             break;
 
         case TOKEN_SET:
-            todo();
+            sb_sprintf(&c->sb, "(");
+            compile_expr(c, binary->lhs);
+            sb_sprintf(&c->sb, " = ");
+            compile_expr(c, binary->rhs);
+            sb_sprintf(&c->sb, ")");
             break;
 
         default:

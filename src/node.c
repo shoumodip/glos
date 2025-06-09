@@ -1,8 +1,11 @@
 #include "node.h"
 
-static_assert(COUNT_TYPES == 2, "");
+static_assert(COUNT_TYPES == 3, "");
 const char *type_to_cstr(Type type) {
     switch (type.kind) {
+    case TYPE_UNIT:
+        return "()";
+
     case TYPE_BOOL:
         return "bool";
 

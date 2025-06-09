@@ -1,7 +1,11 @@
 var first = 69
 var second i64 = 420
+var third i64
 
 fn main() {
+    third = 3
+
     print first
     print second
+    print first + 8 + second * third
 }

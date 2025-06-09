@@ -80,11 +80,12 @@ static void check_type(Node *n) {
 }
 
 static_assert(COUNT_NODES == 8, "");
-static void check_expr(Context *c, Node *n) {
+static void check_expr(Context *c, Node *n, bool ref) {
     if (!n) {
         return;
     }
 
+    bool allow_ref = false;
     switch (n->kind) {
     case NODE_ATOM: {
         NodeAtom *atom = (NodeAtom *) n;
@@ -101,11 +102,12 @@ static void check_expr(Context *c, Node *n) {
 
         case TOKEN_IDENT:
             atom->definition = scope_find(c->globals, n->token.sv);
-            if (atom->definition) {
-                n->type = atom->definition->type;
-            } else {
+            if (!atom->definition) {
                 error_undefined(n, "identifier");
             }
+
+            allow_ref = atom->definition->kind == NODE_VAR;
+            n->type = atom->definition->type;
             break;
 
         default:
@@ -119,7 +121,7 @@ static void check_expr(Context *c, Node *n) {
         static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
-            check_expr(c, unary->operand);
+            check_expr(c, unary->operand, false);
             n->type = type_assert_arith(unary->operand);
             break;
 
@@ -137,14 +139,17 @@ static void check_expr(Context *c, Node *n) {
         case TOKEN_SUB:
         case TOKEN_MUL:
         case TOKEN_DIV:
-            check_expr(c, binary->lhs);
-            check_expr(c, binary->rhs);
+            check_expr(c, binary->lhs, false);
+            check_expr(c, binary->rhs, false);
             type_assert_arith(binary->lhs);
             n->type = type_assert_node(binary->rhs, binary->lhs);
             break;
 
         case TOKEN_SET:
-            todo();
+            check_expr(c, binary->lhs, true);
+            check_expr(c, binary->rhs, false);
+            type_assert_node(binary->rhs, binary->lhs);
+            n->type = (Type) {.kind = TYPE_UNIT};
             break;
 
         default:
@@ -154,6 +159,11 @@ static void check_expr(Context *c, Node *n) {
 
     default:
         unreachable();
+    }
+
+    if (!allow_ref && ref) {
+        fprintf(stderr, PosFmt "ERROR: Cannot take reference to value not in memory\n", PosArg(n->token.pos));
+        exit(1);
     }
 }
 
@@ -172,7 +182,7 @@ static void check_stmt(Context *c, Node *n) {
     switch (n->kind) {
     case NODE_IF: {
         NodeIf *iff = (NodeIf *) n;
-        check_expr(c, iff->condition);
+        check_expr(c, iff->condition, false);
         type_assert(iff->condition, (Type) {.kind = TYPE_BOOL});
 
         check_stmt(c, iff->consequence);
@@ -212,8 +222,18 @@ static void check_stmt(Context *c, Node *n) {
         }
 
         if (var->expr) {
-            check_expr(c, var->expr);
+            check_expr(c, var->expr, false);
             n->type = var->expr->type;
+
+            if (n->type.kind == TYPE_UNIT) {
+                fprintf(
+                    stderr,
+                    PosFmt "ERROR: Cannot define variable with type '%s'\n",
+                    PosArg(n->token.pos),
+                    type_to_cstr(n->type));
+
+                exit(1);
+            }
 
             if (var->type) {
                 type_assert(var->expr, var->type->type);
@@ -230,12 +250,12 @@ static void check_stmt(Context *c, Node *n) {
 
     case NODE_PRINT: {
         NodePrint *print = (NodePrint *) n;
-        check_expr(c, print->operand);
+        check_expr(c, print->operand, false);
         type_assert_scalar(print->operand);
     } break;
 
     default:
-        check_expr(c, n);
+        check_expr(c, n, false);
         break;
     }
 }
