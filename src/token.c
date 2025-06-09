@@ -15,6 +15,9 @@ const char *token_kind_to_cstr(TokenKind kind) {
     case TOKEN_BOOL:
         return "boolean";
 
+    case TOKEN_IDENT:
+        return "identifier";
+
     case TOKEN_LPAREN:
         return "'('";
 
