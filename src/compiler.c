@@ -1,6 +1,7 @@
 #include "compiler.h"
 
 typedef struct {
+    size_t types;
     size_t globals;
 
     SB     sb;
@@ -13,6 +14,7 @@ static inline void sb_indent(Compiler *c) {
     }
 }
 
+#define TypeFmt   "__glos_t%zu"
 #define GlobalFmt "__glos_g%zu"
 
 static_assert(COUNT_NODES == 8, "");
@@ -28,6 +30,12 @@ static void compile_type(Compiler *c, Type *type) {
 
     case TYPE_I64:
         sb_sprintf(&c->sb, "long");
+        break;
+
+    case TYPE_FN:
+        // TODO: This won't work inside expressions
+        type->compiled = ++c->types;
+        sb_sprintf(&c->sb, "typedef void (*" TypeFmt ")(void); " TypeFmt, type->compiled, type->compiled);
         break;
 
     default:
@@ -56,7 +64,7 @@ static void compile_expr(Compiler *c, Node *n) {
             break;
 
         case TOKEN_IDENT:
-            sb_sprintf(&c->sb, GlobalFmt, atom->definition->data);
+            sb_sprintf(&c->sb, GlobalFmt, atom->definition->compiled);
             break;
 
         default:
@@ -170,9 +178,9 @@ static void compile_stmt(Compiler *c, Node *n) {
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
-        n->data = ++c->globals;
+        n->compiled = ++c->globals;
 
-        sb_sprintf(&c->sb, "\nvoid " GlobalFmt "(void) ", n->data);
+        sb_sprintf(&c->sb, "\nvoid " GlobalFmt "(void) ", n->compiled);
         compile_stmt(c, fn->body);
         sb_sprintf(&c->sb, "\n");
     } break;
@@ -182,9 +190,9 @@ static void compile_stmt(Compiler *c, Node *n) {
         if (var->local) {
             todo();
         } else {
-            n->data = ++c->globals;
+            n->compiled = ++c->globals;
             compile_type(c, &n->type);
-            sb_sprintf(&c->sb, " " GlobalFmt ";", n->data);
+            sb_sprintf(&c->sb, " " GlobalFmt ";", n->compiled);
         }
     } break;
 
@@ -209,6 +217,11 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
         exit(1);
     }
 
+    if (main->kind != NODE_FN) {
+        fprintf(stderr, PosFmt "ERROR: Function 'main' must be a function literal\n", PosArg(main->token.pos));
+        exit(1);
+    }
+
     Compiler c = {0};
     sb_sprintf(&c.sb, "extern int printf(const char *fmt, ...);\n");
 
@@ -226,7 +239,7 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
             NodeVar *var = (NodeVar *) it;
             if (var->expr) {
                 sb_indent(&c);
-                sb_sprintf(&c.sb, GlobalFmt " = ", it->data);
+                sb_sprintf(&c.sb, GlobalFmt " = ", it->compiled);
                 compile_expr(&c, var->expr);
                 sb_sprintf(&c.sb, ";\n");
             }
@@ -234,7 +247,7 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
     }
 
     sb_indent(&c);
-    sb_sprintf(&c.sb, GlobalFmt "();\n", main->data);
+    sb_sprintf(&c.sb, GlobalFmt "();\n", main->compiled);
     sb_indent(&c);
     sb_sprintf(&c.sb, "return 0;\n");
     c.indent--;

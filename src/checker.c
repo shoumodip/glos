@@ -74,6 +74,10 @@ static void check_type(Node *n) {
         }
         break;
 
+    case NODE_FN:
+        n->type = (Type) {.kind = TYPE_FN};
+        break;
+
     default:
         unreachable();
     }
@@ -203,6 +207,8 @@ static void check_stmt(Context *c, Node *n) {
         }
 
         NodeFn *fn = (NodeFn *) n;
+        n->type = (Type) {.kind = TYPE_FN};
+
         da_push(&c->globals, n);
         check_stmt(c, fn->body);
     } break;

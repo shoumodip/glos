@@ -14,11 +14,16 @@ typedef enum {
     TYPE_UNIT,
     TYPE_BOOL,
     TYPE_I64,
+
+    TYPE_FN,
+
     COUNT_TYPES
 } TypeKind;
 
 typedef struct {
     TypeKind kind;
+
+    size_t compiled;
 } Type;
 
 const char *type_to_cstr(Type type);
@@ -46,8 +51,8 @@ struct Node {
     Type     type;
     Token    token;
 
-    size_t data;
     Node  *next;
+    size_t compiled;
 };
 
 typedef struct {

@@ -77,6 +77,12 @@ static Node *parse_type(Parser *p) {
         node = node_alloc(p, NODE_ATOM, token);
         break;
 
+    case TOKEN_FN:
+        node = node_alloc(p, NODE_FN, token);
+        lexer_expect(&p->lexer, TOKEN_LPAREN);
+        lexer_expect(&p->lexer, TOKEN_RPAREN);
+        break;
+
     default:
         error_unexpected(token);
         break;
