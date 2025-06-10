@@ -5,3 +5,5 @@
 003-variables/error-undefined.glos
 003-variables/error-redefinition.glos
 003-variables/error-assignment-definition-type-mismatch.glos
+003-variables/error-undefined-outside-scope.glos
+003-variables/error-undefined-outside-scope-despite-same-depth.glos

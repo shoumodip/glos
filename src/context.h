@@ -12,6 +12,7 @@ typedef struct {
 Node *scope_find(Scope s, SV name);
 
 typedef struct {
+    Scope locals;
     Scope globals;
 } Context;
 

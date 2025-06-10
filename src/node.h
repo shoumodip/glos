@@ -10,6 +10,11 @@ typedef struct {
     Node *tail;
 } Nodes;
 
+typedef struct {
+    bool   local;
+    size_t iota;
+} CompileData;
+
 typedef enum {
     TYPE_UNIT,
     TYPE_BOOL,
@@ -23,7 +28,7 @@ typedef enum {
 typedef struct {
     TypeKind kind;
 
-    size_t compiled;
+    CompileData compile;
 } Type;
 
 const char *type_to_cstr(Type type);
@@ -50,9 +55,9 @@ struct Node {
     NodeKind kind;
     Type     type;
     Token    token;
+    Node    *next;
 
-    Node  *next;
-    size_t compiled;
+    CompileData compile;
 };
 
 typedef struct {

@@ -57,6 +57,14 @@ static void error_undefined(const Node *n, const char *label) {
     exit(1);
 }
 
+static Node *ident_find(Context *c, SV name) {
+    Node *n = scope_find(c->locals, name);
+    if (n) {
+        return n;
+    }
+    return scope_find(c->globals, name);
+}
+
 static_assert(COUNT_NODES == 8, "");
 static void check_type(Node *n) {
     if (!n) {
@@ -105,7 +113,7 @@ static void check_expr(Context *c, Node *n, bool ref) {
             break;
 
         case TOKEN_IDENT:
-            atom->definition = scope_find(c->globals, n->token.sv);
+            atom->definition = ident_find(c, n->token.sv);
             if (!atom->definition) {
                 error_undefined(n, "identifier");
             }
@@ -194,10 +202,14 @@ static void check_stmt(Context *c, Node *n) {
     } break;
 
     case NODE_BLOCK: {
+        const size_t locals_count_save = c->locals.count;
+
         NodeBlock *block = (NodeBlock *) n;
         for (Node *it = block->body.head; it; it = it->next) {
             check_stmt(c, it);
         }
+
+        c->locals.count = locals_count_save;
     } break;
 
     case NODE_FN: {
@@ -248,7 +260,7 @@ static void check_stmt(Context *c, Node *n) {
         }
 
         if (var->local) {
-            todo();
+            da_push(&c->locals, n);
         } else {
             da_push(&c->globals, n);
         }

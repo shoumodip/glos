@@ -1,21 +1,56 @@
+#include <ctype.h>
+
 #include "compiler.h"
 
 typedef struct {
-    size_t types;
+    bool   local;
+    size_t locals;
     size_t globals;
 
     SB     sb;
     size_t indent;
 } Compiler;
 
-static inline void sb_indent(Compiler *c) {
+static inline CompileData compile_data_new(Compiler *c) {
+    CompileData data = {.local = c->local};
+    if (c->local) {
+        data.iota = ++c->locals;
+    } else {
+        data.iota = ++c->globals;
+    }
+    return data;
+}
+
+#define compile_sb_sprintf(c, ...) sb_sprintf(&(c)->sb, __VA_ARGS__)
+
+static inline void compile_sb_indent(Compiler *c) {
     for (size_t i = 0; i < c->indent; i++) {
         da_push(&c->sb, '\t');
     }
 }
 
-#define TypeFmt   "__glos_t%zu"
-#define GlobalFmt "__glos_g%zu"
+static inline void compile_sb_quoted(Compiler *c, SV sv) {
+    compile_sb_sprintf(c, "\"");
+    for (size_t i = 0; i < sv.count; i++) {
+        const char it = sv.data[i];
+        if (it == '"') {
+            compile_sb_sprintf(c, "\\\"");
+        } else if (isprint(it)) {
+            compile_sb_sprintf(c, "%c", it);
+        } else {
+            compile_sb_sprintf(c, "\\x%x", it);
+        }
+    }
+    compile_sb_sprintf(c, "\"");
+}
+
+static inline void sb_compile_data(Compiler *c, CompileData data) {
+    if (data.local) {
+        compile_sb_sprintf(c, "__glos_l%zu", data.iota);
+    } else {
+        compile_sb_sprintf(c, "__glos_g%zu", data.iota);
+    }
+}
 
 static_assert(COUNT_NODES == 8, "");
 static void compile_type(Compiler *c, Type *type) {
@@ -25,17 +60,20 @@ static void compile_type(Compiler *c, Type *type) {
 
     switch (type->kind) {
     case TYPE_BOOL:
-        sb_sprintf(&c->sb, "_Bool");
+        compile_sb_sprintf(c, "_Bool");
         break;
 
     case TYPE_I64:
-        sb_sprintf(&c->sb, "long");
+        compile_sb_sprintf(c, "long");
         break;
 
     case TYPE_FN:
         // TODO: This won't work inside expressions
-        type->compiled = ++c->types;
-        sb_sprintf(&c->sb, "typedef void (*" TypeFmt ")(void); " TypeFmt, type->compiled, type->compiled);
+        type->compile = compile_data_new(c);
+        compile_sb_sprintf(c, "typedef void (*");
+        sb_compile_data(c, type->compile);
+        compile_sb_sprintf(c, ")(void); ");
+        sb_compile_data(c, type->compile);
         break;
 
     default:
@@ -56,15 +94,15 @@ static void compile_expr(Compiler *c, Node *n) {
         static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_INT:
-            sb_sprintf(&c->sb, "%zuL", n->token.as.integer);
+            compile_sb_sprintf(c, "%zuL", n->token.as.integer);
             break;
 
         case TOKEN_BOOL:
-            sb_sprintf(&c->sb, "%dL", n->token.as.boolean);
+            compile_sb_sprintf(c, "%dL", n->token.as.boolean);
             break;
 
         case TOKEN_IDENT:
-            sb_sprintf(&c->sb, GlobalFmt, atom->definition->compiled);
+            sb_compile_data(c, atom->definition->compile);
             break;
 
         default:
@@ -78,9 +116,9 @@ static void compile_expr(Compiler *c, Node *n) {
         static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
-            sb_sprintf(&c->sb, "-(");
+            compile_sb_sprintf(c, "-(");
             compile_expr(c, unary->operand);
-            sb_sprintf(&c->sb, ")");
+            compile_sb_sprintf(c, ")");
         } break;
 
         default:
@@ -94,43 +132,43 @@ static void compile_expr(Compiler *c, Node *n) {
         static_assert(COUNT_TOKENS == 19, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
-            sb_sprintf(&c->sb, "(");
+            compile_sb_sprintf(c, "(");
             compile_expr(c, binary->lhs);
-            sb_sprintf(&c->sb, " + ");
+            compile_sb_sprintf(c, " + ");
             compile_expr(c, binary->rhs);
-            sb_sprintf(&c->sb, ")");
+            compile_sb_sprintf(c, ")");
             break;
 
         case TOKEN_SUB:
-            sb_sprintf(&c->sb, "(");
+            compile_sb_sprintf(c, "(");
             compile_expr(c, binary->lhs);
-            sb_sprintf(&c->sb, " - ");
+            compile_sb_sprintf(c, " - ");
             compile_expr(c, binary->rhs);
-            sb_sprintf(&c->sb, ")");
+            compile_sb_sprintf(c, ")");
             break;
 
         case TOKEN_MUL:
-            sb_sprintf(&c->sb, "(");
+            compile_sb_sprintf(c, "(");
             compile_expr(c, binary->lhs);
-            sb_sprintf(&c->sb, " * ");
+            compile_sb_sprintf(c, " * ");
             compile_expr(c, binary->rhs);
-            sb_sprintf(&c->sb, ")");
+            compile_sb_sprintf(c, ")");
             break;
 
         case TOKEN_DIV:
-            sb_sprintf(&c->sb, "(");
+            compile_sb_sprintf(c, "(");
             compile_expr(c, binary->lhs);
-            sb_sprintf(&c->sb, " / ");
+            compile_sb_sprintf(c, " / ");
             compile_expr(c, binary->rhs);
-            sb_sprintf(&c->sb, ")");
+            compile_sb_sprintf(c, ")");
             break;
 
         case TOKEN_SET:
-            sb_sprintf(&c->sb, "(");
+            compile_sb_sprintf(c, "(");
             compile_expr(c, binary->lhs);
-            sb_sprintf(&c->sb, " = ");
+            compile_sb_sprintf(c, " = ");
             compile_expr(c, binary->rhs);
-            sb_sprintf(&c->sb, ")");
+            compile_sb_sprintf(c, ")");
             break;
 
         default:
@@ -152,60 +190,87 @@ static void compile_stmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_IF: {
         NodeIf *iff = (NodeIf *) n;
-        sb_sprintf(&c->sb, "if (");
+        compile_sb_sprintf(c, "if (");
         compile_expr(c, iff->condition);
-        sb_sprintf(&c->sb, ") ");
+        compile_sb_sprintf(c, ") ");
         compile_stmt(c, iff->consequence);
 
         if (iff->antecedence) {
-            sb_sprintf(&c->sb, " else ");
+            compile_sb_sprintf(c, " else ");
             compile_stmt(c, iff->antecedence);
         }
     } break;
 
     case NODE_BLOCK: {
         NodeBlock *block = (NodeBlock *) n;
-        sb_sprintf(&c->sb, "{\n");
+        compile_sb_sprintf(c, "{\n");
         c->indent++;
         for (Node *it = block->body.head; it; it = it->next) {
-            sb_indent(c);
+            compile_sb_sprintf(c, "#line %zu\n", it->token.pos.row + 1);
+            compile_sb_indent(c);
             compile_stmt(c, it);
-            sb_sprintf(&c->sb, "\n");
+            compile_sb_sprintf(c, "\n");
         }
         c->indent--;
-        sb_sprintf(&c->sb, "}");
+        compile_sb_indent(c);
+        compile_sb_sprintf(c, "}");
     } break;
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
-        n->compiled = ++c->globals;
+        n->compile = compile_data_new(c);
 
-        sb_sprintf(&c->sb, "\nvoid " GlobalFmt "(void) ", n->compiled);
+        compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
+        compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
+
+        compile_sb_sprintf(c, "\nstatic void ");
+        sb_compile_data(c, n->compile);
+        compile_sb_sprintf(c, "(void) ");
+
+        const bool local_save = c->local;
+        c->local = true;
         compile_stmt(c, fn->body);
-        sb_sprintf(&c->sb, "\n");
+        c->local = local_save;
+
+        compile_sb_sprintf(c, "\n");
     } break;
 
     case NODE_VAR: {
         NodeVar *var = (NodeVar *) n;
         if (var->local) {
-            todo();
-        } else {
-            n->compiled = ++c->globals;
             compile_type(c, &n->type);
-            sb_sprintf(&c->sb, " " GlobalFmt ";", n->compiled);
+            compile_sb_sprintf(c, " ");
+
+            n->compile = compile_data_new(c);
+            sb_compile_data(c, n->compile);
+
+            if (var->expr) {
+                compile_sb_sprintf(c, " = ");
+                compile_expr(c, var->expr);
+            }
+
+            compile_sb_sprintf(c, ";");
+        } else {
+            compile_type(c, &n->type);
+            compile_sb_sprintf(c, " ");
+
+            n->compile = compile_data_new(c);
+            sb_compile_data(c, n->compile);
+
+            compile_sb_sprintf(c, ";");
         }
     } break;
 
     case NODE_PRINT: {
         NodePrint *print = (NodePrint *) n;
-        sb_sprintf(&c->sb, "printf(\"%%ld\\n\", (long) (");
+        compile_sb_sprintf(c, "printf(\"%%ld\\n\", (long) (");
         compile_expr(c, print->operand);
-        sb_sprintf(&c->sb, "));");
+        compile_sb_sprintf(c, "));");
     } break;
 
     default:
         compile_expr(c, n);
-        sb_sprintf(&c->sb, ";");
+        compile_sb_sprintf(c, ";");
         break;
     }
 }
@@ -223,14 +288,15 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
     }
 
     Compiler c = {0};
-    sb_sprintf(&c.sb, "extern int printf(const char *fmt, ...);\n");
+    compile_sb_sprintf(&c, "extern int printf(const char *fmt, ...);\n");
 
     for (size_t i = 0; i < context->globals.count; i++) {
-        sb_sprintf(&c.sb, "\n");
+        compile_sb_sprintf(&c, "\n");
         compile_stmt(&c, context->globals.data[i]);
     }
 
-    sb_sprintf(&c.sb, "\nint main(void) {\n");
+    compile_sb_sprintf(&c, "\n#line 1 \"%s.c\"", output);
+    compile_sb_sprintf(&c, "\nint main(void) {\n");
     c.indent++;
 
     for (size_t i = 0; i < context->globals.count; i++) {
@@ -238,20 +304,22 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
         if (it->kind == NODE_VAR) {
             NodeVar *var = (NodeVar *) it;
             if (var->expr) {
-                sb_indent(&c);
-                sb_sprintf(&c.sb, GlobalFmt " = ", it->compiled);
+                compile_sb_indent(&c);
+                sb_compile_data(&c, it->compile);
+                compile_sb_sprintf(&c, " = ");
                 compile_expr(&c, var->expr);
-                sb_sprintf(&c.sb, ";\n");
+                compile_sb_sprintf(&c, ";\n");
             }
         }
     }
 
-    sb_indent(&c);
-    sb_sprintf(&c.sb, GlobalFmt "();\n", main->compiled);
-    sb_indent(&c);
-    sb_sprintf(&c.sb, "return 0;\n");
+    compile_sb_indent(&c);
+    sb_compile_data(&c, main->compile);
+    compile_sb_sprintf(&c, "();\n");
+    compile_sb_indent(&c);
+    compile_sb_sprintf(&c, "return 0;\n");
     c.indent--;
-    sb_sprintf(&c.sb, "}\n");
+    compile_sb_sprintf(&c, "}\n");
 
 #if 0
     fwrite(c.sb.data, c.sb.count, 1, stdout);

@@ -8,4 +8,7 @@ fn main() {
     print first
     print second
     print first + 8 + second * third
+
+    var local = 80085
+    print local
 }

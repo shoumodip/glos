@@ -1,0 +1,8 @@
+fn main() {
+    if true {
+        var x = 69
+        print x
+    } else {
+        print x
+    }
+}
