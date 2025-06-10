@@ -229,6 +229,7 @@ static void compile_stmt(Compiler *c, Node *n) {
 
         const bool local_save = c->local;
         c->local = true;
+        c->locals = 0;
         compile_stmt(c, fn->body);
         c->local = local_save;
 
