@@ -1,13 +1,19 @@
 #include "node.h"
 
-static_assert(COUNT_TYPES == 2, "");
+static_assert(COUNT_TYPES == 4, "");
 const char *type_to_cstr(Type type) {
     switch (type.kind) {
+    case TYPE_UNIT:
+        return "()";
+
     case TYPE_BOOL:
         return "bool";
 
     case TYPE_I64:
         return "i64";
+
+    case TYPE_FN:
+        return "fn ()";
 
     default:
         unreachable();

@@ -10,14 +10,25 @@ typedef struct {
     Node *tail;
 } Nodes;
 
+typedef struct {
+    bool   local;
+    size_t iota;
+} CompileData;
+
 typedef enum {
+    TYPE_UNIT,
     TYPE_BOOL,
     TYPE_I64,
+
+    TYPE_FN,
+
     COUNT_TYPES
 } TypeKind;
 
 typedef struct {
     TypeKind kind;
+
+    CompileData compile;
 } Type;
 
 const char *type_to_cstr(Type type);
@@ -34,6 +45,7 @@ typedef enum {
     NODE_BLOCK,
 
     NODE_FN,
+    NODE_VAR,
 
     NODE_PRINT,
     COUNT_NODES
@@ -43,13 +55,14 @@ struct Node {
     NodeKind kind;
     Type     type;
     Token    token;
+    Node    *next;
 
-    size_t data;
-    Node  *next;
+    CompileData compile;
 };
 
 typedef struct {
-    Node node;
+    Node  node;
+    Node *definition;
 } NodeAtom;
 
 typedef struct {
@@ -79,6 +92,13 @@ typedef struct {
     Node  node;
     Node *body;
 } NodeFn;
+
+typedef struct {
+    Node  node;
+    Node *expr;
+    Node *type;
+    bool  local;
+} NodeVar;
 
 typedef struct {
     Node  node;

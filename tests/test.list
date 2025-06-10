@@ -1,3 +1,9 @@
 001-integers/main.glos
 002-conditions/main.glos
 002-conditions/error-expected-condition-type-bool.glos
+003-variables/main.glos
+003-variables/error-undefined.glos
+003-variables/error-redefinition.glos
+003-variables/error-assignment-definition-type-mismatch.glos
+003-variables/error-undefined-outside-scope.glos
+003-variables/error-undefined-outside-scope-despite-same-depth.glos
