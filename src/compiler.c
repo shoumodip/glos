@@ -9,6 +9,8 @@ typedef struct {
 
     SB     sb;
     size_t indent;
+
+    Scope delayed_fns;
 } Compiler;
 
 static inline CompileData compile_data_new(Compiler *c) {
@@ -76,6 +78,8 @@ static void compile_type(Compiler *c, Type *type) {
         unreachable();
     }
 }
+
+static void compile_fn(Compiler *c, Node *n);
 
 static_assert(COUNT_NODES == 9, "");
 static void compile_expr(Compiler *c, Node *n) {
@@ -229,36 +233,15 @@ static void compile_stmt(Compiler *c, Node *n) {
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
-        assert(n->compile.iota);
-
-        compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
-        compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
-
-        compile_sb_sprintf(c, "\nstatic void ");
-        sb_compile_data(c, n->compile);
-
-        const bool local_save = c->local;
-        c->local = true;
-        c->locals = 0;
-
-        compile_sb_sprintf(c, "(");
-        for (Node *it = fn->args.head; it; it = it->next) {
-            compile_type(c, &it->type);
-            compile_sb_sprintf(c, " ");
-
-            it->compile = compile_data_new(c);
-            sb_compile_data(c, it->compile);
-
-            if (it->next) {
-                compile_sb_sprintf(c, ", ");
+        if (fn->local) {
+            da_push(&c->delayed_fns, n);
+        } else {
+            compile_fn(c, n);
+            for (size_t i = 0; i < c->delayed_fns.count; i++) {
+                compile_fn(c, c->delayed_fns.data[i]);
             }
+            c->delayed_fns.count = 0;
         }
-        compile_sb_sprintf(c, ") ");
-
-        compile_stmt(c, fn->body);
-        c->local = local_save;
-
-        compile_sb_sprintf(c, "\n");
     } break;
 
     case NODE_VAR: {
@@ -291,6 +274,40 @@ static void compile_stmt(Compiler *c, Node *n) {
         compile_sb_sprintf(c, ";");
         break;
     }
+}
+
+static void compile_fn(Compiler *c, Node *n) {
+    assert(n->compile.iota);
+
+    NodeFn *fn = (NodeFn *) n;
+    compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
+    compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
+
+    compile_sb_sprintf(c, "\nstatic void ");
+    sb_compile_data(c, n->compile);
+
+    const bool local_save = c->local;
+    c->local = true;
+    c->locals = 0;
+
+    compile_sb_sprintf(c, "(");
+    for (Node *it = fn->args.head; it; it = it->next) {
+        compile_type(c, &it->type);
+        compile_sb_sprintf(c, " ");
+
+        it->compile = compile_data_new(c);
+        sb_compile_data(c, it->compile);
+
+        if (it->next) {
+            compile_sb_sprintf(c, ", ");
+        }
+    }
+    compile_sb_sprintf(c, ") ");
+
+    compile_stmt(c, fn->body);
+    c->local = local_save;
+
+    compile_sb_sprintf(c, "\n");
 }
 
 static_assert(COUNT_NODES == 9, "");

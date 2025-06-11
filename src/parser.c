@@ -232,13 +232,12 @@ static Node *parse_stmt(Parser *p) {
     } break;
 
     case TOKEN_FN: {
-        local_assert(p, token, false);
+        NodeFn *fn = node_alloc(p, NODE_FN, lexer_expect(&p->lexer, TOKEN_IDENT));
+        fn->local = p->local;
+        lexer_expect(&p->lexer, TOKEN_LPAREN);
 
         const bool local_save = p->local;
         p->local = true;
-
-        NodeFn *fn = node_alloc(p, NODE_FN, lexer_expect(&p->lexer, TOKEN_IDENT));
-        lexer_expect(&p->lexer, TOKEN_LPAREN);
 
         while (!lexer_read(&p->lexer, TOKEN_RPAREN)) {
             NodeVar *arg = node_alloc(p, NODE_VAR, lexer_expect(&p->lexer, TOKEN_IDENT));
@@ -258,7 +257,6 @@ static Node *parse_stmt(Parser *p) {
         fn->body = parse_stmt(p);
 
         p->local = local_save;
-
         node = (Node *) fn;
     } break;
 

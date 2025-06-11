@@ -58,10 +58,13 @@ static void error_undefined(const Node *n, const char *label) {
 }
 
 static Node *ident_find(Context *c, SV name) {
-    Node *n = scope_find(c->locals, name);
-    if (n) {
-        return n;
+    if (c->fn.fn) {
+        Node *n = context_fn_find(c->fn, c->locals, name);
+        if (n) {
+            return n;
+        }
     }
+
     return scope_find(c->globals, name);
 }
 
@@ -252,20 +255,25 @@ static void check_stmt(Context *c, Node *n) {
     } break;
 
     case NODE_FN: {
-        const Node *previous = scope_find(c->globals, n->token.sv);
-        if (previous) {
-            error_redefinition(n, previous, "identifier");
-        }
-
         NodeFn *fn = (NodeFn *) n;
+        if (fn->local) {
+            da_push(&c->locals, n);
+        } else {
+            const Node *previous = scope_find(c->globals, n->token.sv);
+            if (previous) {
+                error_redefinition(n, previous, "identifier");
+            }
+            da_push(&c->globals, n);
+        }
+        n->type = (Type) {.kind = TYPE_FN, .spec = n};
+
+        const ContextFn context_fn_save = context_fn_begin(c, fn);
         for (Node *it = fn->args.head; it; it = it->next) {
             check_stmt(c, it);
         }
 
-        n->type = (Type) {.kind = TYPE_FN, .spec = n};
-
-        da_push(&c->globals, n);
         check_stmt(c, fn->body);
+        context_fn_end(c, context_fn_save);
     } break;
 
     case NODE_VAR: {

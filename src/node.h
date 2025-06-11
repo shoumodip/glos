@@ -104,6 +104,7 @@ typedef struct {
     size_t arity;
 
     Node *body;
+    bool  local;
 } NodeFn;
 
 typedef struct {

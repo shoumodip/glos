@@ -85,13 +85,15 @@
 :b testcase 23
 004-functions/main.glos
 :i returncode 0
-:b stdout 21
+:b stdout 27
 69
 420
 69
 420
 69
 420
+69
+69
 
 :b stderr 0
 

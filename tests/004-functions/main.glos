@@ -10,6 +10,11 @@ fn print_sum(x i64, y i64) {
     print x + y
 }
 
+fn print_twice(x i64) {
+    print x
+    print x
+}
+
 var f fn ()
 
 fn main() {
@@ -24,4 +29,10 @@ fn main() {
 
     print_sum(34, 35)
     print_sum(200, 220)
+
+    fn apply_int(x i64, f fn (i64)) {
+        f(x)
+    }
+
+    apply_int(69, print_twice)
 }
