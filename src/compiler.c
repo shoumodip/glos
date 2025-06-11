@@ -301,16 +301,20 @@ static void compile_fn(Compiler *c, Node *n) {
     c->locals = 0;
 
     compile_sb_sprintf(c, "(");
-    for (Node *it = fn->args.head; it; it = it->next) {
-        compile_type(c, &it->type);
-        compile_sb_sprintf(c, " ");
+    if (fn->args.head) {
+        for (Node *it = fn->args.head; it; it = it->next) {
+            compile_type(c, &it->type);
+            compile_sb_sprintf(c, " ");
 
-        it->compile = compile_data_new(c);
-        compile_sb_data(c, it->compile);
+            it->compile = compile_data_new(c);
+            compile_sb_data(c, it->compile);
 
-        if (it->next) {
-            compile_sb_sprintf(c, ", ");
+            if (it->next) {
+                compile_sb_sprintf(c, ", ");
+            }
         }
+    } else {
+        compile_sb_sprintf(c, "void");
     }
     compile_sb_sprintf(c, ") ");
 
@@ -343,11 +347,15 @@ static void pre_compile_type(Compiler *c, Type *type) {
         compile_sb_data(c, type->compile);
 
         compile_sb_sprintf(c, ")(");
-        for (Node *it = spec->args.head; it; it = it->next) {
-            compile_type(c, &it->type);
-            if (it->next) {
-                compile_sb_sprintf(c, ", ");
+        if (spec->args.head) {
+            for (Node *it = spec->args.head; it; it = it->next) {
+                compile_type(c, &it->type);
+                if (it->next) {
+                    compile_sb_sprintf(c, ", ");
+                }
             }
+        } else {
+            compile_sb_sprintf(c, "void");
         }
         compile_sb_sprintf(c, ");\n");
     } break;
@@ -417,11 +425,15 @@ static void pre_compile_node(Compiler *c, Node *n) {
         compile_sb_data(c, n->compile);
 
         compile_sb_sprintf(c, "(");
-        for (Node *it = fn->args.head; it; it = it->next) {
-            compile_type(c, &it->type);
-            if (it->next) {
-                compile_sb_sprintf(c, ", ");
+        if (fn->args.head) {
+            for (Node *it = fn->args.head; it; it = it->next) {
+                compile_type(c, &it->type);
+                if (it->next) {
+                    compile_sb_sprintf(c, ", ");
+                }
             }
+        } else {
+            compile_sb_sprintf(c, "void");
         }
         compile_sb_sprintf(c, ");\n");
 
