@@ -68,11 +68,7 @@ static void compile_type(Compiler *c, Type *type) {
         break;
 
     case TYPE_FN:
-        // TODO: This won't work inside expressions
-        type->compile = compile_data_new(c);
-        compile_sb_sprintf(c, "typedef void (*");
-        sb_compile_data(c, type->compile);
-        compile_sb_sprintf(c, ")(void); ");
+        assert(type->compile.iota);
         sb_compile_data(c, type->compile);
         break;
 
@@ -233,7 +229,7 @@ static void compile_stmt(Compiler *c, Node *n) {
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
-        n->compile = compile_data_new(c);
+        assert(n->compile.iota);
 
         compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
         compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
@@ -280,14 +276,6 @@ static void compile_stmt(Compiler *c, Node *n) {
             }
 
             compile_sb_sprintf(c, ";");
-        } else {
-            compile_type(c, &n->type);
-            compile_sb_sprintf(c, " ");
-
-            n->compile = compile_data_new(c);
-            sb_compile_data(c, n->compile);
-
-            compile_sb_sprintf(c, ";");
         }
     } break;
 
@@ -301,6 +289,137 @@ static void compile_stmt(Compiler *c, Node *n) {
     default:
         compile_expr(c, n);
         compile_sb_sprintf(c, ";");
+        break;
+    }
+}
+
+static_assert(COUNT_NODES == 9, "");
+static void pre_compile_type(Compiler *c, Type *type) {
+    if (!type || type->compile.iota) {
+        return;
+    }
+
+    switch (type->kind) {
+    case TYPE_BOOL:
+    case TYPE_I64:
+        break;
+
+    case TYPE_FN: {
+        NodeFn *spec = (NodeFn *) type->spec;
+        for (Node *it = spec->args.head; it; it = it->next) {
+            pre_compile_type(c, &it->type);
+        }
+
+        type->compile = compile_data_new(c);
+
+        compile_sb_sprintf(c, "typedef void (*");
+        sb_compile_data(c, type->compile);
+
+        compile_sb_sprintf(c, ")(");
+        for (Node *it = spec->args.head; it; it = it->next) {
+            compile_type(c, &it->type);
+            if (it->next) {
+                compile_sb_sprintf(c, ", ");
+            }
+        }
+        compile_sb_sprintf(c, ");\n");
+    } break;
+
+    default:
+        unreachable();
+    }
+}
+
+// TODO: Perform hashing of type definitions
+static_assert(COUNT_NODES == 9, "");
+static void pre_compile_node(Compiler *c, Node *n) {
+    if (!n || n->compile.iota) {
+        return;
+    }
+
+    switch (n->kind) {
+    case NODE_ATOM:
+        break;
+
+    case NODE_CALL: {
+        NodeCall *call = (NodeCall *) n;
+        pre_compile_node(c, call->fn);
+
+        for (Node *it = call->args.head; it; it = it->next) {
+            pre_compile_node(c, it);
+        }
+    } break;
+
+    case NODE_UNARY: {
+        NodeUnary *unary = (NodeUnary *) n;
+        pre_compile_node(c, unary->operand);
+    } break;
+
+    case NODE_BINARY: {
+        NodeBinary *binary = (NodeBinary *) n;
+        pre_compile_node(c, binary->lhs);
+        pre_compile_node(c, binary->rhs);
+    } break;
+
+    case NODE_IF: {
+        NodeIf *iff = (NodeIf *) n;
+        pre_compile_node(c, iff->condition);
+        pre_compile_node(c, iff->consequence);
+        pre_compile_node(c, iff->antecedence);
+    } break;
+
+    case NODE_BLOCK: {
+        NodeBlock *block = (NodeBlock *) n;
+        for (Node *it = block->body.head; it; it = it->next) {
+            pre_compile_node(c, it);
+        }
+    } break;
+
+    case NODE_FN: {
+        NodeFn *fn = (NodeFn *) n;
+        for (Node *it = fn->args.head; it; it = it->next) {
+            pre_compile_node(c, it);
+        }
+
+        n->compile = compile_data_new(c);
+        compile_sb_sprintf(c, "static void ");
+        sb_compile_data(c, n->compile);
+
+        compile_sb_sprintf(c, "(");
+        for (Node *it = fn->args.head; it; it = it->next) {
+            compile_type(c, &it->type);
+            if (it->next) {
+                compile_sb_sprintf(c, ", ");
+            }
+        }
+        compile_sb_sprintf(c, ");\n");
+
+        pre_compile_node(c, fn->body);
+    } break;
+
+    case NODE_VAR: {
+        NodeVar *var = (NodeVar *) n;
+        pre_compile_node(c, var->expr);
+        pre_compile_type(c, &n->type);
+
+        if (!var->local) {
+            compile_type(c, &n->type);
+            compile_sb_sprintf(c, " ");
+
+            n->compile = compile_data_new(c);
+            sb_compile_data(c, n->compile);
+
+            compile_sb_sprintf(c, ";\n");
+        }
+    } break;
+
+    case NODE_PRINT: {
+        NodePrint *print = (NodePrint *) n;
+        pre_compile_node(c, print->operand);
+    } break;
+
+    default:
+        unreachable();
         break;
     }
 }
@@ -321,7 +440,10 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
     compile_sb_sprintf(&c, "extern int printf(const char *fmt, ...);\n");
 
     for (size_t i = 0; i < context->globals.count; i++) {
-        compile_sb_sprintf(&c, "\n");
+        pre_compile_node(&c, context->globals.data[i]);
+    }
+
+    for (size_t i = 0; i < context->globals.count; i++) {
         compile_stmt(&c, context->globals.data[i]);
     }
 

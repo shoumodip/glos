@@ -27,7 +27,7 @@ typedef enum {
 
 typedef struct {
     TypeKind    kind;
-    Node       *spec; // TODO: Use an actual "Type Allocator" instead of this hacky fix
+    Node       *spec;
     CompileData compile;
 } Type;
 
