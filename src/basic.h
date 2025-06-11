@@ -87,6 +87,7 @@ void sb_sprintf(SB *sb, const char *fmt, ...) __attribute__((format(printf, 2, 3
 void *temp_alloc(size_t n);
 char *temp_sprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 char *temp_sv_to_cstr(SV sv);
+void  temp_remove_null(void);
 
 // Arena Allocator
 typedef struct ArenaRegion ArenaRegion;

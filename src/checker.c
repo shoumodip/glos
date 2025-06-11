@@ -82,9 +82,16 @@ static void check_type(Node *n) {
         }
         break;
 
-    case NODE_FN:
-        n->type = (Type) {.kind = TYPE_FN};
-        break;
+    case NODE_FN: {
+        NodeFn *spec = (NodeFn *) n;
+        for (Node *it = spec->args.head; it; it = it->next) {
+            NodeVar *arg = (NodeVar *) it;
+            check_type(arg->type);
+            it->type = arg->type->type;
+        }
+
+        n->type = (Type) {.kind = TYPE_FN, .spec = n};
+    } break;
 
     default:
         unreachable();
@@ -102,7 +109,7 @@ static void check_expr(Context *c, Node *n, bool ref) {
     case NODE_ATOM: {
         NodeAtom *atom = (NodeAtom *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 20, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = (Type) {.kind = TYPE_I64};
@@ -131,14 +138,29 @@ static void check_expr(Context *c, Node *n, bool ref) {
         NodeCall *call = (NodeCall *) n;
         check_expr(c, call->fn, false);
 
-        if (call->fn->type.kind != TYPE_FN) {
+        const Type fn_type = call->fn->type;
+        if (fn_type.kind != TYPE_FN) {
+            fprintf(
+                stderr, PosFmt "ERROR: Cannot call type '%s'\n", PosArg(call->fn->token.pos), type_to_cstr(fn_type));
+            exit(1);
+        }
+
+        const NodeFn *expected = (NodeFn *) fn_type.spec;
+        if (call->arity != expected->arity) {
             fprintf(
                 stderr,
-                PosFmt "ERROR: Cannot call type '%s'\n",
-                PosArg(call->fn->token.pos),
-                type_to_cstr(call->fn->type));
+                PosFmt "ERROR: Expected %zu argument%s, got %zu\n",
+                PosArg(n->token.pos),
+                expected->arity,
+                expected->arity == 1 ? "" : "s",
+                call->arity);
 
             exit(1);
+        }
+
+        for (Node *a = call->args.head, *e = expected->args.head; a; a = a->next, e = e->next) {
+            check_expr(c, a, false);
+            type_assert_node(a, e);
         }
 
         n->type = (Type) {.kind = TYPE_UNIT};
@@ -147,7 +169,7 @@ static void check_expr(Context *c, Node *n, bool ref) {
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 20, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             check_expr(c, unary->operand, false);
@@ -162,7 +184,7 @@ static void check_expr(Context *c, Node *n, bool ref) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 20, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
         case TOKEN_SUB:
@@ -236,7 +258,11 @@ static void check_stmt(Context *c, Node *n) {
         }
 
         NodeFn *fn = (NodeFn *) n;
-        n->type = (Type) {.kind = TYPE_FN};
+        for (Node *it = fn->args.head; it; it = it->next) {
+            check_stmt(c, it);
+        }
+
+        n->type = (Type) {.kind = TYPE_FN, .spec = n};
 
         da_push(&c->globals, n);
         check_stmt(c, fn->body);

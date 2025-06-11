@@ -85,7 +85,9 @@
 :b testcase 23
 004-functions/main.glos
 :i returncode 0
-:b stdout 14
+:b stdout 21
+69
+420
 69
 420
 69

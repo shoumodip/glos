@@ -26,8 +26,8 @@ typedef enum {
 } TypeKind;
 
 typedef struct {
-    TypeKind kind;
-
+    TypeKind    kind;
+    Node       *spec; // TODO: Use an actual "Type Allocator" instead of this hacky fix
     CompileData compile;
 } Type;
 
@@ -69,6 +69,9 @@ typedef struct {
 typedef struct {
     Node  node;
     Node *fn;
+
+    Nodes  args;
+    size_t arity;
 } NodeCall;
 
 typedef struct {
@@ -95,7 +98,11 @@ typedef struct {
 } NodeBlock;
 
 typedef struct {
-    Node  node;
+    Node node;
+
+    Nodes  args;
+    size_t arity;
+
     Node *body;
 } NodeFn;
 

@@ -1,20 +1,27 @@
-fn no_args_no_return_1() {
+fn print_69() {
     print 69
 }
 
-fn no_args_no_return_2() {
+fn print_420() {
     print 420
+}
+
+fn print_sum(x i64, y i64) {
+    print x + y
 }
 
 var f fn ()
 
 fn main() {
-    no_args_no_return_1()
-    no_args_no_return_2()
+    print_69()
+    print_420()
 
-    f = no_args_no_return_1
+    f = print_69
     f()
 
-    f = no_args_no_return_2
+    f = print_420
     f()
+
+    print_sum(34, 35)
+    print_sum(200, 220)
 }

@@ -1,6 +1,6 @@
 #include "token.h"
 
-static_assert(COUNT_TOKENS == 19, "");
+static_assert(COUNT_TOKENS == 20, "");
 const char *token_kind_to_cstr(TokenKind kind) {
     switch (kind) {
     case TOKEN_EOF:
@@ -8,6 +8,9 @@ const char *token_kind_to_cstr(TokenKind kind) {
 
     case TOKEN_EOL:
         return "';'";
+
+    case TOKEN_COMMA:
+        return "','";
 
     case TOKEN_INT:
         return "integer";

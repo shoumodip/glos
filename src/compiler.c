@@ -91,7 +91,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_ATOM: {
         NodeAtom *atom = (NodeAtom *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 20, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             compile_sb_sprintf(c, "%zuL", n->token.as.integer);
@@ -113,13 +113,22 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_CALL: {
         NodeCall *call = (NodeCall *) n;
         compile_expr(c, call->fn);
-        compile_sb_sprintf(c, "()");
+        compile_sb_sprintf(c, "(");
+        for (Node *it = call->args.head; it; it = it->next) {
+            // TODO: This inherits the undefined order of call arguments from C
+            //       Use "SSA" to define the evaluation from left to right
+            compile_expr(c, it);
+            if (it->next) {
+                compile_sb_sprintf(c, ", ");
+            }
+        }
+        compile_sb_sprintf(c, ")");
     } break;
 
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 20, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             compile_sb_sprintf(c, "-(");
@@ -135,7 +144,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 20, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
             compile_sb_sprintf(c, "(");
@@ -231,11 +240,25 @@ static void compile_stmt(Compiler *c, Node *n) {
 
         compile_sb_sprintf(c, "\nstatic void ");
         sb_compile_data(c, n->compile);
-        compile_sb_sprintf(c, "(void) ");
 
         const bool local_save = c->local;
         c->local = true;
         c->locals = 0;
+
+        compile_sb_sprintf(c, "(");
+        for (Node *it = fn->args.head; it; it = it->next) {
+            compile_type(c, &it->type);
+            compile_sb_sprintf(c, " ");
+
+            it->compile = compile_data_new(c);
+            sb_compile_data(c, it->compile);
+
+            if (it->next) {
+                compile_sb_sprintf(c, ", ");
+            }
+        }
+        compile_sb_sprintf(c, ") ");
+
         compile_stmt(c, fn->body);
         c->local = local_save;
 
