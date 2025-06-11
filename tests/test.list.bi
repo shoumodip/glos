@@ -1,4 +1,4 @@
-:i count 9
+:i count 10
 :b testcase 22
 001-integers/main.glos
 :i returncode 0
@@ -81,4 +81,15 @@
 
 :b stderr 106
 003-variables/error-undefined-outside-scope-despite-same-depth.glos:6:15: ERROR: Undefined identifier 'x'
+
+:b testcase 23
+004-functions/main.glos
+:i returncode 0
+:b stdout 14
+69
+420
+69
+420
+
+:b stderr 0
 

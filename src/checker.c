@@ -65,7 +65,7 @@ static Node *ident_find(Context *c, SV name) {
     return scope_find(c->globals, name);
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void check_type(Node *n) {
     if (!n) {
         return;
@@ -91,7 +91,7 @@ static void check_type(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void check_expr(Context *c, Node *n, bool ref) {
     if (!n) {
         return;
@@ -125,6 +125,23 @@ static void check_expr(Context *c, Node *n, bool ref) {
         default:
             unreachable();
         }
+    } break;
+
+    case NODE_CALL: {
+        NodeCall *call = (NodeCall *) n;
+        check_expr(c, call->fn, false);
+
+        if (call->fn->type.kind != TYPE_FN) {
+            fprintf(
+                stderr,
+                PosFmt "ERROR: Cannot call type '%s'\n",
+                PosArg(call->fn->token.pos),
+                type_to_cstr(call->fn->type));
+
+            exit(1);
+        }
+
+        n->type = (Type) {.kind = TYPE_UNIT};
     } break;
 
     case NODE_UNARY: {
@@ -185,7 +202,7 @@ static void error_redefinition(const Node *n, const Node *previous, const char *
     exit(1);
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void check_stmt(Context *c, Node *n) {
     if (!n) {
         return;

@@ -1,0 +1,20 @@
+fn no_args_no_return_1() {
+    print 69
+}
+
+fn no_args_no_return_2() {
+    print 420
+}
+
+var f fn ()
+
+fn main() {
+    no_args_no_return_1()
+    no_args_no_return_2()
+
+    f = no_args_no_return_1
+    f()
+
+    f = no_args_no_return_2
+    f()
+}

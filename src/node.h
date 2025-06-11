@@ -38,6 +38,7 @@ bool type_is_integer(Type type);
 
 typedef enum {
     NODE_ATOM,
+    NODE_CALL,
     NODE_UNARY,
     NODE_BINARY,
 
@@ -64,6 +65,11 @@ typedef struct {
     Node  node;
     Node *definition;
 } NodeAtom;
+
+typedef struct {
+    Node  node;
+    Node *fn;
+} NodeCall;
 
 typedef struct {
     Node  node;

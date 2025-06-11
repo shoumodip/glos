@@ -16,11 +16,16 @@ typedef enum {
     POWER_ADD,
     POWER_MUL,
     POWER_PRE,
+    POWER_DOT
 } Power;
 
 static_assert(COUNT_TOKENS == 19, "");
 static Power token_kind_to_power(TokenKind kind) {
     switch (kind) {
+    case TOKEN_LPAREN:
+    case TOKEN_RPAREN:
+        return POWER_DOT;
+
     case TOKEN_ADD:
     case TOKEN_SUB:
         return POWER_ADD;
@@ -37,10 +42,11 @@ static Power token_kind_to_power(TokenKind kind) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void *node_alloc(Parser *p, NodeKind kind, Token token) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(NodeAtom),
+        [NODE_CALL] = sizeof(NodeCall),
         [NODE_UNARY] = sizeof(NodeUnary),
         [NODE_BINARY] = sizeof(NodeBinary),
 
@@ -130,10 +136,21 @@ static Node *parse_expr(Parser *p, Power mbp) {
         }
         lexer_unbuffer(&p->lexer);
 
-        NodeBinary *binary = node_alloc(p, NODE_BINARY, token);
-        binary->lhs = node;
-        binary->rhs = parse_expr(p, lbp);
-        node = (Node *) binary;
+        switch (token.kind) {
+        case TOKEN_LPAREN: {
+            NodeCall *call = node_alloc(p, NODE_CALL, token);
+            call->fn = node;
+            lexer_expect(&p->lexer, TOKEN_RPAREN);
+            node = (Node *) call;
+        } break;
+
+        default: {
+            NodeBinary *binary = node_alloc(p, NODE_BINARY, token);
+            binary->lhs = node;
+            binary->rhs = parse_expr(p, lbp);
+            node = (Node *) binary;
+        } break;
+        }
     }
 
     return node;

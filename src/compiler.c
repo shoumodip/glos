@@ -52,7 +52,7 @@ static inline void sb_compile_data(Compiler *c, CompileData data) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void compile_type(Compiler *c, Type *type) {
     if (!type) {
         return;
@@ -81,7 +81,7 @@ static void compile_type(Compiler *c, Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void compile_expr(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -108,6 +108,12 @@ static void compile_expr(Compiler *c, Node *n) {
         default:
             unreachable();
         }
+    } break;
+
+    case NODE_CALL: {
+        NodeCall *call = (NodeCall *) n;
+        compile_expr(c, call->fn);
+        compile_sb_sprintf(c, "()");
     } break;
 
     case NODE_UNARY: {
@@ -181,7 +187,7 @@ static void compile_expr(Compiler *c, Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 9, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
