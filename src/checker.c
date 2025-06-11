@@ -101,6 +101,8 @@ static void check_type(Node *n) {
     }
 }
 
+static void check_fn(Context *c, Node *n);
+
 static_assert(COUNT_NODES == 9, "");
 static void check_expr(Context *c, Node *n, bool ref) {
     if (!n) {
@@ -211,6 +213,10 @@ static void check_expr(Context *c, Node *n, bool ref) {
         }
     } break;
 
+    case NODE_FN:
+        check_fn(c, n);
+        break;
+
     default:
         unreachable();
     }
@@ -254,27 +260,9 @@ static void check_stmt(Context *c, Node *n) {
         c->locals.count = locals_count_save;
     } break;
 
-    case NODE_FN: {
-        NodeFn *fn = (NodeFn *) n;
-        if (fn->local) {
-            da_push(&c->locals, n);
-        } else {
-            const Node *previous = scope_find(c->globals, n->token.sv);
-            if (previous) {
-                error_redefinition(n, previous, "identifier");
-            }
-            da_push(&c->globals, n);
-        }
-        n->type = (Type) {.kind = TYPE_FN, .spec = n};
-
-        const ContextFn context_fn_save = context_fn_begin(c, fn);
-        for (Node *it = fn->args.head; it; it = it->next) {
-            check_stmt(c, it);
-        }
-
-        check_stmt(c, fn->body);
-        context_fn_end(c, context_fn_save);
-    } break;
+    case NODE_FN:
+        check_fn(c, n);
+        break;
 
     case NODE_VAR: {
         NodeVar *var = (NodeVar *) n;
@@ -327,6 +315,28 @@ static void check_stmt(Context *c, Node *n) {
         check_expr(c, n, false);
         break;
     }
+}
+
+static void check_fn(Context *c, Node *n) {
+    NodeFn *fn = (NodeFn *) n;
+    if (fn->local) {
+        da_push(&c->locals, n);
+    } else {
+        const Node *previous = scope_find(c->globals, n->token.sv);
+        if (previous) {
+            error_redefinition(n, previous, "identifier");
+        }
+        da_push(&c->globals, n);
+    }
+    n->type = (Type) {.kind = TYPE_FN, .spec = n};
+
+    const ContextFn context_fn_save = context_fn_begin(c, fn);
+    for (Node *it = fn->args.head; it; it = it->next) {
+        check_stmt(c, it);
+    }
+
+    check_stmt(c, fn->body);
+    context_fn_end(c, context_fn_save);
 }
 
 void check_nodes(Context *c, Nodes ns) {

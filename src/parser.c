@@ -111,6 +111,8 @@ static Node *parse_type(Parser *p) {
     return node;
 }
 
+static Node *parse_fn(Parser *p, Token name);
+
 static_assert(COUNT_TOKENS == 20, "");
 static Node *parse_expr(Parser *p, Power mbp) {
     Node *node = NULL;
@@ -132,6 +134,10 @@ static Node *parse_expr(Parser *p, Power mbp) {
     case TOKEN_LPAREN:
         node = parse_expr(p, POWER_SET);
         lexer_expect(&p->lexer, TOKEN_RPAREN);
+        break;
+
+    case TOKEN_FN:
+        node = parse_fn(p, token);
         break;
 
     default:
@@ -231,34 +237,9 @@ static Node *parse_stmt(Parser *p) {
         node = (Node *) iff;
     } break;
 
-    case TOKEN_FN: {
-        NodeFn *fn = node_alloc(p, NODE_FN, lexer_expect(&p->lexer, TOKEN_IDENT));
-        fn->local = p->local;
-        lexer_expect(&p->lexer, TOKEN_LPAREN);
-
-        const bool local_save = p->local;
-        p->local = true;
-
-        while (!lexer_read(&p->lexer, TOKEN_RPAREN)) {
-            NodeVar *arg = node_alloc(p, NODE_VAR, lexer_expect(&p->lexer, TOKEN_IDENT));
-            arg->local = true;
-            arg->type = parse_type(p);
-
-            nodes_push(&fn->args, (Node *) arg);
-            fn->arity++;
-
-            token = lexer_expect(&p->lexer, TOKEN_COMMA, TOKEN_RPAREN);
-            if (token.kind != TOKEN_COMMA) {
-                break;
-            }
-        }
-
-        lexer_buffer(&p->lexer, lexer_expect(&p->lexer, TOKEN_LBRACE));
-        fn->body = parse_stmt(p);
-
-        p->local = local_save;
-        node = (Node *) fn;
-    } break;
+    case TOKEN_FN:
+        node = parse_fn(p, lexer_expect(&p->lexer, TOKEN_IDENT));
+        break;
 
     case TOKEN_VAR: {
         NodeVar *var = node_alloc(p, NODE_VAR, lexer_expect(&p->lexer, TOKEN_IDENT));
@@ -291,6 +272,35 @@ static Node *parse_stmt(Parser *p) {
 
     consume_eols(p);
     return node;
+}
+
+static Node *parse_fn(Parser *p, Token name) {
+    NodeFn *fn = node_alloc(p, NODE_FN, name);
+    fn->local = p->local;
+    lexer_expect(&p->lexer, TOKEN_LPAREN);
+
+    const bool local_save = p->local;
+    p->local = true;
+
+    while (!lexer_read(&p->lexer, TOKEN_RPAREN)) {
+        NodeVar *arg = node_alloc(p, NODE_VAR, lexer_expect(&p->lexer, TOKEN_IDENT));
+        arg->local = true;
+        arg->type = parse_type(p);
+
+        nodes_push(&fn->args, (Node *) arg);
+        fn->arity++;
+
+        Token token = lexer_expect(&p->lexer, TOKEN_COMMA, TOKEN_RPAREN);
+        if (token.kind != TOKEN_COMMA) {
+            break;
+        }
+    }
+
+    lexer_buffer(&p->lexer, lexer_expect(&p->lexer, TOKEN_LBRACE));
+    fn->body = parse_stmt(p);
+
+    p->local = local_save;
+    return (Node *) fn;
 }
 
 void parse_file(Parser *p, Lexer lexer) {

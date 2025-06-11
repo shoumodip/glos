@@ -46,7 +46,7 @@ static inline void compile_sb_quoted(Compiler *c, SV sv) {
     compile_sb_sprintf(c, "\"");
 }
 
-static inline void sb_compile_data(Compiler *c, CompileData data) {
+static inline void compile_sb_data(Compiler *c, CompileData data) {
     if (data.local) {
         compile_sb_sprintf(c, "__glos_l%zu", data.iota);
     } else {
@@ -71,15 +71,13 @@ static void compile_type(Compiler *c, Type *type) {
 
     case TYPE_FN:
         assert(type->compile.iota);
-        sb_compile_data(c, type->compile);
+        compile_sb_data(c, type->compile);
         break;
 
     default:
         unreachable();
     }
 }
-
-static void compile_fn(Compiler *c, Node *n);
 
 static_assert(COUNT_NODES == 9, "");
 static void compile_expr(Compiler *c, Node *n) {
@@ -102,7 +100,7 @@ static void compile_expr(Compiler *c, Node *n) {
             break;
 
         case TOKEN_IDENT:
-            sb_compile_data(c, atom->definition->compile);
+            compile_sb_data(c, atom->definition->compile);
             break;
 
         default:
@@ -191,10 +189,17 @@ static void compile_expr(Compiler *c, Node *n) {
         }
     } break;
 
+    case NODE_FN:
+        da_push(&c->delayed_fns, n);
+        compile_sb_data(c, n->compile);
+        break;
+
     default:
         unreachable();
     }
 }
+
+static void compile_fn(Compiler *c, Node *n);
 
 static_assert(COUNT_NODES == 9, "");
 static void compile_stmt(Compiler *c, Node *n) {
@@ -227,6 +232,7 @@ static void compile_stmt(Compiler *c, Node *n) {
             compile_sb_sprintf(c, "\n");
         }
         c->indent--;
+        compile_sb_sprintf(c, "#line %zu\n", n->token.pos.row + 1);
         compile_sb_indent(c);
         compile_sb_sprintf(c, "}");
     } break;
@@ -251,7 +257,7 @@ static void compile_stmt(Compiler *c, Node *n) {
             compile_sb_sprintf(c, " ");
 
             n->compile = compile_data_new(c);
-            sb_compile_data(c, n->compile);
+            compile_sb_data(c, n->compile);
 
             if (var->expr) {
                 compile_sb_sprintf(c, " = ");
@@ -284,7 +290,7 @@ static void compile_fn(Compiler *c, Node *n) {
     compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
 
     compile_sb_sprintf(c, "\nstatic void ");
-    sb_compile_data(c, n->compile);
+    compile_sb_data(c, n->compile);
 
     const bool local_save = c->local;
     c->local = true;
@@ -296,7 +302,7 @@ static void compile_fn(Compiler *c, Node *n) {
         compile_sb_sprintf(c, " ");
 
         it->compile = compile_data_new(c);
-        sb_compile_data(c, it->compile);
+        compile_sb_data(c, it->compile);
 
         if (it->next) {
             compile_sb_sprintf(c, ", ");
@@ -330,7 +336,7 @@ static void pre_compile_type(Compiler *c, Type *type) {
         type->compile = compile_data_new(c);
 
         compile_sb_sprintf(c, "typedef void (*");
-        sb_compile_data(c, type->compile);
+        compile_sb_data(c, type->compile);
 
         compile_sb_sprintf(c, ")(");
         for (Node *it = spec->args.head; it; it = it->next) {
@@ -400,7 +406,7 @@ static void pre_compile_node(Compiler *c, Node *n) {
 
         n->compile = compile_data_new(c);
         compile_sb_sprintf(c, "static void ");
-        sb_compile_data(c, n->compile);
+        compile_sb_data(c, n->compile);
 
         compile_sb_sprintf(c, "(");
         for (Node *it = fn->args.head; it; it = it->next) {
@@ -424,7 +430,7 @@ static void pre_compile_node(Compiler *c, Node *n) {
             compile_sb_sprintf(c, " ");
 
             n->compile = compile_data_new(c);
-            sb_compile_data(c, n->compile);
+            compile_sb_data(c, n->compile);
 
             compile_sb_sprintf(c, ";\n");
         }
@@ -464,7 +470,7 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
         compile_stmt(&c, context->globals.data[i]);
     }
 
-    compile_sb_sprintf(&c, "\n#line 1 \"%s.c\"", output);
+    compile_sb_sprintf(&c, "\n#line 1 \"glos_start_call_main.h\"");
     compile_sb_sprintf(&c, "\nint main(void) {\n");
     c.indent++;
 
@@ -474,7 +480,7 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
             NodeVar *var = (NodeVar *) it;
             if (var->expr) {
                 compile_sb_indent(&c);
-                sb_compile_data(&c, it->compile);
+                compile_sb_data(&c, it->compile);
                 compile_sb_sprintf(&c, " = ");
                 compile_expr(&c, var->expr);
                 compile_sb_sprintf(&c, ";\n");
@@ -483,10 +489,9 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
     }
 
     compile_sb_indent(&c);
-    sb_compile_data(&c, main->compile);
-    compile_sb_sprintf(&c, "();\n");
-    compile_sb_indent(&c);
-    compile_sb_sprintf(&c, "return 0;\n");
+    compile_sb_sprintf(&c, "return (");
+    compile_sb_data(&c, main->compile);
+    compile_sb_sprintf(&c, "(), 0);\n");
     c.indent--;
     compile_sb_sprintf(&c, "}\n");
 
