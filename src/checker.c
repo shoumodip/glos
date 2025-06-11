@@ -68,6 +68,16 @@ static Node *ident_find(Context *c, SV name) {
     return scope_find(c->globals, name);
 }
 
+static Node *nodes_find(Nodes ns, SV name, Node *until) {
+    for (Node *it = ns.head; it && it != until; it = it->next) {
+        if (sv_eq(it->token.sv, name)) {
+            return it;
+        }
+    }
+
+    return NULL;
+}
+
 static_assert(COUNT_NODES == 10, "");
 static void check_type(Node *n) {
     if (!n) {
@@ -336,6 +346,13 @@ static void check_fn(Context *c, Node *n) {
 
     const ContextFn context_fn_save = context_fn_begin(c, fn);
     for (Node *it = fn->args.head; it; it = it->next) {
+        if (it->token.kind == TOKEN_IDENT) {
+            const Node *previous = nodes_find(fn->args, it->token.sv, it);
+            if (previous) {
+                error_redefinition(it, previous, "argument");
+            }
+        }
+
         check_stmt(c, it);
     }
 
