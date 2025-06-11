@@ -103,6 +103,7 @@ static void check_type(Node *n) {
             it->type = arg->type->type;
         }
 
+        check_type(spec->ret);
         n->type = (Type) {.kind = TYPE_FN, .spec = n};
     } break;
 
@@ -160,7 +161,7 @@ static void check_expr(Context *c, Node *n, bool ref) {
             exit(1);
         }
 
-        const NodeFn *expected = (NodeFn *) fn_type.spec;
+        const NodeFn *expected = (const NodeFn *) fn_type.spec;
         if (call->arity != expected->arity) {
             fprintf(
                 stderr,
@@ -178,7 +179,7 @@ static void check_expr(Context *c, Node *n, bool ref) {
             type_assert_node(a, e);
         }
 
-        n->type = (Type) {.kind = TYPE_UNIT};
+        n->type = node_fn_return_type(expected);
     } break;
 
     case NODE_UNARY: {
@@ -270,9 +271,17 @@ static void check_stmt(Context *c, Node *n) {
         c->locals.count = locals_count_save;
     } break;
 
-    case NODE_RETURN:
-        // Nothing to do for now
-        break;
+    case NODE_RETURN: {
+        NodeReturn *ret = (NodeReturn *) n;
+
+        n->type = (Type) {.kind = TYPE_UNIT};
+        if (ret->value) {
+            check_expr(c, ret->value, false);
+            n->type = ret->value->type;
+        }
+
+        type_assert(n, node_fn_return_type(c->fn.fn));
+    } break;
 
     case NODE_FN:
         check_fn(c, n);
@@ -356,6 +365,7 @@ static void check_fn(Context *c, Node *n) {
         check_stmt(c, it);
     }
 
+    check_type(fn->ret);
     check_stmt(c, fn->body);
     context_fn_end(c, context_fn_save);
 }

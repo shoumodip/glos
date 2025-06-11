@@ -76,6 +76,18 @@ static void error_unexpected(Token token) {
 }
 
 static_assert(COUNT_TOKENS == 21, "");
+static bool token_kind_is_start_of_type(TokenKind k) {
+    switch (k) {
+    case TOKEN_IDENT:
+    case TOKEN_FN:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static_assert(COUNT_TOKENS == 21, "");
 static Node *parse_type(Parser *p) {
     Node *node = NULL;
     Token token = lexer_next(&p->lexer);
@@ -100,6 +112,11 @@ static Node *parse_type(Parser *p) {
             if (token.kind != TOKEN_COMMA) {
                 break;
             }
+        }
+
+        token = lexer_peek(&p->lexer);
+        if (!token.newline && token_kind_is_start_of_type(token.kind)) {
+            fn->ret = parse_type(p);
         }
 
         node = (Node *) fn;
@@ -239,9 +256,16 @@ static Node *parse_stmt(Parser *p) {
         node = (Node *) iff;
     } break;
 
-    case TOKEN_RETURN:
-        node = node_alloc(p, NODE_RETURN, token);
-        break;
+    case TOKEN_RETURN: {
+        NodeReturn *ret = node_alloc(p, NODE_RETURN, token);
+
+        token = lexer_peek(&p->lexer);
+        if (!token.newline && token.kind != TOKEN_EOL && token.kind != TOKEN_RBRACE) {
+            ret->value = parse_expr(p, POWER_SET);
+        }
+
+        node = (Node *) ret;
+    } break;
 
     case TOKEN_FN:
         node = parse_fn(p, lexer_expect(&p->lexer, TOKEN_IDENT));
@@ -280,8 +304,8 @@ static Node *parse_stmt(Parser *p) {
     return node;
 }
 
-static Node *parse_fn(Parser *p, Token name) {
-    NodeFn *fn = node_alloc(p, NODE_FN, name);
+static Node *parse_fn(Parser *p, Token token) {
+    NodeFn *fn = node_alloc(p, NODE_FN, token);
     fn->local = p->local;
     lexer_expect(&p->lexer, TOKEN_LPAREN);
 
@@ -296,10 +320,15 @@ static Node *parse_fn(Parser *p, Token name) {
         nodes_push(&fn->args, (Node *) arg);
         fn->arity++;
 
-        Token token = lexer_expect(&p->lexer, TOKEN_COMMA, TOKEN_RPAREN);
+        token = lexer_expect(&p->lexer, TOKEN_COMMA, TOKEN_RPAREN);
         if (token.kind != TOKEN_COMMA) {
             break;
         }
+    }
+
+    token = lexer_peek(&p->lexer);
+    if (!token.newline && token_kind_is_start_of_type(token.kind)) {
+        fn->ret = parse_type(p);
     }
 
     lexer_buffer(&p->lexer, lexer_expect(&p->lexer, TOKEN_LBRACE));

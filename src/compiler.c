@@ -237,9 +237,15 @@ static void compile_stmt(Compiler *c, Node *n) {
         compile_sb_sprintf(c, "}");
     } break;
 
-    case NODE_RETURN:
-        compile_sb_sprintf(c, "return;");
-        break;
+    case NODE_RETURN: {
+        NodeReturn *ret = (NodeReturn *) n;
+        compile_sb_sprintf(c, "return");
+        if (ret->value) {
+            compile_sb_sprintf(c, " ");
+            compile_expr(c, ret->value);
+        }
+        compile_sb_sprintf(c, ";");
+    } break;
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
@@ -293,7 +299,13 @@ static void compile_fn(Compiler *c, Node *n) {
     compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
     compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
 
-    compile_sb_sprintf(c, "\nstatic void ");
+    compile_sb_sprintf(c, "\nstatic ");
+    if (fn->ret) {
+        compile_type(c, &fn->ret->type);
+    } else {
+        compile_sb_sprintf(c, "void");
+    }
+    compile_sb_sprintf(c, " ");
     compile_sb_data(c, n->compile);
 
     const bool local_save = c->local;
@@ -343,7 +355,13 @@ static void pre_compile_type(Compiler *c, Type *type) {
 
         type->compile = compile_data_new(c);
 
-        compile_sb_sprintf(c, "typedef void (*");
+        compile_sb_sprintf(c, "typedef ");
+        if (spec->ret) {
+            compile_type(c, &spec->ret->type);
+        } else {
+            compile_sb_sprintf(c, "void");
+        }
+        compile_sb_sprintf(c, " (*");
         compile_sb_data(c, type->compile);
 
         compile_sb_sprintf(c, ")(");
@@ -410,9 +428,10 @@ static void pre_compile_node(Compiler *c, Node *n) {
         }
     } break;
 
-    case NODE_RETURN:
-        // Nothing to do for now
-        break;
+    case NODE_RETURN: {
+        NodeReturn *ret = (NodeReturn *) n;
+        pre_compile_node(c, ret->value);
+    } break;
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
@@ -421,7 +440,13 @@ static void pre_compile_node(Compiler *c, Node *n) {
         }
 
         n->compile = compile_data_new(c);
-        compile_sb_sprintf(c, "static void ");
+        compile_sb_sprintf(c, "static ");
+        if (fn->ret) {
+            compile_type(c, &fn->ret->type);
+        } else {
+            compile_sb_sprintf(c, "void");
+        }
+        compile_sb_sprintf(c, " ");
         compile_sb_data(c, n->compile);
 
         compile_sb_sprintf(c, "(");

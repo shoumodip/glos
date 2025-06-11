@@ -41,4 +41,18 @@ fn main() {
     })
 
     early_return()
+
+    fn add(x i64, y i64) i64 {
+        return x + y
+    }
+
+    print add(34, 35)
+
+    fn map_int(x i64, f fn (i64) i64) i64 {
+        return f(x)
+    }
+
+    print map_int(210, fn (x i64) i64 {
+        return x * 2
+    })
 }

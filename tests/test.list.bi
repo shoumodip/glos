@@ -1,4 +1,4 @@
-:i count 15
+:i count 16
 :b testcase 22
 001-integers/main.glos
 :i returncode 0
@@ -85,7 +85,7 @@
 :b testcase 23
 004-functions/main.glos
 :i returncode 0
-:b stdout 31
+:b stdout 38
 69
 420
 69
@@ -93,6 +93,8 @@
 69
 420
 69
+69
+420
 69
 420
 
@@ -138,4 +140,12 @@
 
 :b stderr 111
 004-functions/error-nested-functions-outside-identifier-used-inside.glos:5:15: ERROR: Undefined identifier 'x'
+
+:b testcase 45
+004-functions/error-return-type-mismatch.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 90
+004-functions/error-return-type-mismatch.glos:2:5: ERROR: Expected type 'bool', got 'i64'
 

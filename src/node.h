@@ -99,7 +99,8 @@ typedef struct {
 } NodeBlock;
 
 typedef struct {
-    Node node;
+    Node  node;
+    Node *value;
 } NodeReturn;
 
 typedef struct {
@@ -108,9 +109,12 @@ typedef struct {
     Nodes  args;
     size_t arity;
 
+    Node *ret;
     Node *body;
     bool  local;
 } NodeFn;
+
+Type node_fn_return_type(const NodeFn *fn);
 
 typedef struct {
     Node  node;
