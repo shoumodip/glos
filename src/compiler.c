@@ -54,7 +54,7 @@ static inline void compile_sb_data(Compiler *c, CompileData data) {
     }
 }
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void compile_type(Compiler *c, Type *type) {
     if (!type) {
         return;
@@ -79,7 +79,7 @@ static void compile_type(Compiler *c, Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void compile_expr(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -89,7 +89,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_ATOM: {
         NodeAtom *atom = (NodeAtom *) n;
 
-        static_assert(COUNT_TOKENS == 20, "");
+        static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             compile_sb_sprintf(c, "%zuL", n->token.as.integer);
@@ -126,7 +126,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 20, "");
+        static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             compile_sb_sprintf(c, "-(");
@@ -142,7 +142,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 20, "");
+        static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
             compile_sb_sprintf(c, "(");
@@ -201,7 +201,7 @@ static void compile_expr(Compiler *c, Node *n) {
 
 static void compile_fn(Compiler *c, Node *n);
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -236,6 +236,10 @@ static void compile_stmt(Compiler *c, Node *n) {
         compile_sb_indent(c);
         compile_sb_sprintf(c, "}");
     } break;
+
+    case NODE_RETURN:
+        compile_sb_sprintf(c, "return;");
+        break;
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
@@ -316,7 +320,7 @@ static void compile_fn(Compiler *c, Node *n) {
     compile_sb_sprintf(c, "\n");
 }
 
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void pre_compile_type(Compiler *c, Type *type) {
     if (!type || type->compile.iota) {
         return;
@@ -354,7 +358,7 @@ static void pre_compile_type(Compiler *c, Type *type) {
 }
 
 // TODO: Perform hashing of type definitions
-static_assert(COUNT_NODES == 9, "");
+static_assert(COUNT_NODES == 10, "");
 static void pre_compile_node(Compiler *c, Node *n) {
     if (!n || n->compile.iota) {
         return;
@@ -397,6 +401,10 @@ static void pre_compile_node(Compiler *c, Node *n) {
             pre_compile_node(c, it);
         }
     } break;
+
+    case NODE_RETURN:
+        // Nothing to do for now
+        break;
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;

@@ -10,6 +10,12 @@ fn print_sum(x i64, y i64) {
     print x + y
 }
 
+fn early_return() {
+    print 420
+    return
+    print 1337
+}
+
 var f fn ()
 
 fn main() {
@@ -33,4 +39,6 @@ fn main() {
         print x
         print x
     })
+
+    early_return()
 }

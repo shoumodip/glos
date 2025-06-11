@@ -44,6 +44,7 @@ typedef enum {
 
     NODE_IF,
     NODE_BLOCK,
+    NODE_RETURN,
 
     NODE_FN,
     NODE_VAR,
@@ -96,6 +97,10 @@ typedef struct {
     Node  node;
     Nodes body;
 } NodeBlock;
+
+typedef struct {
+    Node node;
+} NodeReturn;
 
 typedef struct {
     Node node;
