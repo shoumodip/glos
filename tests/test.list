@@ -7,3 +7,11 @@
 003-variables/error-assignment-definition-type-mismatch.glos
 003-variables/error-undefined-outside-scope.glos
 003-variables/error-undefined-outside-scope-despite-same-depth.glos
+004-functions/main.glos
+004-functions/error-argument-redefinition.glos
+004-functions/error-argument-count-mismatch.glos
+004-functions/error-argument-type-mismatch.glos
+004-functions/error-nested-functions-inside-identifier-used-outside.glos
+004-functions/error-nested-functions-outside-identifier-used-inside.glos
+004-functions/error-return-type-mismatch.glos
+004-functions/error-expected-return.glos

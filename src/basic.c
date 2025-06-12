@@ -83,6 +83,12 @@ char *temp_sv_to_cstr(SV sv) {
     return p;
 }
 
+void temp_remove_null(void) {
+    if (temp_count && temp_data[temp_count - 1] == '\0') {
+        temp_count--;
+    }
+}
+
 // Arena Allocator
 #define ARENA_MINIMUM_CAPACITY 16000
 

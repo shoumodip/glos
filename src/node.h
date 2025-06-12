@@ -26,8 +26,8 @@ typedef enum {
 } TypeKind;
 
 typedef struct {
-    TypeKind kind;
-
+    TypeKind    kind;
+    Node       *spec;
     CompileData compile;
 } Type;
 
@@ -38,11 +38,13 @@ bool type_is_integer(Type type);
 
 typedef enum {
     NODE_ATOM,
+    NODE_CALL,
     NODE_UNARY,
     NODE_BINARY,
 
     NODE_IF,
     NODE_BLOCK,
+    NODE_RETURN,
 
     NODE_FN,
     NODE_VAR,
@@ -64,6 +66,14 @@ typedef struct {
     Node  node;
     Node *definition;
 } NodeAtom;
+
+typedef struct {
+    Node  node;
+    Node *fn;
+
+    Nodes  args;
+    size_t arity;
+} NodeCall;
 
 typedef struct {
     Node  node;
@@ -90,8 +100,21 @@ typedef struct {
 
 typedef struct {
     Node  node;
+    Node *value;
+} NodeReturn;
+
+typedef struct {
+    Node node;
+
+    Nodes  args;
+    size_t arity;
+
+    Node *ret;
     Node *body;
+    bool  local;
 } NodeFn;
+
+Type node_fn_return_type(const NodeFn *fn);
 
 typedef struct {
     Node  node;

@@ -9,6 +9,8 @@ typedef struct {
 
     SB     sb;
     size_t indent;
+
+    Scope delayed_fns;
 } Compiler;
 
 static inline CompileData compile_data_new(Compiler *c) {
@@ -44,7 +46,7 @@ static inline void compile_sb_quoted(Compiler *c, SV sv) {
     compile_sb_sprintf(c, "\"");
 }
 
-static inline void sb_compile_data(Compiler *c, CompileData data) {
+static inline void compile_sb_data(Compiler *c, CompileData data) {
     if (data.local) {
         compile_sb_sprintf(c, "__glos_l%zu", data.iota);
     } else {
@@ -52,7 +54,7 @@ static inline void sb_compile_data(Compiler *c, CompileData data) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 10, "");
 static void compile_type(Compiler *c, Type *type) {
     if (!type) {
         return;
@@ -68,12 +70,8 @@ static void compile_type(Compiler *c, Type *type) {
         break;
 
     case TYPE_FN:
-        // TODO: This won't work inside expressions
-        type->compile = compile_data_new(c);
-        compile_sb_sprintf(c, "typedef void (*");
-        sb_compile_data(c, type->compile);
-        compile_sb_sprintf(c, ")(void); ");
-        sb_compile_data(c, type->compile);
+        assert(type->compile.iota);
+        compile_sb_data(c, type->compile);
         break;
 
     default:
@@ -81,7 +79,7 @@ static void compile_type(Compiler *c, Type *type) {
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static_assert(COUNT_NODES == 10, "");
 static void compile_expr(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -91,7 +89,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_ATOM: {
         NodeAtom *atom = (NodeAtom *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             compile_sb_sprintf(c, "%zuL", n->token.as.integer);
@@ -102,7 +100,7 @@ static void compile_expr(Compiler *c, Node *n) {
             break;
 
         case TOKEN_IDENT:
-            sb_compile_data(c, atom->definition->compile);
+            compile_sb_data(c, atom->definition->compile);
             break;
 
         default:
@@ -110,10 +108,25 @@ static void compile_expr(Compiler *c, Node *n) {
         }
     } break;
 
+    case NODE_CALL: {
+        NodeCall *call = (NodeCall *) n;
+        compile_expr(c, call->fn);
+        compile_sb_sprintf(c, "(");
+        for (Node *it = call->args.head; it; it = it->next) {
+            // TODO: This inherits the undefined order of call arguments from C
+            //       Use "SSA" to define the evaluation from left to right
+            compile_expr(c, it);
+            if (it->next) {
+                compile_sb_sprintf(c, ", ");
+            }
+        }
+        compile_sb_sprintf(c, ")");
+    } break;
+
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
             compile_sb_sprintf(c, "-(");
@@ -129,7 +142,7 @@ static void compile_expr(Compiler *c, Node *n) {
     case NODE_BINARY: {
         NodeBinary *binary = (NodeBinary *) n;
 
-        static_assert(COUNT_TOKENS == 19, "");
+        static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_ADD:
             compile_sb_sprintf(c, "(");
@@ -176,12 +189,19 @@ static void compile_expr(Compiler *c, Node *n) {
         }
     } break;
 
+    case NODE_FN:
+        da_push(&c->delayed_fns, n);
+        compile_sb_data(c, n->compile);
+        break;
+
     default:
         unreachable();
     }
 }
 
-static_assert(COUNT_NODES == 8, "");
+static void compile_fn(Compiler *c, Node *n);
+
+static_assert(COUNT_NODES == 10, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -212,28 +232,31 @@ static void compile_stmt(Compiler *c, Node *n) {
             compile_sb_sprintf(c, "\n");
         }
         c->indent--;
+        compile_sb_sprintf(c, "#line %zu\n", n->token.pos.row + 1);
         compile_sb_indent(c);
         compile_sb_sprintf(c, "}");
     } break;
 
+    case NODE_RETURN: {
+        NodeReturn *ret = (NodeReturn *) n;
+        compile_sb_sprintf(c, "return");
+        if (ret->value) {
+            compile_sb_sprintf(c, " ");
+            compile_expr(c, ret->value);
+        }
+        compile_sb_sprintf(c, ";");
+    } break;
+
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
-        n->compile = compile_data_new(c);
-
-        compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
-        compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
-
-        compile_sb_sprintf(c, "\nstatic void ");
-        sb_compile_data(c, n->compile);
-        compile_sb_sprintf(c, "(void) ");
-
-        const bool local_save = c->local;
-        c->local = true;
-        c->locals = 0;
-        compile_stmt(c, fn->body);
-        c->local = local_save;
-
-        compile_sb_sprintf(c, "\n");
+        if (fn->local) {
+            da_push(&c->delayed_fns, n);
+        } else {
+            compile_fn(c, n);
+            while (c->delayed_fns.count) {
+                compile_fn(c, c->delayed_fns.data[--c->delayed_fns.count]);
+            }
+        }
     } break;
 
     case NODE_VAR: {
@@ -243,20 +266,12 @@ static void compile_stmt(Compiler *c, Node *n) {
             compile_sb_sprintf(c, " ");
 
             n->compile = compile_data_new(c);
-            sb_compile_data(c, n->compile);
+            compile_sb_data(c, n->compile);
 
             if (var->expr) {
                 compile_sb_sprintf(c, " = ");
                 compile_expr(c, var->expr);
             }
-
-            compile_sb_sprintf(c, ";");
-        } else {
-            compile_type(c, &n->type);
-            compile_sb_sprintf(c, " ");
-
-            n->compile = compile_data_new(c);
-            sb_compile_data(c, n->compile);
 
             compile_sb_sprintf(c, ";");
         }
@@ -272,6 +287,206 @@ static void compile_stmt(Compiler *c, Node *n) {
     default:
         compile_expr(c, n);
         compile_sb_sprintf(c, ";");
+        break;
+    }
+}
+
+static void compile_fn(Compiler *c, Node *n) {
+    assert(n->compile.iota);
+
+    NodeFn *fn = (NodeFn *) n;
+    compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
+    compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
+
+    compile_sb_sprintf(c, "\nstatic ");
+    if (fn->ret) {
+        compile_type(c, &fn->ret->type);
+    } else {
+        compile_sb_sprintf(c, "void");
+    }
+    compile_sb_sprintf(c, " ");
+    compile_sb_data(c, n->compile);
+
+    const bool local_save = c->local;
+    c->local = true;
+    c->locals = 0;
+
+    compile_sb_sprintf(c, "(");
+    if (fn->args.head) {
+        for (Node *it = fn->args.head; it; it = it->next) {
+            compile_type(c, &it->type);
+            compile_sb_sprintf(c, " ");
+
+            it->compile = compile_data_new(c);
+            compile_sb_data(c, it->compile);
+
+            if (it->next) {
+                compile_sb_sprintf(c, ", ");
+            }
+        }
+    } else {
+        compile_sb_sprintf(c, "void");
+    }
+    compile_sb_sprintf(c, ") ");
+
+    compile_stmt(c, fn->body);
+    c->local = local_save;
+
+    compile_sb_sprintf(c, "\n");
+}
+
+static_assert(COUNT_NODES == 10, "");
+static void pre_compile_type(Compiler *c, Type *type) {
+    if (!type || type->compile.iota) {
+        return;
+    }
+
+    switch (type->kind) {
+    case TYPE_BOOL:
+    case TYPE_I64:
+        break;
+
+    case TYPE_FN: {
+        NodeFn *spec = (NodeFn *) type->spec;
+        for (Node *it = spec->args.head; it; it = it->next) {
+            pre_compile_type(c, &it->type);
+        }
+
+        type->compile = compile_data_new(c);
+
+        compile_sb_sprintf(c, "typedef ");
+        if (spec->ret) {
+            compile_type(c, &spec->ret->type);
+        } else {
+            compile_sb_sprintf(c, "void");
+        }
+        compile_sb_sprintf(c, " (*");
+        compile_sb_data(c, type->compile);
+
+        compile_sb_sprintf(c, ")(");
+        if (spec->args.head) {
+            for (Node *it = spec->args.head; it; it = it->next) {
+                compile_type(c, &it->type);
+                if (it->next) {
+                    compile_sb_sprintf(c, ", ");
+                }
+            }
+        } else {
+            compile_sb_sprintf(c, "void");
+        }
+        compile_sb_sprintf(c, ");\n");
+    } break;
+
+    default:
+        unreachable();
+    }
+}
+
+// TODO: Perform hashing of type definitions
+static_assert(COUNT_NODES == 10, "");
+static void pre_compile_node(Compiler *c, Node *n) {
+    if (!n || n->compile.iota) {
+        return;
+    }
+
+    switch (n->kind) {
+    case NODE_ATOM:
+        break;
+
+    case NODE_CALL: {
+        NodeCall *call = (NodeCall *) n;
+        pre_compile_node(c, call->fn);
+
+        for (Node *it = call->args.head; it; it = it->next) {
+            pre_compile_node(c, it);
+        }
+    } break;
+
+    case NODE_UNARY: {
+        NodeUnary *unary = (NodeUnary *) n;
+        pre_compile_node(c, unary->operand);
+    } break;
+
+    case NODE_BINARY: {
+        NodeBinary *binary = (NodeBinary *) n;
+        pre_compile_node(c, binary->lhs);
+        pre_compile_node(c, binary->rhs);
+    } break;
+
+    case NODE_IF: {
+        NodeIf *iff = (NodeIf *) n;
+        pre_compile_node(c, iff->condition);
+        pre_compile_node(c, iff->consequence);
+        pre_compile_node(c, iff->antecedence);
+    } break;
+
+    case NODE_BLOCK: {
+        NodeBlock *block = (NodeBlock *) n;
+        for (Node *it = block->body.head; it; it = it->next) {
+            pre_compile_node(c, it);
+        }
+    } break;
+
+    case NODE_RETURN: {
+        NodeReturn *ret = (NodeReturn *) n;
+        pre_compile_node(c, ret->value);
+    } break;
+
+    case NODE_FN: {
+        NodeFn *fn = (NodeFn *) n;
+        for (Node *it = fn->args.head; it; it = it->next) {
+            pre_compile_node(c, it);
+        }
+
+        n->compile = compile_data_new(c);
+        compile_sb_sprintf(c, "static ");
+        if (fn->ret) {
+            compile_type(c, &fn->ret->type);
+        } else {
+            compile_sb_sprintf(c, "void");
+        }
+        compile_sb_sprintf(c, " ");
+        compile_sb_data(c, n->compile);
+
+        compile_sb_sprintf(c, "(");
+        if (fn->args.head) {
+            for (Node *it = fn->args.head; it; it = it->next) {
+                compile_type(c, &it->type);
+                if (it->next) {
+                    compile_sb_sprintf(c, ", ");
+                }
+            }
+        } else {
+            compile_sb_sprintf(c, "void");
+        }
+        compile_sb_sprintf(c, ");\n");
+
+        pre_compile_node(c, fn->body);
+    } break;
+
+    case NODE_VAR: {
+        NodeVar *var = (NodeVar *) n;
+        pre_compile_node(c, var->expr);
+        pre_compile_type(c, &n->type);
+
+        if (!var->local) {
+            compile_type(c, &n->type);
+            compile_sb_sprintf(c, " ");
+
+            n->compile = compile_data_new(c);
+            compile_sb_data(c, n->compile);
+
+            compile_sb_sprintf(c, ";\n");
+        }
+    } break;
+
+    case NODE_PRINT: {
+        NodePrint *print = (NodePrint *) n;
+        pre_compile_node(c, print->operand);
+    } break;
+
+    default:
+        unreachable();
         break;
     }
 }
@@ -292,11 +507,14 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
     compile_sb_sprintf(&c, "extern int printf(const char *fmt, ...);\n");
 
     for (size_t i = 0; i < context->globals.count; i++) {
-        compile_sb_sprintf(&c, "\n");
+        pre_compile_node(&c, context->globals.data[i]);
+    }
+
+    for (size_t i = 0; i < context->globals.count; i++) {
         compile_stmt(&c, context->globals.data[i]);
     }
 
-    compile_sb_sprintf(&c, "\n#line 1 \"%s.c\"", output);
+    compile_sb_sprintf(&c, "\n#line 1 \"glos_start_call_main.h\"");
     compile_sb_sprintf(&c, "\nint main(void) {\n");
     c.indent++;
 
@@ -306,7 +524,7 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
             NodeVar *var = (NodeVar *) it;
             if (var->expr) {
                 compile_sb_indent(&c);
-                sb_compile_data(&c, it->compile);
+                compile_sb_data(&c, it->compile);
                 compile_sb_sprintf(&c, " = ");
                 compile_expr(&c, var->expr);
                 compile_sb_sprintf(&c, ";\n");
@@ -315,10 +533,9 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
     }
 
     compile_sb_indent(&c);
-    sb_compile_data(&c, main->compile);
-    compile_sb_sprintf(&c, "();\n");
-    compile_sb_indent(&c);
-    compile_sb_sprintf(&c, "return 0;\n");
+    compile_sb_sprintf(&c, "return (");
+    compile_sb_data(&c, main->compile);
+    compile_sb_sprintf(&c, "(), 0);\n");
     c.indent--;
     compile_sb_sprintf(&c, "}\n");
 

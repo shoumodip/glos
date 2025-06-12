@@ -1,0 +1,58 @@
+fn print_69() {
+    print 69
+}
+
+fn print_420() {
+    print 420
+}
+
+fn print_sum(x i64, y i64) {
+    print x + y
+}
+
+fn early_return() {
+    print 420
+    return
+    print 1337
+}
+
+var f fn ()
+
+fn main() {
+    print_69()
+    print_420()
+
+    f = print_69
+    f()
+
+    f = print_420
+    f()
+
+    print_sum(34, 35)
+    print_sum(200, 220)
+
+    fn apply_int(x i64, f fn (i64)) {
+        f(x)
+    }
+
+    apply_int(69, fn (x i64) {
+        print x
+        print x
+    })
+
+    early_return()
+
+    fn add(x i64, y i64) i64 {
+        return x + y
+    }
+
+    print add(34, 35)
+
+    fn map_int(x i64, f fn (i64) i64) i64 {
+        return f(x)
+    }
+
+    print map_int(210, fn (x i64) i64 {
+        return x * 2
+    })
+}

@@ -15,6 +15,7 @@ typedef struct {
 typedef enum {
     TOKEN_EOF,
     TOKEN_EOL,
+    TOKEN_COMMA,
 
     TOKEN_INT,
     TOKEN_BOOL,
@@ -34,6 +35,8 @@ typedef enum {
 
     TOKEN_IF,
     TOKEN_ELSE,
+
+    TOKEN_RETURN,
 
     TOKEN_FN,
     TOKEN_VAR,
