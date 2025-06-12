@@ -253,10 +253,9 @@ static void compile_stmt(Compiler *c, Node *n) {
             da_push(&c->delayed_fns, n);
         } else {
             compile_fn(c, n);
-            for (size_t i = 0; i < c->delayed_fns.count; i++) {
-                compile_fn(c, c->delayed_fns.data[i]);
+            while (c->delayed_fns.count) {
+                compile_fn(c, c->delayed_fns.data[--c->delayed_fns.count]);
             }
-            c->delayed_fns.count = 0;
         }
     } break;
 
