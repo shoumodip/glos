@@ -245,6 +245,35 @@ static void error_redefinition(const Node *n, const Node *previous, const char *
 }
 
 static_assert(COUNT_NODES == 10, "");
+static bool always_returns(Node *n) {
+    switch (n->kind) {
+    case NODE_BLOCK: {
+        NodeBlock *block = (NodeBlock *) n;
+        for (Node *it = block->body.head; it; it = it->next) {
+            if (always_returns(it)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    case NODE_IF: {
+        NodeIf *iff = (NodeIf *) n;
+        if (!iff->antecedence) {
+            return false;
+        }
+        return always_returns(iff->consequence) && always_returns(iff->antecedence);
+    }
+
+    case NODE_RETURN:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static_assert(COUNT_NODES == 10, "");
 static void check_stmt(Context *c, Node *n) {
     if (!n) {
         return;
@@ -367,6 +396,12 @@ static void check_fn(Context *c, Node *n) {
 
     check_type(fn->ret);
     check_stmt(c, fn->body);
+
+    if (fn->ret && !always_returns(fn->body)) {
+        fprintf(stderr, PosFmt "ERROR: Expected return statement\n", PosArg(fn->body->token.pos));
+        exit(1);
+    }
+
     context_fn_end(c, context_fn_save);
 }
 

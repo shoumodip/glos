@@ -14,3 +14,4 @@
 004-functions/error-nested-functions-inside-identifier-used-outside.glos
 004-functions/error-nested-functions-outside-identifier-used-inside.glos
 004-functions/error-return-type-mismatch.glos
+004-functions/error-expected-return.glos

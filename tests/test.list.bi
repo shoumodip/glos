@@ -1,4 +1,4 @@
-:i count 16
+:i count 17
 :b testcase 22
 001-integers/main.glos
 :i returncode 0
@@ -148,4 +148,12 @@
 
 :b stderr 90
 004-functions/error-return-type-mismatch.glos:2:5: ERROR: Expected type 'bool', got 'i64'
+
+:b testcase 40
+004-functions/error-expected-return.glos
+:i returncode 1
+:b stdout 0
+
+:b stderr 80
+004-functions/error-expected-return.glos:1:15: ERROR: Expected return statement
 
