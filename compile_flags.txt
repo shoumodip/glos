@@ -3,3 +3,4 @@
 -Wmissing-prototypes
 -Wimplicit-fallthrough
 -pedantic
+-Isrc/libqbe/include/

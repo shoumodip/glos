@@ -1,77 +1,32 @@
-#include <ctype.h>
-
 #include "compiler.h"
+#include "qbe.h"
 
 typedef struct {
-    bool   local;
-    size_t locals;
-    size_t globals;
-
-    SB     sb;
-    size_t indent;
-
-    Scope delayed_fns;
+    Qbe   *qbe;
+    QbeFn *fn;
 } Compiler;
 
-static inline CompileData compile_data_new(Compiler *c) {
-    CompileData data = {.local = c->local};
-    if (c->local) {
-        data.iota = ++c->locals;
-    } else {
-        data.iota = ++c->globals;
-    }
-    return data;
-}
-
-#define compile_sb_sprintf(c, ...) sb_sprintf(&(c)->sb, __VA_ARGS__)
-
-static inline void compile_sb_indent(Compiler *c) {
-    for (size_t i = 0; i < c->indent; i++) {
-        da_push(&c->sb, '\t');
-    }
-}
-
-static inline void compile_sb_quoted(Compiler *c, SV sv) {
-    compile_sb_sprintf(c, "\"");
-    for (size_t i = 0; i < sv.count; i++) {
-        const char it = sv.data[i];
-        if (it == '"') {
-            compile_sb_sprintf(c, "\\\"");
-        } else if (isprint(it)) {
-            compile_sb_sprintf(c, "%c", it);
-        } else {
-            compile_sb_sprintf(c, "\\x%x", it);
-        }
-    }
-    compile_sb_sprintf(c, "\"");
-}
-
-static inline void compile_sb_data(Compiler *c, CompileData data) {
-    if (data.local) {
-        compile_sb_sprintf(c, "__glos_l%zu", data.iota);
-    } else {
-        compile_sb_sprintf(c, "__glos_g%zu", data.iota);
-    }
-}
-
 static_assert(COUNT_NODES == 10, "");
-static void compile_type(Compiler *c, Type *type) {
+static void compile_type(Type *type) {
     if (!type) {
         return;
     }
 
     switch (type->kind) {
+    case TYPE_UNIT:
+        type->qbe = qbe_type_basic(QBE_TYPE_I0);
+        break;
+
     case TYPE_BOOL:
-        compile_sb_sprintf(c, "_Bool");
+        type->qbe = qbe_type_basic(QBE_TYPE_I8);
         break;
 
     case TYPE_I64:
-        compile_sb_sprintf(c, "long");
+        type->qbe = qbe_type_basic(QBE_TYPE_I64);
         break;
 
     case TYPE_FN:
-        assert(type->compile.iota);
-        compile_sb_data(c, type->compile);
+        type->qbe = qbe_type_basic(QBE_TYPE_I64);
         break;
 
     default:
@@ -79,12 +34,15 @@ static void compile_type(Compiler *c, Type *type) {
     }
 }
 
+static void compile_stmt(Compiler *c, Node *n);
+
 static_assert(COUNT_NODES == 10, "");
-static void compile_expr(Compiler *c, Node *n) {
+static QbeNode *compile_expr(Compiler *c, Node *n, bool ref) {
     if (!n) {
-        return;
+        return NULL;
     }
 
+    compile_type(&n->type);
     switch (n->kind) {
     case NODE_ATOM: {
         NodeAtom *atom = (NodeAtom *) n;
@@ -92,15 +50,37 @@ static void compile_expr(Compiler *c, Node *n) {
         static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_INT:
-            compile_sb_sprintf(c, "%zuL", n->token.as.integer);
-            break;
+            return qbe_atom_int(c->qbe, QBE_TYPE_I64, n->token.as.integer);
 
         case TOKEN_BOOL:
-            compile_sb_sprintf(c, "%dL", n->token.as.boolean);
-            break;
+            return qbe_atom_int(c->qbe, QBE_TYPE_I64, n->token.as.boolean);
 
         case TOKEN_IDENT:
-            compile_sb_data(c, atom->definition->compile);
+            switch (atom->definition->kind) {
+            case NODE_FN: {
+                NodeFn *fn = (NodeFn *) atom->definition;
+                if (!fn->qbe) {
+                    compile_stmt(c, atom->definition);
+                }
+                return fn->qbe;
+            };
+
+            case NODE_VAR: {
+                NodeVar *var = (NodeVar *) atom->definition;
+                if (!var->qbe) {
+                    compile_stmt(c, atom->definition);
+                }
+
+                if (ref || var->kind == NODE_VAR_ARG) {
+                    return var->qbe;
+                }
+
+                return qbe_build_load(c->qbe, c->fn, var->qbe, n->type.qbe);
+            } break;
+
+            default:
+                unreachable();
+            }
             break;
 
         default:
@@ -110,18 +90,15 @@ static void compile_expr(Compiler *c, Node *n) {
 
     case NODE_CALL: {
         NodeCall *call = (NodeCall *) n;
-        compile_expr(c, call->fn);
-        compile_sb_sprintf(c, "(");
+        QbeNode  *fn = compile_expr(c, call->fn, false);
+
+        QbeCall *fn_call = qbe_build_call(c->qbe, c->fn, fn, n->type.qbe);
         for (Node *it = call->args.head; it; it = it->next) {
-            // TODO: This inherits the undefined order of call arguments from C
-            //       Use "SSA" to define the evaluation from left to right
-            compile_expr(c, it);
-            if (it->next) {
-                compile_sb_sprintf(c, ", ");
-            }
+            qbe_call_add_arg(c->qbe, fn_call, compile_expr(c, it, false));
         }
-        compile_sb_sprintf(c, ")");
-    } break;
+
+        return (QbeNode *) fn_call;
+    };
 
     case NODE_UNARY: {
         NodeUnary *unary = (NodeUnary *) n;
@@ -129,10 +106,9 @@ static void compile_expr(Compiler *c, Node *n) {
         static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
         case TOKEN_SUB: {
-            compile_sb_sprintf(c, "-(");
-            compile_expr(c, unary->operand);
-            compile_sb_sprintf(c, ")");
-        } break;
+            QbeNode *operand = compile_expr(c, unary->operand, false);
+            return qbe_build_unary(c->qbe, c->fn, QBE_UNARY_NEG, n->type.qbe, operand);
+        }
 
         default:
             unreachable();
@@ -144,62 +120,52 @@ static void compile_expr(Compiler *c, Node *n) {
 
         static_assert(COUNT_TOKENS == 21, "");
         switch (n->token.kind) {
-        case TOKEN_ADD:
-            compile_sb_sprintf(c, "(");
-            compile_expr(c, binary->lhs);
-            compile_sb_sprintf(c, " + ");
-            compile_expr(c, binary->rhs);
-            compile_sb_sprintf(c, ")");
-            break;
+        case TOKEN_ADD: {
+            QbeNode *lhs = compile_expr(c, binary->lhs, false);
+            QbeNode *rhs = compile_expr(c, binary->rhs, false);
+            return qbe_build_binary(c->qbe, c->fn, QBE_BINARY_ADD, n->type.qbe, lhs, rhs);
+        }
 
-        case TOKEN_SUB:
-            compile_sb_sprintf(c, "(");
-            compile_expr(c, binary->lhs);
-            compile_sb_sprintf(c, " - ");
-            compile_expr(c, binary->rhs);
-            compile_sb_sprintf(c, ")");
-            break;
+        case TOKEN_SUB: {
+            QbeNode *lhs = compile_expr(c, binary->lhs, false);
+            QbeNode *rhs = compile_expr(c, binary->rhs, false);
+            return qbe_build_binary(c->qbe, c->fn, QBE_BINARY_SUB, n->type.qbe, lhs, rhs);
+        }
 
-        case TOKEN_MUL:
-            compile_sb_sprintf(c, "(");
-            compile_expr(c, binary->lhs);
-            compile_sb_sprintf(c, " * ");
-            compile_expr(c, binary->rhs);
-            compile_sb_sprintf(c, ")");
-            break;
+        case TOKEN_MUL: {
+            QbeNode *lhs = compile_expr(c, binary->lhs, false);
+            QbeNode *rhs = compile_expr(c, binary->rhs, false);
+            return qbe_build_binary(c->qbe, c->fn, QBE_BINARY_MUL, n->type.qbe, lhs, rhs);
+        }
 
-        case TOKEN_DIV:
-            compile_sb_sprintf(c, "(");
-            compile_expr(c, binary->lhs);
-            compile_sb_sprintf(c, " / ");
-            compile_expr(c, binary->rhs);
-            compile_sb_sprintf(c, ")");
-            break;
+        case TOKEN_DIV: {
+            QbeNode *lhs = compile_expr(c, binary->lhs, false);
+            QbeNode *rhs = compile_expr(c, binary->rhs, false);
+            return qbe_build_binary(c->qbe, c->fn, QBE_BINARY_SDIV, n->type.qbe, lhs, rhs);
+        }
 
-        case TOKEN_SET:
-            compile_sb_sprintf(c, "(");
-            compile_expr(c, binary->lhs);
-            compile_sb_sprintf(c, " = ");
-            compile_expr(c, binary->rhs);
-            compile_sb_sprintf(c, ")");
-            break;
+        case TOKEN_SET: {
+            QbeNode *lhs = compile_expr(c, binary->lhs, true);
+            QbeNode *rhs = compile_expr(c, binary->rhs, false);
+            qbe_build_store(c->qbe, c->fn, lhs, rhs);
+            return NULL;
+        }
 
         default:
             unreachable();
         }
     } break;
 
-    case NODE_FN:
-        da_push(&c->delayed_fns, n);
-        compile_sb_data(c, n->compile);
-        break;
+    case NODE_FN: {
+        NodeFn *fn = (NodeFn *) n;
+        compile_stmt(c, n);
+        return fn->qbe;
+    }
 
     default:
         unreachable();
     }
 }
-
-static void compile_fn(Compiler *c, Node *n);
 
 static_assert(COUNT_NODES == 10, "");
 static void compile_stmt(Compiler *c, Node *n) {
@@ -210,289 +176,144 @@ static void compile_stmt(Compiler *c, Node *n) {
     switch (n->kind) {
     case NODE_IF: {
         NodeIf *iff = (NodeIf *) n;
-        compile_sb_sprintf(c, "if (");
-        compile_expr(c, iff->condition);
-        compile_sb_sprintf(c, ") ");
-        compile_stmt(c, iff->consequence);
 
+        QbeBlock *consequence = qbe_block_new(c->qbe);
+        QbeBlock *antecedence = qbe_block_new(c->qbe);
+
+        QbeBlock *end = antecedence;
         if (iff->antecedence) {
-            compile_sb_sprintf(c, " else ");
+            end = qbe_block_new(c->qbe);
+        }
+
+        // Condition
+        QbeNode *condition = compile_expr(c, iff->condition, false);
+        qbe_build_branch(c->qbe, c->fn, condition, consequence, antecedence);
+
+        // Consequence
+        qbe_build_block(c->qbe, c->fn, consequence);
+        compile_stmt(c, iff->consequence);
+        qbe_build_jump(c->qbe, c->fn, end);
+
+        // Antecedence
+        if (iff->antecedence) {
+            qbe_build_block(c->qbe, c->fn, antecedence);
             compile_stmt(c, iff->antecedence);
+            qbe_build_jump(c->qbe, c->fn, end);
         }
+
+        // End
+        qbe_build_block(c->qbe, c->fn, end);
     } break;
 
     case NODE_BLOCK: {
         NodeBlock *block = (NodeBlock *) n;
-        compile_sb_sprintf(c, "{\n");
-        c->indent++;
         for (Node *it = block->body.head; it; it = it->next) {
-            compile_sb_sprintf(c, "#line %zu\n", it->token.pos.row + 1);
-            compile_sb_indent(c);
+            qbe_build_debug_line(c->qbe, c->fn, it->token.pos.row + 1);
             compile_stmt(c, it);
-            compile_sb_sprintf(c, "\n");
         }
-        c->indent--;
-        compile_sb_sprintf(c, "#line %zu\n", n->token.pos.row + 1);
-        compile_sb_indent(c);
-        compile_sb_sprintf(c, "}");
+        qbe_build_debug_line(c->qbe, c->fn, n->token.pos.row + 1);
     } break;
 
     case NODE_RETURN: {
         NodeReturn *ret = (NodeReturn *) n;
-        compile_sb_sprintf(c, "return");
-        if (ret->value) {
-            compile_sb_sprintf(c, " ");
-            compile_expr(c, ret->value);
-        }
-        compile_sb_sprintf(c, ";");
+        qbe_build_return(c->qbe, c->fn, compile_expr(c, ret->value, false));
+        qbe_build_block(c->qbe, c->fn, qbe_block_new(c->qbe));
     } break;
 
     case NODE_FN: {
         NodeFn *fn = (NodeFn *) n;
-        if (fn->local) {
-            da_push(&c->delayed_fns, n);
-        } else {
-            compile_fn(c, n);
-            while (c->delayed_fns.count) {
-                compile_fn(c, c->delayed_fns.data[--c->delayed_fns.count]);
+
+        Type return_type = node_fn_return_type(fn);
+        compile_type(&return_type);
+
+        QbeFn *fn_save = c->fn;
+        c->fn = qbe_fn_new(c->qbe, (QbeSV) {0}, return_type.qbe);
+        fn->qbe = (QbeNode *) c->fn;
+
+        for (Node *it = fn->args.head; it; it = it->next) {
+            NodeVar *arg = (NodeVar *) it;
+            compile_type(&it->type);
+            arg->qbe = qbe_fn_add_arg(c->qbe, c->fn, it->type.qbe);
+            if (arg->kind == NODE_VAR_LOCAL) {
+                QbeNode *var = qbe_fn_add_var(c->qbe, c->fn, it->type.qbe);
+                qbe_build_store(c->qbe, c->fn, var, arg->qbe);
+                arg->qbe = var;
             }
         }
+
+        assert(fn->body->kind == NODE_BLOCK);
+        NodeBlock *fn_block = (NodeBlock *) fn->body;
+
+        size_t fn_row = 0;
+        if (fn_block->body.head) {
+            fn_row = fn_block->body.head->token.pos.row;
+
+            compile_stmt(c, fn_block->body.head);
+            for (Node *it = fn_block->body.head->next; it; it = it->next) {
+                qbe_build_debug_line(c->qbe, c->fn, it->token.pos.row + 1);
+                compile_stmt(c, it);
+            }
+        } else {
+            fn_row = fn_block->node.token.pos.row;
+        }
+
+        qbe_build_debug_line(c->qbe, c->fn, fn_block->node.token.pos.row + 1);
+        qbe_fn_set_debug(c->qbe, c->fn, qbe_sv_from_cstr(n->token.pos.path), fn_row + 1);
+        qbe_build_return(c->qbe, c->fn, NULL);
+
+        c->fn = fn_save;
     } break;
 
     case NODE_VAR: {
         NodeVar *var = (NodeVar *) n;
-        if (var->local) {
-            compile_type(c, &n->type);
-            compile_sb_sprintf(c, " ");
 
-            n->compile = compile_data_new(c);
-            compile_sb_data(c, n->compile);
-
+        compile_type(&n->type);
+        if (var->kind == NODE_VAR_GLOBAL) {
+            var->qbe = qbe_var_new(c->qbe, (QbeSV) {0}, n->type.qbe);
+        } else {
+            var->qbe = qbe_fn_add_var(c->qbe, c->fn, n->type.qbe);
             if (var->expr) {
-                compile_sb_sprintf(c, " = ");
-                compile_expr(c, var->expr);
+                qbe_build_store(c->qbe, c->fn, var->qbe, compile_expr(c, var->expr, false));
+            } else {
+                // TODO: Move "zero"-ing logic into LibQBE
+                QbeNode *memset = qbe_atom_symbol(c->qbe, qbe_sv_from_cstr("memset"), qbe_type_basic(QBE_TYPE_I64));
+                QbeCall *call = qbe_build_call(c->qbe, c->fn, memset, qbe_type_basic(QBE_TYPE_I64));
+                qbe_call_add_arg(c->qbe, call, var->qbe);
+                qbe_call_add_arg(c->qbe, call, qbe_atom_int(c->qbe, QBE_TYPE_I32, 0));
+                qbe_call_add_arg(c->qbe, call, qbe_atom_int(c->qbe, QBE_TYPE_I64, qbe_sizeof(n->type.qbe)));
             }
-
-            compile_sb_sprintf(c, ";");
         }
     } break;
 
     case NODE_PRINT: {
         NodePrint *print = (NodePrint *) n;
-        compile_sb_sprintf(c, "printf(\"%%ld\\n\", (long) (");
-        compile_expr(c, print->operand);
-        compile_sb_sprintf(c, "));");
+
+        static QbeNode *fn;
+        if (!fn) {
+            fn = qbe_atom_symbol(c->qbe, qbe_sv_from_cstr("printf"), qbe_type_basic(QBE_TYPE_I64));
+        }
+
+        static QbeNode *fmt;
+        if (!fmt) {
+            fmt = qbe_str_new(c->qbe, qbe_sv_from_cstr("%ld\n"));
+        }
+
+        QbeCall *call = qbe_build_call(c->qbe, c->fn, fn, qbe_type_basic(QBE_TYPE_I32));
+        qbe_call_add_arg(c->qbe, call, fmt);
+        qbe_call_start_variadic(c->qbe, call);
+
+        QbeNode *operand = compile_expr(c, print->operand, false);
+        qbe_call_add_arg(c->qbe, call, qbe_build_cast(c->qbe, c->fn, operand, QBE_TYPE_I64, true));
     } break;
 
     default:
-        compile_expr(c, n);
-        compile_sb_sprintf(c, ";");
+        compile_expr(c, n, false);
         break;
     }
 }
 
-static void compile_fn(Compiler *c, Node *n) {
-    assert(n->compile.iota);
-
-    NodeFn *fn = (NodeFn *) n;
-    compile_sb_sprintf(c, "\n#line %zu ", n->token.pos.row + 1);
-    compile_sb_quoted(c, sv_from_cstr(n->token.pos.path));
-
-    compile_sb_sprintf(c, "\nstatic ");
-    if (fn->ret) {
-        compile_type(c, &fn->ret->type);
-    } else {
-        compile_sb_sprintf(c, "void");
-    }
-    compile_sb_sprintf(c, " ");
-    compile_sb_data(c, n->compile);
-
-    const bool local_save = c->local;
-    c->local = true;
-    c->locals = 0;
-
-    compile_sb_sprintf(c, "(");
-    if (fn->args.head) {
-        for (Node *it = fn->args.head; it; it = it->next) {
-            compile_type(c, &it->type);
-            compile_sb_sprintf(c, " ");
-
-            it->compile = compile_data_new(c);
-            compile_sb_data(c, it->compile);
-
-            if (it->next) {
-                compile_sb_sprintf(c, ", ");
-            }
-        }
-    } else {
-        compile_sb_sprintf(c, "void");
-    }
-    compile_sb_sprintf(c, ") ");
-
-    compile_stmt(c, fn->body);
-    c->local = local_save;
-
-    compile_sb_sprintf(c, "\n");
-}
-
-static_assert(COUNT_NODES == 10, "");
-static void pre_compile_type(Compiler *c, Type *type) {
-    if (!type || type->compile.iota) {
-        return;
-    }
-
-    switch (type->kind) {
-    case TYPE_BOOL:
-    case TYPE_I64:
-        break;
-
-    case TYPE_FN: {
-        NodeFn *spec = (NodeFn *) type->spec;
-        for (Node *it = spec->args.head; it; it = it->next) {
-            pre_compile_type(c, &it->type);
-        }
-
-        type->compile = compile_data_new(c);
-
-        compile_sb_sprintf(c, "typedef ");
-        if (spec->ret) {
-            compile_type(c, &spec->ret->type);
-        } else {
-            compile_sb_sprintf(c, "void");
-        }
-        compile_sb_sprintf(c, " (*");
-        compile_sb_data(c, type->compile);
-
-        compile_sb_sprintf(c, ")(");
-        if (spec->args.head) {
-            for (Node *it = spec->args.head; it; it = it->next) {
-                compile_type(c, &it->type);
-                if (it->next) {
-                    compile_sb_sprintf(c, ", ");
-                }
-            }
-        } else {
-            compile_sb_sprintf(c, "void");
-        }
-        compile_sb_sprintf(c, ");\n");
-    } break;
-
-    default:
-        unreachable();
-    }
-}
-
-// TODO: Perform hashing of type definitions
-static_assert(COUNT_NODES == 10, "");
-static void pre_compile_node(Compiler *c, Node *n) {
-    if (!n || n->compile.iota) {
-        return;
-    }
-
-    switch (n->kind) {
-    case NODE_ATOM:
-        break;
-
-    case NODE_CALL: {
-        NodeCall *call = (NodeCall *) n;
-        pre_compile_node(c, call->fn);
-
-        for (Node *it = call->args.head; it; it = it->next) {
-            pre_compile_node(c, it);
-        }
-    } break;
-
-    case NODE_UNARY: {
-        NodeUnary *unary = (NodeUnary *) n;
-        pre_compile_node(c, unary->operand);
-    } break;
-
-    case NODE_BINARY: {
-        NodeBinary *binary = (NodeBinary *) n;
-        pre_compile_node(c, binary->lhs);
-        pre_compile_node(c, binary->rhs);
-    } break;
-
-    case NODE_IF: {
-        NodeIf *iff = (NodeIf *) n;
-        pre_compile_node(c, iff->condition);
-        pre_compile_node(c, iff->consequence);
-        pre_compile_node(c, iff->antecedence);
-    } break;
-
-    case NODE_BLOCK: {
-        NodeBlock *block = (NodeBlock *) n;
-        for (Node *it = block->body.head; it; it = it->next) {
-            pre_compile_node(c, it);
-        }
-    } break;
-
-    case NODE_RETURN: {
-        NodeReturn *ret = (NodeReturn *) n;
-        pre_compile_node(c, ret->value);
-    } break;
-
-    case NODE_FN: {
-        NodeFn *fn = (NodeFn *) n;
-        for (Node *it = fn->args.head; it; it = it->next) {
-            pre_compile_node(c, it);
-        }
-
-        n->compile = compile_data_new(c);
-        compile_sb_sprintf(c, "static ");
-        if (fn->ret) {
-            compile_type(c, &fn->ret->type);
-        } else {
-            compile_sb_sprintf(c, "void");
-        }
-        compile_sb_sprintf(c, " ");
-        compile_sb_data(c, n->compile);
-
-        compile_sb_sprintf(c, "(");
-        if (fn->args.head) {
-            for (Node *it = fn->args.head; it; it = it->next) {
-                compile_type(c, &it->type);
-                if (it->next) {
-                    compile_sb_sprintf(c, ", ");
-                }
-            }
-        } else {
-            compile_sb_sprintf(c, "void");
-        }
-        compile_sb_sprintf(c, ");\n");
-
-        pre_compile_node(c, fn->body);
-    } break;
-
-    case NODE_VAR: {
-        NodeVar *var = (NodeVar *) n;
-        pre_compile_node(c, var->expr);
-        pre_compile_type(c, &n->type);
-
-        if (!var->local) {
-            compile_type(c, &n->type);
-            compile_sb_sprintf(c, " ");
-
-            n->compile = compile_data_new(c);
-            compile_sb_data(c, n->compile);
-
-            compile_sb_sprintf(c, ";\n");
-        }
-    } break;
-
-    case NODE_PRINT: {
-        NodePrint *print = (NodePrint *) n;
-        pre_compile_node(c, print->operand);
-    } break;
-
-    default:
-        unreachable();
-        break;
-    }
-}
-
-void compile_nodes(Context *context, Cmd *cmd, const char *output) {
-    Node *main = scope_find(context->globals, sv_from_cstr("main"));
+static NodeFn *get_main(Context *c) {
+    Node *main = scope_find(c->globals, sv_from_cstr("main"));
     if (!main) {
         fprintf(stderr, "ERROR: Function 'main' is not defined\n");
         exit(1);
@@ -503,64 +324,54 @@ void compile_nodes(Context *context, Cmd *cmd, const char *output) {
         exit(1);
     }
 
-    Compiler c = {0};
-    compile_sb_sprintf(&c, "extern int printf(const char *fmt, ...);\n");
-
-    for (size_t i = 0; i < context->globals.count; i++) {
-        pre_compile_node(&c, context->globals.data[i]);
+    NodeFn *main_fn = (NodeFn *) main;
+    if (main_fn->arity) {
+        fprintf(stderr, PosFmt "ERROR: Function 'main' cannot take any arguments\n", PosArg(main->token.pos));
+        exit(1);
     }
+
+    if (main_fn->ret) {
+        fprintf(stderr, PosFmt "ERROR: Function 'main' cannot return anything\n", PosArg(main->token.pos));
+        exit(1);
+    }
+    return main_fn;
+}
+
+void compile_nodes(Context *context, const char *output) {
+    NodeFn *main = get_main(context);
+
+    Compiler c = {0};
+    c.qbe = qbe_new();
 
     for (size_t i = 0; i < context->globals.count; i++) {
         compile_stmt(&c, context->globals.data[i]);
     }
 
-    compile_sb_sprintf(&c, "\n#line 1 \"glos_start_call_main.h\"");
-    compile_sb_sprintf(&c, "\nint main(void) {\n");
-    c.indent++;
+    // Entry
+    c.fn = qbe_fn_new(c.qbe, qbe_sv_from_cstr("main"), qbe_type_basic(QBE_TYPE_I32));
+    qbe_fn_set_debug(c.qbe, c.fn, qbe_sv_from_cstr("glos_start_call_main.h"), 1);
 
     for (size_t i = 0; i < context->globals.count; i++) {
         Node *it = context->globals.data[i];
         if (it->kind == NODE_VAR) {
             NodeVar *var = (NodeVar *) it;
             if (var->expr) {
-                compile_sb_indent(&c);
-                compile_sb_data(&c, it->compile);
-                compile_sb_sprintf(&c, " = ");
-                compile_expr(&c, var->expr);
-                compile_sb_sprintf(&c, ";\n");
+                qbe_build_store(c.qbe, c.fn, var->qbe, compile_expr(&c, var->expr, false));
             }
         }
     }
 
-    compile_sb_indent(&c);
-    compile_sb_sprintf(&c, "return (");
-    compile_sb_data(&c, main->compile);
-    compile_sb_sprintf(&c, "(), 0);\n");
-    c.indent--;
-    compile_sb_sprintf(&c, "}\n");
+    qbe_build_call(c.qbe, c.fn, main->qbe, qbe_type_basic(QBE_TYPE_I0));
+    qbe_build_return(c.qbe, c.fn, qbe_atom_int(c.qbe, QBE_TYPE_I32, 0));
 
 #if 0
-    fwrite(c.sb.data, c.sb.count, 1, stdout);
+    qbe_compile(c.qbe);
+    QbeSV program = qbe_get_compiled_program(c.qbe);
+    fwrite(program.data, program.count, 1, stdout);
     exit(0);
 #endif
 
-    da_push(cmd, "cc");
-    da_push(cmd, "-g");
-    da_push(cmd, "-o");
-    da_push(cmd, output);
-    da_push(cmd, "-x");
-    da_push(cmd, "c");
-    da_push(cmd, "-");
-
-    FILE *in = NULL;
-    Proc  proc = cmd_run_async(cmd, (CmdStdio) {.in = &in});
-
-    if (in) {
-        fwrite(c.sb.data, c.sb.count, 1, in);
-        fclose(in);
-    }
-
-    const int code = cmd_wait(proc);
+    const int code = qbe_generate(c.qbe, QBE_TARGET_DEFAULT, output, NULL, 0);
     if (code) {
         exit(code);
     }

@@ -3,6 +3,6 @@
 
 #include "context.h"
 
-void compile_nodes(Context *context, Cmd *cmd, const char *output);
+void compile_nodes(Context *context, const char *output);
 
 #endif // COMPILER_H
