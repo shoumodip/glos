@@ -74,15 +74,6 @@ bool sv_has_suffix(SV a, SV b);
 SV sv_from_cstr(const char *cstr);
 SV sv_strip_suffix(SV a, SV b);
 
-// String Builder
-typedef struct {
-    char  *data;
-    size_t count;
-    size_t capacity;
-} SB;
-
-void sb_sprintf(SB *sb, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
-
 // Temporary Allocator
 void *temp_alloc(size_t n);
 char *temp_sprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -108,16 +99,6 @@ typedef struct {
     size_t       capacity;
 } Cmd;
 
-typedef struct {
-    FILE **in;
-    FILE **out;
-    FILE **err;
-} CmdStdio;
-
-typedef int Proc;
-
-Proc cmd_run_async(Cmd *c, CmdStdio stdio);
-int  cmd_run_sync(Cmd *c, CmdStdio stdio);
-int  cmd_wait(Proc proc);
+int cmd_run(Cmd *c);
 
 #endif // BASIC_H

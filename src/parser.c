@@ -282,7 +282,11 @@ static Node *parse_stmt(Parser *p) {
             var->expr = parse_expr(p, POWER_SET);
         }
 
-        var->local = p->local;
+        if (p->local) {
+            var->kind = NODE_VAR_LOCAL;
+        } else {
+            var->kind = NODE_VAR_GLOBAL;
+        }
         node = (Node *) var;
     } break;
 
@@ -314,7 +318,7 @@ static Node *parse_fn(Parser *p, Token token) {
 
     while (!lexer_read(&p->lexer, TOKEN_RPAREN)) {
         NodeVar *arg = node_alloc(p, NODE_VAR, lexer_expect(&p->lexer, TOKEN_IDENT));
-        arg->local = true;
+        arg->kind = NODE_VAR_ARG;
         arg->type = parse_type(p);
 
         nodes_push(&fn->args, (Node *) arg);

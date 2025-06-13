@@ -142,6 +142,13 @@ static void check_expr(Context *c, Node *n, bool ref) {
             }
 
             allow_ref = atom->definition->kind == NODE_VAR;
+            if (allow_ref && ref) {
+                NodeVar *var = (NodeVar *) atom->definition;
+                if (var->kind == NODE_VAR_ARG) {
+                    var->kind = NODE_VAR_LOCAL;
+                }
+            }
+
             n->type = atom->definition->type;
             break;
 
@@ -318,7 +325,7 @@ static void check_stmt(Context *c, Node *n) {
 
     case NODE_VAR: {
         NodeVar *var = (NodeVar *) n;
-        if (!var->local) {
+        if (var->kind == NODE_VAR_GLOBAL) {
             const Node *previous = scope_find(c->globals, n->token.sv);
             if (previous) {
                 error_redefinition(n, previous, "identifier");
@@ -350,10 +357,10 @@ static void check_stmt(Context *c, Node *n) {
             }
         }
 
-        if (var->local) {
-            da_push(&c->locals, n);
-        } else {
+        if (var->kind == NODE_VAR_GLOBAL) {
             da_push(&c->globals, n);
+        } else {
+            da_push(&c->locals, n);
         }
     } break;
 

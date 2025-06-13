@@ -1,6 +1,7 @@
 #ifndef NODE_H
 #define NODE_H
 
+#include "qbe.h"
 #include "token.h"
 
 typedef struct Node Node;
@@ -9,11 +10,6 @@ typedef struct {
     Node *head;
     Node *tail;
 } Nodes;
-
-typedef struct {
-    bool   local;
-    size_t iota;
-} CompileData;
 
 typedef enum {
     TYPE_UNIT,
@@ -26,9 +22,9 @@ typedef enum {
 } TypeKind;
 
 typedef struct {
-    TypeKind    kind;
-    Node       *spec;
-    CompileData compile;
+    TypeKind kind;
+    Node    *spec;
+    QbeType  qbe;
 } Type;
 
 const char *type_to_cstr(Type type);
@@ -58,8 +54,6 @@ struct Node {
     Type     type;
     Token    token;
     Node    *next;
-
-    CompileData compile;
 };
 
 typedef struct {
@@ -112,15 +106,26 @@ typedef struct {
     Node *ret;
     Node *body;
     bool  local;
+
+    QbeNode *qbe;
 } NodeFn;
 
 Type node_fn_return_type(const NodeFn *fn);
 
+typedef enum {
+    NODE_VAR_GLOBAL,
+    NODE_VAR_LOCAL,
+    NODE_VAR_ARG,
+} NodeVarKind;
+
 typedef struct {
-    Node  node;
+    Node node;
+
     Node *expr;
     Node *type;
-    bool  local;
+
+    NodeVarKind kind;
+    QbeNode    *qbe;
 } NodeVar;
 
 typedef struct {
