@@ -1,0 +1,28 @@
+a: Foo : A(69)
+main :: () {
+    #if a == {
+    case A
+        other()
+        println(a)
+        x: A = a
+    }
+}
+
+b: Foo : B("Urmom")
+other :: () {
+    #if b == B {
+        println(b)
+        x: B = b
+    }
+}
+
+// Details
+Foo :: trait {
+    foo: ()
+}
+
+A   :: distinct i64
+foo :: (this: A) { println("A: ", this) }
+
+B   :: distinct string
+foo :: (this: B) { println("B: ", this) }

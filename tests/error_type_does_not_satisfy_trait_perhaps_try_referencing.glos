@@ -1,0 +1,13 @@
+Foo :: trait {
+    a: ()
+    b: ()
+}
+
+Bar :: distinct i64
+
+main :: () {
+    Foo(Bar(0))
+}
+
+a :: (this: &Bar) {}
+b :: (this: &Bar) {}

@@ -1,0 +1,7 @@
+EXIT 1
+STDOUT 0
+
+STDERR 272
+tests/error_type_does_not_satisfy_trait_perhaps_try_referencing.glos:9:12: ERROR: Type 'Bar' does not implement 'Foo'
+tests/error_type_does_not_satisfy_trait_perhaps_try_referencing.glos:9:12: NOTE: The trait is implemented for '&Bar', not 'Bar'. Perhaps try referencing?
+

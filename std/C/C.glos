@@ -1,31 +1,33 @@
-File :: distinct rawptr
+FILE :: distinct rawptr
 
 extern {
     printf :: (fmt: &char, ...) -> i32
-    fprintf :: (f: File, fmt: &char, ...) -> i32
-    fflush :: (f: File)
+    fprintf :: (f: FILE, fmt: &char, ...) -> i32
+    snprintf :: (out: &char, size: i64, fmt: &char, ...) -> i32
+    fwrite :: (ptr: rawptr, size: i64, count: i64, f: FILE)
+    fflush :: (f: FILE)
     abort :: ()
     exit :: (code: i32)
     memcmp :: (a: rawptr, b: rawptr, n: i64) -> i32
 }
 
 #if PLATFORM == {
-case .Linux
+case .LINUX
     extern {
-        stdin: File
-        stdout: File
-        stderr: File
+        stdin: FILE
+        stdout: FILE
+        stderr: FILE
     }
 
-case .MacOS
+case .MACOS
     extern {
-        #link "__stdinp"  stdin: File
-        #link "__stdoutp" stdout: File
-        #link "__stderrp" stderr: File
+        #link "__stdinp"  stdin: FILE
+        #link "__stdoutp" stdout: FILE
+        #link "__stderrp" stderr: FILE
     }
 
-case .Windows
-    stdin: File
-    stdout: File
-    stderr: File
+case .WINDOWS
+    stdin: FILE
+    stdout: FILE
+    stderr: FILE
 }

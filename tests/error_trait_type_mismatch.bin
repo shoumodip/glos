@@ -1,0 +1,7 @@
+EXIT 134
+STDOUT 3
+69
+
+STDERR 57
+tests/error_trait_type_mismatch.glos:4:15: Type mismatch
+

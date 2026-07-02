@@ -42,6 +42,14 @@ main :: () {
         })
     }
 
+    // Traits
+    {
+        write_type(trait {
+            read: (a: string) -> i32
+            show: (a: i32) -> string
+        })
+    }
+
     // Unions
     {
         write_type(union {
@@ -171,6 +179,22 @@ write_type :: (ti: &Type_Info) {
             }
             write_string("}")
 
+        case Type_Info_Trait
+            write_string("trait {")
+            if variant.names.count != 0 {
+                write_string("\n")
+                depth += 1
+                for i := 0; i < variant.names.count; i += 1 {
+                    write_indent(depth)
+                    write_string(variant.names[i])
+                    write_string(": ")
+                    write_type(variant.types[i])
+                    write_string("\n")
+                }
+                depth -= 1
+                write_indent(depth)
+            }
+            write_string("}")
 
         case Type_Info_Union
             write_string("union {")
@@ -219,9 +243,6 @@ write_type :: (ti: &Type_Info) {
         case Type_Info_String
             write_string("string")
 
-        case Type_Info_Any
-            write_string("any")
-
         case null
             unreachable()
         }
@@ -241,3 +262,5 @@ write_type :: (ti: &Type_Info) {
 
     C :: #import "C"
 }
+
+// TODO: Trait

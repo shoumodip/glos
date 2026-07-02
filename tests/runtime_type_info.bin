@@ -1,5 +1,5 @@
 EXIT 0
-STDOUT 526
+STDOUT 588
 bool
 char
 i8
@@ -27,6 +27,10 @@ enum i64 {
     Bar = 1
     Baz = 69
     Urmom = 70
+}
+trait {
+    read: (string) -> i32
+    show: (i32) -> string
 }
 union {
     i32

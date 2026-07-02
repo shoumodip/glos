@@ -15,6 +15,7 @@ typedef struct Node_Define Node_Define;
 
 typedef struct Node_Fn     Node_Fn;
 typedef struct Node_Enum   Node_Enum;
+typedef struct Node_Trait  Node_Trait;
 typedef struct Node_Union  Node_Union;
 typedef struct Node_Struct Node_Struct;
 
@@ -70,13 +71,13 @@ typedef enum {
 
     TYPE_FN,
     TYPE_ENUM,
+    TYPE_TRAIT,
     TYPE_UNION,
     TYPE_STRUCT,
 
     TYPE_ARRAY,
     TYPE_SLICE,
     TYPE_STRING,
-    TYPE_ANY,
 
     TYPE_GROUP,
     TYPE_MODULE,
@@ -88,6 +89,8 @@ typedef enum {
 
 typedef struct Type               Type;
 typedef struct Type_Fn_Arg        Type_Fn_Arg;
+typedef struct Type_Trait_Impl    Type_Trait_Impl;
+typedef struct Type_Trait_Method  Type_Trait_Method;
 typedef struct Type_Union_Variant Type_Union_Variant;
 typedef struct Type_Struct_Field  Type_Struct_Field;
 
@@ -116,6 +119,19 @@ typedef struct {
     Type_Kind  underlying;
     Node_Enum *definition;
 } Type_Enum;
+
+typedef struct {
+    Type_Trait_Method *methods;
+    size_t             methods_count;
+
+    struct {
+        Type_Trait_Impl *head; // Who cares about direction...
+    } impls;
+
+    LLVMMetadataRef debug;
+
+    Node_Trait *definition;
+} Type_Trait;
 
 typedef struct {
     Type_Union_Variant *variants;
@@ -171,6 +187,7 @@ struct Type {
     union {
         Type_Fn     *fn;
         Type_Enum    enumm;
+        Type_Trait  *trait;
         Type_Union  *unionn;
         Type_Struct *structt;
 
@@ -197,6 +214,28 @@ struct Type_Fn_Arg {
     bool         default_value_is_caller_location;
 
     bool has_default_value;
+};
+
+typedef struct {
+    Node_Fn     *fn;
+    LLVMValueRef wrapper;
+} Type_Trait_Impl_Method;
+
+struct Type_Trait_Impl {
+    Type        type;
+    Type_Trait *trait;
+
+    Type_Trait_Impl_Method *methods;
+    size_t                  methods_count;
+
+    LLVMValueRef     llvm;
+    Type_Trait_Impl *next;
+};
+
+struct Type_Trait_Method {
+    Pos  pos;
+    SV   name;
+    Type type;
 };
 
 struct Type_Union_Variant {
@@ -233,16 +272,22 @@ typedef enum {
     CONST_VALUE_VAR,
     CONST_VALUE_TYPE,
 
+    CONST_VALUE_TRAIT,
     CONST_VALUE_UNION,
     CONST_VALUE_STRUCT,
 
     CONST_VALUE_ARRAY,
     CONST_VALUE_STRING,
-    CONST_VALUE_ANY,
 
     CONST_VALUE_MODULE,
     COUNT_CONST_VALUES
 } Const_Value_Kind;
+
+typedef struct {
+    Type            *type;
+    Const_Value     *data;
+    Type_Trait_Impl *impl;
+} Const_Value_Trait;
 
 typedef struct {
     Type_Union  *spec;
@@ -263,11 +308,6 @@ typedef struct {
     bool is_slice;
 } Const_Value_Array;
 
-typedef struct {
-    Type        *type;
-    Const_Value *value;
-} Const_Value_Any;
-
 struct Const_Value {
     Const_Value_Kind kind;
     union {
@@ -276,12 +316,12 @@ struct Const_Value {
         Node_Fn   *fn;
         Node_Atom *var;
 
+        Const_Value_Trait  trait;
         Const_Value_Union  unionn;
         Const_Value_Struct structt;
 
         Const_Value_Array array;
         SV                string;
-        Const_Value_Any   any;
 
         Module *module;
     } as;
@@ -296,12 +336,12 @@ static_assert(COUNT_CONST_VALUES == 10, "");
 #define const_value_var(v)  ((Const_Value) {.kind = CONST_VALUE_VAR, .as.var = (v)})
 #define const_value_type(v) ((Const_Value) {.kind = CONST_VALUE_TYPE, .as.type = (v)})
 
-#define const_value_struct(v) ((Const_Value) {.kind = CONST_VALUE_STRUCT, .as.structt = (v)})
+#define const_value_trait(v)  ((Const_Value) {.kind = CONST_VALUE_TRAIT, .as.trait = (v)})
 #define const_value_union(v)  ((Const_Value) {.kind = CONST_VALUE_UNION, .as.unionn = (v)})
+#define const_value_struct(v) ((Const_Value) {.kind = CONST_VALUE_STRUCT, .as.structt = (v)})
 
 #define const_value_array(v)  ((Const_Value) {.kind = CONST_VALUE_ARRAY, .as.array = (v)})
 #define const_value_string(v) ((Const_Value) {.kind = CONST_VALUE_STRING, .as.string = (v)})
-#define const_value_any(v)    ((Const_Value) {.kind = CONST_VALUE_ANY, .as.any = (v)})
 
 #define const_value_module(v) ((Const_Value) {.kind = CONST_VALUE_MODULE, .as.module = (v)})
 
@@ -326,6 +366,7 @@ typedef enum {
 
     NODE_FN,
     NODE_ENUM,
+    NODE_TRAIT,
     NODE_UNION,
     NODE_STRUCT,
     NODE_COMPOUND,
@@ -352,7 +393,7 @@ typedef enum {
 
 typedef enum {
     AUTO_CAST_NONE,
-    AUTO_CAST_TO_ANY,
+    AUTO_CAST_TO_TRAIT,
     AUTO_CAST_TO_UNION,
     AUTO_CAST_ARRAY_TO_SLICE,
     COUNT_AUTO_CASTS
@@ -364,7 +405,10 @@ typedef struct {
     Type from;
     Type to;
 
-    size_t data; // For unions
+    union {
+        size_t           union_index;
+        Type_Trait_Impl *trait_impl;
+    };
 } Auto_Cast;
 
 struct Node {
@@ -380,9 +424,11 @@ struct Node {
     Auto_Cast *auto_casts;
     size_t     auto_casts_count;
     Type      *auto_casts_group;
+
+    Module *module;
 };
 
-Node *node_alloc(Arena *a, Node_Kind kind, Token token);
+Node *node_alloc(Module *module, Node_Kind kind, Token token);
 Node *node_iter(Node *it, Node *ll);
 
 // When the concrete type of an abstract value is resolved inside conditional statements
@@ -467,8 +513,8 @@ typedef struct {
     Node_Fn **overloads;
     Module   *module;
 
-    Node *any_check;
-    Type *any_check_type;
+    Node *trait_check;
+    Type *trait_check_type;
 
     Node  *union_check;
     size_t union_check_index;
@@ -484,6 +530,7 @@ typedef struct {
     union {
         size_t field_index;
         size_t enum_value;
+        size_t trait_method;
         size_t union_index;
     };
 
@@ -496,6 +543,7 @@ typedef struct {
     LLVMValueRef method_receiver_llvm;
 
     bool is_enum;
+    bool is_trait;
 
     Module *module;
 } Node_Member;
@@ -546,8 +594,17 @@ struct Node_Fn {
     bool is_inline;
     bool is_method;
 
-    // compare :: (this: $T, that: T) -> bool // Partial, only implements equality
-    // compare :: (this: $T, that: T) -> i32  // Complete, implements equality AND ordering
+    // Foo :: trait {
+    //     foo: () // <- This function is a trait method type
+    // }
+    Type *trait_method_type;
+
+    // For generating wrappers of trait implementation methods
+    Node_Fn    *wrapper;
+    Type_Trait *wrapper_for_trait;
+
+    // compare :: (this: $T, that: T) -> bool       // Partial, only implements equality
+    // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
     bool is_compare_operator_complete;
 
     Node_Fn *outer_fn;
@@ -585,6 +642,21 @@ struct Node_Enum {
 
     LLVMTypeRef     llvm;
     LLVMMetadataRef debug;
+};
+
+// This represents a type
+struct Node_Trait {
+    Node   node;
+    Nodes  methods;
+    size_t methods_count; // Calculated at parse time
+
+    Node_Atom *defined_as;
+    size_t     defined_as_anon_iota;
+
+    // The module this was parsed in
+    Module *module;
+
+    Node_Fn *defined_in;
 };
 
 // This represents a type
@@ -641,8 +713,8 @@ typedef enum {
     TYPE_CAST_NOP,
     TYPE_CAST_NORMAL,
     TYPE_CAST_TO_BOOL,
+    TYPE_CAST_TO_TRAIT,
     TYPE_CAST_TO_UNION,
-    TYPE_CAST_TO_ANY,
     COUNT_TYPE_CASTS,
 } Type_Cast;
 
@@ -668,7 +740,10 @@ typedef struct {
 
     bool      is_type_cast;
     Type_Cast type_cast;
-    size_t    type_cast_union_index;
+    union {
+        Type_Trait_Impl *type_cast_trait_impl;
+        size_t           type_cast_union_index;
+    };
 
     bool is_stmt;
 } Node_Call;
@@ -756,9 +831,9 @@ typedef struct {
     size_t preds_count;
 
     Node_Enum  *enumeration;
+    Node_Trait *trait;
     Node_Union *unionn;
 
-    bool is_expr_any;
     bool is_expr_type_info;
 
     bool       is_compile_time;
@@ -787,4 +862,8 @@ typedef struct {
 void node_debug(FILE *f, Node *n);
 void nodes_debug(FILE *f, Nodes ns);
 
+Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, size_t method_index);
+
 #endif // NODE_H
+
+// Remove the individual `module` fields present in specific node types

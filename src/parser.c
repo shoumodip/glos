@@ -49,7 +49,7 @@ typedef enum {
     POWER_DOT,
 } Power;
 
-static_assert(COUNT_TOKENS == 76, "");
+static_assert(COUNT_TOKENS == 77, "");
 static Power token_kind_to_power(Token_Kind kind) {
     switch (kind) {
     case TOKEN_DOT:
@@ -234,7 +234,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 static Node *parse_stmt(Parser *p);
 
 static Node *parse_block(Parser *p, Token token) {
-    Node_Block *block = (Node_Block *) node_alloc(&default_arena, NODE_BLOCK, token);
+    Node_Block *block = (Node_Block *) node_alloc(p->module_current, NODE_BLOCK, token);
     while (!read_token(p, TOKEN_RBRACE)) {
         nodes_push(&block->body, parse_stmt(p));
         expect_stmt_terminator(p);
@@ -256,7 +256,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
     bool  should_be_switch = false;
     Node *expr = parse_expr(p, POWER_SET, false, false, &should_be_switch);
     if (should_be_switch) {
-        Node_Switch *sw = (Node_Switch *) node_alloc(&default_arena, NODE_SWITCH, token);
+        Node_Switch *sw = (Node_Switch *) node_alloc(p->module_current, NODE_SWITCH, token);
         sw->is_compile_time = is_compile_time;
         sw->expr = expr;
 
@@ -276,7 +276,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
                 fallback = true;
             }
 
-            Node_Case *case_ = (Node_Case *) node_alloc(&default_arena, NODE_CASE, token);
+            Node_Case *case_ = (Node_Case *) node_alloc(p->module_current, NODE_CASE, token);
             if (!fallback) {
                 do {
                     nodes_push(&case_->preds, parse_expr(p, POWER_SET, false, false, NULL));
@@ -286,7 +286,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
             }
             expect_stmt_terminator(p);
 
-            case_->body = node_alloc(&default_arena, NODE_BLOCK, token);
+            case_->body = node_alloc(p->module_current, NODE_BLOCK, token);
             Node_Block *block = (Node_Block *) case_->body;
             while (true) {
                 ahead = peek_token(p);
@@ -304,7 +304,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
 
         node = (Node *) sw;
     } else {
-        Node_If *iff = (Node_If *) node_alloc(&default_arena, NODE_IF, token);
+        Node_If *iff = (Node_If *) node_alloc(p->module_current, NODE_IF, token);
         iff->condition = expr;
         iff->is_compile_time = is_compile_time;
 
@@ -333,7 +333,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
 }
 
 static Node *parse_for(Parser *p, Token token) {
-    Node_For *forr = (Node_For *) node_alloc(&default_arena, NODE_FOR, token);
+    Node_For *forr = (Node_For *) node_alloc(p->module_current, NODE_FOR, token);
 
     if (peek_token(p).kind != TOKEN_LBRACE) {
         forr->condition = parse_expr(p, POWER_NIL, false, false, NULL);
@@ -407,6 +407,8 @@ static void definition_lhs_atom_setup(
             ((Node_Fn *) it_expr)->defined_as = it;
         } else if (it_expr->kind == NODE_ENUM) {
             ((Node_Enum *) it_expr)->defined_as = it;
+        } else if (it_expr->kind == NODE_TRAIT) {
+            ((Node_Trait *) it_expr)->defined_as = it;
         } else if (it_expr->kind == NODE_UNION) {
             ((Node_Union *) it_expr)->defined_as = it;
         } else if (it_expr->kind == NODE_STRUCT) {
@@ -583,7 +585,7 @@ bool parser_import(Parser *p, Node_Import *import) {
 
 static Node *
 parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool spread_allowed, bool is_static) {
-    Node_Define *define = (Node_Define *) node_alloc(&default_arena, NODE_DEFINE, token);
+    Node_Define *define = (Node_Define *) node_alloc(p->module_current, NODE_DEFINE, token);
     if (spread_allowed && peek_token(p).kind == TOKEN_SPREAD) {
         define->has_spread = true;
         define->spread_pos = next_token(p).pos;
@@ -667,7 +669,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
 }
 
 static Node *parse_compound(Parser *p, Node *lhs, Token token) {
-    Node_Compound *compound = (Node_Compound *) node_alloc(&default_arena, NODE_COMPOUND, token);
+    Node_Compound *compound = (Node_Compound *) node_alloc(p->module_current, NODE_COMPOUND, token);
     compound->lhs = lhs;
     compound->is_designated = false;
     while (!read_token(p, TOKEN_RBRACE)) {
@@ -676,7 +678,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
         bool child_is_designated = false;
         if (read_token(p, TOKEN_SET)) {
             assert(p->state.ahead.kind == TOKEN_SET);
-            Node_Binary *binary = (Node_Binary *) node_alloc(&default_arena, NODE_BINARY, p->state.ahead);
+            Node_Binary *binary = (Node_Binary *) node_alloc(p->module_current, NODE_BINARY, p->state.ahead);
             binary->lhs = child;
             binary->rhs = parse_expr(p, POWER_SET, false, true, NULL);
             binary->module = p->module_current;
@@ -706,7 +708,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 76, "");
+static_assert(COUNT_TOKENS == 77, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     Node *node = NULL;
     Token token = next_token(p);
@@ -724,15 +726,15 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_DIRECTIVE_MAIN:
     case TOKEN_DIRECTIVE_PLATFORM:
     case TOKEN_DIRECTIVE_CALLER_LOCATION:
-        node = node_alloc(&default_arena, NODE_ATOM, token);
+        node = node_alloc(p->module_current, NODE_ATOM, token);
         ((Node_Atom *) node)->module = p->module_current;
         break;
 
     case TOKEN_ISTRING: {
-        node = node_alloc(&default_arena, NODE_INTERPOLATION, token);
+        node = node_alloc(p->module_current, NODE_INTERPOLATION, token);
         Node_Interpolation *interp = (Node_Interpolation *) node;
 
-        nodes_push(&interp->children, node_alloc(&default_arena, NODE_ATOM, token));
+        nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
         interp->children_count++;
 
         while (token.kind == TOKEN_ISTRING) {
@@ -741,13 +743,13 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             expect_token(p, TOKEN_RBRACE); // This also ensures that there is nothing left in the buffer
 
             token = lexer_get_string(&p->state.lexer, p->state.lexer.pos);
-            nodes_push(&interp->children, node_alloc(&default_arena, NODE_ATOM, token));
+            nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
             interp->children_count++;
         }
     } break;
 
     case TOKEN_DOT: {
-        node = node_alloc(&default_arena, NODE_MEMBER, expect_token(p, TOKEN_IDENT));
+        node = node_alloc(p->module_current, NODE_MEMBER, expect_token(p, TOKEN_IDENT));
         Node_Member *member = (Node_Member *) node;
         member->dot = token;
         member->module = p->module_current;
@@ -757,27 +759,28 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_MUL:
     case TOKEN_BNOT:
     case TOKEN_LNOT: {
-        node = node_alloc(&default_arena, NODE_UNARY, token);
+        node = node_alloc(p->module_current, NODE_UNARY, token);
         Node_Unary *unary = (Node_Unary *) node;
         unary->value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
         unary->module = p->module_current;
     } break;
 
     case TOKEN_BAND: {
-        node = node_alloc(&default_arena, NODE_UNARY, token);
+        node = node_alloc(p->module_current, NODE_UNARY, token);
         Node_Unary *unary = (Node_Unary *) node;
         unary->value = parse_expr(p, POWER_REF, false, compounds_allowed, NULL);
         unary->module = p->module_current;
     } break;
 
     case TOKEN_DISTINCT: {
-        node = node_alloc(&default_arena, NODE_DISTINCT, token);
+        node = node_alloc(p->module_current, NODE_DISTINCT, token);
         Node_Distinct *distinct = (Node_Distinct *) node;
         distinct->value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
 
-        static_assert(COUNT_NODES == 27, "");
+        static_assert(COUNT_NODES == 28, "");
         switch (distinct->value->kind) {
         case NODE_ENUM:
+        case NODE_TRAIT:
         case NODE_UNION:
         case NODE_STRUCT:
             fprintf(
@@ -811,7 +814,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         if (is_fn) {
             Node *arg = node;
-            node = node_alloc(&default_arena, NODE_FN, token);
+            node = node_alloc(p->module_current, NODE_FN, token);
 
             Node_Fn *fn = (Node_Fn *) node;
             fn->outer_fn = p->state.fn_current;
@@ -909,12 +912,21 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 }
 
                 if (read_token(p, TOKEN_SPREAD)) {
+                    if (fn->is_method) {
+                        assert(p->state.ahead.kind == TOKEN_SPREAD);
+                        fprintf(
+                            stderr,
+                            Pos_Fmt "ERROR: Methods cannot have untyped variadics\n",
+                            Pos_Arg(p->state.ahead.pos));
+                        exit(1);
+                    }
+
                     fn->variadics_kind = VARIADICS_UNTYPED;
                     fn_args_end_pos = expect_token(p, TOKEN_RPAREN).pos;
                     break;
                 }
 
-                Node *name = node_alloc(&default_arena, NODE_ATOM, expect_token(p, TOKEN_IDENT));
+                Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
                 if (sv_match(name->token.sv, "this")) {
                     fprintf(
                         stderr,
@@ -973,7 +985,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         break;
 
     case TOKEN_LBRACKET: {
-        node = node_alloc(&default_arena, NODE_INDEXABLE, token);
+        node = node_alloc(p->module_current, NODE_INDEXABLE, token);
         Node_Indexable *indexable = (Node_Indexable *) node;
 
         token = peek_token(p);
@@ -985,7 +997,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_ENUM: {
-        node = node_alloc(&default_arena, NODE_ENUM, token);
+        node = node_alloc(p->module_current, NODE_ENUM, token);
         Node_Enum *enumm = (Node_Enum *) node;
         enumm->defined_in = p->state.fn_current;
         enumm->module = p->module_current;
@@ -997,7 +1009,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         expect_token(p, TOKEN_LBRACE);
         while (!read_token(p, TOKEN_RBRACE)) {
-            Node *it = node_alloc(&default_arena, NODE_UNARY, expect_token(p, TOKEN_IDENT));
+            Node *it = node_alloc(p->module_current, NODE_UNARY, expect_token(p, TOKEN_IDENT));
             if (read_token(p, TOKEN_SET)) {
                 Node_Unary *unary = (Node_Unary *) it;
                 unary->value = parse_expr(p, POWER_SET, false, true, NULL);
@@ -1010,8 +1022,54 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         }
     } break;
 
+    case TOKEN_TRAIT: {
+        node = node_alloc(p->module_current, NODE_TRAIT, token);
+        Node_Trait *trait = (Node_Trait *) node;
+        trait->module = p->module_current;
+        trait->defined_in = p->state.fn_current;
+
+        expect_token(p, TOKEN_LBRACE);
+        while (!read_token(p, TOKEN_RBRACE)) {
+            Node_Atom *name = (Node_Atom *) node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
+            name->module = p->module_current;
+            Node *method = parse_define(p, (Node *) name, expect_token(p, TOKEN_COLON), false, false, false);
+
+            Node_Define *define = (Node_Define *) method;
+            if (define->is_const) {
+                fprintf(
+                    stderr,
+                    Pos_Fmt "ERROR: Expected trait method, got constant definition\n",
+                    Pos_Arg(method->token.pos));
+                exit(1);
+            }
+
+            if (define->expr) {
+                fprintf(
+                    stderr,
+                    Pos_Fmt "ERROR: Trait method definition cannot have assignment\n",
+                    Pos_Arg(method->token.pos));
+                exit(1);
+            }
+
+            if (define->type->kind != NODE_FN) {
+                fprintf(
+                    stderr,
+                    Pos_Fmt "ERROR: Trait method must be a literal function type\n",
+                    Pos_Arg(define->type->token.pos));
+                exit(1);
+            }
+
+            Node_Fn *fn = (Node_Fn *) define->type;
+            fn->trait_method_type = &node->type;
+
+            nodes_push(&trait->methods, method);
+            trait->methods_count++;
+            expect_stmt_terminator(p);
+        }
+    } break;
+
     case TOKEN_UNION: {
-        node = node_alloc(&default_arena, NODE_UNION, token);
+        node = node_alloc(p->module_current, NODE_UNION, token);
         Node_Union *unionn = (Node_Union *) node;
         unionn->module = p->module_current;
         unionn->defined_in = p->state.fn_current;
@@ -1025,7 +1083,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_STRUCT: {
-        node = node_alloc(&default_arena, NODE_STRUCT, token);
+        node = node_alloc(p->module_current, NODE_STRUCT, token);
         Node_Struct *structt = (Node_Struct *) node;
         structt->module = p->module_current;
         structt->defined_in = p->state.fn_current;
@@ -1034,7 +1092,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         while (!read_token(p, TOKEN_RBRACE)) {
             token = peek_token(p);
             if (token.kind == TOKEN_SPREAD) {
-                Node_Unary *spread = (Node_Unary *) node_alloc(&default_arena, NODE_UNARY, next_token(p));
+                Node_Unary *spread = (Node_Unary *) node_alloc(p->module_current, NODE_UNARY, next_token(p));
                 spread->value = parse_expr(p, POWER_PRE, false, false, NULL);
                 spread->module = p->module_current;
                 nodes_push(&structt->fields, (Node *) spread);
@@ -1065,7 +1123,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
     case TOKEN_SIZEOF:
     case TOKEN_TYPEOF: {
-        node = node_alloc(&default_arena, NODE_UNARY, token);
+        node = node_alloc(p->module_current, NODE_UNARY, token);
         Node_Unary *unary = (Node_Unary *) node;
         expect_token(p, TOKEN_LPAREN);
         unary->value = parse_expr(p, POWER_SET, false, true, NULL);
@@ -1074,7 +1132,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_DIRECTIVE_IMPORT: {
-        node = node_alloc(&default_arena, NODE_IMPORT, token);
+        node = node_alloc(p->module_current, NODE_IMPORT, token);
         Node_Import *import = (Node_Import *) node;
         import->path = expect_token(p, TOKEN_STRING);
 
@@ -1128,7 +1186,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         switch (token.kind) {
         case TOKEN_DOT: {
             Node_Member *member =
-                (Node_Member *) node_alloc(&default_arena, NODE_MEMBER, expect_token(p, TOKEN_IDENT, TOKEN_LPAREN));
+                (Node_Member *) node_alloc(p->module_current, NODE_MEMBER, expect_token(p, TOKEN_IDENT, TOKEN_LPAREN));
 
             member->lhs = node;
             member->dot = token;
@@ -1149,7 +1207,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 return node;
             }
 
-            Node_Group *group = (Node_Group *) node_alloc(&default_arena, NODE_GROUP, token);
+            Node_Group *group = (Node_Group *) node_alloc(p->module_current, NODE_GROUP, token);
             nodes_push(&group->nodes, node);
             group->count++;
 
@@ -1162,7 +1220,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         } break;
 
         case TOKEN_LPAREN: {
-            Node_Call *call = (Node_Call *) node_alloc(&default_arena, NODE_CALL, token);
+            Node_Call *call = (Node_Call *) node_alloc(p->module_current, NODE_CALL, token);
             call->fn = node;
 
             bool has_named_args = false;
@@ -1219,7 +1277,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                         exit(1);
                     }
 
-                    Node_Binary *binary = (Node_Binary *) node_alloc(&default_arena, NODE_BINARY, next_token(p));
+                    Node_Binary *binary = (Node_Binary *) node_alloc(p->module_current, NODE_BINARY, next_token(p));
                     binary->lhs = arg;
                     binary->rhs = parse_expr(p, POWER_SET, false, true, NULL);
                     binary->module = p->module_current;
@@ -1274,7 +1332,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             break;
 
         case TOKEN_LBRACKET: {
-            Node_Index *index = (Node_Index *) node_alloc(&default_arena, NODE_INDEX, token);
+            Node_Index *index = (Node_Index *) node_alloc(p->module_current, NODE_INDEX, token);
             index->lhs = node;
             index->module = p->module_current;
 
@@ -1299,7 +1357,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 *should_be_switch = true;
                 return node;
             } else {
-                Node_Binary *binary = (Node_Binary *) node_alloc(&default_arena, NODE_BINARY, token);
+                Node_Binary *binary = (Node_Binary *) node_alloc(p->module_current, NODE_BINARY, token);
                 binary->lhs = node;
                 binary->rhs = parse_expr(p, lbp, groups_allowed, compounds_allowed, NULL);
                 binary->module = p->module_current;
@@ -1332,14 +1390,14 @@ static void local_assert(Parser *p, bool expected_is_local, Token token, const c
     }
 }
 
-static_assert(COUNT_NODES == 27, "");
+static_assert(COUNT_NODES == 28, "");
 static Node *parse_stmt(Parser *p) {
     Node *node = NULL;
 
     Token token = next_token(p);
     switch (token.kind) {
     case TOKEN_DIRECTIVE_ASSERT: {
-        node = node_alloc(&default_arena, NODE_ASSERT, token);
+        node = node_alloc(p->module_current, NODE_ASSERT, token);
         Node_Assert *assertt = (Node_Assert *) node;
 
         expect_token(p, TOKEN_LPAREN);
@@ -1470,16 +1528,16 @@ static Node *parse_stmt(Parser *p) {
     } break;
 
     case TOKEN_DIRECTIVE_LIBRARY: {
-        node = node_alloc(&default_arena, NODE_IMPORT, token);
+        node = node_alloc(p->module_current, NODE_IMPORT, token);
         Node_Import *import = (Node_Import *) node;
         if (read_token(p, TOKEN_LBRACE)) {
             while (!read_token(p, TOKEN_RBRACE)) {
-                Node *library = node_alloc(&default_arena, NODE_ATOM, expect_token(p, TOKEN_STRING));
+                Node *library = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_STRING));
                 nodes_push(&import->libraries, library);
                 expect_stmt_terminator(p);
             }
         } else {
-            Node *library = node_alloc(&default_arena, NODE_ATOM, expect_token(p, TOKEN_STRING));
+            Node *library = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_STRING));
             nodes_push(&import->libraries, library);
         }
     } break;
@@ -1518,7 +1576,7 @@ static Node *parse_stmt(Parser *p) {
 
         const bool in_defer_save = p->state.in_defer;
         p->state.in_defer = true;
-        node = node_alloc(&default_arena, NODE_DEFER, token);
+        node = node_alloc(p->module_current, NODE_DEFER, token);
         Node_Defer *defer = (Node_Defer *) node;
         defer->stmt = parse_stmt(p);
         p->state.in_defer = in_defer_save;
@@ -1545,7 +1603,7 @@ static Node *parse_stmt(Parser *p) {
             exit(1);
         }
 
-        node = node_alloc(&default_arena, NODE_JUMP, token);
+        node = node_alloc(p->module_current, NODE_JUMP, token);
         break;
 
     case TOKEN_RETURN: {
@@ -1560,7 +1618,7 @@ static Node *parse_stmt(Parser *p) {
             exit(1);
         }
 
-        node = node_alloc(&default_arena, NODE_RETURN, token);
+        node = node_alloc(p->module_current, NODE_RETURN, token);
 
         Node_Return *returnn = (Node_Return *) node;
         if (!peek_token(p).newline) {
@@ -1576,7 +1634,7 @@ static Node *parse_stmt(Parser *p) {
 
         const bool after_private_save = p->state.after_private;
 
-        node = node_alloc(&default_arena, NODE_EXTERN, token);
+        node = node_alloc(p->module_current, NODE_EXTERN, token);
         Node_Extern *externn = (Node_Extern *) node;
 
         expect_token(p, TOKEN_LBRACE);

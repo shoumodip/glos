@@ -72,6 +72,7 @@ typedef enum {
     TOKEN_NE,
 
     TOKEN_ENUM,
+    TOKEN_TRAIT,
     TOKEN_UNION,
     TOKEN_STRUCT,
     TOKEN_SIZEOF,

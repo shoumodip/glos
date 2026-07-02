@@ -1,0 +1,16 @@
+main :: () {
+    a: Foo : A(69)
+    b :: a.(A)
+    c :: a.(B)
+}
+
+// Details
+Foo :: trait {
+    foo: ()
+}
+
+A   :: distinct i64
+foo :: (this: A) {}
+
+B   :: distinct i64
+foo :: (this: B) {}

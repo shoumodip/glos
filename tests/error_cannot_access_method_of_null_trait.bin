@@ -1,0 +1,6 @@
+EXIT 134
+STDOUT 0
+
+STDERR 92
+tests/error_cannot_access_method_of_null_trait.glos:3:7: Cannot access method of null trait
+

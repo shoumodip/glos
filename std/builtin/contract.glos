@@ -8,9 +8,9 @@
 // contract definitions.
 
 Platform :: enum {
-    Linux
-    MacOS
-    Windows
+    LINUX
+    MACOS
+    WINDOWS
 }
 
 PLATFORM :: #platform
@@ -27,12 +27,12 @@ Type_Info :: struct {
         Type_Info_Pointer
         Type_Info_Function
         Type_Info_Enumeration
+        Type_Info_Trait
         Type_Info_Union
         Type_Info_Structure
         Type_Info_Array
         Type_Info_Slice
         Type_Info_String
-        Type_Info_Any
     }
     id: i64
 }
@@ -59,6 +59,11 @@ Type_Info_Enumeration :: struct {
     underlying: Type
 }
 
+Type_Info_Trait :: struct {
+    names: []string
+    types: []Type
+}
+
 Type_Info_Union :: struct {
     variants: []Type
 }
@@ -79,7 +84,6 @@ Type_Info_Slice :: struct {
 }
 
 Type_Info_String :: struct {}
-Type_Info_Any :: struct {}
 
 Source_Code_Location :: struct {
     path: string
@@ -92,3 +96,5 @@ Comparison :: enum {
     EQ =  0
     GT =  1
 }
+
+Any :: trait {}

@@ -1,0 +1,7 @@
+EXIT 1
+STDOUT 0
+
+STDERR 216
+tests/error_type_does_not_satisfy_trait_in_access.glos:7:8: ERROR: Type 'i64' does not implement 'Foo'
+tests/error_type_does_not_satisfy_trait_in_access.glos:2:5: NOTE: The method 'foo' is not defined for type 'i64'
+

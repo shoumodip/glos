@@ -135,6 +135,25 @@ void sb_push_type(SB *sb, Type type) {
         }
     } break;
 
+    case TYPE_TRAIT: {
+        const Type_Trait *spec = type.spec.trait;
+        const Node_Atom  *defined_as = spec->definition->defined_as;
+        if (defined_as) {
+            sb_push_sv(sb, defined_as->node.token.sv);
+        } else {
+            sb_push_cstr(sb, "trait {");
+            for (size_t i = 0; i < spec->methods_count; i++) {
+                const Type_Trait_Method it = spec->methods[i];
+                if (i) {
+                    sb_push_cstr(sb, "; ");
+                }
+                sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
+                sb_push_type(sb, it.type);
+            }
+            sb_push_cstr(sb, "}");
+        }
+    } break;
+
     case TYPE_UNION: {
         const Type_Union *spec = type.spec.unionn;
         const Node_Atom  *defined_as = spec->definition->defined_as;
@@ -187,10 +206,6 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_cstr(sb, "string");
         break;
 
-    case TYPE_ANY:
-        sb_push_cstr(sb, "any");
-        break;
-
     case TYPE_GROUP:
         sb_push_cstr(sb, "(");
         for (size_t i = 0; i < type.spec.group.count; i++) {
@@ -238,6 +253,28 @@ const char *type_to_cstr(Type type) {
     sb_push_type(&default_sb, type);
     sb_push(&default_sb, '\'');
     return arena_sb_to_cstr(&temp_arena, &default_sb, start);
+}
+
+static bool type_trait_eq(Type_Trait *a, Type_Trait *b) {
+    if (a->definition->defined_as || b->definition->defined_as) {
+        return a->definition->defined_as == b->definition->defined_as;
+    }
+
+    if (a->definition->methods_count != b->definition->methods_count) {
+        return false;
+    }
+
+    if (a->methods == b->methods) {
+        return true;
+    }
+
+    for (size_t i = 0; i < a->methods_count; i++) {
+        if (!type_eq(a->methods[i].type, b->methods[i].type)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static bool type_union_eq(Type_Union *a, Type_Union *b) {
@@ -325,6 +362,9 @@ bool type_eq(Type a, Type b) {
 
     case TYPE_ENUM:
         return a.spec.enumm.definition == b.spec.enumm.definition;
+
+    case TYPE_TRAIT:
+        return type_trait_eq(a.spec.trait, b.spec.trait);
 
     case TYPE_UNION:
         return type_union_eq(a.spec.unionn, b.spec.unionn);
@@ -417,7 +457,7 @@ bool type_is_scalar(Type type) {
         return true;
     }
 
-    if (type.kind == TYPE_BOOL || type.kind == TYPE_CHAR || type.kind == TYPE_FN || type.kind == TYPE_ANY) {
+    if (type.kind == TYPE_BOOL || type.kind == TYPE_CHAR || type.kind == TYPE_FN) {
         return true;
     }
 
@@ -488,6 +528,25 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     case CONST_VALUE_TYPE:
         return type_eq(a.as.type, b.as.type);
 
+    case CONST_VALUE_TRAIT:
+        if (a.as.trait.impl != b.as.trait.impl) {
+            return false;
+        }
+
+        if (!a.as.trait.type || !b.as.trait.type) {
+            return a.as.trait.type == b.as.trait.type;
+        }
+
+        if (!type_eq(*a.as.trait.type, *b.as.trait.type)) {
+            return false;
+        }
+
+        if (!a.as.trait.data || !b.as.trait.data) {
+            return a.as.trait.data == b.as.trait.data;
+        }
+
+        return const_value_eq(*a.as.trait.data, *b.as.trait.data);
+
     case CONST_VALUE_UNION:
         if (!type_union_eq(a.as.unionn.spec, b.as.unionn.spec)) {
             return false;
@@ -538,17 +597,6 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     case CONST_VALUE_STRING:
         return sv_eq(a.as.string, b.as.string);
 
-    case CONST_VALUE_ANY:
-        if (!a.as.any.type) {
-            return !b.as.any.type;
-        }
-
-        if (!type_eq(*a.as.any.type, *b.as.any.type)) {
-            return false;
-        }
-
-        return const_value_eq(*a.as.any.value, *b.as.any.value);
-
     case CONST_VALUE_MODULE:
         unreachable();
 
@@ -557,8 +605,8 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     }
 }
 
-static_assert(COUNT_NODES == 27, "");
-Node *node_alloc(Arena *arena, Node_Kind kind, Token token) {
+static_assert(COUNT_NODES == 28, "");
+Node *node_alloc(Module *module, Node_Kind kind, Token token) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(Node_Atom), // This comment is here to prevent clang-format from messing this up
         [NODE_GROUP] = sizeof(Node_Group),
@@ -573,6 +621,7 @@ Node *node_alloc(Arena *arena, Node_Kind kind, Token token) {
         // This comment is here to prevent clang-format from messing this up
         [NODE_FN] = sizeof(Node_Fn),
         [NODE_ENUM] = sizeof(Node_Enum),
+        [NODE_TRAIT] = sizeof(Node_Trait),
         [NODE_UNION] = sizeof(Node_Union),
         [NODE_STRUCT] = sizeof(Node_Struct),
         [NODE_COMPOUND] = sizeof(Node_Compound),
@@ -597,9 +646,10 @@ Node *node_alloc(Arena *arena, Node_Kind kind, Token token) {
     };
 
     assert(kind >= NODE_ATOM && kind < COUNT_NODES);
-    Node *node = arena_alloc(arena, sizes[kind]);
+    Node *node = arena_alloc(&default_arena, sizes[kind]);
     node->kind = kind;
     node->token = token;
+    node->module = module;
     return node;
 }
 
@@ -646,7 +696,7 @@ static void nodes_debug_impl(FILE *f, Nodes ns, int depth, const char *label) {
     }
 }
 
-static_assert(COUNT_NODES == 27, "");
+static_assert(COUNT_NODES == 28, "");
 static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     if (!n) {
         return;
@@ -739,6 +789,13 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
         Node_Enum *enumm = (Node_Enum *) n;
         fprintf(f, "Enumeration {\n");
         nodes_debug_impl(f, enumm->values, depth + 1, "Values");
+        fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
+    } break;
+
+    case NODE_TRAIT: {
+        Node_Trait *trait = (Node_Trait *) n;
+        fprintf(f, "Trait {\n");
+        nodes_debug_impl(f, trait->methods, depth + 1, "Methods");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
 
@@ -900,3 +957,25 @@ void node_debug(FILE *f, Node *n) {
 void nodes_debug(FILE *f, Nodes ns) {
     nodes_debug_impl(f, ns, 0, NULL);
 }
+
+Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, size_t method_index) {
+    assert(fn->node.type.kind == TYPE_FN);
+    Type_Fn *wrapper_spec = arena_clone(a, fn->node.type.spec.fn, sizeof(*fn->node.type.spec.fn));
+    wrapper_spec->args = arena_clone(a, wrapper_spec->args, wrapper_spec->args_count * sizeof(*wrapper_spec->args));
+
+    wrapper_spec->args[0].type.ref++;
+    wrapper_spec->args[0].type.llvm = NULL;
+    wrapper_spec->llvm = NULL;
+    assert(wrapper_spec->variadics_kind != VARIADICS_UNTYPED);
+
+    Node_Fn *wrapper_node = arena_clone(a, fn, sizeof(*fn));
+    wrapper_node->node.token.pos = trait->methods[method_index].pos;
+    wrapper_node->node.type.spec.fn = wrapper_spec;
+    wrapper_node->llvm = NULL;
+    wrapper_node->llvm_debug_scope = NULL;
+    wrapper_node->wrapper = fn;
+    wrapper_node->wrapper_for_trait = trait;
+    return wrapper_node;
+}
+
+// TODO: Print space in anonymous types

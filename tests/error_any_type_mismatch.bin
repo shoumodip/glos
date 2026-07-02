@@ -1,6 +1,0 @@
-EXIT 134
-STDOUT 0
-
-STDERR 54
-tests/error_any_type_mismatch.glos:3:7: Type mismatch
-

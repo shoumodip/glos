@@ -1,0 +1,6 @@
+EXIT 1
+STDOUT 0
+
+STDERR 124
+tests/error_trait_type_mismatch_in_constant_expression.glos:4:12: ERROR: Type mismatch: Accessing 'B', but real type is 'A'
+

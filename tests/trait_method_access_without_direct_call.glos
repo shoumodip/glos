@@ -1,0 +1,23 @@
+a := Int(69)
+b := Int(420)
+
+main :: () {
+    x: Show : a
+    f :: x.show
+    f(rawptr(&a))
+
+    y: Show = b
+    g := y.show
+    g(rawptr(&b))
+}
+
+// Details
+Show :: trait {
+    show: ()
+}
+
+Int :: distinct i64
+
+show :: (this: Int) {
+    println(this)
+}

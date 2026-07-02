@@ -51,6 +51,7 @@ typedef struct {
     const Type_Union *type_info_variants_union;
 
     Type source_code_location_type;
+    Type any_type;
 
     // Rest all are only used by compiler
     Cmd        *cmd;
@@ -88,9 +89,20 @@ typedef struct {
     size_t type_id_iota;
     HT(Type, Type_Info) type_info_cache;
 
-    // Compound types like these are the same irrespective of underlying type, therefore don't generate them over and
-    // over.
+    // Slice :: struct {
+    //     data: rawptr
+    //     count: i64
+    // }
     LLVMTypeRef llvm_slice_type;
+
+    // Trait :: struct {
+    //     type: Type
+    //     data: rawptr
+    //     impl: &[N]Trait_Method
+    // }
+    LLVMTypeRef llvm_trait_type;
+
+    // TODO: Cache the debug for these types as well
 
     size_t iota_anonymous_fn;
 } Compiler;

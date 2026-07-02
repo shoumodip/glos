@@ -1,0 +1,18 @@
+Foo :: trait {
+    a: ()           // Undefined
+    b: (_: i32)     // Wrong number of arguments
+    c: (_: bool)    // Wrong argument type
+    d: () -> string // Wrong Return type
+    e: ()           // Wrong receiver type
+}
+
+Bar :: distinct i64
+
+main :: () {
+    Foo(Bar(69))
+}
+
+b :: (this: Bar) {}
+c :: (this: Bar, _: string) {}
+d :: (this: Bar) {}
+e :: (this: &Bar) {}

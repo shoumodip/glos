@@ -1,0 +1,10 @@
+Foo :: trait {
+    foo: ()
+}
+
+main :: () {
+    f: Foo
+    if f == {
+    case i64
+    }
+}

@@ -1,0 +1,14 @@
+main :: () {
+    s :: [1]Show {}[0] // Also check default constant traits at the same time
+    s.show()
+}
+
+Show :: trait {
+    show: ()
+}
+
+Int :: distinct i64
+
+show :: (this: Int) {
+    println(this)
+}

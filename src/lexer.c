@@ -204,7 +204,7 @@ Token lexer_get_string(Lexer *l, Pos pos) {
     return token;
 }
 
-static_assert(COUNT_TOKENS == 76, "");
+static_assert(COUNT_TOKENS == 77, "");
 Token lexer_iter(Lexer *l) {
     skip_whitespace(l);
 
@@ -260,6 +260,8 @@ Token lexer_iter(Lexer *l) {
             token.kind = TOKEN_NULL;
         } else if (sv_match(token.sv, "enum")) {
             token.kind = TOKEN_ENUM;
+        } else if (sv_match(token.sv, "trait")) {
+            token.kind = TOKEN_TRAIT;
         } else if (sv_match(token.sv, "union")) {
             token.kind = TOKEN_UNION;
         } else if (sv_match(token.sv, "struct")) {
