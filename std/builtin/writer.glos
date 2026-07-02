@@ -1,0 +1,216 @@
+// Trait
+Writer :: trait {
+    write: (bytes: []char)
+}
+
+// Implementation of C FILE*
+// TODO: These should in another module. Perhaps `io` or `os`
+File :: distinct C.FILE
+
+write :: (this: File, bytes: []char) {
+    C.fwrite(rawptr(bytes.data), sizeof(char), bytes.count, C.FILE(this));
+}
+
+// Printing functions
+wprint :: (w: Writer, vs: ...Any) {
+    write_source_code_location :: (w: Writer, l: Source_Code_Location) {
+        wprint(w, "\{l.path}:\{l.row}:\{l.col}:")
+    }
+
+    write :: (w: Writer, a: Any, nested: bool) {
+        // TODO: Have a special case for `Type`
+        if a.type == Source_Code_Location {
+            write_source_code_location(w, *&Source_Code_Location(a.data))
+            return
+        }
+
+        v := a.type.variant
+        if v == {
+        case null
+            w.write([]char("null"))
+
+        case Type_Info_Boolean
+            if *&bool(a.data) {
+                w.write([]char("true"))
+            } else {
+                w.write([]char("false"))
+            }
+
+        case Type_Info_Character
+            ch := *&char(a.data)
+            if nested {
+                w.write([]char("'"))
+                if ch == '\'' {
+                    w.write([]char("\\'"))
+                } else {
+                    w.write((&ch)[..1])
+                }
+                w.write([]char("'"))
+            } else {
+                w.write((&ch)[..1])
+            }
+
+        case Type_Info_Integer
+            buffer: [32]char
+            count: i32
+            if v.signed {
+                if a.type.size == {
+                case 1; count = C.snprintf(buffer.data, buffer.count, "%d".data, *&i8(a.data))
+                case 2; count = C.snprintf(buffer.data, buffer.count, "%d".data, *&i16(a.data))
+                case 4; count = C.snprintf(buffer.data, buffer.count, "%d".data, *&i32(a.data))
+                case 8; count = C.snprintf(buffer.data, buffer.count, "%zd".data, *&i64(a.data))
+                case; unreachable()
+                }
+            } else {
+                if a.type.size == {
+                case 1; count = C.snprintf(buffer.data, buffer.count, "%u".data, *&u8(a.data))
+                case 2; count = C.snprintf(buffer.data, buffer.count, "%u".data, *&u16(a.data))
+                case 4; count = C.snprintf(buffer.data, buffer.count, "%u".data, *&u32(a.data))
+                case 8; count = C.snprintf(buffer.data, buffer.count, "%zu".data, *&u64(a.data))
+                case; unreachable()
+                }
+            }
+            w.write(buffer[..count])
+
+        case Type_Info_Pointer, Type_Info_Function
+            ptr := *&rawptr(a.data)
+            if ptr == null {
+                w.write([]char("null"))
+            } else {
+                buffer: [32]char
+                count := C.snprintf(buffer.data, buffer.count, "0x%x".data, ptr)
+                w.write(buffer[..count])
+            }
+
+        case Type_Info_Enumeration
+            value: i64
+            if v.underlying.size == {
+            case 1; value = i64(*&i8(a.data))
+            case 2; value = i64(*&i16(a.data))
+            case 4; value = i64(*&i32(a.data))
+            case 8; value = i64(*&i64(a.data))
+            }
+
+            for i := 0; i < v.values.count; i += 1 {
+                if v.values[i] == value {
+                    w.write([]char(v.names[i]))
+                    return
+                }
+            }
+
+            wprint(w, "(Invalid enum value: \{v.underlying})")
+
+        case Type_Info_Trait
+            t: Any
+            t.type = *&Type(a.data)
+            t.data = *&rawptr(a.data + rawptr(8))
+            if t.type == null {
+                w.write([]char("null"))
+            } else {
+                write(w, t, nested)
+            }
+
+        case Type_Info_Union
+            variant := *&i64(a.data)
+            if variant == 0 {
+                w.write([]char("null"))
+            } else {
+                t: Any
+                t.type = v.variants[variant - 1]
+                t.data = a.data + rawptr(8)
+                write(w, t, nested)
+            }
+
+        case Type_Info_Structure
+            w.write([]char("{"))
+            for i := 0; i < v.types.count; i += 1 {
+                field: Any
+                field.type = v.types[i]
+                field.data = a.data + rawptr(v.offsets[i])
+                if i != 0 {
+                    w.write([]char(", "))
+                }
+                write(w, field, true)
+            }
+            w.write([]char("}"))
+
+        case Type_Info_Array
+            w.write([]char("{"))
+            for i := 0; i < v.count; i += 1 {
+                if i != 0 {
+                    w.write([]char(", "))
+                }
+
+                item: Any
+                item.type = v.underlying
+                item.data = a.data + rawptr(i * v.underlying.size)
+                write(w, item, true)
+            }
+            w.write([]char("}"))
+
+        case Type_Info_Slice
+            count := *&i64(a.data + rawptr(8))
+            data  := *&rawptr(a.data)
+
+            w.write([]char("{"))
+            for i := 0; i < count; i += 1 {
+                if i != 0 {
+                    w.write([]char(", "))
+                }
+
+                item: Any
+                item.type = v.underlying
+                item.data = data + rawptr(i * v.underlying.size)
+                write(w, item, true)
+            }
+            w.write([]char("}"))
+
+        case Type_Info_String
+            s := *&string(a.data)
+            if nested {
+                w.write([]char("\""))
+                for i := 0; i < s.count; i += 1 {
+                    ch := s[i]
+                    if ch == '"' {
+                        w.write([]char("\\\""))
+                    } else {
+                        w.write((&ch)[..1])
+                    }
+                }
+                w.write([]char("\""))
+            } else {
+                w.write([]char(s))
+            }
+        }
+    }
+
+    for i := 0; i < vs.count; i += 1 {
+        v := vs[i]
+        if v == null {
+            w.write([]char("null"))
+        } else {
+            write(w, v, false)
+        }
+    }
+}
+
+wprintln :: (w: Writer, vs: ...Any) {
+    wprint(w, ...vs)
+    wprint(w, '\n')
+}
+
+print :: (vs: ...Any) {
+    wprint(File(C.stdout), ...vs)
+}
+
+println :: (vs: ...Any) {
+    wprintln(File(C.stdout), ...vs)
+}
+
+eprint :: (vs: ...Any) {
+    wprint(File(C.stderr), ...vs)
+}
+
+eprintln :: (vs: ...Any) {
+    wprintln(File(C.stderr), ...vs)
+}

@@ -427,7 +427,13 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
     }
 
     if (type_kind_eq(expected, TYPE_TRAIT) && !expected.ref && !type_is_unknown(actual)) {
+        if (actual.is_meta) {
+            assert(group_index == -1); // Literals cannot be part of a group
+            try_auto_cast_type_to_rtti(c, n, c->type_info_pointer_type);
+            actual = n->type;
+        }
         finalize_untyped_type(c, n);
+
         Type_Trait_Impl *impl = check_type_satisfies_trait(c, actual, expected.spec.trait, n, group_index);
         set_auto_cast(n, group_index, AUTO_CAST_TO_TRAIT, actual, expected);
         n->auto_casts[group_index == -1 ? 0 : group_index].trait_impl = impl;

@@ -8,9 +8,9 @@
 // contract definitions.
 
 Platform :: enum {
-    Linux
-    MacOS
-    Windows
+    LINUX
+    MACOS
+    WINDOWS
 }
 
 PLATFORM :: #platform
