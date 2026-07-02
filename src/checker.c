@@ -5414,8 +5414,8 @@ void check_nodes(Compiler *c) {
         assert(c->type_info_pointer_type.kind == TYPE_STRUCT);
         const Type_Struct *type_info_structure = c->type_info_pointer_type.spec.structt;
 
-        assert(type_info_structure->fields_count == 4);
-        const Type *type_info_variant = &type_info_structure->fields[2].type;
+        assert(type_info_structure->fields_count == 5);
+        const Type *type_info_variant = &type_info_structure->fields[3].type;
 
         assert(type_info_variant->kind == TYPE_UNION);
         c->type_info_variants_union = type_info_variant->spec.unionn;
@@ -5550,3 +5550,4 @@ void check_nodes(Compiler *c) {
 
 // TODO: Sometimes non-cyclic definitions are falsely flagged as cyclic
 // TODO: Should #if be deferred until end of orderless definitions?
+// TODO: Enum values is a bit broken (signedness)

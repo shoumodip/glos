@@ -262,5 +262,3 @@ write_type :: (ti: &Type_Info) {
 
     C :: #import "C"
 }
-
-// TODO: Trait

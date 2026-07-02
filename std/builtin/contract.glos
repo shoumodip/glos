@@ -20,6 +20,8 @@ Type :: &Type_Info
 Type_Info :: struct {
     size: i64
     align: i64
+
+    name: string
     variant: union {
         Type_Info_Boolean
         Type_Info_Character
@@ -34,6 +36,7 @@ Type_Info :: struct {
         Type_Info_Slice
         Type_Info_String
     }
+
     id: i64
 }
 
@@ -51,6 +54,8 @@ Type_Info_Pointer :: struct {
 Type_Info_Function :: struct {
     args:    []Type
     returns: []Type
+
+    // TODO: Variadics
 }
 
 Type_Info_Enumeration :: struct {

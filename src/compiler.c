@@ -1215,7 +1215,6 @@ static LLVMValueRef compile_const_value_into_memory(Compiler *c, LLVMValueRef va
 
 static LLVMValueRef compile_string_into_const_value(Compiler *c, SV sv) {
     LLVMValueRef memory = LLVMConstStringInContext(c->llvm_context, sv.data, sv.count, false);
-
     LLVMValueRef fields[] = {
         compile_const_value_into_memory(c, memory),
         LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), sv.count, true),
@@ -1966,7 +1965,7 @@ typedef struct {
     size_t     variant_index;
     Type_Info *type_info;
 
-    LLVMValueRef ti_fields[4];
+    LLVMValueRef ti_fields[5];
     size_t       ti_fields_iota;
 
     LLVMValueRef tiv_fields[3];
@@ -2005,6 +2004,29 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
 
     tic->ti_fields[tic->ti_fields_iota++] = LLVMConstInt(
         LLVMInt64TypeInContext(c->llvm_context), LLVMABIAlignmentOfType(c->llvm_target_data, type->llvm), false);
+
+    SV name = {0};
+    {
+        static_assert(COUNT_TYPES == 25, "");
+
+        Node_Atom *defined_as = NULL;
+        if (type->distinct) {
+            defined_as = type->distinct;
+        } else if (type->kind == TYPE_ENUM) {
+            defined_as = type->spec.enumm.definition->defined_as;
+        } else if (type->kind == TYPE_TRAIT) {
+            defined_as = type->spec.trait->definition->defined_as;
+        } else if (type->kind == TYPE_UNION) {
+            defined_as = type->spec.unionn->definition->defined_as;
+        } else if (type->kind == TYPE_STRUCT) {
+            defined_as = type->spec.structt->definition->defined_as;
+        }
+
+        if (defined_as) {
+            name = defined_as->node.token.sv;
+        }
+    }
+    tic->ti_fields[tic->ti_fields_iota++] = compile_string_into_const_value(c, name);
 
     tic->tiv_fields[tic->tiv_fields_iota++] =
         LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), tic->variant_index, false);
@@ -4495,3 +4517,5 @@ void compiler_build(Compiler *c, const char *output_path) {
     da_free(&c->defers);
     arena_reset(&temp_arena, checkpoint);
 }
+
+// TODO: For complete switch, emit an unreachable in the fallback case

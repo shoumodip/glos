@@ -13,12 +13,150 @@ write :: (this: File, bytes: []char) {
 
 // Printing functions
 wprint :: (w: Writer, vs: ...Any) {
+    write_type :: (w: Writer, t: Type) {
+        if t.name.count != 0 {
+            w.write([]char(t.name))
+            return
+        }
+
+        v := t.variant
+        if v == {
+        case Type_Info_Boolean
+            w.write([]char("bool"))
+
+        case Type_Info_Character
+            w.write([]char("char"))
+
+        case Type_Info_Integer
+            if v.signed {
+                w.write([]char("i"))
+            } else {
+                w.write([]char("u"))
+            }
+            wprint(w, t.size * 8)
+
+        case Type_Info_Pointer
+            if v.underlying != null {
+                w.write([]char("&"))
+                write_type(w, v.underlying)
+            } else {
+                w.write([]char("rawptr"))
+            }
+
+        case Type_Info_Function
+            w.write([]char("("))
+            for i := 0; i < v.args.count; i += 1 {
+                if i > 0 {
+                    w.write([]char(", "))
+                }
+                write_type(w, v.args[i])
+            }
+            w.write([]char(")"))
+
+            if v.returns.count > 0 {
+                w.write([]char(" -> "))
+                if v.returns.count > 1 {
+                    w.write([]char("("))
+                }
+
+                for i := 0; i < v.returns.count; i += 1 {
+                    if i > 0 {
+                        w.write([]char(", "))
+                    }
+                    write_type(w, v.returns[i])
+                }
+
+                if v.returns.count > 1 {
+                    w.write([]char(")"))
+                }
+            }
+
+        case Type_Info_Enumeration
+            w.write([]char("enum "))
+            write_type(w, v.underlying)
+            w.write([]char(" {"))
+            if v.names.count != 0 {
+                w.write([]char(" "))
+                for i := 0; i < v.names.count; i += 1 {
+                    if i != 0 {
+                        w.write([]char("; "))
+                    }
+
+                    wprint(w, "\{v.names[i]} = \{v.values[i]}")
+                }
+                w.write([]char(" "))
+            }
+            w.write([]char("}"))
+
+        case Type_Info_Trait
+            w.write([]char("trait {"))
+            if v.names.count != 0 {
+                w.write([]char(" "))
+                for i := 0; i < v.names.count; i += 1 {
+                    if i != 0 {
+                        w.write([]char("; "))
+                    }
+
+                    wprint(w, "\{v.names[i]}: \{v.types[i]}")
+                }
+                w.write([]char(" "))
+            }
+            w.write([]char("}"))
+
+        case Type_Info_Union
+            w.write([]char("union {"))
+            if v.variants.count != 0 {
+                w.write([]char(" "))
+                for i := 0; i < v.variants.count; i += 1 {
+                    if i != 0 {
+                        w.write([]char("; "))
+                    }
+
+                    write_type(w, v.variants[i])
+                }
+                w.write([]char(" "))
+            }
+            w.write([]char("}"))
+
+        case Type_Info_Structure
+            w.write([]char("struct {"))
+            if v.names.count != 0 {
+                w.write([]char(" "))
+                for i := 0; i < v.names.count; i += 1 {
+                    if i != 0 {
+                        w.write([]char("; "))
+                    }
+
+                    wprint(w, "\{v.names[i]}: \{v.types[i]}")
+                }
+                w.write([]char(" "))
+            }
+            w.write([]char("}"))
+
+        case Type_Info_Array
+            wprint(w, "[\{v.count}]\{v.underlying}")
+
+        case Type_Info_Slice
+            wprint(w, "[]\{v.underlying}")
+
+        case Type_Info_String
+            w.write([]char("string"))
+
+        case null
+            w.write([]char("null"))
+        }
+    }
+
     write_source_code_location :: (w: Writer, l: Source_Code_Location) {
         wprint(w, "\{l.path}:\{l.row}:\{l.col}:")
     }
 
     write :: (w: Writer, a: Any, nested: bool) {
-        // TODO: Have a special case for `Type`
+        if a.type == Type {
+            write_type(w, *&Type(a.data))
+            return
+        }
+
         if a.type == Source_Code_Location {
             write_source_code_location(w, *&Source_Code_Location(a.data))
             return
@@ -26,9 +164,6 @@ wprint :: (w: Writer, vs: ...Any) {
 
         v := a.type.variant
         if v == {
-        case null
-            w.write([]char("null"))
-
         case Type_Info_Boolean
             if *&bool(a.data) {
                 w.write([]char("true"))
@@ -181,6 +316,9 @@ wprint :: (w: Writer, vs: ...Any) {
             } else {
                 w.write([]char(s))
             }
+
+        case null
+            w.write([]char("null"))
         }
     }
 
