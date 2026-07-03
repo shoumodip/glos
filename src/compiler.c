@@ -2006,7 +2006,7 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
         LLVMInt64TypeInContext(c->llvm_context), LLVMABIAlignmentOfType(c->llvm_target_data, type->llvm), false);
 
     SV name = {0};
-    {
+    if (!type->ref) {
         static_assert(COUNT_TYPES == 25, "");
 
         Node_Atom *defined_as = NULL;
