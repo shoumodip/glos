@@ -7,6 +7,7 @@
 // This file is intended to be kept in sync with the compiler's internal
 // contract definitions.
 
+// Platform
 Platform :: enum {
     LINUX
     MACOS
@@ -15,6 +16,7 @@ Platform :: enum {
 
 PLATFORM :: #platform
 
+// RTTI
 Type :: &Type_Info
 
 Type_Info :: struct {
@@ -90,16 +92,25 @@ Type_Info_Slice :: struct {
 
 Type_Info_String :: struct {}
 
+// Builtin compound types
+Any :: trait {}
+
 Source_Code_Location :: struct {
     path: string
     row: i64
     col: i64
 }
 
-Comparison :: enum {
+// Comparisons
+Ordering :: enum {
     LT = -1
     EQ =  0
     GT =  1
 }
 
-Any :: trait {}
+Equivalence :: enum {
+    EQ = 0
+    NE = 1
+}
+
+#assert(i64(Ordering.EQ) == i64(Equivalence.EQ))

@@ -1,15 +1,15 @@
 EXIT 1
 STDOUT 0
 
-STDERR 703
+STDERR 718
 tests/error_operator_overloading_binary_comparison_method_too_few_arguments.glos:2:1: ERROR: The method 'compare' implements an operator overload and thus must have a particular signature
 
 ```
-compare :: (this: T, that: T) -> bool | Comparison
+compare :: (this: T, that: T) -> Ordering | Equivalence
 ```
 
-Return 'Comparison' if you want this method to implement both equality checking as well as ordered comparisons.
-Otherwise return 'bool' to implement just equality checking. Do NOT return 'Comparison | bool' literally.
+Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.
+Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.
 
 It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 

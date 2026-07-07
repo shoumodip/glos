@@ -1,7 +1,7 @@
 Foo :: struct {}
 
-compare :: (this: Foo, that: Foo) -> bool {
-    return true
+compare :: (this: Foo, that: Foo) -> Equivalence {
+    return .EQ
 }
 
 main :: () {

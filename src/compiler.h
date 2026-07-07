@@ -32,7 +32,8 @@ typedef struct {
     HT(Method_Spec, Node_Fn *) methods_table;
     DA(Node_Fn *) methods_list;
 
-    Type comparison_type;
+    Type ordering_type;
+    Type equivalence_type;
 
     // These are used both by the analyzer and the compiler
     Context context;

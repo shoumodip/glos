@@ -1,7 +1,7 @@
 EXIT 1
 STDOUT 0
 
-STDERR 363
+STDERR 368
 tests/error_operator_overloading_binary_comparison_method_does_not_implement_ordering.glos:10:15: ERROR: Type 'Foo' does not implement ordered comparisons
-tests/error_operator_overloading_binary_comparison_method_does_not_implement_ordering.glos:3:38: NOTE: The method 'compare' only implements equality checking since its return type is 'bool', not 'Comparison'
+tests/error_operator_overloading_binary_comparison_method_does_not_implement_ordering.glos:3:38: NOTE: The method 'compare' only implements equality checking since its return type is 'Equivalence', not 'Ordering'
 

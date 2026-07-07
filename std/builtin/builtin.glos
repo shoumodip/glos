@@ -39,7 +39,7 @@ unreachable :: (message: ...Any, location := #caller_location) {
     C.abort()
 }
 
-compare :: (this: string, that: string) -> Comparison {
+compare :: (this: string, that: string) -> Ordering {
     n := this.count
     if n > that.count {
         n = that.count

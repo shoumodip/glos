@@ -3609,7 +3609,7 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
                     Pos_Arg(binary->overload->returns.head->token.pos),
                     SV_Arg(binary->overload->defined_as->node.token.sv),
                     type_to_cstr(*binary->overload->node.type.spec.fn->return_type),
-                    type_to_cstr(c->comparison_type));
+                    type_to_cstr(c->ordering_type));
                 exit(1);
             }
         }
@@ -4320,10 +4320,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         exit(1);
                     }
                 } else if (sv_match(name, "compare")) {
-                    const char *signature = "(this: T, that: T) -> bool | Comparison";
+                    const char *signature = "(this: T, that: T) -> Ordering | Equivalence";
                     const char *note =
-                        "Return 'Comparison' if you want this method to implement both equality checking as well as ordered comparisons.\n"
-                        "Otherwise return 'bool' to implement just equality checking. Do NOT return 'Comparison | bool' literally.\n";
+                        "Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.\n"
+                        "Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.\n";
                     check_special_method_signature_args_count(fn, 2, signature, note);
 
                     const Type lhs_type = fn_spec->args[0].type;
@@ -4339,21 +4339,21 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         exit(1);
                     }
 
-                    if (!type_eq(*fn_spec->return_type, (Type) {.kind = TYPE_BOOL}) &&
-                        !type_eq(*fn_spec->return_type, c->comparison_type)) //
+                    if (!type_eq(*fn_spec->return_type, c->equivalence_type) &&
+                        !type_eq(*fn_spec->return_type, c->ordering_type)) //
                     {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         fprintf(
                             stderr,
                             Pos_Fmt "INFO: Expected to return %s or %s, got %s\n",
                             Pos_Arg(fn->returns.head ? fn->returns.head->token.pos : fn->body->token.pos),
-                            type_to_cstr((Type) {.kind = TYPE_BOOL}),
-                            type_to_cstr(c->comparison_type),
+                            type_to_cstr(c->equivalence_type),
+                            type_to_cstr(c->ordering_type),
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
                         exit(1);
                     }
 
-                    fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->comparison_type);
+                    fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->ordering_type);
                 } else if (sv_match(name, "index")) {
                     const char *signature = "(this: T, key: K, assign: bool) -> &V";
                     const char *note = NULL;
@@ -5449,11 +5449,17 @@ void check_nodes(Compiler *c) {
         c->type_info_variants[TYPE_STRING] = CONTRACT_TYPE_INFO_STRING;
     }
 
+    // Comparisons
     {
-        const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Comparison"), NULL);
+        Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Ordering"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
-        c->comparison_type = value.as.type;
-        c->comparison_type.is_meta = false;
+        c->ordering_type = value.as.type;
+        c->ordering_type.is_meta = false;
+
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Equivalence"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+        c->equivalence_type = value.as.type;
+        c->equivalence_type.is_meta = false;
     }
 
     // Source code location
@@ -5551,3 +5557,7 @@ void check_nodes(Compiler *c) {
 // TODO: Sometimes non-cyclic definitions are falsely flagged as cyclic
 // TODO: Should #if be deferred until end of orderless definitions?
 // TODO: Enum values is a bit broken (signedness)
+//
+// TODO: Apply the type restriction of special methods into traits
+//       -> Or rather should we move from "special" methods into particular traits?
+//       -> Perhaps after compile time polymorphism is implemented?

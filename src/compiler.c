@@ -2889,15 +2889,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 set_debug_pos(c, n->token.pos);
                 if (binary->overload) {
                     LLVMValueRef value = compile_binary_with_overloaded_operator(c, binary, 0, lhs, rhs);
-                    if (binary->overload->is_compare_operator_complete) {
-                        return LLVMBuildICmp(c->llvm_builder, op.i, value, LLVMConstNull(LLVMTypeOf(value)), "");
-                    }
-
-                    if (n->token.kind == TOKEN_EQ) {
-                        return value;
-                    } else if (n->token.kind == TOKEN_NE) {
-                        return LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, value, LLVMConstNull(LLVMTypeOf(value)), "");
-                    }
+                    return LLVMBuildICmp(c->llvm_builder, op.i, value, LLVMConstNull(LLVMTypeOf(value)), "");
                 } else if (op.u && !type_is_signed(binary->lhs->type)) {
                     return LLVMBuildICmp(c->llvm_builder, op.u, lhs, rhs, "");
                 } else {
