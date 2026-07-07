@@ -13,11 +13,6 @@ void link_flags_add_libpath(Link_Flags *ls, SV path);
 void link_flags_add_libname(Link_Flags *ls, SV name);
 
 typedef struct {
-    size_t       id;
-    LLVMValueRef info;
-} Type_Info;
-
-typedef struct {
     uintptr_t uid;
     SV        name;
 } Method_Spec;
@@ -87,8 +82,7 @@ typedef struct {
 
     HT(const char *, LLVMMetadataRef) llvm_debug_files;
 
-    size_t type_id_iota;
-    HT(Type, Type_Info) type_info_cache;
+    HT(Type, LLVMValueRef) type_info_cache;
 
     // Slice :: struct {
     //     data: rawptr

@@ -497,10 +497,14 @@ static LLVMTypeRef abi_finalize(Compiler *c, ABI *abi) {
         abi->is_variadic);
 }
 
-static LLVMValueRef undo_load(LLVMValueRef value) {
+static LLVMValueRef get_load_ptr(LLVMValueRef value) {
     assert(LLVMGetInstructionOpcode(value) == LLVMLoad);
     assert(LLVMGetFirstUse(value) == NULL);
-    LLVMValueRef ptr = LLVMGetOperand(value, 0);
+    return LLVMGetOperand(value, 0);
+}
+
+static LLVMValueRef undo_load(LLVMValueRef value) {
+    LLVMValueRef ptr = get_load_ptr(value);
     LLVMInstructionEraseFromParent(value);
     return ptr;
 }
@@ -1962,10 +1966,10 @@ static LLVMValueRef create_const_struct_from_single_value_if_not_already(Compile
 typedef struct {
     Type *type;
 
-    size_t     variant_index;
-    Type_Info *type_info;
+    size_t        variant_index;
+    LLVMValueRef *type_info;
 
-    LLVMValueRef ti_fields[5];
+    LLVMValueRef ti_fields[4];
     size_t       ti_fields_iota;
 
     LLVMValueRef tiv_fields[3];
@@ -1990,13 +1994,11 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
     {
         tic->type_info = ht_get(&c->type_info_cache, *type);
         if (tic->type_info) {
-            tic->done = tic->type_info->info;
+            tic->done = *tic->type_info;
             return;
         }
 
-        tic->type_info = ht_set(&c->type_info_cache, *type, (Type_Info) {0});
-        tic->type_info->id = ++c->type_id_iota;
-        tic->type_info->info = LLVMAddGlobal(c->llvm_module, c->type_info_type.llvm, "");
+        tic->type_info = ht_set(&c->type_info_cache, *type, LLVMAddGlobal(c->llvm_module, c->type_info_type.llvm, ""));
     }
 
     tic->ti_fields[tic->ti_fields_iota++] = LLVMConstInt(
@@ -2254,15 +2256,13 @@ static LLVMValueRef compile_type_info_finalize(Compiler *c, Type_Info_Compiler *
 
     tic->ti_fields[tic->ti_fields_iota++] =
         LLVMConstStructInContext(c->llvm_context, tic->tiv_fields, tic->tiv_fields_iota, false);
-    tic->ti_fields[tic->ti_fields_iota++] =
-        LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), tic->type_info->id, true);
 
     LLVMValueRef real = compile_const_value_into_memory(
         c, LLVMConstStructInContext(c->llvm_context, tic->ti_fields, tic->ti_fields_iota, false));
 
-    LLVMReplaceAllUsesWith(tic->type_info->info, real);
-    LLVMDeleteGlobal(tic->type_info->info);
-    tic->type_info->info = real;
+    LLVMReplaceAllUsesWith(*tic->type_info, real);
+    LLVMDeleteGlobal(*tic->type_info);
+    *tic->type_info = real;
     tic->done = real;
     return real;
 }
@@ -3884,32 +3884,6 @@ static void introduce_ghost_for_union(Compiler *c, Node_Atom *ghost, bool is_tra
     }
 }
 
-static LLVMValueRef get_type_id_from_type_info_pointer(Compiler *c, LLVMValueRef ptr) {
-    LLVMValueRef is_null =
-        LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, ptr, LLVMConstNull(LLVMPointerTypeInContext(c->llvm_context, 0)), "");
-
-    LLVMBasicBlockRef null_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
-    LLVMBasicBlockRef not_null_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
-    LLVMBasicBlockRef merge_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
-    LLVMBuildCondBr(c->llvm_builder, is_null, null_block, not_null_block);
-
-    LLVMPositionBuilderAtEnd(c->llvm_builder, null_block);
-    LLVMBuildBr(c->llvm_builder, merge_block);
-
-    LLVMPositionBuilderAtEnd(c->llvm_builder, not_null_block);
-    LLVMValueRef id = LLVMBuildStructGEP2(c->llvm_builder, c->type_info_type.llvm, ptr, 3, "");
-    id = LLVMBuildLoad2(c->llvm_builder, LLVMInt64TypeInContext(c->llvm_context), id, "");
-    LLVMBuildBr(c->llvm_builder, merge_block);
-
-    LLVMPositionBuilderAtEnd(c->llvm_builder, merge_block);
-    LLVMTypeRef       i64_type = LLVMInt64TypeInContext(c->llvm_context);
-    LLVMValueRef      phi = LLVMBuildPhi(c->llvm_builder, i64_type, "");
-    LLVMValueRef      phi_values[] = {LLVMConstNull(i64_type), id};
-    LLVMBasicBlockRef phi_blocks[] = {null_block, not_null_block};
-    LLVMAddIncoming(phi, phi_values, phi_blocks, len(phi_blocks));
-    return phi;
-}
-
 static_assert(COUNT_NODES == 28, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
@@ -4136,15 +4110,99 @@ static void compile_stmt(Compiler *c, Node *n) {
         LLVMTypeRef  i64_type = LLVMInt64TypeInContext(c->llvm_context);
         LLVMTypeRef  ptr_type = LLVMPointerTypeInContext(c->llvm_context, 0);
         LLVMValueRef expr = compile_expr(c, sw->expr, false);
+
+        bool chain = false;
         if (sw->trait) {
             expr = undo_load(expr);
             expr = LLVMBuildLoad2(c->llvm_builder, ptr_type, expr, "");
-            expr = get_type_id_from_type_info_pointer(c, expr);
+            chain = true;
         } else if (sw->unionn) {
             expr = undo_load(expr);
             expr = LLVMBuildLoad2(c->llvm_builder, i64_type, expr, "");
-        } else if (sw->is_expr_type_info) {
-            expr = get_type_id_from_type_info_pointer(c, expr);
+        } else if (type_is_pointer(sw->expr->type) || sw->is_expr_type_info || sw->compare_overload) {
+            chain = true;
+        }
+
+        if (chain) {
+            LLVMBasicBlockRef end = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+
+            size_t iota = 0;
+            for (Node *it = sw->cases.head; it; it = it->next) {
+                Node_Case *branch = (Node_Case *) it;
+                if (!branch->preds.head) {
+                    continue; // Fallback
+                }
+
+                LLVMBasicBlockRef body = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+                for (Node *pred = branch->preds.head; pred; pred = pred->next) {
+                    set_debug_pos(c, pred->token.pos);
+
+                    LLVMValueRef value = compile_const_value(c, sw->preds[iota++].value, sw->expr->type);
+                    LLVMValueRef match = NULL;
+                    if (sw->compare_overload) {
+                        const void *checkpoint = arena_alloc(&temp_arena, 0);
+
+                        Typed_LLVM_Value fn = {0};
+                        fn.value = compile_fn(c, sw->compare_overload);
+                        fn.type = &sw->compare_overload->node.type;
+
+                        const Type_Fn    *fn_spec = fn.type->spec.fn;
+                        Typed_LLVM_Value *args = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*args));
+
+                        args[0].value = expr;
+                        args[0].type = &fn_spec->args[0].type;
+
+                        LLVMValueRef expr_load_ptr = NULL;
+                        if (type_is_compound(sw->expr->type)) {
+                            expr_load_ptr = get_load_ptr(expr);
+                            value = LLVMBuildLoad2(
+                                c->llvm_builder, LLVMTypeOf(value), compile_const_value_into_memory(c, value), "");
+                        }
+
+                        args[1].value = value;
+                        args[1].type = &fn_spec->args[1].type;
+
+                        compile_optional_arguments(c, args, fn_spec, pred->token.pos);
+                        LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
+
+                        arena_reset(&temp_arena, checkpoint);
+                        match =
+                            LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, result, LLVMConstNull(LLVMTypeOf(result)), "");
+
+                        if (expr_load_ptr) {
+                            // The call compilation erased this load
+                            expr = LLVMBuildLoad2(c->llvm_builder, sw->expr->type.llvm, expr_load_ptr, "");
+                        }
+                    } else {
+                        match = LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, expr, value, "");
+                    }
+
+                    LLVMBasicBlockRef next = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+                    LLVMBuildCondBr(c->llvm_builder, match, body, next);
+                    LLVMPositionBuilderAtEnd(c->llvm_builder, next);
+                }
+
+                LLVMBasicBlockRef next = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+                LLVMBuildBr(c->llvm_builder, next);
+
+                LLVMPositionBuilderAtEnd(c->llvm_builder, body);
+                if (branch->context_replace.to) {
+                    introduce_ghost_for_union(
+                        c, branch->context_replace.to, branch->context_replace.from->node.type.kind == TYPE_TRAIT);
+                }
+                compile_stmt(c, branch->body);
+                LLVMBuildBr(c->llvm_builder, end);
+
+                LLVMPositionBuilderAtEnd(c->llvm_builder, next);
+            }
+
+            if (sw->fallback) {
+                compile_stmt(c, ((Node_Case *) sw->fallback)->body);
+            }
+
+            LLVMBuildBr(c->llvm_builder, end);
+            LLVMPositionBuilderAtEnd(c->llvm_builder, end);
+            return;
         }
 
         LLVMBasicBlockRef fallback = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
@@ -4167,18 +4225,6 @@ static void compile_stmt(Compiler *c, Node *n) {
                 LLVMValueRef value = NULL;
                 if (sw->unionn) {
                     value = LLVMConstInt(i64_type, i64_from_int128(pred_value->as.integer), true);
-                } else if (sw->trait || sw->is_expr_type_info) {
-                    if (pred_value->kind == CONST_VALUE_TYPE) {
-                        assert(!pred_value->as.type.is_meta);
-                        compile_type_info(c, &pred_value->as.type);
-
-                        const size_t id = ht_get(&c->type_info_cache, pred_value->as.type)->id;
-                        value = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), id, true);
-                    } else if (pred_value->kind == CONST_VALUE_INT && int128_is_zero(pred_value->as.integer)) {
-                        value = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), 0, true);
-                    } else {
-                        unreachable();
-                    }
                 } else {
                     value = compile_const_value(c, *pred_value, sw->expr->type);
                 }

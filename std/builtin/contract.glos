@@ -38,8 +38,6 @@ Type_Info :: struct {
         Type_Info_Slice
         Type_Info_String
     }
-
-    id: i64
 }
 
 Type_Info_Boolean :: struct {}

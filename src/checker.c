@@ -1670,6 +1670,42 @@ static Const_Value eval_const_expr(Compiler *c, Node *n, bool ref) {
     return result;
 }
 
+static_assert(COUNT_TOKENS == 77, "");
+static const char *operator_method_name_from_token_kind(Token_Kind kind) {
+    switch (kind) {
+    case TOKEN_ADD:
+    case TOKEN_ADD_SET:
+        return "add";
+
+    case TOKEN_SUB:
+    case TOKEN_SUB_SET:
+        return "sub";
+
+    case TOKEN_MUL:
+    case TOKEN_MUL_SET:
+        return "mul";
+
+    case TOKEN_DIV:
+    case TOKEN_DIV_SET:
+        return "div";
+
+    case TOKEN_MOD:
+    case TOKEN_MOD_SET:
+        return "mod";
+
+    case TOKEN_GT:
+    case TOKEN_GE:
+    case TOKEN_LT:
+    case TOKEN_LE:
+    case TOKEN_EQ:
+    case TOKEN_NE:
+        return "compare";
+
+    default:
+        unreachable();
+    }
+}
+
 static void check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw) {
     check_expr(c, sw->expr, REF_NONE);
     finalize_untyped_type(c, sw->expr);
@@ -1688,13 +1724,8 @@ static void check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw) {
         sw->is_expr_type_info = true;
     } else if (type_eq(sw->expr->type, c->type_info_pointer_type)) {
         sw->is_expr_type_info = true;
-    } else if (!type_is_numeric(sw->expr->type) && !type_kind_eq(sw->expr->type, TYPE_CHAR)) {
-        fprintf(
-            stderr,
-            Pos_Fmt "ERROR: Expected numeric or character value, got %s\n",
-            Pos_Arg(sw->expr->token.pos),
-            type_to_cstr(sw->expr->type));
-        exit(1);
+    } else if (!type_is_scalar(sw->expr->type)) {
+        sw->compare_overload = get_operator_overload(c, "compare", sw->expr, &sw->expr->token.pos, sw->node.module);
     }
 
     if (!sw->preds) {
@@ -1750,7 +1781,7 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
                     break;
 
                 default:
-                    unreachable();
+                    unreachable(); // TODO: Fix this. Now switch supports any type that implements comparisons
                 }
             }
 
@@ -2762,42 +2793,6 @@ static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *r
         SV_Arg(spec.name),
         type_to_cstr(receiver->type));
     exit(1);
-}
-
-static_assert(COUNT_TOKENS == 77, "");
-static const char *operator_method_name_from_token_kind(Token_Kind kind) {
-    switch (kind) {
-    case TOKEN_ADD:
-    case TOKEN_ADD_SET:
-        return "add";
-
-    case TOKEN_SUB:
-    case TOKEN_SUB_SET:
-        return "sub";
-
-    case TOKEN_MUL:
-    case TOKEN_MUL_SET:
-        return "mul";
-
-    case TOKEN_DIV:
-    case TOKEN_DIV_SET:
-        return "div";
-
-    case TOKEN_MOD:
-    case TOKEN_MOD_SET:
-        return "mod";
-
-    case TOKEN_GT:
-    case TOKEN_GE:
-    case TOKEN_LT:
-    case TOKEN_LE:
-    case TOKEN_EQ:
-    case TOKEN_NE:
-        return "compare";
-
-    default:
-        unreachable();
-    }
 }
 
 static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *binary, Node *n) {
@@ -5414,7 +5409,7 @@ void check_nodes(Compiler *c) {
         assert(c->type_info_pointer_type.kind == TYPE_STRUCT);
         const Type_Struct *type_info_structure = c->type_info_pointer_type.spec.structt;
 
-        assert(type_info_structure->fields_count == 5);
+        assert(type_info_structure->fields_count == 4);
         const Type *type_info_variant = &type_info_structure->fields[3].type;
 
         assert(type_info_variant->kind == TYPE_UNION);
@@ -5561,3 +5556,5 @@ void check_nodes(Compiler *c) {
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?
+//
+// TODO: Show the method signature required for operator overloading

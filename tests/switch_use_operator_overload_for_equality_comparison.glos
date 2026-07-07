@@ -1,0 +1,13 @@
+main :: () {
+    x := "Foo"
+    if x == {
+    case "Foo"
+        println("It is foo")
+
+    case "Bar", "Baz"
+        println("It is bar or baz")
+
+    case
+        println("Uh oh")
+    }
+}
