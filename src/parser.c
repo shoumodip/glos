@@ -798,30 +798,32 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_LPAREN: {
-        bool is_fn = false;
-        Pos  fn_args_end_pos = {0};
+        Node_Fn *fn = NULL;
         if (read_token(p, TOKEN_RPAREN)) {
-            is_fn = true;
+            fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
+            fn->outer_fn = p->state.fn_current;
+            fn->module = p->module_current;
+            p->state.fn_current = fn;
+
+            assert(p->state.ahead.kind == TOKEN_RPAREN);
+            fn->args_end_pos = p->state.ahead.pos;
         } else {
             node = parse_expr(p, POWER_SET, false, true, NULL);
             if (peek_token(p).kind == TOKEN_COLON) {
-                is_fn = true;
+                fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
+                fn->outer_fn = p->state.fn_current;
+                fn->module = p->module_current;
+                p->state.fn_current = fn;
+
                 node = parse_define(p, node, next_token(p), false, true, false);
             } else {
-                fn_args_end_pos = expect_token(p, TOKEN_RPAREN).pos;
+                expect_token(p, TOKEN_RPAREN);
             }
         }
 
-        if (is_fn) {
+        if (fn) {
             Node *arg = node;
-            node = node_alloc(p->module_current, NODE_FN, token);
-
-            Node_Fn *fn = (Node_Fn *) node;
-            fn->outer_fn = p->state.fn_current;
-            fn->module = p->module_current;
-
-            Node_Fn *fn_current_save = p->state.fn_current;
-            p->state.fn_current = fn;
+            node = (Node *) fn;
 
             if (arg) {
                 Node_Define *define = (Node_Define *) arg;
@@ -855,8 +857,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                     fn->is_method = true;
                 }
-
-                definition_lhs_setup(p, define, false);
             }
 
             Node *typed_variadics = NULL;
@@ -907,7 +907,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 token = expect_token(p, TOKEN_COMMA, TOKEN_RPAREN);
                 if (token.kind != TOKEN_COMMA) {
-                    fn_args_end_pos = token.pos;
+                    fn->args_end_pos = token.pos;
                     break;
                 }
 
@@ -922,7 +922,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     }
 
                     fn->variadics_kind = VARIADICS_UNTYPED;
-                    fn_args_end_pos = expect_token(p, TOKEN_RPAREN).pos;
+                    fn->args_end_pos = expect_token(p, TOKEN_RPAREN).pos;
                     break;
                 }
 
@@ -938,8 +938,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false);
             }
-
-            fn->args_end_pos = fn_args_end_pos;
 
             if (read_token(p, TOKEN_ARROW)) {
                 if (read_token(p, TOKEN_LPAREN)) {
@@ -973,7 +971,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 fn->is_type = true;
             }
 
-            p->state.fn_current = fn_current_save;
+            p->state.fn_current = fn->outer_fn;
         }
     } break;
 
