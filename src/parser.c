@@ -620,7 +620,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
 
     token = peek_token(p);
     if (token.kind != TOKEN_SET && token.kind != TOKEN_COLON) {
-        define->type = parse_expr(p, POWER_PRE, false, true, NULL);
+        define->type = parse_expr(p, POWER_PRE, false, false, NULL);
     }
 
     token = peek_token(p);
@@ -954,7 +954,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 }
             }
 
-            if (peek_token(p).kind == TOKEN_LBRACE) {
+            if (peek_token(p).kind == TOKEN_LBRACE && compounds_allowed) {
                 fn->body = parse_block(p, next_token(p));
             } else {
                 if (fn->is_method && !p->state.in_extern) {

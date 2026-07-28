@@ -3621,7 +3621,8 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
                 type_assert_type(binary->rhs);
                 binary->rhs->type.is_meta = false;
                 check_type_satisfies_trait(c, binary->rhs->type, binary->lhs->type.spec.trait, binary->rhs, -1);
-                binary->trait_check_type = &binary->rhs->type;
+                binary->trait_check_type = arena_clone(&default_arena, &binary->rhs->type, sizeof(binary->rhs->type));
+                binary->rhs->type.is_meta = true;
             }
         } else if (type_is_trait(binary->rhs->type)) {
             binary->trait_check = binary->rhs;
@@ -3629,7 +3630,8 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
                 type_assert_type(binary->lhs);
                 binary->lhs->type.is_meta = false;
                 check_type_satisfies_trait(c, binary->lhs->type, binary->rhs->type.spec.trait, binary->lhs, -1);
-                binary->trait_check_type = &binary->lhs->type;
+                binary->trait_check_type = arena_clone(&default_arena, &binary->lhs->type, sizeof(binary->lhs->type));
+                binary->lhs->type.is_meta = true;
             }
         } else if (type_is_union(binary->lhs->type)) {
             binary->union_check = binary->lhs;
