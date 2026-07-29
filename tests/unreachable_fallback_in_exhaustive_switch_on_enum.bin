@@ -1,0 +1,6 @@
+EXIT 134
+STDOUT 0
+
+STDERR 102
+tests/unreachable_fallback_in_exhaustive_switch_on_enum.glos:8:5: Unreachable: Invalid enum value: 69
+

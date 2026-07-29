@@ -1,0 +1,14 @@
+Foo :: union {
+    i64
+    string
+}
+
+main :: () {
+    f: Foo
+    f.type = 69
+    if f == {
+    case null
+    case i64
+    case string
+    }
+}

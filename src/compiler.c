@@ -4242,14 +4242,35 @@ static void compile_stmt(Compiler *c, Node *n) {
         }
         assert(iota == sw->preds_count);
 
+        bool jump_to_end = true;
         LLVMPositionBuilderAtEnd(c->llvm_builder, fallback);
         if (sw->fallback) {
             compile_stmt(c, ((Node_Case *) sw->fallback)->body);
+        } else if (sw->enumeration) {
+            const char *message = arena_sprintf(
+                &temp_arena,
+                Pos_Fmt "Unreachable: Invalid enum value: %%%s\n",
+                Pos_Arg(n->token.pos),
+                type_is_signed(sw->expr->type) ? "zd" : "zu");
+
+            set_debug_pos(c, n->token.pos);
+            compile_panic(c, message, expr, NULL, NULL);
+            arena_reset(&temp_arena, message);
+            jump_to_end = false;
+        } else if (sw->unionn) {
+            const char *message =
+                arena_sprintf(&temp_arena, Pos_Fmt "Unreachable: Invalid union tag: %%zd\n", Pos_Arg(n->token.pos));
+
+            set_debug_pos(c, n->token.pos);
+            compile_panic(c, message, expr, NULL, NULL);
+            arena_reset(&temp_arena, message);
+            jump_to_end = false;
         }
 
         LLVMSetCurrentDebugLocation2(c->llvm_builder, NULL);
-        LLVMBuildBr(c->llvm_builder, end);
-
+        if (jump_to_end) {
+            LLVMBuildBr(c->llvm_builder, end);
+        }
         LLVMPositionBuilderAtEnd(c->llvm_builder, end);
     } break;
 

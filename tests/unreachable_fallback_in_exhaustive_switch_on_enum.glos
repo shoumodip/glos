@@ -1,0 +1,12 @@
+Foo :: enum {
+    A
+    B
+}
+
+main :: () {
+    f := Foo(69)
+    if f == {
+    case .A
+    case .B
+    }
+}
