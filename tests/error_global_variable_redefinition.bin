@@ -1,7 +1,7 @@
 EXIT 1
 STDOUT 0
 
-STDERR 148
+STDERR 164
 tests/error_global_variable_redefinition.glos:2:1: ERROR: Redefinition of 'x'
-tests/error_global_variable_redefinition.glos:1:1: NOTE: Defined here
+tests/error_global_variable_redefinition.glos:1:1: NOTE: Here is the first definition
 

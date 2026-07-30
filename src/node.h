@@ -18,6 +18,7 @@ typedef struct Node_Enum   Node_Enum;
 typedef struct Node_Trait  Node_Trait;
 typedef struct Node_Union  Node_Union;
 typedef struct Node_Struct Node_Struct;
+typedef struct Node_Import Node_Import;
 
 typedef struct {
     Node *head;
@@ -29,6 +30,12 @@ void nodes_push(Nodes *ns, Node *n);
 typedef DA(Node_Atom *) Local_Scope;
 typedef HT(SV, Node_Atom *) Global_Scope;
 
+typedef enum {
+    UNCHECKED,
+    CHECKING,
+    CHECKED,
+} Check_Status;
+
 typedef struct Module Module;
 
 struct Module {
@@ -39,6 +46,11 @@ struct Module {
 
     Nodes        nodes;
     Global_Scope globals;
+
+    DA(Node_Import *) imports;
+
+    // For unqualified imports
+    Check_Status orderless_check_status;
 
     Module *next;
 };
@@ -348,12 +360,6 @@ static_assert(COUNT_CONST_VALUES == 10, "");
 bool const_value_eq(Const_Value a, Const_Value b);
 
 typedef enum {
-    UNCHECKED,
-    CHECKING,
-    CHECKED,
-} Check_Status;
-
-typedef enum {
     NODE_ATOM,
     NODE_GROUP,
     NODE_UNARY,
@@ -554,12 +560,13 @@ typedef struct {
     Node *message;
 } Node_Assert;
 
-typedef struct {
+struct Node_Import {
     Node    node;
     Token   path;
     Module *module;
     Nodes   libraries;
-} Node_Import;
+    bool    is_stmt;
+};
 
 typedef struct {
     Node       node;

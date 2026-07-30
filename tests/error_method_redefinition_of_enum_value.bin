@@ -1,7 +1,7 @@
 EXIT 1
 STDOUT 0
 
-STDERR 160
+STDERR 176
 tests/error_method_redefinition_of_enum_value.glos:6:1: ERROR: Redefinition of 'Baz'
-tests/error_method_redefinition_of_enum_value.glos:3:5: NOTE: Defined here
+tests/error_method_redefinition_of_enum_value.glos:3:5: NOTE: Here is the first definition
 

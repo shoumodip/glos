@@ -1,7 +1,7 @@
 EXIT 1
 STDOUT 0
 
-STDERR 168
+STDERR 184
 tests/error_redefinition_of_constant_in_same_block.glos:3:5: ERROR: Redefinition of 'N'
-tests/error_redefinition_of_constant_in_same_block.glos:2:5: NOTE: Defined here
+tests/error_redefinition_of_constant_in_same_block.glos:2:5: NOTE: Here is the first definition
 

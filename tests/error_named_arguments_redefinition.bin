@@ -1,7 +1,7 @@
 EXIT 1
 STDOUT 0
 
-STDERR 149
+STDERR 165
 tests/error_named_arguments_redefinition.glos:4:17: ERROR: Redefinition of 'a'
-tests/error_named_arguments_redefinition.glos:4:9: NOTE: Defined here
+tests/error_named_arguments_redefinition.glos:4:9: NOTE: Here is the first definition
 
