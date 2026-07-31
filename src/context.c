@@ -1,5 +1,6 @@
 #include "context.h"
 #include "basic.h"
+#include "node.h"
 #include "token.h"
 
 void local_scope_push(Local_Scope *scope, Node_Atom *atom) {
@@ -30,58 +31,82 @@ Node_Atom *global_scope_find(Global_Scope *scope, SV name) {
     return p ? *p : NULL;
 }
 
-static Node_Atom *context_fn_find(const Context_Fn *fn, const Local_Scope *locals, SV name) {
-    if (!fn) {
-        return NULL;
-    }
-
-    assert(fn->begin <= locals->count);
-    assert(fn->end <= locals->count);
-    for (size_t i = fn->end; i > fn->begin; i--) {
-        Node_Atom *it = locals->data[i - 1];
-        if (sv_eq(it->node.token.sv, name)) {
-            return it;
-        }
-    }
-
-    return context_fn_find(fn->outer, locals, name);
-}
-
 void context_push_fn(Context *c, Context_Fn *fn) {
     assert(fn);
-    fn->begin = c->locals.count;
-    fn->end = c->locals.count;
+    fn->defines_begin = c->defines.count;
+    fn->defines_end = c->defines.count;
+
+    fn->imports_begin = c->imports.count;
+    fn->imports_end = c->imports.count;
     c->fn = fn;
 }
 
 void context_pop_fn(Context *c) {
     assert(c->fn);
-    c->locals.count = c->fn->begin;
+    c->defines.count = c->fn->defines_begin;
+    c->imports.count = c->fn->imports_begin;
     c->fn = c->fn->outer;
 }
 
 void context_restore_fn(Context *c, Context_Fn *save) {
     c->fn = save;
     if (c->fn) {
-        c->locals.count = c->fn->end;
+        c->defines.count = c->fn->defines_end;
+        c->imports.count = c->fn->imports_end;
     }
 }
 
-void context_push_local(Context *c, Node_Atom *atom) {
+void context_push_define(Context *c, Node_Atom *define) {
     assert(c->fn);
-    assert(c->fn->end == c->locals.count);
-    da_push(&c->locals, atom);
-    c->fn->end++;
+    da_push(&c->defines, define);
+    c->fn->defines_end++;
 }
 
-Node_Atom *context_find_local(const Context *c, SV name) {
-    return context_fn_find(c->fn, &c->locals, name);
+void context_push_import(Context *c, Node_Import *import) {
+    assert(c->fn);
+    da_push(&c->imports, import);
+    c->fn->imports_end++;
 }
 
-void context_set_end(Context *c, size_t end) {
+Node_Atom *context_find_define_ex(const Context *c, SV name, Module *skip) {
+    for (Context_Fn *fn = c->fn; fn; fn = fn->outer) {
+        for (size_t i = fn->defines_end; i > fn->defines_begin; i--) {
+            Node_Atom *it = c->defines.data[i - 1];
+            if (sv_eq(it->node.token.sv, name)) {
+                return it;
+            }
+        }
+    }
+
+    for (Context_Fn *fn = c->fn; fn; fn = fn->outer) {
+        for (size_t i = fn->imports_end; i > fn->imports_begin; i--) {
+            Module *module = c->imports.data[i - 1]->module;
+            if (skip && module == skip) {
+                continue;
+            }
+
+            Node_Atom *define = global_scope_find(&module->globals, name);
+            if (define) {
+                return define;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+Node_Atom *context_find_define(const Context *c, SV name) {
+    return context_find_define_ex(c, name, NULL);
+}
+
+void context_set_end(Context *c, size_t defines_end, size_t imports_end) {
     if (c->fn) {
-        assert(c->fn->end == c->locals.count);
-        c->fn->end = end;
-        c->locals.count = end;
+        assert(c->fn->defines_end == c->defines.count);
+        c->fn->defines_end = defines_end;
+        c->defines.count = defines_end;
+
+        assert(c->fn->imports_end == c->imports.count);
+        c->fn->imports_end = imports_end;
+        c->imports.count = imports_end;
     }
 }

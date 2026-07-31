@@ -1,7 +1,7 @@
 EXIT 1
 STDOUT 0
 
-STDERR 132
+STDERR 148
 tests/error_method_redefinition.glos:3:1: ERROR: Redefinition of 'foo'
-tests/error_method_redefinition.glos:2:1: NOTE: Defined here
+tests/error_method_redefinition.glos:2:1: NOTE: Here is the first definition
 

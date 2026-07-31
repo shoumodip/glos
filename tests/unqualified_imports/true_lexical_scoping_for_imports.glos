@@ -1,0 +1,11 @@
+main :: () {
+    {
+        #import "foo"
+        foo()
+    }
+
+    {
+        #import "bar"
+        foo()
+    }
+}

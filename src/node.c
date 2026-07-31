@@ -16,8 +16,9 @@ void nodes_push(Nodes *ns, Node *n) {
 }
 
 void modules_free(Modules *ms) {
-    for (Module *m = ms->head; m; m = m->next) {
+    ll_foreach(m, ms) {
         ht_free(&m->globals);
+        da_free(&m->imports);
     }
     ht_free(&ms->table);
 }

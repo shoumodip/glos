@@ -1133,6 +1133,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         node = node_alloc(p->module_current, NODE_IMPORT, token);
         Node_Import *import = (Node_Import *) node;
         import->path = expect_token(p, TOKEN_STRING);
+        import->is_local = p->state.fn_current != NULL;
 
         if (!p->state.in_compile_time_condition) {
             parser_import(p, import);
@@ -1650,7 +1651,9 @@ static Node *parse_stmt(Parser *p) {
         node = parse_expr(p, POWER_NIL, true, true, NULL);
         if (node->kind != NODE_DEFINE) {
             not_in_extern_assert(p, token);
-            if (node->kind != NODE_IMPORT) {
+            if (node->kind == NODE_IMPORT) {
+                ((Node_Import *) node)->is_stmt = true;
+            } else {
                 local_assert(p, true, node->token, "expression");
             }
         }
