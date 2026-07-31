@@ -357,7 +357,9 @@ Token lexer_iter(Lexer *l) {
         break;
 
     case '"':
-        return lexer_get_string(l, token.pos);
+        token = lexer_get_string(l, token.pos);
+        token.newline = l->newline;
+        return token;
 
     case '+':
         token.kind = TOKEN_ADD;
