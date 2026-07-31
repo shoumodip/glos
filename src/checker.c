@@ -838,7 +838,13 @@ typedef enum {
 static void check_expr(Compiler *c, Node *n, Ref_Kind ref);
 static void check_stmt(Compiler *c, Node *n);
 
-static Node_Atom *module_globals_find_ex(Module *m, SV name, Module *skip) {
+static void define_orderless_nodes_of_module(Compiler *c, Module *module, const Pos *unqualified_import_pos);
+
+static Node_Atom *module_globals_find_ex(Compiler *c, Module *m, SV name, Module *skip) {
+    if (m->orderless_check_status == UNCHECKED) {
+        define_orderless_nodes_of_module(c, m, NULL);
+    }
+
     Node_Atom *g = global_scope_find(&m->globals, name);
     if (g) {
         return g;
@@ -859,8 +865,8 @@ static Node_Atom *module_globals_find_ex(Module *m, SV name, Module *skip) {
     return NULL;
 }
 
-static Node_Atom *module_globals_find(Module *m, SV name) {
-    return module_globals_find_ex(m, name, NULL);
+static Node_Atom *module_globals_find(Compiler *c, Module *m, SV name) {
+    return module_globals_find_ex(c, m, name, NULL);
 }
 
 static Node_Fn *get_main(Compiler *c) {
@@ -868,7 +874,7 @@ static Node_Fn *get_main(Compiler *c) {
         return c->main_fn;
     }
 
-    Node_Atom *main = module_globals_find(c->main_module, sv_from_cstr("main"));
+    Node_Atom *main = module_globals_find(c, c->main_module, sv_from_cstr("main"));
     if (!main) {
         fprintf(
             stderr,
@@ -2034,7 +2040,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                 ht_foreach(it, &import->module->globals) {
                     Node_Atom *previous = context_find_define_ex(&c->context, *it.key, import->module);
                     if (!previous) {
-                        previous = module_globals_find_ex(n->module, *it.key, import->module);
+                        previous = module_globals_find_ex(c, n->module, *it.key, import->module);
                     }
 
                     if (previous) {
@@ -2090,7 +2096,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                     }
 
                     if (!is_method) {
-                        Node_Atom *previous = module_globals_find(it->module, it->node.token.sv);
+                        Node_Atom *previous = module_globals_find(c, it->module, it->node.token.sv);
                         if (previous) {
                             error_redefinition_global((Node *) it, (Node *) previous, it->module, &c->context);
                         }
@@ -2490,11 +2496,24 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
     }
 
     if (!definition) {
-        definition = module_globals_find(module, n->token.sv);
+        definition = module_globals_find(c, module, n->token.sv);
         if (!definition && atom) {
-            module = c->builtin_module;
-            importing = true;
-            definition = module_globals_find(module, n->token.sv);
+            Type_Kind builtin_type_kind;
+            if (get_builtin_type_kind(n->token.sv, &builtin_type_kind)) {
+                n->type = (Type) {.kind = builtin_type_kind, .is_meta = true};
+                if (ref == REF_ASSIGN) {
+                    fprintf(
+                        stderr, Pos_Fmt "ERROR: Cannot assign to compile time constant value\n", Pos_Arg(n->token.pos));
+                    exit(1);
+                }
+                return;
+            }
+
+            if (module != c->builtin_module) {
+                module = c->builtin_module;
+                importing = true;
+                definition = module_globals_find(c, module, n->token.sv);
+            }
         }
 
         if (definition && definition->definition_spec->is_private && importing) {
@@ -2570,14 +2589,6 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             }
         }
     } else {
-        if (atom) {
-            Type_Kind kind;
-            if (get_builtin_type_kind(n->token.sv, &kind)) {
-                n->type = (Type) {.kind = kind, .is_meta = true};
-                return;
-            }
-        }
-
         error_undefined(&n->token, "identifier", false);
     }
 }
@@ -5460,7 +5471,7 @@ Const_Value get_platform(Compiler *c, Type *type) {
 }
 
 Const_Value get_const_definition_value(Compiler *c, Module *m, SV name, Type *type) {
-    Node_Atom *atom = module_globals_find(m, name);
+    Node_Atom *atom = module_globals_find(c, m, name);
     assert(atom);
     assert(atom->definition_spec->is_const);
     check_stmt(c, (Node *) atom->definition_spec->definition_node);
