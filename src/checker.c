@@ -425,6 +425,14 @@ static bool try_auto_cast_literal(Node *n, Type expected) {
         return true;
     }
 
+    // untyped string -> &char
+    if (n->kind == NODE_ATOM && n->token.kind == TOKEN_STRING &&
+        type_eq(expected, (Type) {.kind = TYPE_CHAR, .ref = 1})) //
+    {
+        n->type = expected;
+        return true;
+    }
+
     return false;
 }
 
@@ -1142,6 +1150,11 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             return atom->definition->definition_spec->const_value;
 
         case TOKEN_STRING:
+            if (type_eq(n->type, (Type) {.kind = TYPE_CHAR, .ref = 1})) {
+                fprintf(
+                    stderr, Pos_Fmt "ERROR: Cannot access pointers in constant expressions\n", Pos_Arg(n->token.pos));
+                exit(1);
+            }
             return const_value_string(n->token.sv);
 
         case TOKEN_ISTRING:

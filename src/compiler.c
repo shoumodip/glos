@@ -2685,7 +2685,20 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         case TOKEN_IDENT:
             return compile_ident(c, n, (Node_Atom *) atom->definition, ref);
 
-        case TOKEN_STRING:
+        case TOKEN_STRING: {
+            if (type_eq(n->type, (Type) {.kind = TYPE_CHAR, .ref = 1})) {
+                return compile_const_value_into_memory(
+                    c, LLVMConstStringInContext(c->llvm_context, n->token.sv.data, n->token.sv.count, false));
+            }
+
+            LLVMValueRef memory = compile_const_value_into_memory(c, compile_string_into_const_value(c, n->token.sv));
+            if (ref) {
+                return memory;
+            }
+
+            return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, memory, "");
+        }
+
         case TOKEN_ISTRING: {
             LLVMValueRef memory = compile_const_value_into_memory(c, compile_string_into_const_value(c, n->token.sv));
             if (ref) {

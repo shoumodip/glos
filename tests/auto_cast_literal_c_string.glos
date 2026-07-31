@@ -1,0 +1,5 @@
+C :: #import "C"
+
+main :: () {
+    C.printf("Hello, world!\n")
+}
