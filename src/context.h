@@ -12,14 +12,19 @@ Node_Atom *global_scope_find(Global_Scope *scope, SV name);
 struct Context_Fn {
     Node_Fn *fn;
 
-    size_t begin;
-    size_t end;
+    size_t defines_begin;
+    size_t defines_end;
+
+    size_t imports_begin;
+    size_t imports_end;
 
     Context_Fn *outer;
 };
 
 typedef struct {
-    Local_Scope      locals;
+    Local_Scope  defines;
+    Node_Imports imports;
+
     Context_Fn      *fn;
     Context_Replace *replace;
 } Context;
@@ -31,9 +36,12 @@ void context_push_fn(Context *c, Context_Fn *fn);
 void context_pop_fn(Context *c);
 void context_restore_fn(Context *c, Context_Fn *save);
 
-void       context_push_local(Context *c, Node_Atom *atom);
-Node_Atom *context_find_local(const Context *c, SV name);
+void context_push_define(Context *c, Node_Atom *define);
+void context_push_import(Context *c, Node_Import *import);
 
-void context_set_end(Context *c, size_t end);
+Node_Atom *context_find_define_ex(const Context *c, SV name, Module *skip);
+Node_Atom *context_find_define(const Context *c, SV name);
+
+void context_set_end(Context *c, size_t defines_end, size_t imports_end);
 
 #endif // CONTEXT_H

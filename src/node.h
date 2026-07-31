@@ -30,6 +30,8 @@ void nodes_push(Nodes *ns, Node *n);
 typedef DA(Node_Atom *) Local_Scope;
 typedef HT(SV, Node_Atom *) Global_Scope;
 
+typedef DA(Node_Import *) Node_Imports;
+
 typedef enum {
     UNCHECKED,
     CHECKING,
@@ -45,9 +47,8 @@ struct Module {
     const char *relative_path;
 
     Nodes        nodes;
+    Node_Imports imports;
     Global_Scope globals;
-
-    DA(Node_Import *) imports;
 
     // For unqualified imports
     Check_Status orderless_check_status;
@@ -565,7 +566,9 @@ struct Node_Import {
     Token   path;
     Module *module;
     Nodes   libraries;
-    bool    is_stmt;
+
+    bool is_stmt;
+    bool is_local;
 };
 
 typedef struct {

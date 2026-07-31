@@ -1133,6 +1133,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         node = node_alloc(p->module_current, NODE_IMPORT, token);
         Node_Import *import = (Node_Import *) node;
         import->path = expect_token(p, TOKEN_STRING);
+        import->is_local = p->state.fn_current != NULL;
 
         if (!p->state.in_compile_time_condition) {
             parser_import(p, import);

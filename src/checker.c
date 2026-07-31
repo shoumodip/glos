@@ -42,29 +42,40 @@ static void error_redefinition(const Node *n, const Pos *previous) {
     exit(1);
 }
 
-static void error_redefinition_global(const Node *this, const Node *previous, const Module *module) {
-    fprintf(stderr, Pos_Fmt "ERROR: Redefinition of '" SV_Fmt "'\n", Pos_Arg(this->token.pos), SV_Arg(this->token.sv));
-    if (this->module != module) {
-        for (size_t i = 0; i < module->imports.count; i++) {
-            Node_Import *it = module->imports.data[i];
+static void error_redefinition_add_helper_message_for_import(
+    const Node *this, const Module *module, const Context *context, const char *label) //
+{
+    for (size_t i = 0; i < module->imports.count; i++) {
+        Node_Import *it = module->imports.data[i];
+        if (it->module == this->module) {
+            fprintf(stderr, Pos_Fmt "NOTE: The %s was imported here\n", Pos_Arg(it->node.token.pos), label);
+            return;
+        }
+    }
+
+    for (Context_Fn *fn = context->fn; fn; fn = fn->outer) {
+        for (size_t i = fn->imports_end; i > fn->imports_begin; i--) {
+            Node_Import *it = context->imports.data[i - 1];
             if (it->module == this->module) {
-                fprintf(stderr, Pos_Fmt "NOTE: Imported here\n", Pos_Arg(it->node.token.pos));
-                break;
+                fprintf(stderr, Pos_Fmt "NOTE: The %s was imported here\n", Pos_Arg(it->node.token.pos), label);
+                return;
             }
         }
+    }
+}
+
+static void
+error_redefinition_global(const Node *this, const Node *previous, const Module *module, const Context *context) //
+{
+    fprintf(stderr, Pos_Fmt "ERROR: Redefinition of '" SV_Fmt "'\n", Pos_Arg(this->token.pos), SV_Arg(this->token.sv));
+    if (this->module != module) {
+        error_redefinition_add_helper_message_for_import(this, module, context, "redefinition");
     }
 
     if (previous) {
         fprintf(stderr, Pos_Fmt "NOTE: Here is the first definition\n", Pos_Arg(previous->token.pos));
         if (previous->module != module) {
-            for (size_t i = 0; i < module->imports.count; i++) {
-                Node_Import *it = module->imports.data[i];
-                if (it->module == previous->module) {
-                    fprintf(
-                        stderr, Pos_Fmt "NOTE: That first definition was imported here\n", Pos_Arg(it->node.token.pos));
-                    break;
-                }
-            }
+            error_redefinition_add_helper_message_for_import(previous, module, context, "first definition");
         }
     }
     exit(1);
@@ -827,20 +838,29 @@ typedef enum {
 static void check_expr(Compiler *c, Node *n, Ref_Kind ref);
 static void check_stmt(Compiler *c, Node *n);
 
-static Node_Atom *module_globals_find(Module *m, SV name) {
-    Node_Atom *a = global_scope_find(&m->globals, name);
-    if (a) {
-        return a;
+static Node_Atom *module_globals_find_ex(Module *m, SV name, Module *skip) {
+    Node_Atom *g = global_scope_find(&m->globals, name);
+    if (g) {
+        return g;
     }
 
     for (size_t i = 0; i < m->imports.count; i++) {
-        a = global_scope_find(&m->imports.data[i]->module->globals, name);
-        if (a) {
-            return a;
+        Module *module = m->imports.data[i]->module;
+        if (skip && module == skip) {
+            continue;
+        }
+
+        g = global_scope_find(&module->globals, name);
+        if (g) {
+            return g;
         }
     }
 
     return NULL;
+}
+
+static Node_Atom *module_globals_find(Module *m, SV name) {
+    return module_globals_find_ex(m, name, NULL);
 }
 
 static Node_Fn *get_main(Compiler *c) {
@@ -2004,20 +2024,24 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
             }
 
             if (!imported) {
-                da_push(&n->module->imports, import);
+                if (import->is_local) {
+                    context_push_import(&c->context, import);
+                } else {
+                    da_push(&n->module->imports, import);
+                }
+
                 define_orderless_nodes_of_module(c, import->module, &n->token.pos);
                 ht_foreach(it, &import->module->globals) {
-                    Node_Atom *previous = module_globals_find(n->module, *it.key);
+                    Node_Atom *previous = context_find_define_ex(&c->context, *it.key, import->module);
+                    if (!previous) {
+                        previous = module_globals_find_ex(n->module, *it.key, import->module);
+                    }
+
                     if (previous) {
-                        Node_Atom *this = *it.value;
-                        if (this->module != previous->module) {
-                            error_redefinition_global((Node *) *it.value, (Node *) previous, n->module);
-                        }
+                        error_redefinition_global((Node *) *it.value, (Node *) previous, n->module, &c->context);
                     }
                 }
             }
-
-            // TODO(@import): Local
         }
     } break;
 
@@ -2031,11 +2055,11 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                     if (it->definition_spec->is_const) {
                         const Context_Fn *fn = c->context.fn;
 
-                        assert(fn->end <= c->context.locals.count);
-                        assert(block_start <= c->context.locals.count);
-                        assert(block_start <= fn->end);
-                        for (size_t i = fn->end; i > block_start; i--) {
-                            Node_Atom *previous = c->context.locals.data[i - 1];
+                        assert(fn->defines_end <= c->context.defines.count);
+                        assert(block_start <= c->context.defines.count);
+                        assert(block_start <= fn->defines_end);
+                        for (size_t i = fn->defines_end; i > block_start; i--) {
+                            Node_Atom *previous = c->context.defines.data[i - 1];
                             if (!previous->definition_spec->is_const) {
                                 continue;
                             }
@@ -2046,7 +2070,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                             }
                         }
 
-                        context_push_local(&c->context, it);
+                        context_push_define(&c->context, it);
                     }
 
                     it->definition_spec->fn_context = c->context.fn;
@@ -2068,9 +2092,8 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                     if (!is_method) {
                         Node_Atom *previous = module_globals_find(it->module, it->node.token.sv);
                         if (previous) {
-                            error_redefinition_global((Node *) it, (Node *) previous, it->module);
+                            error_redefinition_global((Node *) it, (Node *) previous, it->module, &c->context);
                         }
-
                         global_scope_push(&it->module->globals, it);
                     }
                 }
@@ -2384,7 +2407,7 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
 
     if (it->definition_spec->is_local) {
         if (!it->definition_spec->is_const && !sv_match(it->node.token.sv, "_")) {
-            context_push_local(&c->context, it);
+            context_push_define(&c->context, it);
         }
     }
 
@@ -2453,7 +2476,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
 
     Node_Atom *definition = NULL;
     if (atom) {
-        definition = context_find_local(&c->context, n->token.sv);
+        definition = context_find_define(&c->context, n->token.sv);
         if (definition && definition->definition_spec->fn_context && c->context.fn) {
             if (definition->definition_spec->fn_context != c->context.fn && !definition->definition_spec->is_const) {
                 fprintf(
@@ -5226,15 +5249,16 @@ static void check_stmt(Compiler *c, Node *n) {
     case NODE_BLOCK: {
         Node_Block *block = (Node_Block *) n;
 
-        const size_t context_end_save = c->context.fn->end;
+        const size_t context_defines_end_save = c->context.fn->defines_end;
+        const size_t context_imports_end_save = c->context.fn->imports_end;
         for (Node *it = block->body.head; it; it = it->next) {
-            define_orderless_node(c, it, context_end_save);
+            define_orderless_node(c, it, context_defines_end_save);
         }
 
         for (Node *it = block->body.head; it; it = it->next) {
             check_stmt(c, it);
         }
-        context_set_end(&c->context, context_end_save);
+        context_set_end(&c->context, context_defines_end_save, context_imports_end_save);
     } break;
 
     case NODE_IF: {
@@ -5290,7 +5314,8 @@ static void check_stmt(Compiler *c, Node *n) {
     case NODE_FOR: {
         Node_For *forr = (Node_For *) n;
 
-        const size_t context_end_save = c->context.fn->end;
+        const size_t context_defines_end_save = c->context.fn->defines_end;
+        const size_t context_imports_end_save = c->context.fn->imports_end;
         {
             check_stmt(c, forr->init);
             if (forr->condition) {
@@ -5300,7 +5325,7 @@ static void check_stmt(Compiler *c, Node *n) {
             check_stmt(c, forr->update);
             check_stmt(c, forr->body);
         }
-        context_set_end(&c->context, context_end_save);
+        context_set_end(&c->context, context_defines_end_save, context_imports_end_save);
     } break;
 
     case NODE_CASE:
