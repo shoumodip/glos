@@ -575,9 +575,26 @@ static void tests_flush(Tests *tests, Cmd *cmd, bool interactive, Arena *arena, 
                         arena_reset(arena, actual.err.data);
                     }
 
-                    fprintf(stderr, "Replaying '%s'\n", it->name);
-                    test_prepare_cmd(*it, cmd);
-                    it->proc = cmd_run_async(cmd, (Cmd_Stdio) {.out = &it->pout, .err = &it->perr});
+                    for (size_t j = i; j < tests->count; j++) {
+                        Test *it = &tests->data[j];
+                        if (j > i) {
+                            static char junk[4096];
+                            if (it->pout) {
+                                while (fread(junk, sizeof(junk), 1, it->pout) > 0);
+                                fclose(it->pout);
+                            }
+
+                            if (it->perr) {
+                                while (fread(junk, sizeof(junk), 1, it->perr) > 0);
+                                fclose(it->perr);
+                            }
+                            cmd_wait(it->proc);
+                        };
+
+                        fprintf(stderr, "Replaying '%s'\n", it->name);
+                        test_prepare_cmd(*it, cmd);
+                        it->proc = cmd_run_async(cmd, (Cmd_Stdio) {.out = &it->pout, .err = &it->perr});
+                    }
                     continue;
                 } else if (choice == 'q') {
                     exit(0);
