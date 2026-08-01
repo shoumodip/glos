@@ -1,12 +1,27 @@
 EXIT 1
 STDOUT 0
 
-STDERR 244
+STDERR 421
 tests/error_switch_on_enum_not_complete.glos:9:5: ERROR: This switch statement is not complete
 
-The following enumeration values are not handled:
-    - C
-    - D
+    if Foo.D == {
+    case .A
+        println("Foo.A")
+    case .B
+        println("Foo.B")
+    }
+
+    The following enumeration values are not handled:
+        - C
+        - D
 
 tests/error_switch_on_enum_not_complete.glos:1:8: NOTE: Enumeration defined here
+
+    Foo :: enum {
+        A
+        B
+        C
+        D
+    }
+
 

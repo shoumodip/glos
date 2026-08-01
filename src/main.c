@@ -1,27 +1,42 @@
 #include "basic.h"
 #include "checker.h"
 #include "compiler.h"
+#include "error.h"
 #include "parser.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 static void usage(FILE *f, const char *program) {
+    afprintf(f, ANSI_COLOR_CYAN | ANSI_BOLD, "Usage:\n");
+    afprintf(f, ANSI_COLOR_GREEN | ANSI_BOLD, "    %s", program);
     fprintf(
         f,
-        "Usage:\n"
-        "    %s [FLAGS...] [FILE|DIRECTORY]\n"
-        "\n"
-        "Flags:\n"
-        "    -h              Show this message\n"
-        "    -r              Run the program\n"
-        "    -o OUTPUT       Set the output path\n"
-        "    --              End of compiler options. All following arguments are passed to the program if ran\n",
-        program);
+        " [FLAGS...] [FILE|DIRECTORY]\n"
+        "\n");
+
+    afprintf(f, ANSI_COLOR_CYAN | ANSI_BOLD, "Flags:\n");
+
+    static const struct {
+        const char *flag;
+        const char *desc;
+    } flags[] = {
+        {"h", "             Show this message"},
+        {"r", "             Run the program"},
+        {"o", "OUTPUT       Set the output path"},
+        {"L", "PATH         Add a library path"},
+        {"l", "NAME         Add a library"},
+        {"-", "             End of compiler options. All following arguments are passed to the program if ran"},
+    };
+
+    for (size_t i = 0; i < len(flags); i++) {
+        afprintf(f, ANSI_COLOR_MAGENTA, "    -%s", flags[i].flag);
+        afprintf(f, ANSI_COLOR_DEFAULT, " %s\n", flags[i].desc);
+    }
 }
 
 static const char *shift(int *argc, char ***argv, const char *program, const char *expected) {
     if (*argc <= 0) {
-        fprintf(stderr, "ERROR: %s not provided\n\n", expected);
+        error_standalone(ERROR, "%s not provided\n", expected);
         usage(stderr, program);
         exit(1);
     }
@@ -166,7 +181,7 @@ int main(int argc, char **argv) {
     clock_t timer = 0;
 #endif // PROFILING
 
-    atexit(basic_atexit);
+    basic_init();
     const char *program = shift(&argc, &argv, NULL, NULL);
 
     int result = 0;
@@ -204,15 +219,15 @@ int main(int argc, char **argv) {
 
                 link_flags_add_libname(&link_flags, sv_from_cstr(libname));
             } else {
-                fprintf(stderr, "ERROR: Invalid flag '%s'\n\n", arg);
+                error_standalone(ERROR, "Invalid flag '%s'\n", arg);
                 usage(stderr, program);
                 exit(1);
             }
         } else {
             if (input_path) {
-                fprintf(stderr, "ERROR: Multiple input paths provided\n");
+                error_standalone(ERROR, "Multiple input paths provided");
                 if (run) {
-                    fprintf(stderr, "Hint: When using '-r', pass program arguments after '--'\n");
+                    error_standalone(INFO, "When using '-r', pass program arguments after '--'");
                 }
                 exit(1);
             }
@@ -230,7 +245,7 @@ int main(int argc, char **argv) {
         if (directory_exists(input_path)) {
             output_path = get_path_last(input_path);
             if (!output_path) {
-                fprintf(stderr, "ERROR: Could not infer output path. Provide it manually via '-o'\n");
+                error_standalone(ERROR, "ERROR: Could not infer output path. Provide it manually via '-o'");
                 exit(1);
             }
         } else {
@@ -244,12 +259,12 @@ int main(int argc, char **argv) {
                 temporary_files_push(temp_path);
                 output_path = temp_path;
             }
-        } else {
-            if (directory_exists(output_path)) {
-                fprintf(stderr, "ERROR: The output path '%s' exists and is a directory\n", output_path);
-                exit(1);
-            }
         }
+    }
+
+    if (directory_exists(output_path)) {
+        error_standalone(ERROR, "The output path '%s' exists and is a directory", output_path);
+        exit(1);
     }
 
     Modules modules = {0};
@@ -300,15 +315,13 @@ int main(int argc, char **argv) {
             break;
 
         case PARSE_FAILURE:
-            fprintf(stderr, "ERROR: Could not read directory '%s'\n", compiler.builtin_module->relative_path);
+            error_standalone(ERROR, "Could not read directory '%s'", compiler.builtin_module->relative_path);
             exit(1);
             break;
 
         case PARSE_EMPTY_DIRECTORY:
-            fprintf(
-                stderr,
-                "ERROR: Directory '%s' does not contain any glos files\n",
-                compiler.builtin_module->relative_path);
+            error_standalone(
+                ERROR, "Directory '%s' does not contain any glos files", compiler.builtin_module->relative_path);
             exit(1);
             break;
 
@@ -331,12 +344,12 @@ int main(int argc, char **argv) {
             break;
 
         case PARSE_FAILURE:
-            fprintf(stderr, "ERROR: Could not read directory '%s'\n", input_path);
+            error_standalone(ERROR, "Could not read directory '%s'", input_path);
             exit(1);
             break;
 
         case PARSE_EMPTY_DIRECTORY:
-            fprintf(stderr, "ERROR: Directory '%s' does not contain any glos files\n", input_path);
+            error_standalone(ERROR, "Directory '%s' does not contain any glos files", input_path);
             exit(1);
             break;
 
@@ -345,7 +358,7 @@ int main(int argc, char **argv) {
         }
     } else {
         if (parse_file(&parser, input_path) != PARSE_OK) {
-            fprintf(stderr, "ERROR: Could not read file '%s'\n", input_path);
+            error_standalone(ERROR, "Could not read file '%s'", input_path);
             exit(1);
         }
     }
@@ -395,7 +408,7 @@ int main(int argc, char **argv) {
 
         const Proc child_proc = cmd_run_async(&cmd, (Cmd_Stdio) {0});
         if (child_proc.id == PROC_INVALID) {
-            fprintf(stderr, "ERROR: Could not start process '%s'\n", child_name);
+            error_standalone(ERROR, "Could not start process '%s'", child_name);
             exit(1);
         }
 

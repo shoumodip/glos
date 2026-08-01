@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "basic.h"
+#include "error.h"
 #include "node.h"
 #include "token.h"
 #include <assert.h>
@@ -12,8 +13,9 @@
 #include <errno.h>
 #endif //  PLATFORM_X86_64_WINDOWS
 
+// TODO: Rework this using node
 void error_number_of_values_mismatch(
-    Pos pos, size_t lhs_count, size_t rhs_count, const char *lhs_label, const char *rhs_label) {
+    Token token, size_t lhs_count, size_t rhs_count, const char *lhs_label, const char *rhs_label) {
     if (!lhs_label) {
         lhs_label = "on the left hand side";
     }
@@ -21,10 +23,10 @@ void error_number_of_values_mismatch(
     if (!rhs_label) {
         rhs_label = "on the right hand side";
     }
-    fprintf(
-        stderr,
-        Pos_Fmt "ERROR: Unequal number of values. There %s %zu %s, and %zu %s\n",
-        Pos_Arg(pos),
+    error_token(
+        ERROR,
+        token,
+        "Unequal number of values. There %s %zu %s, and %zu %s",
         lhs_count == 1 ? "is" : "are",
         lhs_count,
         lhs_label,
@@ -139,7 +141,7 @@ Module *module_get(Parser *p, const char *path) {
 }
 
 static void error_unexpected(Token token) {
-    fprintf(stderr, Pos_Fmt "ERROR: Unexpected %s\n", Pos_Arg(token.pos), token_kind_to_cstr(token.kind));
+    error_token(ERROR, token, "Unexpected %s", token_kind_to_cstr(token.kind));
     exit(1);
 }
 
@@ -192,7 +194,8 @@ static Token expect_token(Parser *p, const Token_Kind *kinds) {
         }
     }
 
-    fprintf(stderr, Pos_Fmt "ERROR: Expected ", Pos_Arg(token.pos));
+    error_token_begin(ERROR, token);
+    fprintf(stderr, "Expected ");
     for (const Token_Kind *it = kinds; *it != TOKEN_EOF; it++) {
         if (it != kinds) {
             fprintf(stderr, " or ");
@@ -201,7 +204,8 @@ static Token expect_token(Parser *p, const Token_Kind *kinds) {
         fprintf(stderr, "%s", token_kind_to_cstr(*it));
     }
 
-    fprintf(stderr, ", got %s\n", token_kind_to_cstr(token.kind));
+    fprintf(stderr, ", got %s", token_kind_to_cstr(token.kind));
+    error_finalize();
     exit(1);
 }
 #define expect_token(p, ...) expect_token((p), (const Token_Kind[]) {__VA_ARGS__, TOKEN_EOF})
@@ -225,8 +229,7 @@ static void expect_stmt_terminator(Parser *p) {
     }
 
     const Token ahead = peek_token(p);
-    fprintf(
-        stderr, Pos_Fmt "ERROR: Expected newline or ';', got %s\n", Pos_Arg(ahead.pos), token_kind_to_cstr(ahead.kind));
+    error_token(ERROR, ahead, "Expected newline or ';', got %s", token_kind_to_cstr(ahead.kind));
     exit(1);
 }
 
@@ -241,7 +244,7 @@ static Node *parse_block(Parser *p, Token token) {
     }
 
     assert(p->state.ahead.kind == TOKEN_RBRACE);
-    block->end = p->state.ahead.pos;
+    block->end = p->state.ahead;
     return (Node *) block;
 }
 
@@ -268,8 +271,8 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
             Token ahead = peek_token(p);
             if (ahead.kind == TOKEN_EOL || ahead.kind == TOKEN_RBRACE || ahead.newline) {
                 if (sw->fallback) {
-                    fprintf(stderr, Pos_Fmt "ERROR: Multiple fallback cases is not allowed\n", Pos_Arg(token.pos));
-                    fprintf(stderr, Pos_Fmt "NOTE: Already here\n", Pos_Arg(sw->fallback->token.pos));
+                    error_token(ERROR, token, "Multiple fallback cases is not allowed");
+                    error_token(NOTE, sw->fallback->token, "Already here");
                     exit(1);
                 }
 
@@ -302,6 +305,8 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
             }
         }
 
+        assert(p->state.ahead.kind == TOKEN_RBRACE);
+        sw->end = p->state.ahead;
         node = (Node *) sw;
     } else {
         Node_If *iff = (Node_If *) node_alloc(p->module_current, NODE_IF, token);
@@ -367,10 +372,7 @@ static Node *parse_for(Parser *p, Token token) {
 
 static void not_in_extern_assert(Parser *p, Token token) {
     if (p->state.in_extern) {
-        fprintf(
-            stderr,
-            Pos_Fmt "ERROR: Extern blocks can only have variable and function definitions\n",
-            Pos_Arg(token.pos));
+        error_token(ERROR, token, "Extern blocks can only have variable and function definitions");
         exit(1);
     }
 }
@@ -428,7 +430,7 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
         if (define->expr && define->expr->kind == NODE_GROUP) {
             rhs_count = ((Node_Group *) define->expr)->count;
             error_number_of_values_mismatch(
-                define->node.token.pos,
+                define->node.token,
                 lhs_count,
                 rhs_count,
                 add_trailing_s_if_plural("definition", lhs_count),
@@ -444,7 +446,7 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
         if (is_assigned && define->is_value_known_at_compile_time) {
             if (define->expr->kind != NODE_GROUP) {
                 error_number_of_values_mismatch(
-                    define->node.token.pos,
+                    define->node.token,
                     lhs_count,
                     rhs_count,
 
@@ -457,7 +459,7 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
             rhs_count = rhs->count;
             if (lhs_count != rhs_count) {
                 error_number_of_values_mismatch(
-                    define->node.token.pos,
+                    define->node.token,
                     lhs_count,
                     rhs_count,
 
@@ -490,7 +492,7 @@ bool parser_import(Parser *p, Node_Import *import) {
     if (!absolute_path) {
         // Directory inside the current module
         root = sv_from_cstr(p->module_current->absolute_path);
-        absolute_path = get_absolute_path(root, import->path.sv, &default_arena);
+        absolute_path = get_absolute_path(root, import->path.as.string, &default_arena);
         if (!directory_exists(absolute_path)) {
             arena_reset(&default_arena, absolute_path);
             root = (SV) {0};
@@ -501,7 +503,7 @@ bool parser_import(Parser *p, Node_Import *import) {
     if (!absolute_path) {
         // Directory inside root
         root = p->root;
-        absolute_path = get_absolute_path(root, import->path.sv, &default_arena);
+        absolute_path = get_absolute_path(root, import->path.as.string, &default_arena);
         if (!directory_exists(absolute_path)) {
             arena_reset(&default_arena, absolute_path);
             root = (SV) {0};
@@ -512,7 +514,7 @@ bool parser_import(Parser *p, Node_Import *import) {
     if (!absolute_path) {
         // Directory inside std
         root = p->std;
-        absolute_path = get_absolute_path(root, import->path.sv, &default_arena);
+        absolute_path = get_absolute_path(root, import->path.as.string, &default_arena);
         if (!directory_exists(absolute_path)) {
             arena_reset(&default_arena, absolute_path);
             root = (SV) {0};
@@ -521,11 +523,7 @@ bool parser_import(Parser *p, Node_Import *import) {
     }
 
     if (!absolute_path) {
-        fprintf(
-            stderr,
-            Pos_Fmt "ERROR: Could not find module '" SV_Fmt "'\n",
-            Pos_Arg(import->path.pos),
-            SV_Arg(import->path.sv));
+        error_node(ERROR, (Node *) import, "Could not find module '" SV_Fmt "'", SV_Arg(import->path.as.string));
         exit(1);
     }
 
@@ -539,11 +537,7 @@ bool parser_import(Parser *p, Node_Import *import) {
         } else {
             module->name = sv_from_cstr(get_relative_path(root, sv_from_cstr(module->absolute_path), &default_arena));
             if (sv_match(module->name, "main") || sv_match(module->name, "builtin")) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: The module path '" SV_Fmt "' is reserved\n",
-                    Pos_Arg(import->path.pos),
-                    SV_Arg(module->name));
+                error_node(ERROR, (Node *) import, "The module path '" SV_Fmt "' is reserved", SV_Arg(module->name));
                 exit(1);
             }
 
@@ -555,20 +549,13 @@ bool parser_import(Parser *p, Node_Import *import) {
                 break;
 
             case PARSE_FAILURE:
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Could not read directory '%s'\n",
-                    Pos_Arg(import->path.pos),
-                    module->relative_path);
+                error_node(ERROR, (Node *) import, "Could not read directory '%s'", module->relative_path);
                 exit(1);
                 break;
 
             case PARSE_EMPTY_DIRECTORY:
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Directory '%s' does not contain any glos files\n",
-                    Pos_Arg(import->path.pos),
-                    module->relative_path);
+                error_node(
+                    ERROR, (Node *) import, "Directory '%s' does not contain any glos files", module->relative_path);
                 exit(1);
                 break;
 
@@ -588,7 +575,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
     Node_Define *define = (Node_Define *) node_alloc(p->module_current, NODE_DEFINE, token);
     if (spread_allowed && peek_token(p).kind == TOKEN_SPREAD) {
         define->has_spread = true;
-        define->spread_pos = next_token(p).pos;
+        define->spread_token = next_token(p);
     }
 
     {
@@ -609,10 +596,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
         }
 
         if (illegal) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Expected definition name to be an identifier, got expression\n",
-                Pos_Arg(illegal->token.pos));
+            error_node(ERROR, illegal, "Expected definition name to be an identifier, got expression");
             exit(1);
         }
     }
@@ -626,21 +610,25 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
     token = peek_token(p);
     if (token.kind == TOKEN_SET) {
         if (define->has_spread) {
-            fprintf(stderr, Pos_Fmt "ERROR: Cannot have default value here\n", Pos_Arg(token.pos));
+            error_token(ERROR, token, "Cannot have default value here");
             exit(1);
         }
 
         p->state.peeked = false;
         if (p->state.in_extern) {
             assert(p->state.ahead.kind == TOKEN_SET);
-            fprintf(stderr, Pos_Fmt "ERROR: External variable cannot have assignment\n", Pos_Arg(p->state.ahead.pos));
+            error_node(
+                ERROR,
+                define->name,
+                "External %s cannot have assignment",
+                define->count == 1 ? "variable" : "variables");
             exit(1);
         }
 
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
     } else if (token.kind == TOKEN_COLON) {
         if (define->has_spread) {
-            fprintf(stderr, Pos_Fmt "ERROR: Cannot have default value here\n", Pos_Arg(token.pos));
+            error_token(ERROR, token, "Cannot have default value here");
             exit(1);
         }
 
@@ -655,7 +643,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
 
             Node_Fn *fn = (Node_Fn *) define->expr;
             if (fn->body) {
-                fprintf(stderr, Pos_Fmt "ERROR: External function cannot have body\n", Pos_Arg(fn->body->token.pos));
+                error_node(ERROR, fn->body, "External function cannot have body");
                 exit(1);
             }
 
@@ -688,10 +676,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
 
         if (compound->children.head) {
             if (compound->is_designated != child_is_designated) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Cannot mix ordered and designated initializers\n",
-                    Pos_Arg(child->token.pos));
+                error_node(ERROR, child, "Cannot mix ordered and designated initializers");
                 exit(1);
             }
         } else {
@@ -705,6 +690,8 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
         }
     }
 
+    assert(p->state.ahead.kind == TOKEN_RBRACE);
+    compound->end = p->state.ahead;
     return (Node *) compound;
 }
 
@@ -742,7 +729,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             interp->children_count++;
             expect_token(p, TOKEN_RBRACE); // This also ensures that there is nothing left in the buffer
 
-            token = lexer_get_string(&p->state.lexer, p->state.lexer.pos);
+            token = lexer_get_string(&p->state.lexer, p->state.lexer.pos, node->token.pos);
             nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
             interp->children_count++;
         }
@@ -783,13 +770,14 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         case NODE_TRAIT:
         case NODE_UNION:
         case NODE_STRUCT:
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Redundant application of %s to %s\n",
-                Pos_Arg(token.pos),
+            error_token(
+                ERROR,
+                token,
+                "Redundant application of %s to %s",
                 token_kind_to_cstr(token.kind),
                 token_kind_to_cstr(distinct->value->token.kind));
             exit(1);
+            // TODO: This should be a warning instead to reduce friction during prototyping
             break;
 
         default:
@@ -806,7 +794,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             p->state.fn_current = fn;
 
             assert(p->state.ahead.kind == TOKEN_RPAREN);
-            fn->args_end_pos = p->state.ahead.pos;
+            fn->args_end_token = p->state.ahead;
         } else {
             node = parse_expr(p, POWER_SET, false, true, NULL);
             if (peek_token(p).kind == TOKEN_COLON) {
@@ -830,28 +818,13 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 assert(define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
 
                 if (sv_match(define->name->token.sv, "this")) {
-                    if (fn->outer_fn) {
-                        fprintf(stderr, Pos_Fmt "ERROR: Local function cannot be a method\n", Pos_Arg(token.pos));
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "NOTE: This argument is taken to be the receiver\n",
-                            Pos_Arg(define->name->token.pos));
-                        exit(1);
-                    }
-
                     if (define->has_spread) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: The receiver of a method cannot be variadic\n",
-                            Pos_Arg(define->spread_pos));
+                        error_token(ERROR, define->spread_token, "The receiver of a method cannot be variadic");
                         exit(1);
                     }
 
                     if (define->expr) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: The receiver of a method cannot have a default value\n",
-                            Pos_Arg(define->expr->token.pos));
+                        error_node(ERROR, define->expr, "The receiver of a method cannot have a default value");
                         exit(1);
                     }
 
@@ -865,31 +838,22 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             while (arg) {
                 Node_Define *define = (Node_Define *) arg;
                 if (define->is_const) {
-                    fprintf(
-                        stderr, Pos_Fmt "ERROR: Expected argument definition, got constant\n", Pos_Arg(arg->token.pos));
-                    exit(1);
-                }
-
-                if (!define->expr && fn->variadics_kind == VARIADICS_TYPED) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot have argument without default value after typed variadics\n",
-                        Pos_Arg(arg->token.pos));
+                    error_node(ERROR, arg, "Expected argument definition, got constant");
                     exit(1);
                 }
 
                 if (define->has_spread) {
                     if (fn->variadics_kind == VARIADICS_TYPED) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Cannot have multiple variadic arguments\n",
-                            Pos_Arg(arg->token.pos));
-                        fprintf(stderr, Pos_Fmt "NOTE: Previously here\n", Pos_Arg(typed_variadics->token.pos));
+                        error_node(ERROR, define->name, "Cannot have multiple variadic arguments");
+                        error_node(NOTE, ((Node_Define *) typed_variadics)->name, "Previously here");
                         exit(1);
                     }
 
                     fn->variadics_kind = VARIADICS_TYPED;
                     typed_variadics = arg;
+                } else if (!define->expr && fn->variadics_kind == VARIADICS_TYPED) {
+                    error_node(ERROR, define->name, "Cannot have argument without default value after typed variadics");
+                    exit(1);
                 }
 
                 if (define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT) {
@@ -907,35 +871,31 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 token = expect_token(p, TOKEN_COMMA, TOKEN_RPAREN);
                 if (token.kind != TOKEN_COMMA) {
-                    fn->args_end_pos = token.pos;
+                    fn->args_end_token = token;
                     break;
                 }
 
                 if (read_token(p, TOKEN_SPREAD)) {
                     if (fn->is_method) {
                         assert(p->state.ahead.kind == TOKEN_SPREAD);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Methods cannot have untyped variadics\n",
-                            Pos_Arg(p->state.ahead.pos));
+                        error_token(ERROR, p->state.ahead, "Methods cannot have untyped variadics");
+                        // TODO: This should only apply to traits, not all methods
                         exit(1);
                     }
 
                     fn->variadics_kind = VARIADICS_UNTYPED;
-                    fn->args_end_pos = expect_token(p, TOKEN_RPAREN).pos;
+                    fn->args_end_token = expect_token(p, TOKEN_RPAREN);
                     break;
                 }
 
                 Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
                 if (sv_match(name->token.sv, "this")) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt
-                        "ERROR: The argument 'this' is used to describe the receiver of a method, and therefore must be the first argument\n",
-                        Pos_Arg(name->token.pos));
+                    error_node(
+                        ERROR,
+                        name,
+                        "The argument 'this' is used to describe the receiver of a method, and therefore must be the first argument");
                     exit(1);
                 }
-
                 arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false);
             }
 
@@ -960,15 +920,20 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 if (fn->is_method && !p->state.in_extern) {
                     Node_Define *define = (Node_Define *) fn->args.head;
                     assert(define && define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
-                    fprintf(stderr, Pos_Fmt "ERROR: Function type cannot be a method\n", Pos_Arg(fn->node.token.pos));
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: This argument is taken to be the receiver\n",
-                        Pos_Arg(define->name->token.pos));
+                    error_node(ERROR, (Node *) fn, "Function type cannot be a method");
+                    error_node(NOTE, define->name, "This argument is taken to be the receiver");
                     exit(1);
                 }
 
                 fn->is_type = true;
+            }
+
+            if (fn->is_method && fn->outer_fn) {
+                assert(fn->args.head);
+                Node_Define *define = (Node_Define *) fn->args.head;
+                error_node(ERROR, (Node *) fn, "Local function cannot be a method");
+                error_node(NOTE, define->name, "This argument is taken to be the receiver");
+                exit(1);
             }
 
             p->state.fn_current = fn->outer_fn;
@@ -1018,6 +983,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             enumm->values_count++;
             expect_stmt_terminator(p);
         }
+
+        assert(p->state.ahead.kind == TOKEN_RBRACE);
+        enumm->end = p->state.ahead;
     } break;
 
     case TOKEN_TRAIT: {
@@ -1034,26 +1002,17 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
             Node_Define *define = (Node_Define *) method;
             if (define->is_const) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Expected trait method, got constant definition\n",
-                    Pos_Arg(method->token.pos));
+                error_node(ERROR, method, "Expected trait method, got constant definition");
                 exit(1);
             }
 
             if (define->expr) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Trait method definition cannot have assignment\n",
-                    Pos_Arg(method->token.pos));
+                error_node(ERROR, define->expr, "Trait method definition cannot have assignment");
                 exit(1);
             }
 
             if (define->type->kind != NODE_FN) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Trait method must be a literal function type\n",
-                    Pos_Arg(define->type->token.pos));
+                error_node(ERROR, define->type, "Trait method must be a literal function type");
                 exit(1);
             }
 
@@ -1064,6 +1023,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             trait->methods_count++;
             expect_stmt_terminator(p);
         }
+
+        assert(p->state.ahead.kind == TOKEN_RBRACE);
+        trait->end = p->state.ahead;
     } break;
 
     case TOKEN_UNION: {
@@ -1078,6 +1040,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             unionn->variants_count++;
             expect_stmt_terminator(p);
         }
+
+        assert(p->state.ahead.kind == TOKEN_RBRACE);
+        unionn->end = p->state.ahead;
     } break;
 
     case TOKEN_STRUCT: {
@@ -1097,26 +1062,28 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             } else {
                 Node *field = parse_expr(p, POWER_NIL, true, true, NULL);
                 if (field->kind != NODE_DEFINE) {
-                    fprintf(stderr, Pos_Fmt "ERROR: Expected field, got expression\n", Pos_Arg(field->token.pos));
+                    error_node(ERROR, field, "Expected field, got expression");
                     exit(1);
                 }
 
                 Node_Define *define = (Node_Define *) field;
                 if (define->is_const) {
-                    fprintf(
-                        stderr, Pos_Fmt "ERROR: Expected field, got constant definition\n", Pos_Arg(field->token.pos));
+                    error_node(ERROR, field, "Expected field, got constant definition");
                     exit(1);
                 }
 
                 if (define->expr) {
-                    fprintf(
-                        stderr, Pos_Fmt "ERROR: Field definition cannot have assignment\n", Pos_Arg(field->token.pos));
+                    // TODO: Default struct values
+                    error_node(ERROR, define->expr, "Field definition cannot have assignment");
                     exit(1);
                 }
                 nodes_push(&structt->fields, field);
             }
             expect_stmt_terminator(p);
         }
+
+        assert(p->state.ahead.kind == TOKEN_RBRACE);
+        structt->end = p->state.ahead;
     } break;
 
     case TOKEN_SIZEOF:
@@ -1126,7 +1093,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         expect_token(p, TOKEN_LPAREN);
         unary->value = parse_expr(p, POWER_SET, false, true, NULL);
         unary->module = p->module_current;
-        expect_token(p, TOKEN_RPAREN);
+        unary->end = expect_token(p, TOKEN_RPAREN);
     } break;
 
     case TOKEN_DIRECTIVE_IMPORT: {
@@ -1143,22 +1110,18 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_INLINE: {
         node = parse_expr(p, POWER_DOT, false, false, NULL);
         if (node->kind != NODE_FN) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Expected function literal after %s\n",
-                Pos_Arg(token.pos),
-                token_kind_to_cstr(token.kind));
+            error_node(ERROR, node, "Expected function literal after %s", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         Node_Fn *fn = (Node_Fn *) node;
         if (p->state.in_extern) {
-            fprintf(stderr, Pos_Fmt "ERROR: External function cannot be inlined\n", Pos_Arg(token.pos));
+            error_node(ERROR, node, "External function cannot be inlined");
             exit(1);
         }
 
         if (fn->is_type) {
-            fprintf(stderr, Pos_Fmt "ERROR: Function type cannot be inlined\n", Pos_Arg(token.pos));
+            error_node(ERROR, node, "Function type cannot be inlined");
             exit(1);
         }
 
@@ -1192,7 +1155,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             member->module = p->module_current;
             if (member->node.token.kind == TOKEN_LPAREN) {
                 member->rhs = parse_expr(p, POWER_SET, false, true, NULL);
-                expect_token(p, TOKEN_RPAREN);
+                member->rhs_end = expect_token(p, TOKEN_RPAREN);
             }
             node = (Node *) member;
         } break;
@@ -1234,11 +1197,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 Node *arg = parse_expr(p, POWER_SET, false, true, NULL);
                 if (arg->kind == NODE_INTERPOLATION) {
                     if (need_to_spread) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Redundant %s before interpolated string\n",
-                            Pos_Arg(token.pos),
-                            token_kind_to_cstr(token.kind));
+                        error_token(
+                            ERROR, token, "Redundant %s before interpolated string", token_kind_to_cstr(token.kind));
                         exit(1);
                     }
 
@@ -1247,33 +1207,28 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 if (need_to_spread) {
                     if (call->spread) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Multiple typed variadic sources found\n",
-                            Pos_Arg(call->node.token.pos));
+                        error_node(ERROR, (Node *) call, "Multiple typed variadic sources found");
+                        if (call->spread->kind == NODE_INTERPOLATION) {
+                            error_node(INFO, call->spread, "This provides one source");
+                        } else {
+                            error_token(INFO, call->spread_token, "This provides one source");
+                        }
 
-                        fprintf(stderr, Pos_Fmt "... This provide one source\n", Pos_Arg(call->spread_pos));
-                        fprintf(stderr, Pos_Fmt "... This provide another\n", Pos_Arg(token.pos));
+                        if (arg->kind == NODE_INTERPOLATION) {
+                            error_node(INFO, arg, "This provides another");
+                        } else {
+                            error_token(INFO, token, "This provides another");
+                        }
                         exit(1);
                     }
 
-                    call->spread_pos = token.pos;
+                    call->spread_token = token;
                 }
 
                 token = peek_token(p);
                 if (token.kind == TOKEN_SET) {
-                    if (need_to_spread) {
-                        fprintf(stderr, Pos_Fmt "ERROR: Cannot spread a named argument\n", Pos_Arg(token.pos));
-                        exit(1);
-                    }
-
                     if (arg->kind != NODE_ATOM || arg->token.kind != TOKEN_IDENT) {
                         error_unexpected(token);
-                    }
-
-                    if (sv_match(arg->token.sv, "_")) {
-                        fprintf(stderr, Pos_Fmt "ERROR: Cannot use '_' as a named argument\n", Pos_Arg(arg->token.pos));
-                        exit(1);
                     }
 
                     Node_Binary *binary = (Node_Binary *) node_alloc(p->module_current, NODE_BINARY, next_token(p));
@@ -1282,6 +1237,16 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     binary->module = p->module_current;
                     arg = (Node *) binary;
                     has_named_args = true;
+
+                    if (need_to_spread) {
+                        error_node(ERROR, arg, "Cannot spread a named argument");
+                        exit(1);
+                    }
+
+                    if (sv_match(binary->lhs->token.sv, "_")) {
+                        error_node(ERROR, binary->lhs, "Cannot use '_' as a named argument");
+                        exit(1);
+                    }
                 } else {
                     if (call->spread) {
                         const char *label = "variadics spread";
@@ -1289,19 +1254,12 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                             label = "interpolated string";
                         }
 
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Cannot have positional arguments after %s\n",
-                            Pos_Arg(arg->token.pos),
-                            label);
+                        error_node(ERROR, arg, "Cannot have positional arguments after %s", label);
                         exit(1);
                     }
 
                     if (has_named_args) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Cannot have positional arguments after named arguments\n",
-                            Pos_Arg(arg->token.pos));
+                        error_node(ERROR, arg, "Cannot have positional arguments after named arguments");
                         exit(1);
                     }
                 }
@@ -1318,7 +1276,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             }
 
             assert(p->state.ahead.kind == TOKEN_RPAREN);
-            call->end = p->state.ahead.pos;
+            call->end = p->state.ahead;
             node = (Node *) call;
         } break;
 
@@ -1345,9 +1303,10 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 if (peek_token(p).kind != TOKEN_RBRACKET) {
                     index->b = parse_expr(p, POWER_SET, false, true, NULL);
                 }
-                expect_token(p, TOKEN_RBRACKET);
+                token = expect_token(p, TOKEN_RBRACKET);
             }
 
+            index->end = token;
             node = (Node *) index;
         } break;
 
@@ -1378,13 +1337,7 @@ static void local_assert(Parser *p, bool expected_is_local, Token token, const c
             label = token_kind_to_cstr(token.kind);
         }
 
-        fprintf(
-            stderr,
-            Pos_Fmt "ERROR: Unexpected %s in %s scope\n",
-            Pos_Arg(token.pos),
-            label,
-            p->state.fn_current ? "local" : "global");
-
+        error_token(ERROR, token, "Unexpected %s in %s scope", label, p->state.fn_current ? "local" : "global");
         exit(1);
     }
 }
@@ -1402,9 +1355,10 @@ static Node *parse_stmt(Parser *p) {
         expect_token(p, TOKEN_LPAREN);
         assertt->expr = parse_expr(p, POWER_SET, false, true, NULL);
 
-        if (expect_token(p, TOKEN_COMMA, TOKEN_RPAREN).kind == TOKEN_COMMA) {
+        assertt->end = expect_token(p, TOKEN_COMMA, TOKEN_RPAREN);
+        if (assertt->end.kind == TOKEN_COMMA) {
             assertt->message = parse_expr(p, POWER_SET, false, true, NULL);
-            expect_token(p, TOKEN_RPAREN);
+            assertt->end = expect_token(p, TOKEN_RPAREN);
         }
     } break;
 
@@ -1414,28 +1368,20 @@ static Node *parse_stmt(Parser *p) {
         }
 
         const Token name = expect_token(p, TOKEN_STRING);
-        if (!name.sv.count) {
-            fprintf(stderr, Pos_Fmt "ERROR: Link name cannot be empty\n", Pos_Arg(name.pos));
+        if (!name.as.string.count) {
+            error_token(ERROR, name, "Link name cannot be empty");
             exit(1);
         }
 
         node = parse_stmt(p);
         if (node->kind != NODE_DEFINE) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Expected definition after %s\n",
-                Pos_Arg(node->token.pos),
-                token_kind_to_cstr(token.kind));
+            error_node(ERROR, node, "Expected definition after %s", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         Node_Define *define = (Node_Define *) node;
         if (define->count != 1) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot apply %s to multiple definitions\n",
-                Pos_Arg(node->token.pos),
-                token_kind_to_cstr(token.kind));
+            error_node(ERROR, node, "Cannot apply %s to multiple definitions", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1449,11 +1395,7 @@ static Node *parse_stmt(Parser *p) {
             }
 
             if (!ok) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Cannot apply %s to constant definitions\n",
-                    Pos_Arg(node->token.pos),
-                    token_kind_to_cstr(token.kind));
+                error_node(ERROR, node, "Cannot apply %s to constant definitions", token_kind_to_cstr(token.kind));
                 exit(1);
             }
         }
@@ -1462,43 +1404,31 @@ static Node *parse_stmt(Parser *p) {
         Node_Atom *it = (Node_Atom *) define->name;
 
         assert(it->definition_spec);
-        it->definition_spec->link_as = name.sv;
+        it->definition_spec->link_as = name.as.string;
     } break;
 
     case TOKEN_DIRECTIVE_STATIC: {
         if (p->state.in_extern) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Variables defined inside extern block cannot have static storage\n",
-                Pos_Arg(token.pos));
+            error_token(ERROR, token, "Variables defined inside extern block cannot have static storage");
             exit(1);
         }
 
         if (!p->state.fn_current) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Variables defined in global scope already have static storage\n",
-                Pos_Arg(token.pos));
+            // TODO: Perhaps this should just be warning for reduced friction while prototyping
+            error_token(ERROR, token, "Variables defined in global scope already have static storage");
             exit(1);
         }
 
         node = parse_expr(p, POWER_NIL, true, true, NULL);
         if (node->kind != NODE_DEFINE) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Expected variable definition after %s\n",
-                Pos_Arg(node->token.pos),
-                token_kind_to_cstr(token.kind));
+            error_node(ERROR, node, "Expected variable definition after %s", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         Node_Define *define = (Node_Define *) node;
         if (define->is_const) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Expected variable definition after %s, got constant\n",
-                Pos_Arg(node->token.pos),
-                token_kind_to_cstr(token.kind));
+            error_node(
+                ERROR, node, "Expected variable definition after %s, got constant", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1514,11 +1444,7 @@ static Node *parse_stmt(Parser *p) {
         if (!read_token(p, TOKEN_SPREAD)) {
             node = parse_stmt(p);
             if (node->kind != NODE_DEFINE && node->kind != NODE_EXTERN) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Expected definition or extern block after %s\n",
-                    Pos_Arg(node->token.pos),
-                    token_kind_to_cstr(token.kind));
+                error_node(ERROR, node, "Expected definition or extern block after %s", token_kind_to_cstr(token.kind));
                 exit(1);
             }
 
@@ -1569,7 +1495,7 @@ static Node *parse_stmt(Parser *p) {
         not_in_extern_assert(p, token);
         local_assert(p, true, token, NULL);
         if (p->state.in_defer) {
-            fprintf(stderr, Pos_Fmt "ERROR: Nested 'defer' is not allowed\n", Pos_Arg(token.pos));
+            error_token(ERROR, token, "Nested 'defer' is not allowed");
             exit(1);
         }
 
@@ -1585,20 +1511,12 @@ static Node *parse_stmt(Parser *p) {
     case TOKEN_CONTINUE:
         not_in_extern_assert(p, token);
         if (!p->state.in_loop) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot use %s outside of a loop\n",
-                Pos_Arg(token.pos),
-                token_kind_to_cstr(token.kind));
+            error_token(ERROR, token, "Cannot use %s outside of a loop", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         if (p->state.in_defer) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot use %s inside 'defer' statement\n",
-                Pos_Arg(token.pos),
-                token_kind_to_cstr(token.kind));
+            error_token(ERROR, token, "Cannot use %s inside 'defer' statement", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1609,11 +1527,7 @@ static Node *parse_stmt(Parser *p) {
         not_in_extern_assert(p, token);
         local_assert(p, true, token, NULL);
         if (p->state.in_defer) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot use %s inside 'defer' statement\n",
-                Pos_Arg(token.pos),
-                token_kind_to_cstr(token.kind));
+            error_token(ERROR, token, "Cannot use %s inside 'defer' statement", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1627,7 +1541,7 @@ static Node *parse_stmt(Parser *p) {
 
     case TOKEN_EXTERN: {
         if (p->state.in_extern) {
-            fprintf(stderr, Pos_Fmt "ERROR: Cannot have nested externs\n", Pos_Arg(token.pos));
+            error_token(ERROR, token, "Cannot have nested externs");
             exit(1);
         }
 
@@ -1642,6 +1556,9 @@ static Node *parse_stmt(Parser *p) {
             nodes_push(&externn->nodes, parse_stmt(p));
         }
         p->state.in_extern = false;
+
+        assert(p->state.ahead.kind == TOKEN_RBRACE);
+        externn->end = p->state.ahead;
 
         p->state.after_private = after_private_save;
     } break;
@@ -1832,7 +1749,7 @@ Parse_Result parse_directory(Parser *p, const char *path) {
 
         empty = false;
         if (parse_file(p, it) != PARSE_OK) {
-            fprintf(stderr, "ERROR: Could not read file '%s'", it);
+            error_standalone(ERROR, "Could not read file '%s'", it);
             exit(1);
         }
     }
@@ -1845,3 +1762,5 @@ Parse_Result parse_directory(Parser *p, const char *path) {
     }
     return PARSE_OK;
 }
+
+// TODO: Rework the FFI syntax. It is a bit hairy at the moment, and does not compose well with other concepts

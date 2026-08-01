@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 116
+STDERR 160
 tests/error_number_of_values_mismatch_in_function_return.glos:1:27: ERROR: Too few return values: Expected 2, got 1
+
+    foo :: () -> (i64, i64) { return 69 }
+
 

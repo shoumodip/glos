@@ -1,17 +1,22 @@
 EXIT 1
 STDOUT 0
 
-STDERR 743
-tests/error_operator_overloading_binary_comparison_method_operand_type_mismatch.glos:2:1: ERROR: The method 'compare' implements an operator overload and thus must have a particular signature
+STDERR 856
+tests/error_operator_overloading_binary_comparison_method_operand_type_mismatch.glos:2:1: ERROR: The method 'compare' is special because it implements an operator overload
 
-```
-compare :: (this: T, that: T) -> Ordering | Equivalence
-```
+    compare :: (this: Foo, that: i64) {}
 
-Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.
-Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.
+    It should have this signature:
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+        compare :: (this: T, that: T) -> Ordering | Equivalence
+
+    Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.
+    Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
 tests/error_operator_overloading_binary_comparison_method_operand_type_mismatch.glos:2:24: INFO: Operand types must be same: Expected 'Foo', got 'i64'
+
+    compare :: (this: Foo, that: i64) {}
+
 

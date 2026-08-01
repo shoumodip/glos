@@ -1,4 +1,5 @@
 #include "basic.h"
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -6,15 +7,151 @@
 
 #ifdef PLATFORM_X86_64_WINDOWS
 #include <io.h>
+
+static DWORD original_stdout_mode = 0;
+static bool  stdout_mode_saved = false;
+
+static DWORD original_stderr_mode = 0;
+static bool  stderr_mode_saved = false;
 #else
 #include <sys/wait.h>
 #endif // PLATFORM_X86_64_WINDOWS
 
-void basic_atexit(void) {
+static bool is_terminal(FILE *f) {
+    return isatty(fileno(f));
+}
+
+static void basic_atexit(void) {
+#ifdef PLATFORM_X86_64_WINDOWS
+    if (stdout_mode_saved) {
+        HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (handle != INVALID_HANDLE_VALUE) {
+            fprintf(stdout, "\033[0m");
+            fflush(stdout);
+            SetConsoleMode(handle, original_stdout_mode);
+        }
+        stdout_mode_saved = false;
+    }
+
+    if (stderr_mode_saved) {
+        HANDLE handle = GetStdHandle(STD_ERROR_HANDLE);
+        if (handle != INVALID_HANDLE_VALUE) {
+            fprintf(stderr, "\033[0m");
+            fflush(stderr);
+            SetConsoleMode(handle, original_stderr_mode);
+        }
+        stderr_mode_saved = false;
+    }
+#endif // PLATFORM_X86_64_WINDOWS
+
     temporary_files_cleanup();
     arena_free(&temp_arena);
     arena_free(&default_arena);
     sb_free(&default_sb);
+}
+
+void basic_init(void) {
+    atexit(basic_atexit);
+
+#ifdef PLATFORM_X86_64_WINDOWS
+    if (is_terminal(stdout)) {
+        HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &original_stdout_mode)) {
+            stdout_mode_saved = true;
+            DWORD new_mode = original_stdout_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(handle, new_mode);
+        }
+    }
+
+    if (is_terminal(stderr)) {
+        HANDLE handle = GetStdHandle(STD_ERROR_HANDLE);
+        if (handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &original_stderr_mode)) {
+            stderr_mode_saved = true;
+            DWORD new_mode = original_stderr_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(handle, new_mode);
+        }
+    }
+#endif // PLATFORM_X86_64_WINDOWS
+}
+
+// ANSI printing
+bool ansi_set(FILE *f, ANSI ansi) {
+    bool has_ansi = false;
+    if (is_terminal(f)) {
+        switch (ansi & ANSI_COLOR_MASK) {
+        case ANSI_COLOR_DEFAULT:
+            break;
+
+        case ANSI_COLOR_RED:
+            fprintf(stderr, "\033[31m");
+            has_ansi = true;
+            break;
+
+        case ANSI_COLOR_GREEN:
+            fprintf(stderr, "\033[32m");
+            has_ansi = true;
+            break;
+
+        case ANSI_COLOR_YELLOW:
+            fprintf(stderr, "\033[33m");
+            has_ansi = true;
+            break;
+
+        case ANSI_COLOR_BLUE:
+            fprintf(stderr, "\033[34m");
+            has_ansi = true;
+            break;
+
+        case ANSI_COLOR_MAGENTA:
+            fprintf(stderr, "\033[35m");
+            has_ansi = true;
+            break;
+
+        case ANSI_COLOR_CYAN:
+            fprintf(stderr, "\033[36m");
+            has_ansi = true;
+            break;
+
+        default:
+            unreachable();
+            break;
+        }
+
+        if (ansi & ANSI_BOLD) {
+            fprintf(stderr, "\033[1m");
+            has_ansi = true;
+        }
+
+        if (ansi & ANSI_ITALIC) {
+            fprintf(stderr, "\033[3m");
+            has_ansi = true;
+        }
+
+        if (ansi & ANSI_UNDERLINE) {
+            fprintf(stderr, "\033[4m");
+            has_ansi = true;
+        }
+    }
+    return has_ansi;
+}
+
+void ansi_reset(FILE *f) {
+    if (is_terminal(f)) {
+        fprintf(f, "\033[0m");
+    }
+}
+
+void afprintf(FILE *f, ANSI ansi, const char *fmt, ...) {
+    const bool has_ansi = ansi_set(f, ansi);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(f, fmt, args);
+    va_end(args);
+
+    if (has_ansi) {
+        fprintf(f, "\033[0m");
+    }
 }
 
 // Dynamic Array
@@ -198,6 +335,11 @@ bool ht_iter_impl(
     return false;
 }
 
+// Characters
+bool is_space(char ch) {
+    return isspace(ch);
+}
+
 // String View
 SV sv_from_cstr(const char *cstr) {
     return (SV) {.data = cstr, .count = strlen(cstr)};
@@ -218,6 +360,14 @@ bool sv_eq(SV a, SV b) {
 
 bool sv_match(SV a, const char *b) {
     return a.count == strlen(b) && memcmp(b, a.data, a.count) == 0;
+}
+
+bool sv_has_prefix(SV a, SV b) {
+    if (b.count == 0) {
+        return true;
+    }
+
+    return a.count >= b.count && memcmp(a.data, b.data, b.count) == 0;
 }
 
 bool sv_has_suffix(SV a, SV b) {
@@ -262,6 +412,21 @@ SV sv_drop_mut(SV *s, size_t count) {
     const SV result = (SV) {.data = s->data, .count = count};
     s->data += count;
     s->count -= count;
+    return result;
+}
+
+SV sv_drop_while_mut(SV *s, bool (*f)(char ch)) {
+    SV result = *s;
+    while (s->count) {
+        if (!f(*s->data)) {
+            break;
+        }
+
+        s->data++;
+        s->count--;
+    }
+
+    result.count -= s->count;
     return result;
 }
 
@@ -348,6 +513,7 @@ void arena_free(Arena *a) {
 void arena_reset(Arena *a, const void *ptr) {
     assert((const char *) ptr >= a->data && (const char *) ptr <= a->data + a->head);
     a->head = (const char *) ptr - a->data;
+    a->head = (a->head + 7) & -8; // Alignment
 }
 
 void *arena_alloc(Arena *a, size_t size) {
@@ -429,10 +595,10 @@ bool read_fp(FILE *f, SV *out, Arena *a) {
     while (true) {
 #define CHUNK_SIZE 4096
         arena_alloc(a, CHUNK_SIZE);
-        const size_t n = fread(start + count, sizeof(*start), CHUNK_SIZE, f);
+        const size_t n = fread(start + count, sizeof(*start), CHUNK_SIZE - 1, f);
         count += n;
 
-        if (n < CHUNK_SIZE) {
+        if (n < CHUNK_SIZE - 1) {
             if (feof(f)) {
                 break;
             }
@@ -452,12 +618,13 @@ bool read_fp(FILE *f, SV *out, Arena *a) {
         }
         start[j++] = it;
     }
+    start[j++] = '\0';
 
     count = j;
     arena_reset(a, start + count);
 
     out->data = start;
-    out->count = count;
+    out->count = count - 1;
 
 defer:
     if (!result) {

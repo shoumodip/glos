@@ -1,9 +1,21 @@
 EXIT 1
 STDOUT 0
 
-STDERR 374
+STDERR 450
 tests/unqualified_imports/bar/bar.glos:1:1: ERROR: Redefinition of 'foo'
+
+    foo :: () {
+
 tests/unqualified_imports/error_redefinition_local_global.glos:4:5: NOTE: The redefinition was imported here
+
+    #import "bar"
+
 tests/unqualified_imports/foo/foo.glos:1:1: NOTE: Here is the first definition
+
+    foo :: () {
+
 tests/unqualified_imports/error_redefinition_local_global.glos:1:1: NOTE: The first definition was imported here
+
+    #import "foo"
+
 

@@ -7,6 +7,7 @@ typedef struct {
     const char *path;
     size_t      row;
     size_t      col;
+    SV          line;
 } Pos;
 
 #define Pos_Fmt    "%s:%zu:%zu: "
@@ -119,6 +120,7 @@ typedef struct {
 
     union {
         u64 integer;
+        SV  string;
     } as;
 } Token;
 

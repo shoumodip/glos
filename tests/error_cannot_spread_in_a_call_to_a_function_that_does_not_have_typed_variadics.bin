@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 178
+STDERR 201
 tests/error_cannot_spread_in_a_call_to_a_function_that_does_not_have_typed_variadics.glos:4:9: ERROR: Cannot use '...' in a call to a function that does not have typed variadics
+
+    foo(...[]i64 {})
+
 

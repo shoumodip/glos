@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 132
+STDERR 149
 tests/error_cannot_negate_unsigned_constant_value.glos:1:9: ERROR: Number '-1' is invalid for 'u8', which must be in range [0, 255]
+
+    x: u8 = -1
+
 

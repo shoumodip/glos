@@ -1,12 +1,22 @@
 EXIT 1
 STDOUT 0
 
-STDERR 242
+STDERR 347
 tests/error_union_switch_is_not_complete.glos:8:5: ERROR: This switch statement is not complete
 
-The following union variants are not handled:
-    - null
-    - i64
+    if v == {
+    case string
+    }
+
+    The following union variants are not handled:
+        - null
+        - i64
 
 tests/error_union_switch_is_not_complete.glos:1:10: NOTE: Union defined here
+
+    Value :: union {
+        i64
+        string
+    }
+
 

@@ -1,14 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 529
-tests/error_operator_overloading_binary_arithmetic_method_argument_without_default_value_after_second.glos:2:1: ERROR: The method 'sub' implements an operator overload and thus must have a particular signature
+STDERR 652
+tests/error_operator_overloading_binary_arithmetic_method_argument_without_default_value_after_second.glos:2:1: ERROR: The method 'sub' is special because it implements an operator overload
 
-```
-sub :: (this: T, that: T) -> T
-```
+    sub :: (this: Foo, that: Foo, other: bool) {}
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+    It should have this signature:
+
+        sub :: (this: T, that: T) -> T
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
 tests/error_operator_overloading_binary_arithmetic_method_argument_without_default_value_after_second.glos:2:31: INFO: All arguments after the 2nd argument must be optional
+
+    sub :: (this: Foo, that: Foo, other: bool) {}
+
 

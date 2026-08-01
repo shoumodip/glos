@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 176
+STDERR 197
 tests/error_cannot_use_interpolated_string_here.glos:2:5: ERROR: Cannot use interpolated string here. It can only be used as a variadic source of type 'any' in a function call
+
+    "foobar \{69}"
+
 

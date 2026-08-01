@@ -3,6 +3,7 @@
 #include "compiler.h"
 #include "context.h"
 #include "contract.h"
+#include "error.h"
 #include "int128.h"
 #include "node.h"
 #include "parser.h"
@@ -28,16 +29,19 @@ static Type type_without_ref(Type t) {
 }
 
 static void error_undefined(const Token *t, const char *label, bool no_exit) {
-    fprintf(stderr, Pos_Fmt "ERROR: Undefined %s '" SV_Fmt "'\n", Pos_Arg(t->pos), label, SV_Arg(t->sv));
+    error_token(ERROR, *t, "Undefined %s '" SV_Fmt "'", label, SV_Arg(t->sv));
     if (!no_exit) {
         exit(1);
     }
 }
 
-static void error_redefinition(const Node *n, const Pos *previous) {
-    fprintf(stderr, Pos_Fmt "ERROR: Redefinition of '" SV_Fmt "'\n", Pos_Arg(n->token.pos), SV_Arg(n->token.sv));
-    if (previous) {
-        fprintf(stderr, Pos_Fmt "NOTE: Here is the first definition\n", Pos_Arg(*previous));
+static void error_redefinition(const Node *n, const Pos *previous_pos) {
+    error_token(ERROR, n->token, "Redefinition of '" SV_Fmt "'", SV_Arg(n->token.sv));
+    if (previous_pos) {
+        SV previous_sv = {0};
+        previous_sv.data = previous_pos->line.data + previous_pos->col;
+        previous_sv.count = n->token.sv.count;
+        error_parts(NOTE, previous_sv, *previous_pos, "Here is the first definition");
     }
     exit(1);
 }
@@ -48,7 +52,7 @@ static void error_redefinition_add_helper_message_for_import(
     for (size_t i = 0; i < module->imports.count; i++) {
         Node_Import *it = module->imports.data[i];
         if (it->module == this->module) {
-            fprintf(stderr, Pos_Fmt "NOTE: The %s was imported here\n", Pos_Arg(it->node.token.pos), label);
+            error_node(NOTE, (Node *) it, "The %s was imported here", label);
             return;
         }
     }
@@ -57,7 +61,7 @@ static void error_redefinition_add_helper_message_for_import(
         for (size_t i = fn->imports_end; i > fn->imports_begin; i--) {
             Node_Import *it = context->imports.data[i - 1];
             if (it->module == this->module) {
-                fprintf(stderr, Pos_Fmt "NOTE: The %s was imported here\n", Pos_Arg(it->node.token.pos), label);
+                error_node(NOTE, (Node *) it, "The %s was imported here", label);
                 return;
             }
         }
@@ -67,13 +71,13 @@ static void error_redefinition_add_helper_message_for_import(
 static void
 error_redefinition_global(const Node *this, const Node *previous, const Module *module, const Context *context) //
 {
-    fprintf(stderr, Pos_Fmt "ERROR: Redefinition of '" SV_Fmt "'\n", Pos_Arg(this->token.pos), SV_Arg(this->token.sv));
+    error_token(ERROR, this->token, "Redefinition of '" SV_Fmt "'", SV_Arg(this->token.sv));
     if (this->module != module) {
         error_redefinition_add_helper_message_for_import(this, module, context, "redefinition");
     }
 
     if (previous) {
-        fprintf(stderr, Pos_Fmt "NOTE: Here is the first definition\n", Pos_Arg(previous->token.pos));
+        error_token(NOTE, previous->token, "Here is the first definition");
         if (previous->module != module) {
             error_redefinition_add_helper_message_for_import(previous, module, context, "first definition");
         }
@@ -81,11 +85,11 @@ error_redefinition_global(const Node *this, const Node *previous, const Module *
     exit(1);
 }
 
-static void error_number_of_return_values_mismatch(Pos pos, size_t expected, size_t actual) {
-    fprintf(
-        stderr,
-        Pos_Fmt "ERROR: Too %s return values: Expected %zu, got %zu\n",
-        Pos_Arg(pos),
+static void error_number_of_return_values_mismatch(Token token, size_t expected, size_t actual) {
+    error_token(
+        ERROR,
+        token,
+        "Too %s return values: Expected %zu, got %zu",
         actual < expected ? "few" : "many",
         expected,
         actual);
@@ -142,7 +146,7 @@ static void print_quoted_char(FILE *f, char ch, char quote) {
 
 static void check_that_type_is_known(const Node *n) {
     if (type_is_unknown(n->type)) {
-        fprintf(stderr, Pos_Fmt "ERROR: Cannot infer type of this expression\n", Pos_Arg(n->token.pos));
+        error_node(ERROR, n, "Cannot infer type of this expression");
         exit(1);
     }
 }
@@ -181,10 +185,10 @@ static void check_int_limit_ex(Node *n, Int128 value, bool min_zero, const char 
     }
 
     if (int128_lt(value, limit.min, true) || int128_gt(value, limit.max, true)) {
-        fprintf(
-            stderr,
-            Pos_Fmt "ERROR: Number '%s' is invalid for %s, which must be in range [%s, %s]\n",
-            Pos_Arg(n->token.pos),
+        error_node(
+            ERROR,
+            n,
+            "Number '%s' is invalid for %s, which must be in range [%s, %s]",
             int128_to_cstr(value),
             label ? label : type_to_cstr(n->type),
             int128_to_cstr(limit.min),
@@ -205,7 +209,7 @@ static i64 get_enum_value(Node_Enum *enumm, SV name, const Token *t) {
     }
 
     error_undefined(t, "enumeration value", true);
-    fprintf(stderr, Pos_Fmt "NOTE: Enumeration defined here\n", Pos_Arg(enumm->node.token.pos));
+    error_node(NOTE, (Node *) enumm, "Enumeration defined here");
     exit(1);
 }
 
@@ -222,19 +226,14 @@ static size_t get_union_type_index(Node *n, Type unionn) {
         }
     }
 
-    fprintf(
-        stderr,
-        Pos_Fmt "ERROR: Type %s is not a variant of %s\n",
-        Pos_Arg(n->token.pos),
-        type_to_cstr(type),
-        type_to_cstr(unionn));
-    fprintf(stderr, Pos_Fmt "NOTE: Union defined here\n", Pos_Arg(spec->definition->node.token.pos));
+    error_node(ERROR, n, "Type %s is not a variant of %s", type_to_cstr(type), type_to_cstr(unionn));
+    error_node(NOTE, (Node *) spec->definition, "Union defined here");
     exit(1);
 }
 
 static void     check_compound_expr(Compiler *c, Node_Compound *compound);
 static void     check_binary_expr(Compiler *c, Node_Binary *binary, bool check_children);
-static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Pos *pos, Module *module);
+static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module);
 
 static void set_auto_cast(Node *n, i64 index, Auto_Cast_Kind kind, Type from, Type to) {
     if (!n->auto_casts) {
@@ -291,7 +290,7 @@ static void cast_untyped(Compiler *c, Node *n, Type expected) {
             cast_untyped(c, unary->value, expected);
             if (n->token.kind == TOKEN_SUB) {
                 if (!type_is_numeric(n->type) && !type_is_pointer(n->type)) {
-                    unary->overload = get_operator_overload(c, "neg", unary->value, &n->token.pos, unary->module);
+                    unary->overload = get_operator_overload(c, "neg", unary->value, n, unary->module);
                 }
             }
         }
@@ -410,10 +409,7 @@ static void finalize_untyped_type(Compiler *c, Node *n) {
 // Nice name
 static void maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(Node *n, Type expected) {
     if (type_eq_without_distinct(n->type, expected)) {
-        fprintf(
-            stderr,
-            Pos_Fmt "NOTE: The underlying types seem to be equal, but distinct. Try an explicit cast.\n",
-            Pos_Arg(n->token.pos));
+        error_node(NOTE, n, "The underlying types seem to be equal, but distinct. Try an explicit cast.");
     }
 }
 
@@ -500,14 +496,7 @@ static Type type_assert(Compiler *c, Node *n, Type expected) {
     }
 
     check_that_type_is_known(n);
-
-    fprintf(
-        stderr,
-        Pos_Fmt "ERROR: Expected %s, got %s\n",
-        Pos_Arg(n->token.pos),
-        type_to_cstr(expected),
-        type_to_cstr(n->type));
-
+    error_node(ERROR, n, "Expected %s, got %s", type_to_cstr(expected), type_to_cstr(n->type));
     maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(n, expected);
     exit(1);
 }
@@ -528,7 +517,7 @@ static const char *order_postfix(size_t n) {
     }
 }
 
-static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_index, Pos *requirement) {
+static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement) {
     Type actual = n->type;
 
     const bool is_group = group_index != -1 && type_kind_eq(actual, TYPE_GROUP);
@@ -546,13 +535,7 @@ static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_i
         }
 
         check_that_type_is_known(n);
-        fprintf(
-            stderr,
-            Pos_Fmt "ERROR: Expected %s, got %s\n",
-            Pos_Arg(n->token.pos),
-            type_to_cstr(expected),
-            type_to_cstr(actual));
-
+        error_node(ERROR, n, "Expected %s, got %s", type_to_cstr(expected), type_to_cstr(actual));
         maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(n, expected);
     } else {
         check_that_type_is_known(n);
@@ -561,10 +544,10 @@ static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_i
         }
 
         const char *postfix = order_postfix(group_index + 1);
-        fprintf(
-            stderr,
-            Pos_Fmt "ERROR: Expected %zd%s value of this to be %s, got %s. The type of this entire expression is %s\n",
-            Pos_Arg(n->token.pos),
+        error_node(
+            ERROR,
+            n,
+            "Expected %zd%s value of this to be %s, got %s. The type of this entire expression is %s",
             group_index + 1,
             postfix,
             type_to_cstr(expected),
@@ -572,7 +555,7 @@ static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_i
             type_to_cstr(n->type));
 
         if (requirement) {
-            fprintf(stderr, Pos_Fmt "NOTE: Required here\n", Pos_Arg(*requirement));
+            error_token(NOTE, *requirement, "Required here");
         }
     }
 
@@ -594,14 +577,7 @@ static Type type_assert_node(Compiler *c, Node *a, Node *b) {
 
     check_that_type_is_known(a);
     check_that_type_is_known(b);
-
-    fprintf(
-        stderr,
-        Pos_Fmt "ERROR: Expected %s, got %s\n",
-        Pos_Arg(a->token.pos),
-        type_to_cstr(b->type),
-        type_to_cstr(a->type));
-
+    error_node(ERROR, a, "Expected %s, got %s", type_to_cstr(b->type), type_to_cstr(a->type));
     maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(a, b->type);
     exit(1);
 }
@@ -622,7 +598,7 @@ static Type type_assert_numeric(const Node *n, bool pointers_allowed) {
         label = "numeric";
     }
 
-    fprintf(stderr, Pos_Fmt "ERROR: Expected %s value, got %s\n", Pos_Arg(n->token.pos), label, type_to_cstr(n->type));
+    error_node(ERROR, n, "Expected %s value, got %s", label, type_to_cstr(n->type));
     exit(1);
 }
 
@@ -632,7 +608,7 @@ static Type type_assert_scalar(const Node *n) {
     }
 
     check_that_type_is_known(n);
-    fprintf(stderr, Pos_Fmt "ERROR: Expected scalar value, got %s\n", Pos_Arg(n->token.pos), type_to_cstr(n->type));
+    error_node(ERROR, n, "Expected scalar value, got %s", type_to_cstr(n->type));
     exit(1);
 }
 
@@ -642,7 +618,7 @@ static Type type_assert_type(const Node *n) {
         return n->type;
     }
 
-    fprintf(stderr, Pos_Fmt "ERROR: Expected a type, got %s\n", Pos_Arg(n->token.pos), type_to_cstr(n->type));
+    error_node(ERROR, n, "Expected a type, got %s", type_to_cstr(n->type));
     exit(1);
 }
 
@@ -846,7 +822,7 @@ typedef enum {
 static void check_expr(Compiler *c, Node *n, Ref_Kind ref);
 static void check_stmt(Compiler *c, Node *n);
 
-static void define_orderless_nodes_of_module(Compiler *c, Module *module, const Pos *unqualified_import_pos);
+static void define_orderless_nodes_of_module(Compiler *c, Module *module, const Token *unqualified_import_token);
 
 static Node_Atom *module_globals_find_ex(Compiler *c, Module *m, SV name, Module *skip) {
     if (m->orderless_check_status == UNCHECKED) {
@@ -884,26 +860,19 @@ static Node_Fn *get_main(Compiler *c) {
 
     Node_Atom *main = module_globals_find(c, c->main_module, sv_from_cstr("main"));
     if (!main) {
-        fprintf(
+        error_standalone(ERROR, "Function 'main' is not defined");
+        afprintf(
             stderr,
-            "ERROR: Function 'main' is not defined\n"
+            ANSI_COLOR_YELLOW | ANSI_BOLD,
             "\n"
-            "```\n"
-            "main :: () {\n"
-            "}\n"
-            "```\n");
+            "    main :: () {\n"
+            "    }\n"
+            "\n");
         exit(1);
     }
 
     if (!main->definition_spec->is_const || main->definition_spec->assignment_node->kind != NODE_FN) {
-        fprintf(stderr, Pos_Fmt "ERROR: Identifier 'main' must be a function literal\n", Pos_Arg(main->node.token.pos));
-        fprintf(
-            stderr,
-            "\n"
-            "```\n"
-            "main :: () {\n"
-            "}\n"
-            "```\n");
+        error_node(ERROR, (Node *) main, "Identifier 'main' must be a function literal");
         exit(1);
     }
 
@@ -912,12 +881,14 @@ static Node_Fn *get_main(Compiler *c) {
 
     const Type_Fn *signature = main->node.type.spec.fn;
     if (signature->args_count) {
-        fprintf(stderr, Pos_Fmt "ERROR: Function 'main' cannot take any arguments\n", Pos_Arg(main->node.token.pos));
+        c->main_fn->body = NULL;
+        error_node(ERROR, (Node *) c->main_fn, "Function 'main' cannot take any arguments");
         exit(1);
     }
 
     if (signature->returns_count) {
-        fprintf(stderr, Pos_Fmt "ERROR: Function 'main' cannot return anything\n", Pos_Arg(main->node.token.pos));
+        c->main_fn->body = NULL;
+        error_node(ERROR, (Node *) c->main_fn, "Function 'main' cannot return anything");
         exit(1);
     }
 
@@ -1098,10 +1069,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
     if (ref) {
         if (n->kind != NODE_ATOM || n->token.kind != TOKEN_IDENT) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Can only take reference to variables in a constant expression\n",
-                Pos_Arg(n->token.pos));
+            error_node(ERROR, n, "Can only take reference to variables in a constant expression");
             exit(1);
         }
     }
@@ -1128,14 +1096,8 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             assert(atom->definition);
             if (!atom->definition->definition_spec->is_const) {
                 if (atom->definition->definition_spec->is_local) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot use local variables in a constant expression\n",
-                        Pos_Arg(n->token.pos));
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: Here is the variable being used\n",
-                        Pos_Arg(atom->definition->node.token.pos));
+                    error_node(ERROR, n, "Cannot use local variables in a constant expression");
+                    error_node(NOTE, (Node *) atom->definition, "Here is the variable being used");
                     exit(1);
                 }
 
@@ -1151,11 +1113,14 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
         case TOKEN_STRING:
             if (type_eq(n->type, (Type) {.kind = TYPE_CHAR, .ref = 1})) {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Cannot access pointers in constant expressions\n", Pos_Arg(n->token.pos));
+                error_node(
+                    ERROR,
+                    n,
+                    "Cannot access pointers in constant expressions. (This string literal is auto casted to %s)",
+                    type_to_cstr(n->type));
                 exit(1);
             }
-            return const_value_string(n->token.sv);
+            return const_value_string(n->token.as.string);
 
         case TOKEN_ISTRING:
             unreachable();
@@ -1174,14 +1139,8 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_UNARY: {
         Node_Unary *unary = (Node_Unary *) n;
         if (unary->overload) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot call operator overload in compile time expressions\n",
-                Pos_Arg(n->token.pos));
-            fprintf(
-                stderr,
-                Pos_Fmt "NOTE: This is the overload used\n",
-                Pos_Arg(unary->overload->defined_as->node.token.pos));
+            error_node(ERROR, n, "Cannot call operator overload in compile time expressions");
+            error_node(NOTE, (Node *) unary->overload->defined_as, "This is the overload used");
             exit(1);
         }
 
@@ -1199,7 +1158,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 return const_value_of_var(c, value.as.var);
             }
 
-            fprintf(stderr, Pos_Fmt "ERROR: This expression is not constant at compile time\n", Pos_Arg(n->token.pos));
+            error_node(ERROR, n, "This expression is not constant at compile time");
             exit(1);
             break;
 
@@ -1236,14 +1195,8 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_BINARY: {
         Node_Binary *binary = (Node_Binary *) n;
         if (binary->overload) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot call operator overload in compile time expressions\n",
-                Pos_Arg(n->token.pos));
-            fprintf(
-                stderr,
-                Pos_Fmt "NOTE: This is the overload used\n",
-                Pos_Arg(binary->overload->defined_as->node.token.pos));
+            error_node(ERROR, n, "Cannot call operator overload in compile time expressions");
+            error_node(NOTE, (Node *) binary->overload->defined_as, "This is the overload used");
             exit(1);
         }
 
@@ -1274,7 +1227,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 rhs = eval_const_expr(c, binary->rhs, false);
 
                 if ((n->token.kind == TOKEN_DIV || n->token.kind == TOKEN_MOD) && int128_is_zero(rhs.as.integer)) {
-                    fprintf(stderr, Pos_Fmt "ERROR: Cannot divide by zero\n", Pos_Arg(binary->rhs->token.pos));
+                    error_node(ERROR, binary->rhs, "Cannot divide by zero");
                     exit(1);
                 }
 
@@ -1356,10 +1309,10 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         case CONST_VALUE_TRAIT: {
             if (member->rhs) {
                 if (!lhs.as.trait.type || !type_eq(n->type, *lhs.as.trait.type)) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Type mismatch: Accessing %s, but real type is %s\n",
-                        Pos_Arg(n->token.pos),
+                    error_node(
+                        ERROR,
+                        n,
+                        "Type mismatch: Accessing %s, but real type is %s",
                         type_to_cstr(n->type),
                         lhs.as.trait.type ? type_to_cstr(*lhs.as.trait.type) : "null");
                     exit(1);
@@ -1369,7 +1322,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 return *lhs.as.trait.data;
             } else if (member->is_trait) {
                 if (!lhs.as.trait.impl) {
-                    fprintf(stderr, Pos_Fmt "ERROR: Cannot access method of null trait\n", Pos_Arg(n->token.pos));
+                    error_node(ERROR, n, "Cannot access method of null trait");
                     exit(1);
                 }
 
@@ -1383,8 +1336,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
                 return const_value_u64(0);
             } else if (member->field_index == 1 || member->field_index == 2) {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Cannot access pointers in constant expressions\n", Pos_Arg(n->token.pos));
+                error_node(ERROR, n, "Cannot access pointers in constant expressions");
                 exit(1);
             } else {
                 unreachable();
@@ -1395,10 +1347,10 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             if (member->rhs) {
                 if (member->union_index != lhs.as.unionn.index) {
                     const Type_Union *spec = lhs.as.unionn.spec;
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Type mismatch: Accessing %s, but real type is %s\n",
-                        Pos_Arg(n->token.pos),
+                    error_node(
+                        ERROR,
+                        n,
+                        "Type mismatch: Accessing %s, but real type is %s",
                         member->union_index ? type_to_cstr(spec->variants[member->union_index - 1].type) : "null",
                         lhs.as.unionn.index ? type_to_cstr(spec->variants[lhs.as.unionn.index - 1].type) : "null");
                     exit(1);
@@ -1417,8 +1369,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
         case CONST_VALUE_ARRAY:
             if (member->field_index == 0) {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Cannot access pointers in constant expressions\n", Pos_Arg(n->token.pos));
+                error_node(ERROR, n, "Cannot access pointers in constant expressions");
                 exit(1);
             } else if (member->field_index == 1) {
                 return const_value_u64(lhs.as.array.count);
@@ -1428,8 +1379,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
         case CONST_VALUE_STRING:
             if (member->field_index == 0) {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Cannot access pointers in constant expressions\n", Pos_Arg(n->token.pos));
+                error_node(ERROR, n, "Cannot access pointers in constant expressions");
                 exit(1);
             } else if (member->field_index == 1) {
                 return const_value_u64(lhs.as.string.count);
@@ -1446,8 +1396,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             }
 
             if (!definition->definition_spec->is_const) {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Cannot use variables in a constant expression\n", Pos_Arg(n->token.pos));
+                error_node(ERROR, n, "Cannot use variables in a constant expression");
                 exit(1);
             }
 
@@ -1519,16 +1468,13 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
         if (!call->is_type_cast) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot call functions in a constant expression\n",
-                Pos_Arg(call->fn->token.pos));
+            error_node(ERROR, call->fn, "Cannot call functions in a constant expression");
             exit(1);
         }
 
         const Const_Value value = eval_const_expr(c, call->args.head, false);
         if (value.kind == CONST_VALUE_VAR || type_is_pointer(n->type)) {
-            fprintf(stderr, Pos_Fmt "ERROR: This expression is not constant at compile time\n", Pos_Arg(n->token.pos));
+            error_node(ERROR, n, "This expression is not constant at compile time");
             exit(1);
         }
 
@@ -1557,24 +1503,15 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_INDEX: {
         Node_Index *index = (Node_Index *) n;
         if (index->overload) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot call operator overload in compile time expressions\n",
-                Pos_Arg(n->token.pos));
-            fprintf(
-                stderr,
-                Pos_Fmt "NOTE: This is the overload used\n",
-                Pos_Arg(index->overload->defined_as->node.token.pos));
+            error_node(ERROR, n, "Cannot call operator overload in compile time expressions");
+            error_node(NOTE, (Node *) index->overload->defined_as, "This is the overload used");
             exit(1);
         }
 
         const Const_Value lhs = eval_const_expr(c, index->lhs, false);
         if (index->is_ranged) {
             if (type_is_pointer(index->lhs->type)) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Cannot construct slices from pointers in constant expressions\n",
-                    Pos_Arg(n->token.pos));
+                error_node(ERROR, n, "Cannot construct slices from pointers in constant expressions");
                 exit(1);
             }
 
@@ -1596,23 +1533,16 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 }
 
                 if (begin > end) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Range (%zd..%zd) is invalid: Beginning of range is more than end\n",
-                        Pos_Arg(n->token.pos),
-                        begin,
-                        end);
+                    index->lhs = NULL;
+                    error_node(
+                        ERROR, n, "Range (%zd..%zd) is invalid: Beginning of range is more than end", begin, end);
                     exit(1);
                 }
 
                 if (begin < 0 || end < 0 || (size_t) begin > array.count || (size_t) end > array.count) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Range (%zd..%zd) is out of bounds in array of length %zu\n",
-                        Pos_Arg(n->token.pos),
-                        begin,
-                        end,
-                        array.count);
+                    index->lhs = NULL;
+                    error_node(
+                        ERROR, n, "Range (%zd..%zd) is out of bounds in array of length %zu", begin, end, array.count);
                     exit(1);
                 }
 
@@ -1638,23 +1568,16 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 }
 
                 if (begin > end) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Range (%zd..%zd) is invalid: Beginning of range is more than end\n",
-                        Pos_Arg(n->token.pos),
-                        begin,
-                        end);
+                    index->lhs = NULL;
+                    error_node(
+                        ERROR, n, "Range (%zd..%zd) is invalid: Beginning of range is more than end", begin, end);
                     exit(1);
                 }
 
                 if (begin < 0 || end < 0 || (size_t) begin > sv.count || (size_t) end > sv.count) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Range (%zd..%zd) is out of bounds in string of length %zu\n",
-                        Pos_Arg(n->token.pos),
-                        begin,
-                        end,
-                        sv.count);
+                    index->lhs = NULL;
+                    error_node(
+                        ERROR, n, "Range (%zd..%zd) is out of bounds in string of length %zu", begin, end, sv.count);
                     exit(1);
                 }
 
@@ -1673,12 +1596,8 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             switch (lhs.kind) {
             case CONST_VALUE_ARRAY: {
                 if (at < 0 || (size_t) at >= lhs.as.array.count) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Index %zd is out of bounds in array of length %zu\n",
-                        Pos_Arg(n->token.pos),
-                        at,
-                        lhs.as.array.count);
+                    error_node(
+                        ERROR, index->a, "Index %zd is out of bounds in array of length %zu", at, lhs.as.array.count);
                     exit(1);
                 };
 
@@ -1687,12 +1606,8 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
             case CONST_VALUE_STRING: {
                 if (at < 0 || (size_t) at >= lhs.as.string.count) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Index %zd is out of bounds in string of length %zu\n",
-                        Pos_Arg(n->token.pos),
-                        at,
-                        lhs.as.string.count);
+                    error_node(
+                        ERROR, index->a, "Index %zd is out of bounds in string of length %zu", at, lhs.as.string.count);
                     exit(1);
                 };
 
@@ -1808,7 +1723,7 @@ static void check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw) {
     } else if (type_eq(sw->expr->type, c->type_info_pointer_type)) {
         sw->is_expr_type_info = true;
     } else if (!type_is_scalar(sw->expr->type)) {
-        sw->compare_overload = get_operator_overload(c, "compare", sw->expr, &sw->expr->token.pos, sw->node.module);
+        sw->compare_overload = get_operator_overload(c, "compare", sw->expr, sw->expr, sw->node.module);
     }
 
     if (!sw->preds) {
@@ -1844,7 +1759,8 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
 
     for (size_t i = 0; i < *iota; i++) {
         if (const_value_eq(sw->preds[i].value, value)) {
-            fprintf(stderr, Pos_Fmt "ERROR: Duplicate case ", Pos_Arg(pred->token.pos));
+            error_node_begin(ERROR, pred);
+            fprintf(stderr, "Duplicate case ");
 
             if (sw->unionn) {
                 pred->type.is_meta = false;
@@ -1868,8 +1784,8 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
                 }
             }
 
-            fprintf(stderr, "\n");
-            fprintf(stderr, Pos_Fmt "NOTE: Already here\n", Pos_Arg(sw->preds[i].pred->token.pos));
+            error_finalize();
+            error_node(NOTE, sw->preds[i].pred, "Already here");
             exit(1);
         }
     }
@@ -1883,10 +1799,8 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
 static void check_switch_exhaustive(Node_Switch *sw) {
     if (sw->enumeration) {
         if (sw->preds_count < sw->enumeration->values_count && !sw->fallback) {
-            fprintf(stderr, Pos_Fmt "ERROR: This switch statement is not complete\n", Pos_Arg(sw->node.token.pos));
-
-            fprintf(stderr, "\n");
-            fprintf(stderr, "The following enumeration values are not handled:\n");
+            error_node(ERROR, (Node *) sw, "This switch statement is not complete");
+            afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "    The following enumeration values are not handled:\n");
             ll_foreach(it, &sw->enumeration->values) {
                 bool handled = false;
                 for (size_t i = 0; i < sw->preds_count; i++) {
@@ -1899,20 +1813,17 @@ static void check_switch_exhaustive(Node_Switch *sw) {
                 }
 
                 if (!handled) {
-                    fprintf(stderr, "    - " SV_Fmt "\n", SV_Arg(it->token.sv));
+                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "        - " SV_Fmt "\n", SV_Arg(it->token.sv));
                 }
             }
-            fprintf(stderr, "\n");
-
-            fprintf(stderr, Pos_Fmt "NOTE: Enumeration defined here\n", Pos_Arg(sw->enumeration->node.token.pos));
+            afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
+            error_node(NOTE, (Node *) sw->enumeration, "Enumeration defined here");
             exit(1);
         }
     } else if (sw->unionn) {
         if (sw->preds_count < sw->unionn->variants_count + 1 && !sw->fallback) {
-            fprintf(stderr, Pos_Fmt "ERROR: This switch statement is not complete\n", Pos_Arg(sw->node.token.pos));
-
-            fprintf(stderr, "\n");
-            fprintf(stderr, "The following union variants are not handled:\n");
+            error_node(ERROR, (Node *) sw, "This switch statement is not complete");
+            afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "    The following union variants are not handled:\n");
 
             const size_t variants_count = sw->unionn->variants_count + 1;
 
@@ -1928,15 +1839,16 @@ static void check_switch_exhaustive(Node_Switch *sw) {
 
             for (size_t i = 0; i < variants_count; i++) {
                 if (!handled[i]) {
-                    fprintf(
+                    afprintf(
                         stderr,
-                        "    - %s\n",
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "        - %s\n",
                         i ? type_to_cstr_raw(sw->unionn->node.type.spec.unionn->variants[i - 1].type) : "null");
                 }
             }
-            fprintf(stderr, "\n");
+            afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
 
-            fprintf(stderr, Pos_Fmt "NOTE: Union defined here\n", Pos_Arg(sw->unionn->node.token.pos));
+            error_node(NOTE, (Node *) sw->unionn, "Union defined here");
             exit(1);
         }
     }
@@ -1992,7 +1904,7 @@ static void push_context_replace(Compiler *c, Context_Replace *replace, Node_Ato
 
 static void define_orderless_node(Compiler *c, Node *n, const size_t block_start);
 
-static void define_orderless_nodes_of_module(Compiler *c, Module *module, const Pos *unqualified_import_pos) {
+static void define_orderless_nodes_of_module(Compiler *c, Module *module, const Token *unqualified_import_token) {
     switch (module->orderless_check_status) {
     case UNCHECKED:
         module->orderless_check_status = CHECKING;
@@ -2003,8 +1915,8 @@ static void define_orderless_nodes_of_module(Compiler *c, Module *module, const 
         break;
 
     case CHECKING:
-        assert(unqualified_import_pos);
-        fprintf(stderr, Pos_Fmt "ERROR: Cyclic unqualified import\n", Pos_Arg(*unqualified_import_pos));
+        assert(unqualified_import_token);
+        error_token(ERROR, *unqualified_import_token, "Cyclic unqualified import");
         exit(1);
         break;
 
@@ -2021,7 +1933,7 @@ static void make_sure_import_is_ready(Compiler *c, Node_Import *import) {
     if (!import->module && parser_import(c->parser, import)) {
         const Context context_save = c->context;
         memset(&c->context, 0, sizeof(c->context));
-        define_orderless_nodes_of_module(c, import->module, &import->node.token.pos);
+        define_orderless_nodes_of_module(c, import->module, &import->node.token);
         c->context = context_save;
     }
 }
@@ -2049,7 +1961,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                     da_push(&n->module->imports, import);
                 }
 
-                define_orderless_nodes_of_module(c, import->module, &n->token.pos);
+                define_orderless_nodes_of_module(c, import->module, &n->token);
                 ht_foreach(it, &import->module->globals) {
                     Node_Atom *previous = context_find_define_ex(&c->context, *it.key, import->module);
                     if (!previous) {
@@ -2353,15 +2265,13 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
                     it_expr->type = c->type_info_pointer_type;
                 }
 
-                const bool is_it_a_module = type_kind_eq(it_expr->type, TYPE_MODULE) && !it->definition_spec->is_const;
-                if (is_it_a_module) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot store %s in a %s\n",
-                        Pos_Arg(it_expr->token.pos),
+                if (type_kind_eq(it_expr->type, TYPE_MODULE) && !it->definition_spec->is_const) {
+                    error_node(
+                        ERROR,
+                        it_expr,
+                        "Cannot store %s in a %s",
                         type_to_cstr(it_expr->type),
                         it->definition_spec->is_const ? "constant" : "variable");
-
                     exit(1);
                 }
             }
@@ -2377,7 +2287,7 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
 
             if (lhs_count != rhs_count) {
                 error_number_of_values_mismatch(
-                    definition->node.token.pos,
+                    definition->node.token,
                     lhs_count,
                     rhs_count,
                     add_trailing_s_if_plural("definition", lhs_count),
@@ -2390,7 +2300,7 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
                 if (type) {
                     i64   group_index = -1;
                     Node *n = get_node_from_group(it_expr, it->definition_spec->group_index, &group_index);
-                    type_assert_grouped(c, n, type->type, group_index, &it->node.token.pos);
+                    type_assert_grouped(c, n, type->type, group_index, &it->node.token);
                 } else {
                     it->node.type = it_expr->type.spec.group.data[it->definition_spec->group_index];
                     if (type_is_untyped(it->node.type)) {
@@ -2459,7 +2369,7 @@ static void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_K
         if (ref == REF_ADDR && definition->node.type.is_meta) {
             // Reference to incomplete type definition is allowed
         } else {
-            fprintf(stderr, Pos_Fmt "ERROR: Cyclic definition\n", Pos_Arg(definition->node.token.pos));
+            error_node(ERROR, (Node *) definition, "Cyclic definition");
             exit(1);
         }
         break;
@@ -2489,7 +2399,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
     }
 
     if (sv_match(n->token.sv, "_")) {
-        fprintf(stderr, Pos_Fmt "ERROR: Identifier '_' cannot be used as a value\n", Pos_Arg(n->token.pos));
+        error_token(ERROR, n->token, "Identifier '_' cannot be used as a value");
         exit(1);
     }
 
@@ -2498,11 +2408,8 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
         definition = context_find_define(&c->context, n->token.sv);
         if (definition && definition->definition_spec->fn_context && c->context.fn) {
             if (definition->definition_spec->fn_context != c->context.fn && !definition->definition_spec->is_const) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Cannot use variable from stack frame of outer function\n",
-                    Pos_Arg(n->token.pos));
-                fprintf(stderr, Pos_Fmt "NOTE: Here is the variable being used\n", Pos_Arg(definition->node.token.pos));
+                error_node(ERROR, n, "Cannot use variable from stack frame of outer function");
+                error_node(NOTE, (Node *) definition, "Here is the variable being used");
                 exit(1);
             }
         }
@@ -2515,8 +2422,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             if (get_builtin_type_kind(n->token.sv, &builtin_type_kind)) {
                 n->type = (Type) {.kind = builtin_type_kind, .is_meta = true};
                 if (ref == REF_ASSIGN) {
-                    fprintf(
-                        stderr, Pos_Fmt "ERROR: Cannot assign to compile time constant value\n", Pos_Arg(n->token.pos));
+                    error_node(ERROR, n, "Cannot assign to compile time constant value");
                     exit(1);
                 }
                 return;
@@ -2562,40 +2468,30 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
 
             case REF_ADDR:
                 if (!n->type.is_meta) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot take reference to compile time constant value\n",
-                        Pos_Arg(n->token.pos));
-                    fprintf(
-                        stderr, Pos_Fmt "NOTE: Here is the constant being used\n", Pos_Arg(definition->node.token.pos));
+                    error_node(ERROR, n, "Cannot take reference to compile time constant value");
+                    error_node(NOTE, (Node *) definition, "Here is the constant being used");
                     exit(1);
                 }
                 break;
 
             case REF_ADDR_MEMBER:
                 if (!n->type.is_meta && !type_kind_eq(definition->node.type, TYPE_MODULE)) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot take reference to compile time constant value\n",
-                        Pos_Arg(n->token.pos));
-                    fprintf(
-                        stderr, Pos_Fmt "NOTE: Here is the constant being used\n", Pos_Arg(definition->node.token.pos));
+                    error_node(ERROR, n, "Cannot take reference to compile time constant value");
+                    error_node(NOTE, (Node *) definition, "Here is the constant being used");
                     exit(1);
                 }
                 break;
 
             case REF_ASSIGN:
-                fprintf(stderr, Pos_Fmt "ERROR: Cannot assign to compile time constant value\n", Pos_Arg(n->token.pos));
-                fprintf(stderr, Pos_Fmt "NOTE: Here is the constant being used\n", Pos_Arg(definition->node.token.pos));
+                error_node(ERROR, n, "Cannot assign to compile time constant value");
+                error_node(NOTE, (Node *) definition, "Here is the constant being used");
                 exit(1);
                 break;
 
             case REF_ASSIGN_MEMBER:
                 if (!type_kind_eq(definition->node.type, TYPE_MODULE)) {
-                    fprintf(
-                        stderr, Pos_Fmt "ERROR: Cannot assign to compile time constant value\n", Pos_Arg(n->token.pos));
-                    fprintf(
-                        stderr, Pos_Fmt "NOTE: Here is the constant being used\n", Pos_Arg(definition->node.token.pos));
+                    error_node(ERROR, n, "Cannot assign to compile time constant value");
+                    error_node(NOTE, (Node *) definition, "Here is the constant being used");
                     exit(1);
                 }
                 break;
@@ -2818,19 +2714,14 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
                 if (ok) {
                     ok = false;
                     if (group_index == -1) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Type %s does not implement %s\n",
-                            Pos_Arg(n->token.pos),
-                            type_to_cstr(receiver),
-                            type_to_cstr(expected));
+                        error_node(
+                            ERROR, n, "Type %s does not implement %s", type_to_cstr(receiver), type_to_cstr(expected));
                     } else {
                         const char *postfix = order_postfix(group_index + 1);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt
-                            "ERROR: The %zd%s value of this expression has type %s, which does not implement %s. The type of this entire expression is %s\n",
-                            Pos_Arg(n->token.pos),
+                        error_node(
+                            ERROR,
+                            n,
+                            "The %zd%s value of this expression has type %s, which does not implement %s. The type of this entire expression is %s",
                             group_index + 1,
                             postfix,
                             type_to_cstr(receiver),
@@ -2841,46 +2732,46 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
 
                 if (impl_for_other_type) {
                     const Type impl = it.fn->node.type.spec.fn->args[0].type;
+                    error_node_begin(NOTE, n);
                     fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: The trait is implemented for %s, not %s",
-                        Pos_Arg(n->token.pos),
-                        type_to_cstr(impl),
-                        type_to_cstr(receiver));
+                        stderr, "The trait is implemented for %s, not %s", type_to_cstr(impl), type_to_cstr(receiver));
 
                     if (type_eq(type_without_ref(impl), type_without_ref(receiver))) {
                         fprintf(stderr, ". Perhaps try %s?", impl.ref > receiver.ref ? "referencing" : "dereferencing");
                     }
 
-                    fprintf(stderr, "\n");
+                    error_finalize();
                     exit(1);
                 }
 
                 switch (it.kind) {
                 case UNDEFINED:
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: The method '" SV_Fmt "' is not defined for type %s\n",
-                        Pos_Arg(trait->methods[i].pos),
+                    error_parts(
+                        NOTE,
+                        trait->methods[i].name,
+                        trait->methods[i].pos,
+                        "The method '" SV_Fmt "' is not defined for type %s",
                         SV_Arg(trait->methods[i].name),
                         type_to_cstr(receiver));
                     break;
 
                 case WRONG_RECEIVER:
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: The method '" SV_Fmt "' has receiver %s, not %s\n",
-                        Pos_Arg(it.fn->defined_as->node.token.pos),
+                    it.fn->body = NULL;
+                    error_node(
+                        NOTE,
+                        (Node *) it.fn->defined_as->definition_spec->definition_node,
+                        "The method '" SV_Fmt "' has receiver %s, not %s",
                         SV_Arg(it.fn->defined_as->node.token.sv),
                         type_to_cstr(it.fn->node.type.spec.fn->args[0].type),
                         type_to_cstr(receiver));
                     break;
 
                 case WRONG_SIGNATURE:
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: The method '" SV_Fmt "' has wrong signature. Expected %s, got %s\n",
-                        Pos_Arg(it.fn->defined_as->node.token.pos),
+                    it.fn->body = NULL;
+                    error_node(
+                        NOTE,
+                        (Node *) it.fn->defined_as->definition_spec->definition_node,
+                        "The method '" SV_Fmt "' has wrong signature. Expected %s, got %s",
                         SV_Arg(it.fn->defined_as->node.token.sv),
                         type_to_cstr(trait->methods[i].type),
                         type_to_cstr(it.fn->node.type));
@@ -2917,7 +2808,7 @@ static bool is_indexable(Compiler *c, Type type, Module *module) {
     return false;
 }
 
-static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Pos *pos, Module *module) {
+static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
     Method_Spec spec = {0};
     if (get_method_spec(c, receiver->type, sv_from_cstr(operator), &spec, NULL, NULL)) {
         Node_Fn *method = get_method(c, spec, module);
@@ -2928,15 +2819,17 @@ static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *r
             if ((receiver_type.ref > receiver->type.ref + 1) ||
                 (receiver_type.ref > receiver->type.ref && !receiver->is_memory)) //
             {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Too many levels of pointer indirection in method call\n", Pos_Arg(*pos));
-                fprintf(
-                    stderr,
-                    Pos_Fmt "NOTE: This is of type %s, but the receiver is expected to be %s\n",
-                    Pos_Arg(receiver->token.pos),
+                error_node(ERROR, op, "Too many levels of pointer indirection in method call");
+                error_node(
+                    NOTE,
+                    receiver,
+                    "This is of type %s, but the receiver is expected to be %s",
                     type_to_cstr(receiver->type),
                     type_to_cstr(receiver_type));
+                error_node(NOTE, (Node *) method->defined_as, "This is the overload used");
                 exit(1);
+
+                // TODO: This is broken for single indirection
             }
 
             return method;
@@ -2944,12 +2837,7 @@ static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *r
     }
 
     check_that_type_is_known(receiver);
-    fprintf(
-        stderr,
-        Pos_Fmt "ERROR: Method '" SV_Fmt "' is not defined for %s\n",
-        Pos_Arg(*pos),
-        SV_Arg(spec.name),
-        type_to_cstr(receiver->type));
+    error_node(ERROR, op, "Method '" SV_Fmt "' is not defined for %s", SV_Arg(spec.name), type_to_cstr(receiver->type));
     exit(1);
 }
 
@@ -2959,7 +2847,8 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
     case TOKEN_ADD_SET:
     case TOKEN_SUB_SET:
         if (!type_is_numeric(n->type) && !type_is_pointer(n->type)) {
-            return get_operator_overload(c, operator_method_name_from_token_kind(op), n, &n->token.pos, binary->module);
+            return get_operator_overload(
+                c, operator_method_name_from_token_kind(op), n, (Node *) binary, binary->module);
         }
         break;
 
@@ -2967,15 +2856,14 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
     case TOKEN_DIV_SET:
     case TOKEN_MOD_SET:
         if (type_is_pointer(n->type)) {
-            fprintf(
-                stderr, Pos_Fmt "ERROR: This operation is not valid for pointers\n", Pos_Arg(binary->node.token.pos));
-            fprintf(
-                stderr, Pos_Fmt "NOTE: The operands are of type %s\n", Pos_Arg(n->token.pos), type_to_cstr(n->type));
+            error_node(ERROR, (Node *) binary, "This operation is not valid for pointers");
+            error_node(NOTE, n, "The operands are of type %s", type_to_cstr(n->type));
             exit(1);
         }
 
         if (!type_is_numeric(n->type)) {
-            return get_operator_overload(c, operator_method_name_from_token_kind(op), n, &n->token.pos, binary->module);
+            return get_operator_overload(
+                c, operator_method_name_from_token_kind(op), n, (Node *) binary, binary->module);
         }
         break;
 
@@ -2984,10 +2872,8 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
     case TOKEN_BOR_SET:
     case TOKEN_BAND_SET:
         if (type_is_pointer(n->type)) {
-            fprintf(
-                stderr, Pos_Fmt "ERROR: This operation is not valid for pointers\n", Pos_Arg(binary->node.token.pos));
-            fprintf(
-                stderr, Pos_Fmt "NOTE: The operands are of type %s\n", Pos_Arg(n->token.pos), type_to_cstr(n->type));
+            error_node(ERROR, (Node *) binary, "This operation is not valid for pointers");
+            error_node(NOTE, n, "The operands are of type %s", type_to_cstr(n->type));
             exit(1);
         }
 
@@ -3012,7 +2898,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
     const size_t lhs_count = is_lhs_group ? binary->lhs->type.spec.group.count : 1;
     const size_t rhs_count = is_rhs_group ? binary->rhs->type.spec.group.count : 1;
     if (lhs_count != rhs_count) {
-        error_number_of_values_mismatch(binary->node.token.pos, lhs_count, rhs_count, NULL, NULL);
+        error_number_of_values_mismatch(binary->node.token, lhs_count, rhs_count, NULL, NULL);
     }
 
     if (is_lhs_group) {
@@ -3026,7 +2912,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
             Node *lhs = get_node_from_group(binary->lhs, i, &lhs_group_index);
             i64   rhs_group_index = -1;
             Node *rhs = get_node_from_group(binary->rhs, i, &rhs_group_index);
-            type_assert_grouped(c, rhs, lhs->type, rhs_group_index, &lhs->token.pos);
+            type_assert_grouped(c, rhs, lhs->type, rhs_group_index, &lhs->token);
 
             if (binary->overloads) {
                 binary->overloads[i] = check_assignment_lhs_for_arithmetics(c, binary, lhs);
@@ -3110,10 +2996,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
         if (call->spread) {
             if (fn_spec->variadics_kind != VARIADICS_TYPED) {
                 if (call->spread->kind != NODE_INTERPOLATION) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot use %s in a call to a function that does not have typed variadics\n",
-                        Pos_Arg(call->spread_pos),
+                    error_token(
+                        ERROR,
+                        call->spread_token,
+                        "Cannot use %s in a call to a function that does not have typed variadics",
                         token_kind_to_cstr(TOKEN_SPREAD));
                     exit(1);
                 }
@@ -3130,8 +3016,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
         const Type *expected = NULL;
         if (it_is_named) {
             if (!fn_spec) {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Cannot use named arguments in a cast expression\n", Pos_Arg(it->token.pos));
+                error_node(ERROR, it, "Cannot use named arguments in a cast expression");
                 exit(1);
             }
 
@@ -3149,10 +3034,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
 
             if (!expected) {
                 error_undefined(&it_name->token, "argument", true);
-                fprintf(
-                    stderr,
-                    Pos_Fmt "NOTE: The %s being called is %s\n",
-                    Pos_Arg(call->fn->token.pos),
+                error_node(
+                    NOTE,
+                    call->fn,
+                    "The %s being called is %s",
                     is_method ? "method" : "function",
                     fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
                 exit(1);
@@ -3191,12 +3076,11 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
             }
 
             if (!ok) {
-                fprintf(
-                    stderr, Pos_Fmt "ERROR: Interpolated string is in the wrong position\n", Pos_Arg(it->token.pos));
-                fprintf(
-                    stderr,
-                    Pos_Fmt "NOTE: The %s being called is %s\n",
-                    Pos_Arg(call->fn->token.pos),
+                error_node(ERROR, it, "Interpolated string is in the wrong position");
+                error_node(
+                    NOTE,
+                    call->fn,
+                    "The %s being called is %s",
                     is_method ? "method" : "function",
                     fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
                 exit(1);
@@ -3219,11 +3103,11 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
             } else if (arg == call->spread) {
                 assert(fn_spec->variadics_kind == VARIADICS_TYPED);
                 if (it_index != fn_spec->variadics_index) {
-                    fprintf(stderr, Pos_Fmt "ERROR: Spread is in the wrong position\n", Pos_Arg(call->spread_pos));
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: The %s being called is %s\n",
-                        Pos_Arg(call->fn->token.pos),
+                    error_token(ERROR, call->spread_token, "Spread is in the wrong position");
+                    error_node(
+                        NOTE,
+                        call->fn,
+                        "The %s being called is %s",
                         is_method ? "method" : "function",
                         fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
                     exit(1);
@@ -3255,17 +3139,13 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                             // Provide the variadic argument as a named argument
                             if (variadic_arg->node) {
                                 // Variadic arguments was already started as a stack allocated array
-                                fprintf(
-                                    stderr,
-                                    Pos_Fmt "ERROR: Multiple typed variadic sources found\n",
-                                    Pos_Arg(call->node.token.pos));
-
+                                error_node(ERROR, (Node *) call, "Multiple typed variadic sources found");
                                 if (variadic_arg->node == call->spread) {
-                                    fprintf(
-                                        stderr,
-                                        Pos_Fmt "... This %s provide one source\n",
-                                        Pos_Arg(call->spread_pos),
-                                        call->spread->kind == NODE_INTERPOLATION ? "interpolated string" : "spread");
+                                    if (call->spread->kind == NODE_INTERPOLATION) {
+                                        error_node(INFO, call->spread, "This interpolated string provide one source");
+                                    } else {
+                                        error_token(INFO, call->spread_token, "This spread provide one source");
+                                    }
                                 } else {
                                     bool following = false;
                                     if (variadic_arg->node->next) {
@@ -3276,17 +3156,15 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                                         }
                                     }
 
-                                    fprintf(
-                                        stderr,
-                                        Pos_Fmt "... This argument%s provides one source\n",
-                                        Pos_Arg(variadic_arg->node->token.pos),
+                                    error_node(
+                                        INFO,
+                                        variadic_arg->node,
+                                        "This argument%s provides one source",
                                         following ? " and its following positional arguments" : "");
                                 }
 
-                                fprintf(
-                                    stderr,
-                                    Pos_Fmt "... But this named argument directly passes another variadic source\n",
-                                    Pos_Arg(it_name->token.pos));
+                                error_node(
+                                    INFO, it_name, "But this named argument directly passes another variadic source");
                                 exit(1);
                             }
                         }
@@ -3294,10 +3172,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                         // Start the variadic arguments as a stack allocated array
                         if (call->spread && call->spread != it) {
                             // There is a spread later, but another variadic allocation starts here
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "ERROR: Multiple typed variadic sources found\n",
-                                Pos_Arg(call->node.token.pos));
+                            error_node(ERROR, (Node *) call, "Multiple typed variadic sources found");
 
                             bool following = false;
                             if (it->next) {
@@ -3312,17 +3187,17 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                                 }
                             }
 
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "... This argument%s provides one source\n",
-                                Pos_Arg(it->token.pos),
+                            error_node(
+                                INFO,
+                                it,
+                                "This argument%s provides one source",
                                 following ? " and its following positional arguments" : "");
 
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "... But this %s provides another\n",
-                                Pos_Arg(call->spread_pos),
-                                call->spread->kind == NODE_INTERPOLATION ? "interpolated string" : "spread");
+                            if (call->spread->kind == NODE_INTERPOLATION) {
+                                error_node(INFO, call->spread, "But this interpolated string provides another");
+                            } else {
+                                error_token(INFO, call->spread_token, "But this spread provides another");
+                            }
                             exit(1);
                         }
 
@@ -3379,10 +3254,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                     if (not_provided_count == 1) {
                         not_provided_name = it->name;
                     } else if (not_provided_count == 2) {
+                        error_token_begin(ERROR, call->end);
                         fprintf(
                             stderr,
-                            Pos_Fmt "ERROR: The following arguments are not provided: " SV_Fmt ", " SV_Fmt,
-                            Pos_Arg(call->end),
+                            "The following arguments are not provided: " SV_Fmt ", " SV_Fmt,
                             SV_Arg(not_provided_name),
                             SV_Arg(it->name));
                     } else {
@@ -3393,19 +3268,15 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
 
             if (not_provided_count) {
                 if (not_provided_count == 1) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Argument '" SV_Fmt "' is not provided\n",
-                        Pos_Arg(call->end),
-                        SV_Arg(not_provided_name));
+                    error_token(ERROR, call->end, "Argument '" SV_Fmt "' is not provided", SV_Arg(not_provided_name));
                 } else {
-                    fprintf(stderr, "\n");
+                    error_finalize();
                 }
 
-                fprintf(
-                    stderr,
-                    Pos_Fmt "NOTE: The %s being called is %s\n",
-                    Pos_Arg(call->fn->token.pos),
+                error_node(
+                    ERROR,
+                    call->fn,
+                    "The %s being called is %s",
                     is_method ? "method" : "function",
                     fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
                 exit(1);
@@ -3421,22 +3292,22 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
         extra = "";
     }
 
-    Pos pos = call->end;
+    Token token = call->end;
     if (!has_maximum) {
         size_t iota = 0;
         ll_foreach(it, &call->args) {
             iota += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
             if (iota > args_count_max) {
-                pos = it->token.pos;
+                token = it->token;
                 break;
             }
         }
     }
 
-    fprintf(
-        stderr,
-        Pos_Fmt "ERROR: %s arguments: Expected%s %zu, got %zu\n",
-        Pos_Arg(pos),
+    error_token(
+        ERROR,
+        token,
+        "%s arguments: Expected%s %zu, got %zu",
         situation,
         extra,
         expected - is_method,
@@ -3448,43 +3319,46 @@ static void check_whether_member_access_is_valid(Node_Member *m) {
     if (m->rhs) {
         assert(m->lhs); // A bare '.(Type)' will error out at parse time
         if (!type_is_trait(m->lhs->type) && !type_is_union(m->lhs->type)) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot access variant of %s\n",
-                Pos_Arg(m->node.token.pos),
-                type_to_cstr(m->lhs->type));
+            error_node(ERROR, (Node *) m, "Cannot access variant of %s", type_to_cstr(m->lhs->type));
             exit(1);
         }
     } else {
         if (sv_match(m->node.token.sv, "_")) {
-            fprintf(stderr, Pos_Fmt "ERROR: Field '_' cannot be accessed\n", Pos_Arg(m->node.token.pos));
+            error_token(ERROR, m->node.token, "Field '_' cannot be accessed");
             exit(1);
         }
     }
 }
 
 static void error_special_method_wrong_signature(Token name, const char *signature, const char *note) {
+    error_token(
+        ERROR, name, "The method '" SV_Fmt "' is special because it implements an operator overload", SV_Arg(name.sv));
+
+    ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
     fprintf(
         stderr,
-        Pos_Fmt "ERROR: The method '" SV_Fmt
-                "' implements an operator overload and thus must have a particular signature\n",
-        Pos_Arg(name.pos),
-        SV_Arg(name.sv));
-    fprintf(
-        stderr,
+        "    It should have this signature:\n"
         "\n"
-        "```\n" //
-        SV_Fmt " :: %s\n"
-        "```\n"
-        "\n"
-        "%s"
-        "%s"
-        "It may have other optional arguments at the end, but this is the bare minimum that must be implemented.\n"
+        "        " SV_Fmt " :: %s\n"
         "\n",
         SV_Arg(name.sv),
-        signature,
-        note ? note : "",
-        (note && *note) ? "\n" : "");
+        signature);
+
+    if (note) {
+        SV sv = sv_from_cstr(note);
+        while (sv.count) {
+            const SV line = sv_split_mut(&sv, '\n');
+            fprintf(stderr, "    " SV_Fmt "\n", SV_Arg(line));
+        }
+        fprintf(stderr, "\n");
+    }
+
+    fprintf(
+        stderr,
+        "    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.\n"
+        "\n");
+
+    ansi_reset(stderr);
 }
 
 static void check_special_method_signature_args_count(
@@ -3494,12 +3368,8 @@ static void check_special_method_signature_args_count(
 
     if (fn_spec->args_count < args_count) {
         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-        fprintf(
-            stderr,
-            Pos_Fmt "INFO: Expected at least %zu arguments, got %zu\n",
-            Pos_Arg(fn->args_end_pos),
-            args_count,
-            fn_spec->args_count);
+        error_token(
+            INFO, fn->args_end_token, "Expected at least %zu arguments, got %zu", args_count, fn_spec->args_count);
         exit(1);
     }
 
@@ -3507,10 +3377,11 @@ static void check_special_method_signature_args_count(
         const Type_Fn_Arg *it = &fn_spec->args[i];
         if (!it->has_default_value && i >= args_count) {
             error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-            fprintf(
-                stderr,
-                Pos_Fmt "INFO: All arguments after the %zu%s argument must be optional\n",
-                Pos_Arg(fn_spec->args[i].pos),
+            error_parts(
+                INFO,
+                fn_spec->args[i].name,
+                fn_spec->args[i].pos,
+                "All arguments after the %zu%s argument must be optional",
                 (size_t) args_count,
                 order_postfix(args_count));
             exit(1);
@@ -3545,10 +3416,7 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
 
             if (n->type.kind == TYPE_STRUCT) {
                 if (it_binary->lhs->kind != NODE_ATOM || it_binary->lhs->token.kind != TOKEN_IDENT) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Expected designated initializer to be field name\n",
-                        Pos_Arg(it_binary->lhs->token.pos));
+                    error_node(ERROR, it_binary->lhs, "Expected designated initializer to be field name");
                     exit(1);
                 }
                 Node_Atom *it_field_name = (Node_Atom *) it_binary->lhs;
@@ -3565,10 +3433,7 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
 
                 if (!ok) {
                     error_undefined(&it_field_name->node.token, "field", true);
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: Structure defined here\n",
-                        Pos_Arg(struct_spec->definition->node.token.pos));
+                    error_node(NOTE, (Node *) struct_spec->definition, "Structure defined here");
                     exit(1);
                 }
             } else if (n->type.kind == TYPE_ARRAY || n->type.kind == TYPE_SLICE) {
@@ -3581,10 +3446,10 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
                 if (n->type.kind == TYPE_ARRAY &&
                     int128_ge(value.as.integer, int128_from_u64(n->type.spec.array.count), true)) //
                 {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Index %s is out of bounds in array of length %zu\n",
-                        Pos_Arg(it_binary->lhs->token.pos),
+                    error_node(
+                        ERROR,
+                        it_binary->lhs,
+                        "Index %s is out of bounds in array of length %zu",
                         int128_to_cstr(value.as.integer),
                         n->type.spec.array.count);
                     exit(1);
@@ -3602,15 +3467,16 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
         } else {
             if (n->type.kind == TYPE_STRUCT) {
                 if (it_iota >= struct_spec->fields_count) {
-                    fprintf(stderr, Pos_Fmt "ERROR: Too many ordered initializers\n", Pos_Arg(it->token.pos));
+                    error_node(ERROR, it, "Too many ordered initializers");
+                    error_node(NOTE, (Node *) struct_spec->definition, "Structure defined here");
                     exit(1);
                 }
             } else if (n->type.kind == TYPE_ARRAY) {
                 if (it_iota >= n->type.spec.array.count) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Index %zu is out of bounds in array of length %zu\n",
-                        Pos_Arg(it->token.pos),
+                    error_node(
+                        ERROR,
+                        it,
+                        "Index %zu is out of bounds in array of length %zu",
                         it_iota,
                         n->type.spec.array.count);
                     exit(1);
@@ -3670,7 +3536,7 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
 
         if (!type_is_numeric(binary->lhs->type) && !type_is_pointer(binary->lhs->type)) {
             binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, &n->token.pos, binary->module);
+                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
         }
         n->type = binary->lhs->type;
         break;
@@ -3685,18 +3551,14 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         }
 
         if (type_is_pointer(binary->lhs->type)) {
-            fprintf(stderr, Pos_Fmt "ERROR: This operation is not valid for pointers\n", Pos_Arg(n->token.pos));
-            fprintf(
-                stderr,
-                Pos_Fmt "NOTE: The operands are of type %s\n",
-                Pos_Arg(binary->lhs->token.pos),
-                type_to_cstr(binary->lhs->type));
+            error_node(ERROR, n, "This operation is not valid for pointers");
+            error_node(NOTE, binary->lhs, "The operands are of type %s", type_to_cstr(binary->lhs->type));
             exit(1);
         }
 
         if (!type_is_numeric(binary->lhs->type)) {
             binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, &n->token.pos, binary->module);
+                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
         }
         n->type = binary->lhs->type;
         break;
@@ -3712,12 +3574,8 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         }
 
         if (type_is_pointer(binary->lhs->type)) {
-            fprintf(stderr, Pos_Fmt "ERROR: This operation is not valid for pointers\n", Pos_Arg(n->token.pos));
-            fprintf(
-                stderr,
-                Pos_Fmt "NOTE: The operands are of type %s\n",
-                Pos_Arg(binary->lhs->token.pos),
-                type_to_cstr(binary->lhs->type));
+            error_node(ERROR, n, "This operation is not valid for pointers");
+            error_node(NOTE, binary->lhs, "The operands are of type %s", type_to_cstr(binary->lhs->type));
             exit(1);
         }
 
@@ -3746,20 +3604,15 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         type_assert_node(c, binary->rhs, binary->lhs);
         if (!type_is_numeric(binary->lhs->type) && !type_is_pointer(binary->lhs->type)) {
             binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, &n->token.pos, binary->module);
+                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
 
             if (!binary->overload->is_compare_operator_complete) {
                 assert(binary->overload->returns.head);
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Type %s does not implement ordered comparisons\n",
-                    Pos_Arg(n->token.pos),
-                    type_to_cstr(binary->lhs->type));
-                fprintf(
-                    stderr,
-                    Pos_Fmt "NOTE: The method '" SV_Fmt
-                            "' only implements equality checking since its return type is %s, not %s\n",
-                    Pos_Arg(binary->overload->returns.head->token.pos),
+                error_node(ERROR, n, "Type %s does not implement ordered comparisons", type_to_cstr(binary->lhs->type));
+                error_node(
+                    NOTE,
+                    binary->overload->returns.head,
+                    "The method '" SV_Fmt "' only implements equality checking since its return type is %s, not %s",
                     SV_Arg(binary->overload->defined_as->node.token.sv),
                     type_to_cstr(*binary->overload->node.type.spec.fn->return_type),
                     type_to_cstr(c->ordering_type));
@@ -3811,7 +3664,7 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
                 assert(try_auto_cast_type_to_rtti(c, binary->rhs, c->type_info_pointer_type));
             } else if (!type_is_scalar(binary->lhs->type)) {
                 binary->overload = get_operator_overload(
-                    c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, &n->token.pos, binary->module);
+                    c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
             }
         }
         n->type = (Type) {.kind = TYPE_BOOL};
@@ -3886,10 +3739,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
             break;
 
         case TOKEN_DIRECTIVE_CALLER_LOCATION:
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Cannot use %s here. It can only be used as the default value for a function argument\n",
-                Pos_Arg(n->token.pos),
+            error_node(
+                ERROR,
+                n,
+                "Cannot use %s here. It can only be used as the default value for a function argument",
                 token_kind_to_cstr(n->token.kind));
             exit(1);
             break;
@@ -3936,7 +3789,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
         case TOKEN_SUB:
             check_expr(c, unary->value, REF_NONE);
             if (!type_is_numeric(unary->value->type) && !type_is_pointer(unary->value->type)) {
-                unary->overload = get_operator_overload(c, "neg", unary->value, &n->token.pos, unary->module);
+                unary->overload = get_operator_overload(c, "neg", unary->value, n, unary->module);
             }
             n->type = unary->value->type;
             break;
@@ -3947,16 +3800,11 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
             if (!unary->value->type.ref) {
                 if (type_kind_eq(unary->value->type, TYPE_RAWPTR)) {
-                    fprintf(
-                        stderr, Pos_Fmt "ERROR: Cannot dereference raw pointer\n", Pos_Arg(unary->value->token.pos));
+                    error_node(ERROR, unary->value, "Cannot dereference raw pointer");
                     exit(1);
                 }
 
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Expected typed pointer, got %s\n",
-                    Pos_Arg(unary->value->token.pos),
-                    type_to_cstr(unary->value->type));
+                error_node(ERROR, unary->value, "Expected typed pointer, got %s", type_to_cstr(unary->value->type));
                 exit(1);
             }
 
@@ -4055,35 +3903,28 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
                         const Type receiver_type = method_spec->args[0].type;
                         if (receiver_type.ref > member->lhs->type.ref + 1) {
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "ERROR: Too many levels of pointer indirection in method call\n",
-                                Pos_Arg(n->token.pos));
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "NOTE: This is of type %s, but the receiver is expected to be %s\n",
-                                Pos_Arg(member->lhs->token.pos),
+                            error_node(ERROR, n, "Too many levels of pointer indirection in method call");
+                            error_node(
+                                NOTE,
+                                member->lhs,
+                                "This is of type %s, but the receiver is expected to be %s",
                                 type_to_cstr(member->lhs->type),
                                 type_to_cstr(receiver_type));
                             exit(1);
                         }
 
                         if (receiver_type.ref > member->lhs->type.ref && !member->lhs->is_memory) {
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "ERROR: Too many levels of pointer indirection in method call\n",
-                                Pos_Arg(n->token.pos));
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "NOTE: This is of type %s, but the receiver is expected to be %s\n",
-                                Pos_Arg(member->lhs->token.pos),
+                            error_node(ERROR, n, "Too many levels of pointer indirection in method call");
+                            error_node(
+                                NOTE,
+                                member->lhs,
+                                "This is of type %s, but the receiver is expected to be %s",
                                 type_to_cstr(member->lhs->type),
                                 type_to_cstr(receiver_type));
-                            fprintf(
-                                stderr,
-                                Pos_Fmt
-                                "NOTE: This value does not exist in memory, therefore cannot take reference to it\n",
-                                Pos_Arg(member->lhs->token.pos));
+                            error_node(
+                                NOTE,
+                                member->lhs,
+                                "This value does not exist in memory, therefore cannot take reference to it");
                             exit(1);
                         }
                         is_ref_valid = ref == REF_NONE;
@@ -4167,10 +4008,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
                     if (!definition) {
                         error_undefined(&n->token, "field or method", true);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "NOTE: Structure defined here\n",
-                            Pos_Arg(spec->definition->node.token.pos));
+                        error_node(NOTE, (Node *) spec->definition, "Structure defined here");
                         exit(1);
                     }
 
@@ -4229,28 +4067,16 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                                 error_undefined(&n->token, "method", false);
                             }
                         } else {
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "ERROR: There are no methods defined on %s\n",
-                                Pos_Arg(n->token.pos),
-                                type_to_cstr(receiver));
+                            error_node(ERROR, n, "There are no methods defined on %s", type_to_cstr(receiver));
                             exit(1);
                         }
                     }
 
                     if (!ok) {
                         if (can_have_methods) {
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "ERROR: Undefined method '" SV_Fmt "'\n",
-                                Pos_Arg(n->token.pos),
-                                SV_Arg(n->token.sv));
+                            error_node(ERROR, n, "Undefined method '" SV_Fmt "'", SV_Arg(n->token.sv));
                         } else {
-                            fprintf(
-                                stderr,
-                                Pos_Fmt "ERROR: Cannot access field of %s\n",
-                                Pos_Arg(n->token.pos),
-                                type_to_cstr(member->lhs->type));
+                            error_node(ERROR, n, "Cannot access field of %s", type_to_cstr(member->lhs->type));
                         }
                         exit(1);
                     }
@@ -4267,7 +4093,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
         Node_Import *import = (Node_Import *) n;
         if (import->libraries.head) {
             ll_foreach(it, &import->libraries) {
-                link_flags_add_libname(c->link_flags, it->token.sv);
+                link_flags_add_libname(c->link_flags, it->token.as.string);
             }
         } else {
             make_sure_import_is_ready(c, import);
@@ -4278,10 +4104,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     case NODE_DISTINCT: {
         Node_Distinct *distinct = (Node_Distinct *) n;
         if (!distinct->defined_as) {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: A distinct type must be defined as a constant before it can be used\n",
-                Pos_Arg(n->token.pos));
+            error_node(ERROR, n, "A distinct type must be defined as a constant before it can be used");
             exit(1);
         }
 
@@ -4294,11 +4117,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     case NODE_INTERPOLATION: {
         Node_Interpolation *interp = (Node_Interpolation *) n;
         if (!interp->is_valid) {
-            fprintf(
-                stderr,
-                Pos_Fmt
-                "ERROR: Cannot use interpolated string here. It can only be used as a variadic source of type 'any' in a function call\n",
-                Pos_Arg(n->token.pos));
+            error_node(
+                ERROR,
+                n,
+                "Cannot use interpolated string here. It can only be used as a variadic source of type 'any' in a function call");
             exit(1);
         }
 
@@ -4428,10 +4250,11 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     const Type rhs_type = fn_spec->args[1].type;
                     if (!type_eq(rhs_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Operand types must be same: Expected %s, got %s\n",
-                            Pos_Arg(fn_spec->args[1].pos),
+                        error_parts(
+                            INFO,
+                            fn_spec->args[1].name,
+                            fn_spec->args[1].pos,
+                            "Operand types must be same: Expected %s, got %s",
                             type_to_cstr(lhs_type),
                             type_to_cstr(rhs_type));
                         exit(1);
@@ -4439,10 +4262,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
                     if (!type_eq(*fn_spec->return_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Operand types and return type must be same: Expected to return %s, got %s\n",
-                            Pos_Arg(fn->returns.head ? fn->returns.head->token.pos : fn->body->token.pos),
+                        error_token(
+                            INFO,
+                            fn->returns.head ? fn->returns.head->token : fn->body->token,
+                            "Operand types and return type must be same: Expected to return %s, got %s",
                             type_to_cstr(lhs_type),
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
                         exit(1);
@@ -4455,10 +4278,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     const Type operand_type = fn_spec->args[0].type;
                     if (!type_eq(*fn_spec->return_type, operand_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Operand type and return type must be same: Expected to return %s, got %s\n",
-                            Pos_Arg(fn->returns.head ? fn->returns.head->token.pos : fn->body->token.pos),
+                        error_token(
+                            INFO,
+                            fn->returns.head ? fn->returns.head->token : fn->body->token,
+                            "Operand type and return type must be same: Expected to return %s, got %s",
                             type_to_cstr(operand_type),
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
                         exit(1);
@@ -4474,10 +4297,11 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     const Type rhs_type = fn_spec->args[1].type;
                     if (!type_eq(rhs_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Operand types must be same: Expected %s, got %s\n",
-                            Pos_Arg(fn_spec->args[1].pos),
+                        error_parts(
+                            INFO,
+                            fn_spec->args[1].name,
+                            fn_spec->args[1].pos,
+                            "Operand types must be same: Expected %s, got %s",
                             type_to_cstr(lhs_type),
                             type_to_cstr(rhs_type));
                         exit(1);
@@ -4487,10 +4311,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         !type_eq(*fn_spec->return_type, c->ordering_type)) //
                     {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Expected to return %s or %s, got %s\n",
-                            Pos_Arg(fn->returns.head ? fn->returns.head->token.pos : fn->body->token.pos),
+                        error_token(
+                            INFO,
+                            fn->returns.head ? fn->returns.head->token : fn->body->token,
+                            "Expected to return %s or %s, got %s",
                             type_to_cstr(c->equivalence_type),
                             type_to_cstr(c->ordering_type),
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
@@ -4506,10 +4330,11 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     const Type assign_type = fn_spec->args[2].type;
                     if (!type_eq(assign_type, (Type) {.kind = TYPE_BOOL})) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Expected the third argument to be %s, got %s\n",
-                            Pos_Arg(fn_spec->args[2].pos),
+                        error_parts(
+                            INFO,
+                            fn_spec->args[2].name,
+                            fn_spec->args[2].pos,
+                            "Expected the third argument to be %s, got %s",
                             type_to_cstr((Type) {.kind = TYPE_BOOL}),
                             type_to_cstr(assign_type));
                         exit(1);
@@ -4517,10 +4342,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
                     if (!type_is_pointer(*fn_spec->return_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Expected to return a pointer, got %s\n",
-                            Pos_Arg(fn->returns.head ? fn->returns.head->token.pos : fn->body->token.pos),
+                        error_token(
+                            INFO,
+                            fn->returns.head ? fn->returns.head->token : fn->body->token,
+                            "Expected to return a pointer, got %s",
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
                         exit(1);
                     }
@@ -4533,10 +4358,11 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     const Type end_type = fn_spec->args[2].type;
                     if (!type_eq(end_type, begin_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: Types of range beginning and end must be same: Expected %s, got %s\n",
-                            Pos_Arg(fn_spec->args[2].pos),
+                        error_parts(
+                            INFO,
+                            fn_spec->args[2].name,
+                            fn_spec->args[2].pos,
+                            "Types of range beginning and end must be same: Expected %s, got %s",
                             type_to_cstr(begin_type),
                             type_to_cstr(end_type));
                         exit(1);
@@ -4544,10 +4370,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
                     if (fn_spec->returns_count != 1) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "INFO: The range operator cannot return %zu values\n",
-                            Pos_Arg(fn->returns.head ? fn->returns.head->token.pos : fn->body->token.pos),
+                        error_token(
+                            INFO,
+                            fn->returns.head ? fn->returns.head->token : fn->body->token,
+                            "The range operator cannot return %zu values",
                             fn_spec->returns_count);
                         exit(1);
                     }
@@ -4561,8 +4387,11 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                 check_stmt(c, fn->body);
                 if (fn_spec->returns_count && !always_returns(fn->body)) {
                     assert(fn->body->kind == NODE_BLOCK);
-                    const Pos end = ((Node_Block *) fn->body)->end;
-                    fprintf(stderr, Pos_Fmt "ERROR: Expected return statement\n", Pos_Arg(end));
+                    error_token(
+                        ERROR,
+                        ((Node_Block *) fn->body)->end,
+                        "Expected to return %s",
+                        type_to_cstr(*fn_spec->return_type));
                     exit(1);
                 }
             }
@@ -4583,10 +4412,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
             underlying = enumm->underlying->type;
             underlying.is_meta = false;
             if (!type_is_integer(underlying)) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Expected underlying type of the enumeration to be an integer, got %s\n",
-                    Pos_Arg(enumm->underlying->token.pos),
+                error_node(
+                    ERROR,
+                    enumm->underlying,
+                    "Expected underlying type of the enumeration to be an integer, got %s",
                     type_to_cstr(underlying));
                 exit(1);
             }
@@ -4744,6 +4573,22 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         for (size_t i = fields_start; i < c->struct_fields.count; i++) {
                             Type_Struct_Field previous = c->struct_fields.data[i];
                             if (sv_eq(previous.name, it->node.token.sv)) {
+                                if (previous.spread) {
+                                    error_node(
+                                        ERROR, (Node *) it, "Redefinition of '" SV_Fmt "'", SV_Arg(it->node.token.sv));
+                                    error_node(
+                                        NOTE,
+                                        previous.spread,
+                                        "It was first defined in this structure here by spreading this");
+
+                                    Node_Struct *definition = previous.spread->type.spec.structt->definition;
+                                    if (definition->defined_as) {
+                                        error_node(
+                                            NOTE, (Node *) definition, "Here is the structure we are spreading from");
+                                    }
+
+                                    exit(1);
+                                }
                                 error_redefinition((Node *) it, &previous.pos);
                             }
                         }
@@ -4767,20 +4612,13 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                 Type from = unary->value->type;
                 from.is_meta = false;
                 if (!type_kind_eq(from, TYPE_STRUCT)) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Expected structure type, got %s\n",
-                        Pos_Arg(unary->value->token.pos),
-                        type_to_cstr(from));
+                    error_node(ERROR, unary->value, "Expected structure type, got %s", type_to_cstr(from));
                     exit(1);
                 }
 
                 if (from.ref) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot spread %s without dereferencing it first\n",
-                        Pos_Arg(unary->value->token.pos),
-                        type_to_cstr(from));
+                    error_node(
+                        ERROR, unary->value, "Cannot spread %s without dereferencing it first", type_to_cstr(from));
                     exit(1);
                 }
 
@@ -4790,19 +4628,27 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         for (size_t i = fields_start; i < c->struct_fields.count; i++) {
                             Type_Struct_Field previous = c->struct_fields.data[i];
                             if (sv_eq(previous.name, it.name)) {
-                                fprintf(
-                                    stderr,
-                                    Pos_Fmt "ERROR: While spreading this structure, we encountered a field '" SV_Fmt
-                                            "' that is already defined\n",
-                                    Pos_Arg(unary->value->token.pos),
+                                error_node(
+                                    ERROR,
+                                    unary->value,
+                                    "While spreading this structure, we encountered a field '" SV_Fmt
+                                    "' that is already defined",
                                     SV_Arg(it.name));
-                                fprintf(stderr, Pos_Fmt "NOTE: Defined here\n", Pos_Arg(previous.pos));
+                                error_parts(
+                                    NOTE, previous.name, previous.pos, "It was first defined in this structure here");
+
+                                Node_Struct *definition = from.spec.structt->definition;
+                                if (definition->defined_as) {
+                                    error_node(NOTE, (Node *) definition, "Here is the structure we are spreading");
+                                }
+
                                 exit(1);
                             }
                         }
                     }
 
                     it.pos = unary->value->token.pos;
+                    it.spread = unary->value;
                     da_push(&c->struct_fields, it);
                 }
             } else {
@@ -4831,11 +4677,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
             n->type.is_meta = false;
             if (n->type.ref ||
                 (n->type.kind != TYPE_STRUCT && n->type.kind != TYPE_ARRAY && n->type.kind != TYPE_SLICE)) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Expected structure or array type, got %s\n",
-                    Pos_Arg(compound->lhs->token.pos),
-                    type_to_cstr(n->type));
+                error_node(ERROR, compound->lhs, "Expected structure or array type, got %s", type_to_cstr(n->type));
                 exit(1);
             }
         } else {
@@ -4887,11 +4729,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                 } else if (type_eq(*from_type, string_type) && type_eq(*to_type, char_slice_type)) {
                     same = true;
                 } else {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot cast to %s\n",
-                        Pos_Arg(call->fn->token.pos),
-                        type_to_cstr(*to_type));
+                    error_node(ERROR, call->fn, "Cannot cast to %s", type_to_cstr(*to_type));
                     exit(1);
                 }
             }
@@ -4937,10 +4775,10 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     }
 
                     if (!ok) {
-                        fprintf(
-                            stderr,
-                            Pos_Fmt "ERROR: Cannot cast %s to %s\n",
-                            Pos_Arg(call->fn->token.pos),
+                        error_node(
+                            ERROR,
+                            (Node *) call,
+                            "Cannot cast %s to %s",
                             type_to_cstr(*from_type),
                             type_to_cstr(*to_type));
                         exit(1);
@@ -4963,16 +4801,12 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
             }
         } else {
             if (!type_kind_eq(fn_type, TYPE_FN)) {
-                fprintf(stderr, Pos_Fmt "ERROR: Cannot call %s\n", Pos_Arg(call->fn->token.pos), type_to_cstr(fn_type));
+                error_node(ERROR, call->fn, "Cannot call %s", type_to_cstr(fn_type));
                 exit(1);
             }
 
             if (fn_type.ref) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Cannot call %s without deferencing it first\n",
-                    Pos_Arg(call->fn->token.pos),
-                    type_to_cstr(fn_type));
+                error_node(ERROR, call->fn, "Cannot call %s without deferencing it first", type_to_cstr(fn_type));
                 exit(1);
             }
             const Type_Fn *fn_type_spec = fn_type.spec.fn;
@@ -4981,10 +4815,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
             n->type = *fn_type_spec->return_type;
             if (!call->is_stmt && type_kind_eq(n->type, TYPE_UNIT)) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: This call cannot be used as a value as it does not return anything\n",
-                    Pos_Arg(n->token.pos));
+                error_node(ERROR, n, "This call cannot be used as a value as it does not return anything");
                 exit(1);
             }
         }
@@ -4999,12 +4830,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
         index->is_assign = ref == REF_ASSIGN || ref == REF_ASSIGN_MEMBER;
         if (index->is_ranged) {
             if (index->lhs->type.is_meta) {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Cannot take slice into %s\n",
-                    Pos_Arg(index->lhs->token.pos),
-                    type_to_cstr(index->lhs->type));
-
+                error_node(ERROR, index->lhs, "Cannot take slice into %s", type_to_cstr(index->lhs->type));
                 exit(1);
             }
 
@@ -5017,12 +4843,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
                 // The ending CANNOT be inferred
                 if (!index->b) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot infer end of range from %s\n",
-                        Pos_Arg(index->lhs->token.pos),
-                        type_to_cstr(index->lhs->type));
-
+                    error_node(ERROR, n, "Cannot infer end of range from %s", type_to_cstr(index->lhs->type));
                     exit(1);
                 }
 
@@ -5056,7 +4877,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     n->type.kind = TYPE_SLICE;
                 }
             } else {
-                index->overload = get_operator_overload(c, "range", index->lhs, &n->token.pos, index->module);
+                index->overload = get_operator_overload(c, "range", index->lhs, n, index->module);
                 assert(index->overload->node.type.kind == TYPE_FN);
                 const Type_Fn *fn_spec = index->overload->node.type.spec.fn;
 
@@ -5064,15 +4885,12 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     check_expr(c, index->a, REF_NONE);
                     type_assert(c, index->a, fn_spec->args[1].type);
                 } else if (!fn_spec->args[1].has_default_value) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot infer beginning of range from %s\n",
-                        Pos_Arg(index->lhs->token.pos),
-                        type_to_cstr(index->lhs->type));
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: The method 'range' does not have a default value for its beginning argument\n",
-                        Pos_Arg(fn_spec->args[1].pos));
+                    error_node(ERROR, n, "Cannot infer beginning of range from %s", type_to_cstr(index->lhs->type));
+                    error_parts(
+                        ERROR,
+                        fn_spec->args[1].name,
+                        fn_spec->args[1].pos,
+                        "The method 'range' does not have a default value for its beginning argument");
                     exit(1);
                 }
 
@@ -5080,15 +4898,12 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     check_expr(c, index->b, REF_NONE);
                     type_assert(c, index->b, fn_spec->args[2].type);
                 } else if (!fn_spec->args[2].has_default_value) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Cannot infer end of range from %s\n",
-                        Pos_Arg(index->lhs->token.pos),
-                        type_to_cstr(index->lhs->type));
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: The method 'range' does not have a default value for its end argument\n",
-                        Pos_Arg(fn_spec->args[2].pos));
+                    error_node(ERROR, n, "Cannot infer end of range from %s", type_to_cstr(index->lhs->type));
+                    error_parts(
+                        ERROR,
+                        fn_spec->args[2].name,
+                        fn_spec->args[2].pos,
+                        "The method 'range' does not have a default value for its end argument");
                     exit(1);
                 }
 
@@ -5112,27 +4927,18 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                 n->type = (Type) {.kind = TYPE_CHAR};
             } else {
                 if (index->lhs->type.ref) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: Pointers must be converted into slices before they can be indexed\n"
-                                "\n"
-                                "```\n"
-                                "slice := pointer[begin..end];\n"
-                                "slice[index];\n"
-                                "```\n",
-                        Pos_Arg(index->lhs->token.pos));
-
+                    error_node(ERROR, index->lhs, "Pointers must be converted into slices before they can be indexed");
                     if (is_indexable(c, index->lhs->type, index->module)) {
-                        fprintf(
+                        afprintf(
                             stderr,
-                            "\n"
-                            "NOTE: Here the value is a %s. Perhaps it was meant to be dereferenced before indexing?\n",
+                            ANSI_COLOR_YELLOW | ANSI_BOLD,
+                            "    Here the value is %s. Perhaps it was meant to be dereferenced before indexing?\n",
                             type_to_cstr(index->lhs->type));
                     }
                     exit(1);
                 }
 
-                index->overload = get_operator_overload(c, "index", index->lhs, &n->token.pos, index->module);
+                index->overload = get_operator_overload(c, "index", index->lhs, n, index->module);
 
                 assert(index->overload->node.type.kind == TYPE_FN);
                 const Type_Fn *fn_spec = index->overload->node.type.spec.fn;
@@ -5210,14 +5016,14 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
         case REF_ADDR:
         case REF_ADDR_MEMBER:
             if (!n->type.is_meta) {
-                fprintf(stderr, Pos_Fmt "ERROR: Cannot take reference to value not in memory\n", Pos_Arg(n->token.pos));
+                error_node(ERROR, n, "Cannot take reference to value not in memory");
                 exit(1);
             }
             break;
 
         case REF_ASSIGN:
         case REF_ASSIGN_MEMBER:
-            fprintf(stderr, Pos_Fmt "ERROR: Cannot assign to value not in memory\n", Pos_Arg(n->token.pos));
+            error_node(ERROR, n, "Cannot assign to value not in memory");
             exit(1);
             break;
         }
@@ -5420,7 +5226,7 @@ static void check_stmt(Compiler *c, Node *n) {
             const size_t actual_count = is_group ? returnn->value->type.spec.group.count : 1;
 
             if (actual_count != fn_type->returns_count) {
-                error_number_of_return_values_mismatch(n->token.pos, fn_type->returns_count, actual_count);
+                error_number_of_return_values_mismatch(n->token, fn_type->returns_count, actual_count);
             }
 
             assert(actual_count == fn_type->returns_count);
@@ -5434,7 +5240,7 @@ static void check_stmt(Compiler *c, Node *n) {
             returnn->value->type = *fn_type->return_type;
         } else {
             if (fn_type->returns_count) {
-                error_number_of_return_values_mismatch(n->token.pos, fn_type->returns_count, 0);
+                error_number_of_return_values_mismatch(n->token, fn_type->returns_count, 0);
             }
         }
 
@@ -5626,11 +5432,8 @@ void check_nodes(Compiler *c) {
             assert(define->name->kind == NODE_ATOM && define->type); // Guaranteed by the parser
 
             if (!fn->defined_as) {
-                fprintf(stderr, Pos_Fmt "ERROR: Anonymous function cannot be a method\n", Pos_Arg(fn->node.token.pos));
-                fprintf(
-                    stderr,
-                    Pos_Fmt "NOTE: This argument is taken to be the receiver\n",
-                    Pos_Arg(define->name->token.pos));
+                error_node(ERROR, (Node *) fn, "Anonymous function cannot be a method");
+                error_node(NOTE, define->name, "This argument is taken to be the receiver");
                 exit(1);
             }
             const SV name = fn->defined_as->node.token.sv;
@@ -5644,14 +5447,8 @@ void check_nodes(Compiler *c) {
             Method_Spec spec = {0};
             if (get_method_spec(c, receiver_type, name, &spec, fn->module, &is_named)) {
                 if (!is_named) {
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "ERROR: The receiver of a method cannot have an anonymous type\n",
-                        Pos_Arg(fn->defined_as->node.token.pos));
-                    fprintf(
-                        stderr,
-                        Pos_Fmt "NOTE: This argument is taken to be the receiver\n",
-                        Pos_Arg(define->name->token.pos));
+                    error_node(ERROR, define->type, "The receiver of a method cannot have an anonymous type");
+                    error_node(NOTE, define->name, "This argument is taken to be the receiver");
                     exit(1);
                 }
 
@@ -5676,14 +5473,8 @@ void check_nodes(Compiler *c) {
                 }
                 ht_set(&c->methods_table, spec, fn);
             } else {
-                fprintf(
-                    stderr,
-                    Pos_Fmt "ERROR: Can only define methods on types defined in the same module\n",
-                    Pos_Arg(fn->node.token.pos));
-                fprintf(
-                    stderr,
-                    Pos_Fmt "NOTE: This argument is taken to be the receiver\n",
-                    Pos_Arg(define->name->token.pos));
+                error_node(ERROR, define->type, "Can only define methods on types defined in the same module");
+                error_node(NOTE, define->name, "This argument is taken to be the receiver");
                 exit(1);
             }
         }

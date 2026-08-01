@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 87
+STDERR 99
 tests/error_too_few_arguments.glos:3:9: ERROR: Not enough arguments: Expected 1, got 0
+
+    foo()
+
 

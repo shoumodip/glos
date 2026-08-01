@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 108
+STDERR 120
 tests/error_too_few_arguments_c_variadics.glos:3:9: ERROR: Not enough arguments: Expected at least 1, got 0
+
+    foo()
+
 

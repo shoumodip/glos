@@ -1,17 +1,22 @@
 EXIT 1
 STDOUT 0
 
-STDERR 739
-tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos:2:1: ERROR: The method 'compare' implements an operator overload and thus must have a particular signature
+STDERR 866
+tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos:2:1: ERROR: The method 'compare' is special because it implements an operator overload
 
-```
-compare :: (this: T, that: T) -> Ordering | Equivalence
-```
+    compare :: (this: Foo, that: Foo) -> i32 {}
 
-Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.
-Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.
+    It should have this signature:
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+        compare :: (this: T, that: T) -> Ordering | Equivalence
+
+    Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.
+    Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
 tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos:2:38: INFO: Expected to return 'Equivalence' or 'Ordering', got 'i32'
+
+    compare :: (this: Foo, that: Foo) -> i32 {}
+
 

@@ -1,14 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 476
-tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:2:1: ERROR: The method 'index' implements an operator overload and thus must have a particular signature
+STDERR 619
+tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:2:1: ERROR: The method 'index' is special because it implements an operator overload
 
-```
-index :: (this: T, key: K, assign: bool) -> &V
-```
+    index :: (this: Foo, key: i64, assign: bool) -> bool {}
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+    It should have this signature:
+
+        index :: (this: T, key: K, assign: bool) -> &V
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
 tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:2:49: INFO: Expected to return a pointer, got 'bool'
+
+    index :: (this: Foo, key: i64, assign: bool) -> bool {}
+
 

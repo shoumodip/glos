@@ -1,7 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 234
+STDERR 282
 tests/error_wrong_position_of_interpolated_string.glos:2:14: ERROR: Interpolated string is in the wrong position
+
+    wprintln("\{69}")
+
 tests/error_wrong_position_of_interpolated_string.glos:2:5: NOTE: The function being called is '(w: Writer, vs: ...Any)'
+
+    wprintln("\{69}")
+
 

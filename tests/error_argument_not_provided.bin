@@ -1,7 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 179
+STDERR 216
 tests/error_argument_not_provided.glos:4:15: ERROR: Argument 'b' is not provided
-tests/error_argument_not_provided.glos:4:5: NOTE: The function being called is '(a: i64, b: i64)'
+
+    foo(a = 69)
+
+tests/error_argument_not_provided.glos:4:5: ERROR: The function being called is '(a: i64, b: i64)'
+
+    foo(a = 69)
+
 

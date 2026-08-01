@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 146
+STDERR 163
 tests/error_number_of_values_mismatch_in_constant_definition.glos:1:6: ERROR: Unequal number of values. There are 2 definitions, and 1 assignment
+
+    A, B :: 69
+
 

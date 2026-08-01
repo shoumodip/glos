@@ -2,6 +2,7 @@
 #include "basic.h"
 #include "checker.h"
 #include "dwarf.h"
+#include "error.h"
 #include "node.h"
 #include "token.h"
 
@@ -1829,12 +1830,12 @@ static LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
 
             if (!fn_type_spec->returns_count) {
                 compile_defers(c, c->defers_start, true);
-                set_debug_pos(c, block->end);
+                set_debug_pos(c, block->end.pos);
                 LLVMBuildRetVoid(c->llvm_builder);
             } else {
                 // The semantic analyzer has already determined that the function returns in all execution paths.
                 // No need to compile defers here, as this is unreachable.
-                set_debug_pos(c, block->end);
+                set_debug_pos(c, block->end.pos);
                 LLVMBuildUnreachable(c->llvm_builder);
             }
         }
@@ -2688,10 +2689,13 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         case TOKEN_STRING: {
             if (type_eq(n->type, (Type) {.kind = TYPE_CHAR, .ref = 1})) {
                 return compile_const_value_into_memory(
-                    c, LLVMConstStringInContext(c->llvm_context, n->token.sv.data, n->token.sv.count, false));
+                    c,
+                    LLVMConstStringInContext(
+                        c->llvm_context, n->token.as.string.data, n->token.as.string.count, false));
             }
 
-            LLVMValueRef memory = compile_const_value_into_memory(c, compile_string_into_const_value(c, n->token.sv));
+            LLVMValueRef memory =
+                compile_const_value_into_memory(c, compile_string_into_const_value(c, n->token.as.string));
             if (ref) {
                 return memory;
             }
@@ -2700,7 +2704,8 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         }
 
         case TOKEN_ISTRING: {
-            LLVMValueRef memory = compile_const_value_into_memory(c, compile_string_into_const_value(c, n->token.sv));
+            LLVMValueRef memory =
+                compile_const_value_into_memory(c, compile_string_into_const_value(c, n->token.as.string));
             if (ref) {
                 return memory;
             }
@@ -4414,7 +4419,7 @@ static void compile_stmt(Compiler *c, Node *n) {
 
 static void compiler_init_llvm_target_data(Compiler *c) {
     if (LLVMInitializeNativeTarget() != 0) {
-        fprintf(stderr, "ERROR: Failed to initialize native target\n");
+        error_standalone(ERROR, "Failed to initialize native target");
         exit(1);
     }
     LLVMInitializeNativeAsmPrinter();
@@ -4429,7 +4434,7 @@ static void compiler_init_llvm_target_data(Compiler *c) {
 
     LLVMTargetRef target = NULL;
     if (LLVMGetTargetFromTriple(triple, &target, &error)) {
-        fprintf(stderr, "ERROR: %s\n", error);
+        error_standalone(ERROR, "%s", error);
         exit(1);
     }
 
@@ -4528,12 +4533,12 @@ void compiler_build(Compiler *c, const char *output_path) {
 
         char *error = NULL;
         if (LLVMVerifyModule(c->llvm_module, LLVMReturnStatusAction, &error)) {
-            fprintf(stderr, "ERROR: %s\n", error);
+            error_standalone(ERROR, "%s", error);
             exit(1);
         }
 
         if (LLVMTargetMachineEmitToFile(c->llvm_target_machine, c->llvm_module, object_path, LLVMObjectFile, &error)) {
-            fprintf(stderr, "ERROR: %s\n", error);
+            error_standalone(ERROR, "%s", error);
             exit(1);
         }
 
@@ -4567,13 +4572,13 @@ void compiler_build(Compiler *c, const char *output_path) {
         const char *proc_name = c->cmd->data[0];
         Proc        proc = cmd_run_async(c->cmd, (Cmd_Stdio) {0});
         if (proc.id == PROC_INVALID) {
-            fprintf(stderr, "ERROR: Could not execute '%s'. Make sure a C SDK is setup properly\n", proc_name);
+            error_standalone(ERROR, "Could not execute '%s'. Make sure a C SDK is setup properly", proc_name);
             exit(1);
         }
 
         const int proc_code = cmd_wait(proc);
         if (proc_code != 0) {
-            fprintf(stderr, "ERROR: Process '%s' exited abnormally with code %d\n", proc_name, proc_code);
+            error_standalone(ERROR, "Process '%s' exited abnormally with code %d", proc_name, proc_code);
             exit(1);
         }
     }
@@ -4594,4 +4599,4 @@ void compiler_build(Compiler *c, const char *output_path) {
     arena_reset(&temp_arena, checkpoint);
 }
 
-// TODO: For complete switch, emit an unreachable in the fallback case
+// TODO: Runtime error positions might be different now from the compile time ones

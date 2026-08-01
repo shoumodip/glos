@@ -1,7 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 309
+STDERR 375
 tests/error_operator_overloading_range_method_cannot_infer_beginning_of_range.glos:9:5: ERROR: Cannot infer beginning of range from 'Foo'
-tests/error_operator_overloading_range_method_cannot_infer_beginning_of_range.glos:3:22: NOTE: The method 'range' does not have a default value for its beginning argument
+
+    f[..]
+
+tests/error_operator_overloading_range_method_cannot_infer_beginning_of_range.glos:3:22: ERROR: The method 'range' does not have a default value for its beginning argument
+
+    range :: (this: Foo, a: i64, b: i64) -> bool {
+
 

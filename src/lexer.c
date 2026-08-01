@@ -1,8 +1,15 @@
 #include "lexer.h"
 #include "basic.h"
+#include "error.h"
 #include "token.h"
 #include <ctype.h>
 #include <errno.h>
+
+static SV first_line(SV sv) {
+    const char *p = memchr(sv.data, '\n', sv.count);
+    sv.count = p ? (size_t) (p - sv.data) : sv.count;
+    return sv;
+}
 
 bool lexer_open(Lexer *l, const char *path) {
     memset(l, 0, sizeof(*l));
@@ -11,6 +18,7 @@ bool lexer_open(Lexer *l, const char *path) {
     }
 
     l->pos.path = path;
+    l->pos.line = first_line(l->sv);
     return true;
 }
 
@@ -26,6 +34,8 @@ static void next_char(Lexer *l) {
 
             l->sv.data++;
             l->sv.count--;
+
+            l->pos.line = first_line(l->sv);
             return;
         }
     } else {
@@ -100,15 +110,16 @@ static void skip_whitespace(Lexer *l) {
 
 static void error_invalid(Pos pos, SV sv, const char *label) {
     if (isprint(*sv.data)) {
-        fprintf(stderr, Pos_Fmt "ERROR: Invalid %s '%c'\n", Pos_Arg(pos), label, *sv.data);
+        error_parts(ERROR, sv_drop_mut(&sv, 1), pos, "Invalid %s '%c'", label, *sv.data);
     } else {
-        fprintf(stderr, Pos_Fmt "ERROR: Invalid %s (%d)\n", Pos_Arg(pos), label, *sv.data);
+        error_parts(ERROR, sv_drop_mut(&sv, 1), pos, "Invalid %s '%u'", label, (uint8_t) *sv.data);
     }
     exit(1);
 }
 
-static void error_unterminated(Pos pos, const char *label) {
-    fprintf(stderr, Pos_Fmt "ERROR: Unterminated %s\n", Pos_Arg(pos), label);
+// TODO: This is broken
+static void error_unterminated(Lexer *l, Pos begin, const char *label) {
+    error_range(ERROR, begin, l->pos, "Unterminated %s", label);
     exit(1);
 }
 
@@ -153,9 +164,9 @@ static bool escape_char(char *ch) {
     return true;
 }
 
-static char next_char_with_parsed_escape(Lexer *l, const char *label) {
+static char next_char_with_parsed_escape(Lexer *l, Pos pos, const char *label) {
     if (!l->sv.count) {
-        error_unterminated(l->pos, label);
+        error_unterminated(l, pos, label);
     }
 
     char ch = read_char(l);
@@ -164,7 +175,7 @@ static char next_char_with_parsed_escape(Lexer *l, const char *label) {
     }
 
     if (!l->sv.count) {
-        error_unterminated(l->pos, label);
+        error_unterminated(l, pos, label);
     }
 
     ch = *l->sv.data;
@@ -176,10 +187,15 @@ static char next_char_with_parsed_escape(Lexer *l, const char *label) {
     return ch;
 }
 
-Token lexer_get_string(Lexer *l, Pos pos) {
+Token lexer_get_string(Lexer *l, Pos pos, Pos start) {
     const size_t default_sb_count_save = default_sb.count;
 
-    Token token = {.kind = TOKEN_STRING, .pos = pos};
+    Token token = {
+        .kind = TOKEN_STRING,
+        .pos = pos,
+        .sv = l->sv,
+    };
+
     while (l->sv.count) {
         if (*l->sv.data == '"') {
             break;
@@ -190,16 +206,17 @@ Token lexer_get_string(Lexer *l, Pos pos) {
             token.kind = TOKEN_ISTRING;
             break;
         }
-        sb_push(&default_sb, next_char_with_parsed_escape(l, "string"));
+        sb_push(&default_sb, next_char_with_parsed_escape(l, start, "string"));
     }
 
     if (!l->sv.count) {
-        error_unterminated(l->pos, "string");
+        error_unterminated(l, start, "string");
     }
     next_char(l);
+    token.sv.count -= l->sv.count;
 
-    token.sv.count = default_sb.count - default_sb_count_save;
-    token.sv.data = arena_clone(&default_arena, default_sb.data + default_sb_count_save, token.sv.count);
+    token.as.string.count = default_sb.count - default_sb_count_save;
+    token.as.string.data = arena_clone(&default_arena, default_sb.data + default_sb_count_save, token.as.string.count);
     default_sb.count = default_sb_count_save;
     return token;
 }
@@ -240,7 +257,7 @@ Token lexer_iter(Lexer *l) {
             return token;
         }
 
-        fprintf(stderr, Pos_Fmt "ERROR: Number '" SV_Fmt "' is too large\n", Pos_Arg(token.pos), SV_Arg(token.sv));
+        error_parts(ERROR, token.sv, token.pos, "Number '" SV_Fmt "' is too large", SV_Arg(token.sv));
         exit(1);
     }
 
@@ -350,15 +367,17 @@ Token lexer_iter(Lexer *l) {
 
     case '\'':
         token.kind = TOKEN_CHAR;
-        token.as.integer = next_char_with_parsed_escape(l, "character");
+        token.as.integer = next_char_with_parsed_escape(l, token.pos, "character");
         if (!match_char(l, '\'')) {
-            error_unterminated(l->pos, "character");
+            error_unterminated(l, token.pos, "character");
         }
         break;
 
     case '"':
-        token = lexer_get_string(l, token.pos);
+        token = lexer_get_string(l, token.pos, token.pos);
         token.newline = l->newline;
+        token.sv.data--;
+        token.sv.count++;
         return token;
 
     case '+':
@@ -489,14 +508,10 @@ Token lexer_iter(Lexer *l) {
         } else if (sv_match(token.sv, "#caller_location")) {
             token.kind = TOKEN_DIRECTIVE_CALLER_LOCATION;
         } else {
-            fprintf(
-                stderr,
-                Pos_Fmt "ERROR: Invalid compile time directive '" SV_Fmt "'\n",
-                Pos_Arg(token.pos),
-                SV_Arg(token.sv));
+            error_parts(ERROR, token.sv, token.pos, "Invalid compile time directive '" SV_Fmt "'", SV_Arg(token.sv));
             exit(1);
         }
-        break;
+        return token;
 
     default:
         error_invalid(token.pos, token.sv, "character");

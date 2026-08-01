@@ -1,5 +1,6 @@
 #include "src/basic.h"
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -16,6 +17,16 @@
 #endif
 
 #define TESTS_LIST_PATH "tests/tests.conf"
+
+static void error(const char *fmt, ...) {
+    afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
+    fprintf(stderr, " ");
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+}
 
 static void usage(FILE *f, const char *program) {
     fprintf(
@@ -71,10 +82,6 @@ static SV run_cmd_and_read_stdout(Cmd *cmd) {
 
     fclose(out);
     return sv;
-}
-
-static bool is_space(char ch) {
-    return isspace(ch);
 }
 
 #ifdef PLATFORM_X86_64_WINDOWS
@@ -181,6 +188,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         "src/int128.h",
         "src/basic.h",
         "src/token.h",
+        "src/error.h",
         "src/lexer.h",
         "src/node.h",
         "src/parser.h",
@@ -195,6 +203,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         "src/int128.c",
         "src/basic.c",
         "src/token.c",
+        "src/error.c",
         "src/lexer.c",
         "src/node.c",
         "src/parser.c",
@@ -335,6 +344,7 @@ static char single_char_prompt(FILE *in, FILE *out, const char *choices, const c
         fprintf(out, "%c: %s", it, *d);
     }
     fprintf(out, "): ");
+    ansi_reset(out);
 
     char buffer[16];
     if (fgets(buffer, sizeof(buffer), in) == NULL) {
@@ -466,35 +476,44 @@ static bool test_info_diff(Test_Info expected, Test_Info actual, const char *nam
     const bool stderr_mismatch = !sv_eq(expected.err, actual.err);
 
     if (exit_mismatch || stdout_mismatch || stderr_mismatch) {
-        fprintf(stderr, "\nERROR: Test case '%s' FAILED\n", name);
+        fprintf(stderr, "\n");
+        error("Test case '%s' FAILED", name);
 
         if (exit_mismatch) {
             fprintf(stderr, "\n");
-            fprintf(stderr, "Exit Code:\n");
-            fprintf(stderr, "  Expected: %d\n", expected.exit);
-            fprintf(stderr, "  Actual:   %d\n", actual.exit);
+            afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Exit Code:\n");
+            afprintf(stderr, ANSI_COLOR_GREEN, "  Expected: %d\n", expected.exit);
+            afprintf(stderr, ANSI_COLOR_RED, "  Actual:   %d\n", actual.exit);
         }
 
         if (stdout_mismatch) {
             fprintf(stderr, "\n");
-            fprintf(stderr, "Standard Output:\n");
+            afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Standard Output:\n");
+            ansi_set(stderr, ANSI_COLOR_GREEN);
             fprintf(stderr, "  Expected: %zu byte(s)", expected.out.count);
             print_lines_with_indent(stderr, expected.out, "    ");
+            ansi_reset(stderr);
 
             fprintf(stderr, "\n");
+            ansi_set(stderr, ANSI_COLOR_RED);
             fprintf(stderr, "  Actual:   %zu byte(s)", actual.out.count);
             print_lines_with_indent(stderr, actual.out, "    ");
+            ansi_reset(stderr);
         }
 
         if (stderr_mismatch) {
             fprintf(stderr, "\n");
-            fprintf(stderr, "Standard Error:\n");
+            afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Standard Error:\n");
+            ansi_set(stderr, ANSI_COLOR_GREEN);
             fprintf(stderr, "  Expected: %zu byte(s)", expected.err.count);
             print_lines_with_indent(stderr, expected.err, "    ");
+            ansi_reset(stderr);
 
             fprintf(stderr, "\n");
+            ansi_set(stderr, ANSI_COLOR_RED);
             fprintf(stderr, "  Actual:   %zu byte(s)", actual.err.count);
             print_lines_with_indent(stderr, actual.err, "    ");
+            ansi_reset(stderr);
         }
         return false;
     } else {
@@ -564,6 +583,7 @@ static void tests_flush(Tests *tests, Cmd *cmd, bool interactive, Arena *arena, 
                     "Quit",
                 };
 
+                ansi_set(stderr, ANSI_COLOR_CYAN | ANSI_BOLD);
                 fprintf(stderr, "\nWhat to do for test case '%s'", it->name);
                 const char choice = single_char_prompt(stdin, stderr, "ynrq", descriptions);
                 if (choice == 'y') {
@@ -775,7 +795,7 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
 }
 
 int main(int argc, char **argv) {
-    atexit(basic_atexit);
+    basic_init();
     const char *program = shift(&argc, &argv, NULL, NULL);
 
     bool   tests = false;
@@ -831,3 +851,5 @@ int main(int argc, char **argv) {
 }
 
 #include "src/basic.c"
+
+// TODO: Color everything
