@@ -513,7 +513,8 @@ void arena_free(Arena *a) {
 void arena_reset(Arena *a, const void *ptr) {
     assert((const char *) ptr >= a->data && (const char *) ptr <= a->data + a->head);
     a->head = (const char *) ptr - a->data;
-    a->head = (a->head + 7) & -8; // Alignment
+    // Is this causing the problems?
+    // a->head = (a->head + 7) & -8; // Alignment
 }
 
 void arena_reset_noalign(Arena *a, const void *ptr) {
