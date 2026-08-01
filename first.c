@@ -280,7 +280,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         sv = run_cmd_and_read_stdout(cmd);
 
 #ifdef PLATFORM_ARM64_MACOS
-        arena_reset(&default_arena, sv.data + sv.count);
+        arena_reset_noalign(&default_arena, sv.data + sv.count);
         cmd_push(cmd, "pkg-config", "--libs-only-L", "zlib", "libzstd");
         sv.count += run_cmd_and_read_stdout(cmd).count;
 #endif // PLATFORM_ARM64_MACOS
@@ -319,7 +319,6 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
             cmd_push(cmd, arena_sv_to_cstr(&temp_arena, arg));
         }
         arena_reset(&default_arena, sv.data);
-        cmd_show(*cmd, stderr);
 
         const char *name = cmd->data[0];
         if (cmd_run_sync(cmd, (Cmd_Stdio) {0})) {

@@ -516,6 +516,11 @@ void arena_reset(Arena *a, const void *ptr) {
     a->head = (a->head + 7) & -8; // Alignment
 }
 
+void arena_reset_noalign(Arena *a, const void *ptr) {
+    assert((const char *) ptr >= a->data && (const char *) ptr <= a->data + a->head);
+    a->head = (const char *) ptr - a->data;
+}
+
 void *arena_alloc(Arena *a, size_t size) {
     if (!a->data) {
         if (!a->capacity) {
