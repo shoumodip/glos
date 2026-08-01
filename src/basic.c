@@ -513,8 +513,7 @@ void arena_free(Arena *a) {
 void arena_reset(Arena *a, const void *ptr) {
     assert((const char *) ptr >= a->data && (const char *) ptr <= a->data + a->head);
     a->head = (const char *) ptr - a->data;
-    // Is this causing the problems?
-    // a->head = (a->head + 7) & -8; // Alignment
+    a->head = (a->head + 7) & -8; // Alignment
 }
 
 void arena_reset_noalign(Arena *a, const void *ptr) {
@@ -601,10 +600,10 @@ bool read_fp(FILE *f, SV *out, Arena *a) {
     while (true) {
 #define CHUNK_SIZE 4096
         arena_alloc(a, CHUNK_SIZE);
-        const size_t n = fread(start + count, sizeof(*start), CHUNK_SIZE - 1, f);
+        const size_t n = fread(start + count, sizeof(*start), CHUNK_SIZE, f);
         count += n;
 
-        if (n < CHUNK_SIZE - 1) {
+        if (n < CHUNK_SIZE) {
             if (feof(f)) {
                 break;
             }
@@ -624,13 +623,18 @@ bool read_fp(FILE *f, SV *out, Arena *a) {
         }
         start[j++] = it;
     }
-    start[j++] = '\0';
 
     count = j;
     arena_reset(a, start + count);
 
+    if (count % 8 == 0) {
+        // If it matches the alignment, then a further NULL byte is needed. Otherwise the alignment provides the NULL
+        // terminator already.
+        arena_alloc(a, 1);
+    }
+
     out->data = start;
-    out->count = count - 1;
+    out->count = count;
 
 defer:
     if (!result) {
