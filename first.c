@@ -319,6 +319,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
             cmd_push(cmd, arena_sv_to_cstr(&temp_arena, arg));
         }
         arena_reset(&default_arena, sv.data);
+        cmd_show(*cmd, stderr);
 
         const char *name = cmd->data[0];
         if (cmd_run_sync(cmd, (Cmd_Stdio) {0})) {
