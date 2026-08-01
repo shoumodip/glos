@@ -36,7 +36,7 @@ static void usage(FILE *f, const char *program) {
 
 static const char *shift(int *argc, char ***argv, const char *program, const char *expected) {
     if (*argc <= 0) {
-        error_standalone(ERROR, "%s not provided\n", expected);
+        error_standalone(EK_ERROR, "%s not provided\n", expected);
         usage(stderr, program);
         exit(1);
     }
@@ -219,15 +219,15 @@ int main(int argc, char **argv) {
 
                 link_flags_add_libname(&link_flags, sv_from_cstr(libname));
             } else {
-                error_standalone(ERROR, "Invalid flag '%s'\n", arg);
+                error_standalone(EK_ERROR, "Invalid flag '%s'\n", arg);
                 usage(stderr, program);
                 exit(1);
             }
         } else {
             if (input_path) {
-                error_standalone(ERROR, "Multiple input paths provided");
+                error_standalone(EK_ERROR, "Multiple input paths provided");
                 if (run) {
-                    error_standalone(INFO, "When using '-r', pass program arguments after '--'");
+                    error_standalone(EK_INFO, "When using '-r', pass program arguments after '--'");
                 }
                 exit(1);
             }
@@ -245,7 +245,7 @@ int main(int argc, char **argv) {
         if (directory_exists(input_path)) {
             output_path = get_path_last(input_path);
             if (!output_path) {
-                error_standalone(ERROR, "ERROR: Could not infer output path. Provide it manually via '-o'");
+                error_standalone(EK_ERROR, "ERROR: Could not infer output path. Provide it manually via '-o'");
                 exit(1);
             }
         } else {
@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
     }
 
     if (directory_exists(output_path)) {
-        error_standalone(ERROR, "The output path '%s' exists and is a directory", output_path);
+        error_standalone(EK_ERROR, "The output path '%s' exists and is a directory", output_path);
         exit(1);
     }
 
@@ -315,13 +315,13 @@ int main(int argc, char **argv) {
             break;
 
         case PARSE_FAILURE:
-            error_standalone(ERROR, "Could not read directory '%s'", compiler.builtin_module->relative_path);
+            error_standalone(EK_ERROR, "Could not read directory '%s'", compiler.builtin_module->relative_path);
             exit(1);
             break;
 
         case PARSE_EMPTY_DIRECTORY:
             error_standalone(
-                ERROR, "Directory '%s' does not contain any glos files", compiler.builtin_module->relative_path);
+                EK_ERROR, "Directory '%s' does not contain any glos files", compiler.builtin_module->relative_path);
             exit(1);
             break;
 
@@ -344,12 +344,12 @@ int main(int argc, char **argv) {
             break;
 
         case PARSE_FAILURE:
-            error_standalone(ERROR, "Could not read directory '%s'", input_path);
+            error_standalone(EK_ERROR, "Could not read directory '%s'", input_path);
             exit(1);
             break;
 
         case PARSE_EMPTY_DIRECTORY:
-            error_standalone(ERROR, "Directory '%s' does not contain any glos files", input_path);
+            error_standalone(EK_ERROR, "Directory '%s' does not contain any glos files", input_path);
             exit(1);
             break;
 
@@ -358,7 +358,7 @@ int main(int argc, char **argv) {
         }
     } else {
         if (parse_file(&parser, input_path) != PARSE_OK) {
-            error_standalone(ERROR, "Could not read file '%s'", input_path);
+            error_standalone(EK_ERROR, "Could not read file '%s'", input_path);
             exit(1);
         }
     }
@@ -408,7 +408,7 @@ int main(int argc, char **argv) {
 
         const Proc child_proc = cmd_run_async(&cmd, (Cmd_Stdio) {0});
         if (child_proc.id == PROC_INVALID) {
-            error_standalone(ERROR, "Could not start process '%s'", child_name);
+            error_standalone(EK_ERROR, "Could not start process '%s'", child_name);
             exit(1);
         }
 

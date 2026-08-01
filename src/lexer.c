@@ -110,16 +110,16 @@ static void skip_whitespace(Lexer *l) {
 
 static void error_invalid(Pos pos, SV sv, const char *label) {
     if (isprint(*sv.data)) {
-        error_parts(ERROR, sv_drop_mut(&sv, 1), pos, "Invalid %s '%c'", label, *sv.data);
+        error_parts(EK_ERROR, sv_drop_mut(&sv, 1), pos, "Invalid %s '%c'", label, *sv.data);
     } else {
-        error_parts(ERROR, sv_drop_mut(&sv, 1), pos, "Invalid %s '%u'", label, (uint8_t) *sv.data);
+        error_parts(EK_ERROR, sv_drop_mut(&sv, 1), pos, "Invalid %s '%u'", label, (uint8_t) *sv.data);
     }
     exit(1);
 }
 
 // TODO: This is broken
 static void error_unterminated(Lexer *l, Pos begin, const char *label) {
-    error_range(ERROR, begin, l->pos, "Unterminated %s", label);
+    error_range(EK_ERROR, begin, l->pos, "Unterminated %s", label);
     exit(1);
 }
 
@@ -257,7 +257,7 @@ Token lexer_iter(Lexer *l) {
             return token;
         }
 
-        error_parts(ERROR, token.sv, token.pos, "Number '" SV_Fmt "' is too large", SV_Arg(token.sv));
+        error_parts(EK_ERROR, token.sv, token.pos, "Number '" SV_Fmt "' is too large", SV_Arg(token.sv));
         exit(1);
     }
 
@@ -508,7 +508,7 @@ Token lexer_iter(Lexer *l) {
         } else if (sv_match(token.sv, "#caller_location")) {
             token.kind = TOKEN_DIRECTIVE_CALLER_LOCATION;
         } else {
-            error_parts(ERROR, token.sv, token.pos, "Invalid compile time directive '" SV_Fmt "'", SV_Arg(token.sv));
+            error_parts(EK_ERROR, token.sv, token.pos, "Invalid compile time directive '" SV_Fmt "'", SV_Arg(token.sv));
             exit(1);
         }
         return token;

@@ -23,15 +23,15 @@ static void error_begin(Error_Kind kind) {
     }
 
     switch (kind) {
-    case ERROR:
+    case EK_ERROR:
         afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
         break;
 
-    case NOTE:
+    case EK_NOTE:
         afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "NOTE:");
         break;
 
-    case INFO:
+    case EK_INFO:
         afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "INFO:");
         break;
     }

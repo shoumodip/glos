@@ -1,9 +1,9 @@
 /glos
-/glos.exe
 /first
-/first.exe
 /llvm
 *.o
 *.a
 *.obj
 *.lib
+*.pdb
+*.exe

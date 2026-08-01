@@ -4419,7 +4419,7 @@ static void compile_stmt(Compiler *c, Node *n) {
 
 static void compiler_init_llvm_target_data(Compiler *c) {
     if (LLVMInitializeNativeTarget() != 0) {
-        error_standalone(ERROR, "Failed to initialize native target");
+        error_standalone(EK_ERROR, "Failed to initialize native target");
         exit(1);
     }
     LLVMInitializeNativeAsmPrinter();
@@ -4434,7 +4434,7 @@ static void compiler_init_llvm_target_data(Compiler *c) {
 
     LLVMTargetRef target = NULL;
     if (LLVMGetTargetFromTriple(triple, &target, &error)) {
-        error_standalone(ERROR, "%s", error);
+        error_standalone(EK_ERROR, "%s", error);
         exit(1);
     }
 
@@ -4533,12 +4533,12 @@ void compiler_build(Compiler *c, const char *output_path) {
 
         char *error = NULL;
         if (LLVMVerifyModule(c->llvm_module, LLVMReturnStatusAction, &error)) {
-            error_standalone(ERROR, "%s", error);
+            error_standalone(EK_ERROR, "%s", error);
             exit(1);
         }
 
         if (LLVMTargetMachineEmitToFile(c->llvm_target_machine, c->llvm_module, object_path, LLVMObjectFile, &error)) {
-            error_standalone(ERROR, "%s", error);
+            error_standalone(EK_ERROR, "%s", error);
             exit(1);
         }
 
@@ -4572,13 +4572,13 @@ void compiler_build(Compiler *c, const char *output_path) {
         const char *proc_name = c->cmd->data[0];
         Proc        proc = cmd_run_async(c->cmd, (Cmd_Stdio) {0});
         if (proc.id == PROC_INVALID) {
-            error_standalone(ERROR, "Could not execute '%s'. Make sure a C SDK is setup properly", proc_name);
+            error_standalone(EK_ERROR, "Could not execute '%s'. Make sure a C SDK is setup properly", proc_name);
             exit(1);
         }
 
         const int proc_code = cmd_wait(proc);
         if (proc_code != 0) {
-            error_standalone(ERROR, "Process '%s' exited abnormally with code %d", proc_name, proc_code);
+            error_standalone(EK_ERROR, "Process '%s' exited abnormally with code %d", proc_name, proc_code);
             exit(1);
         }
     }

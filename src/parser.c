@@ -24,7 +24,7 @@ void error_number_of_values_mismatch(
         rhs_label = "on the right hand side";
     }
     error_token(
-        ERROR,
+        EK_ERROR,
         token,
         "Unequal number of values. There %s %zu %s, and %zu %s",
         lhs_count == 1 ? "is" : "are",
@@ -141,7 +141,7 @@ Module *module_get(Parser *p, const char *path) {
 }
 
 static void error_unexpected(Token token) {
-    error_token(ERROR, token, "Unexpected %s", token_kind_to_cstr(token.kind));
+    error_token(EK_ERROR, token, "Unexpected %s", token_kind_to_cstr(token.kind));
     exit(1);
 }
 
@@ -194,7 +194,7 @@ static Token expect_token(Parser *p, const Token_Kind *kinds) {
         }
     }
 
-    error_token_begin(ERROR, token);
+    error_token_begin(EK_ERROR, token);
     fprintf(stderr, "Expected ");
     for (const Token_Kind *it = kinds; *it != TOKEN_EOF; it++) {
         if (it != kinds) {
@@ -229,7 +229,7 @@ static void expect_stmt_terminator(Parser *p) {
     }
 
     const Token ahead = peek_token(p);
-    error_token(ERROR, ahead, "Expected newline or ';', got %s", token_kind_to_cstr(ahead.kind));
+    error_token(EK_ERROR, ahead, "Expected newline or ';', got %s", token_kind_to_cstr(ahead.kind));
     exit(1);
 }
 
@@ -271,8 +271,8 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
             Token ahead = peek_token(p);
             if (ahead.kind == TOKEN_EOL || ahead.kind == TOKEN_RBRACE || ahead.newline) {
                 if (sw->fallback) {
-                    error_token(ERROR, token, "Multiple fallback cases is not allowed");
-                    error_token(NOTE, sw->fallback->token, "Already here");
+                    error_token(EK_ERROR, token, "Multiple fallback cases is not allowed");
+                    error_token(EK_NOTE, sw->fallback->token, "Already here");
                     exit(1);
                 }
 
@@ -372,7 +372,7 @@ static Node *parse_for(Parser *p, Token token) {
 
 static void not_in_extern_assert(Parser *p, Token token) {
     if (p->state.in_extern) {
-        error_token(ERROR, token, "Extern blocks can only have variable and function definitions");
+        error_token(EK_ERROR, token, "Extern blocks can only have variable and function definitions");
         exit(1);
     }
 }
@@ -523,7 +523,7 @@ bool parser_import(Parser *p, Node_Import *import) {
     }
 
     if (!absolute_path) {
-        error_node(ERROR, (Node *) import, "Could not find module '" SV_Fmt "'", SV_Arg(import->path.as.string));
+        error_node(EK_ERROR, (Node *) import, "Could not find module '" SV_Fmt "'", SV_Arg(import->path.as.string));
         exit(1);
     }
 
@@ -537,7 +537,7 @@ bool parser_import(Parser *p, Node_Import *import) {
         } else {
             module->name = sv_from_cstr(get_relative_path(root, sv_from_cstr(module->absolute_path), &default_arena));
             if (sv_match(module->name, "main") || sv_match(module->name, "builtin")) {
-                error_node(ERROR, (Node *) import, "The module path '" SV_Fmt "' is reserved", SV_Arg(module->name));
+                error_node(EK_ERROR, (Node *) import, "The module path '" SV_Fmt "' is reserved", SV_Arg(module->name));
                 exit(1);
             }
 
@@ -549,13 +549,13 @@ bool parser_import(Parser *p, Node_Import *import) {
                 break;
 
             case PARSE_FAILURE:
-                error_node(ERROR, (Node *) import, "Could not read directory '%s'", module->relative_path);
+                error_node(EK_ERROR, (Node *) import, "Could not read directory '%s'", module->relative_path);
                 exit(1);
                 break;
 
             case PARSE_EMPTY_DIRECTORY:
                 error_node(
-                    ERROR, (Node *) import, "Directory '%s' does not contain any glos files", module->relative_path);
+                    EK_ERROR, (Node *) import, "Directory '%s' does not contain any glos files", module->relative_path);
                 exit(1);
                 break;
 
@@ -596,7 +596,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
         }
 
         if (illegal) {
-            error_node(ERROR, illegal, "Expected definition name to be an identifier, got expression");
+            error_node(EK_ERROR, illegal, "Expected definition name to be an identifier, got expression");
             exit(1);
         }
     }
@@ -610,7 +610,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
     token = peek_token(p);
     if (token.kind == TOKEN_SET) {
         if (define->has_spread) {
-            error_token(ERROR, token, "Cannot have default value here");
+            error_token(EK_ERROR, token, "Cannot have default value here");
             exit(1);
         }
 
@@ -618,7 +618,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
         if (p->state.in_extern) {
             assert(p->state.ahead.kind == TOKEN_SET);
             error_node(
-                ERROR,
+                EK_ERROR,
                 define->name,
                 "External %s cannot have assignment",
                 define->count == 1 ? "variable" : "variables");
@@ -628,7 +628,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
     } else if (token.kind == TOKEN_COLON) {
         if (define->has_spread) {
-            error_token(ERROR, token, "Cannot have default value here");
+            error_token(EK_ERROR, token, "Cannot have default value here");
             exit(1);
         }
 
@@ -643,7 +643,7 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
 
             Node_Fn *fn = (Node_Fn *) define->expr;
             if (fn->body) {
-                error_node(ERROR, fn->body, "External function cannot have body");
+                error_node(EK_ERROR, fn->body, "External function cannot have body");
                 exit(1);
             }
 
@@ -676,7 +676,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
 
         if (compound->children.head) {
             if (compound->is_designated != child_is_designated) {
-                error_node(ERROR, child, "Cannot mix ordered and designated initializers");
+                error_node(EK_ERROR, child, "Cannot mix ordered and designated initializers");
                 exit(1);
             }
         } else {
@@ -771,7 +771,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         case NODE_UNION:
         case NODE_STRUCT:
             error_token(
-                ERROR,
+                EK_ERROR,
                 token,
                 "Redundant application of %s to %s",
                 token_kind_to_cstr(token.kind),
@@ -819,12 +819,12 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 if (sv_match(define->name->token.sv, "this")) {
                     if (define->has_spread) {
-                        error_token(ERROR, define->spread_token, "The receiver of a method cannot be variadic");
+                        error_token(EK_ERROR, define->spread_token, "The receiver of a method cannot be variadic");
                         exit(1);
                     }
 
                     if (define->expr) {
-                        error_node(ERROR, define->expr, "The receiver of a method cannot have a default value");
+                        error_node(EK_ERROR, define->expr, "The receiver of a method cannot have a default value");
                         exit(1);
                     }
 
@@ -838,21 +838,22 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             while (arg) {
                 Node_Define *define = (Node_Define *) arg;
                 if (define->is_const) {
-                    error_node(ERROR, arg, "Expected argument definition, got constant");
+                    error_node(EK_ERROR, arg, "Expected argument definition, got constant");
                     exit(1);
                 }
 
                 if (define->has_spread) {
                     if (fn->variadics_kind == VARIADICS_TYPED) {
-                        error_node(ERROR, define->name, "Cannot have multiple variadic arguments");
-                        error_node(NOTE, ((Node_Define *) typed_variadics)->name, "Previously here");
+                        error_node(EK_ERROR, define->name, "Cannot have multiple variadic arguments");
+                        error_node(EK_NOTE, ((Node_Define *) typed_variadics)->name, "Previously here");
                         exit(1);
                     }
 
                     fn->variadics_kind = VARIADICS_TYPED;
                     typed_variadics = arg;
                 } else if (!define->expr && fn->variadics_kind == VARIADICS_TYPED) {
-                    error_node(ERROR, define->name, "Cannot have argument without default value after typed variadics");
+                    error_node(
+                        EK_ERROR, define->name, "Cannot have argument without default value after typed variadics");
                     exit(1);
                 }
 
@@ -878,7 +879,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 if (read_token(p, TOKEN_SPREAD)) {
                     if (fn->is_method) {
                         assert(p->state.ahead.kind == TOKEN_SPREAD);
-                        error_token(ERROR, p->state.ahead, "Methods cannot have untyped variadics");
+                        error_token(EK_ERROR, p->state.ahead, "Methods cannot have untyped variadics");
                         // TODO: This should only apply to traits, not all methods
                         exit(1);
                     }
@@ -891,7 +892,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
                 if (sv_match(name->token.sv, "this")) {
                     error_node(
-                        ERROR,
+                        EK_ERROR,
                         name,
                         "The argument 'this' is used to describe the receiver of a method, and therefore must be the first argument");
                     exit(1);
@@ -920,8 +921,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 if (fn->is_method && !p->state.in_extern) {
                     Node_Define *define = (Node_Define *) fn->args.head;
                     assert(define && define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
-                    error_node(ERROR, (Node *) fn, "Function type cannot be a method");
-                    error_node(NOTE, define->name, "This argument is taken to be the receiver");
+                    error_node(EK_ERROR, (Node *) fn, "Function type cannot be a method");
+                    error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
                     exit(1);
                 }
 
@@ -931,8 +932,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             if (fn->is_method && fn->outer_fn) {
                 assert(fn->args.head);
                 Node_Define *define = (Node_Define *) fn->args.head;
-                error_node(ERROR, (Node *) fn, "Local function cannot be a method");
-                error_node(NOTE, define->name, "This argument is taken to be the receiver");
+                error_node(EK_ERROR, (Node *) fn, "Local function cannot be a method");
+                error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
                 exit(1);
             }
 
@@ -1002,17 +1003,17 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
             Node_Define *define = (Node_Define *) method;
             if (define->is_const) {
-                error_node(ERROR, method, "Expected trait method, got constant definition");
+                error_node(EK_ERROR, method, "Expected trait method, got constant definition");
                 exit(1);
             }
 
             if (define->expr) {
-                error_node(ERROR, define->expr, "Trait method definition cannot have assignment");
+                error_node(EK_ERROR, define->expr, "Trait method definition cannot have assignment");
                 exit(1);
             }
 
             if (define->type->kind != NODE_FN) {
-                error_node(ERROR, define->type, "Trait method must be a literal function type");
+                error_node(EK_ERROR, define->type, "Trait method must be a literal function type");
                 exit(1);
             }
 
@@ -1062,19 +1063,19 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             } else {
                 Node *field = parse_expr(p, POWER_NIL, true, true, NULL);
                 if (field->kind != NODE_DEFINE) {
-                    error_node(ERROR, field, "Expected field, got expression");
+                    error_node(EK_ERROR, field, "Expected field, got expression");
                     exit(1);
                 }
 
                 Node_Define *define = (Node_Define *) field;
                 if (define->is_const) {
-                    error_node(ERROR, field, "Expected field, got constant definition");
+                    error_node(EK_ERROR, field, "Expected field, got constant definition");
                     exit(1);
                 }
 
                 if (define->expr) {
                     // TODO: Default struct values
-                    error_node(ERROR, define->expr, "Field definition cannot have assignment");
+                    error_node(EK_ERROR, define->expr, "Field definition cannot have assignment");
                     exit(1);
                 }
                 nodes_push(&structt->fields, field);
@@ -1110,18 +1111,18 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_INLINE: {
         node = parse_expr(p, POWER_DOT, false, false, NULL);
         if (node->kind != NODE_FN) {
-            error_node(ERROR, node, "Expected function literal after %s", token_kind_to_cstr(token.kind));
+            error_node(EK_ERROR, node, "Expected function literal after %s", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         Node_Fn *fn = (Node_Fn *) node;
         if (p->state.in_extern) {
-            error_node(ERROR, node, "External function cannot be inlined");
+            error_node(EK_ERROR, node, "External function cannot be inlined");
             exit(1);
         }
 
         if (fn->is_type) {
-            error_node(ERROR, node, "Function type cannot be inlined");
+            error_node(EK_ERROR, node, "Function type cannot be inlined");
             exit(1);
         }
 
@@ -1198,7 +1199,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 if (arg->kind == NODE_INTERPOLATION) {
                     if (need_to_spread) {
                         error_token(
-                            ERROR, token, "Redundant %s before interpolated string", token_kind_to_cstr(token.kind));
+                            EK_ERROR, token, "Redundant %s before interpolated string", token_kind_to_cstr(token.kind));
                         exit(1);
                     }
 
@@ -1207,17 +1208,17 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 if (need_to_spread) {
                     if (call->spread) {
-                        error_node(ERROR, (Node *) call, "Multiple typed variadic sources found");
+                        error_node(EK_ERROR, (Node *) call, "Multiple typed variadic sources found");
                         if (call->spread->kind == NODE_INTERPOLATION) {
-                            error_node(INFO, call->spread, "This provides one source");
+                            error_node(EK_INFO, call->spread, "This provides one source");
                         } else {
-                            error_token(INFO, call->spread_token, "This provides one source");
+                            error_token(EK_INFO, call->spread_token, "This provides one source");
                         }
 
                         if (arg->kind == NODE_INTERPOLATION) {
-                            error_node(INFO, arg, "This provides another");
+                            error_node(EK_INFO, arg, "This provides another");
                         } else {
-                            error_token(INFO, token, "This provides another");
+                            error_token(EK_INFO, token, "This provides another");
                         }
                         exit(1);
                     }
@@ -1239,12 +1240,12 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     has_named_args = true;
 
                     if (need_to_spread) {
-                        error_node(ERROR, arg, "Cannot spread a named argument");
+                        error_node(EK_ERROR, arg, "Cannot spread a named argument");
                         exit(1);
                     }
 
                     if (sv_match(binary->lhs->token.sv, "_")) {
-                        error_node(ERROR, binary->lhs, "Cannot use '_' as a named argument");
+                        error_node(EK_ERROR, binary->lhs, "Cannot use '_' as a named argument");
                         exit(1);
                     }
                 } else {
@@ -1254,12 +1255,12 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                             label = "interpolated string";
                         }
 
-                        error_node(ERROR, arg, "Cannot have positional arguments after %s", label);
+                        error_node(EK_ERROR, arg, "Cannot have positional arguments after %s", label);
                         exit(1);
                     }
 
                     if (has_named_args) {
-                        error_node(ERROR, arg, "Cannot have positional arguments after named arguments");
+                        error_node(EK_ERROR, arg, "Cannot have positional arguments after named arguments");
                         exit(1);
                     }
                 }
@@ -1337,7 +1338,7 @@ static void local_assert(Parser *p, bool expected_is_local, Token token, const c
             label = token_kind_to_cstr(token.kind);
         }
 
-        error_token(ERROR, token, "Unexpected %s in %s scope", label, p->state.fn_current ? "local" : "global");
+        error_token(EK_ERROR, token, "Unexpected %s in %s scope", label, p->state.fn_current ? "local" : "global");
         exit(1);
     }
 }
@@ -1369,19 +1370,19 @@ static Node *parse_stmt(Parser *p) {
 
         const Token name = expect_token(p, TOKEN_STRING);
         if (!name.as.string.count) {
-            error_token(ERROR, name, "Link name cannot be empty");
+            error_token(EK_ERROR, name, "Link name cannot be empty");
             exit(1);
         }
 
         node = parse_stmt(p);
         if (node->kind != NODE_DEFINE) {
-            error_node(ERROR, node, "Expected definition after %s", token_kind_to_cstr(token.kind));
+            error_node(EK_ERROR, node, "Expected definition after %s", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         Node_Define *define = (Node_Define *) node;
         if (define->count != 1) {
-            error_node(ERROR, node, "Cannot apply %s to multiple definitions", token_kind_to_cstr(token.kind));
+            error_node(EK_ERROR, node, "Cannot apply %s to multiple definitions", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1395,7 +1396,7 @@ static Node *parse_stmt(Parser *p) {
             }
 
             if (!ok) {
-                error_node(ERROR, node, "Cannot apply %s to constant definitions", token_kind_to_cstr(token.kind));
+                error_node(EK_ERROR, node, "Cannot apply %s to constant definitions", token_kind_to_cstr(token.kind));
                 exit(1);
             }
         }
@@ -1409,26 +1410,26 @@ static Node *parse_stmt(Parser *p) {
 
     case TOKEN_DIRECTIVE_STATIC: {
         if (p->state.in_extern) {
-            error_token(ERROR, token, "Variables defined inside extern block cannot have static storage");
+            error_token(EK_ERROR, token, "Variables defined inside extern block cannot have static storage");
             exit(1);
         }
 
         if (!p->state.fn_current) {
             // TODO: Perhaps this should just be warning for reduced friction while prototyping
-            error_token(ERROR, token, "Variables defined in global scope already have static storage");
+            error_token(EK_ERROR, token, "Variables defined in global scope already have static storage");
             exit(1);
         }
 
         node = parse_expr(p, POWER_NIL, true, true, NULL);
         if (node->kind != NODE_DEFINE) {
-            error_node(ERROR, node, "Expected variable definition after %s", token_kind_to_cstr(token.kind));
+            error_node(EK_ERROR, node, "Expected variable definition after %s", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         Node_Define *define = (Node_Define *) node;
         if (define->is_const) {
             error_node(
-                ERROR, node, "Expected variable definition after %s, got constant", token_kind_to_cstr(token.kind));
+                EK_ERROR, node, "Expected variable definition after %s, got constant", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1444,7 +1445,8 @@ static Node *parse_stmt(Parser *p) {
         if (!read_token(p, TOKEN_SPREAD)) {
             node = parse_stmt(p);
             if (node->kind != NODE_DEFINE && node->kind != NODE_EXTERN) {
-                error_node(ERROR, node, "Expected definition or extern block after %s", token_kind_to_cstr(token.kind));
+                error_node(
+                    EK_ERROR, node, "Expected definition or extern block after %s", token_kind_to_cstr(token.kind));
                 exit(1);
             }
 
@@ -1495,7 +1497,7 @@ static Node *parse_stmt(Parser *p) {
         not_in_extern_assert(p, token);
         local_assert(p, true, token, NULL);
         if (p->state.in_defer) {
-            error_token(ERROR, token, "Nested 'defer' is not allowed");
+            error_token(EK_ERROR, token, "Nested 'defer' is not allowed");
             exit(1);
         }
 
@@ -1511,12 +1513,12 @@ static Node *parse_stmt(Parser *p) {
     case TOKEN_CONTINUE:
         not_in_extern_assert(p, token);
         if (!p->state.in_loop) {
-            error_token(ERROR, token, "Cannot use %s outside of a loop", token_kind_to_cstr(token.kind));
+            error_token(EK_ERROR, token, "Cannot use %s outside of a loop", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
         if (p->state.in_defer) {
-            error_token(ERROR, token, "Cannot use %s inside 'defer' statement", token_kind_to_cstr(token.kind));
+            error_token(EK_ERROR, token, "Cannot use %s inside 'defer' statement", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1527,7 +1529,7 @@ static Node *parse_stmt(Parser *p) {
         not_in_extern_assert(p, token);
         local_assert(p, true, token, NULL);
         if (p->state.in_defer) {
-            error_token(ERROR, token, "Cannot use %s inside 'defer' statement", token_kind_to_cstr(token.kind));
+            error_token(EK_ERROR, token, "Cannot use %s inside 'defer' statement", token_kind_to_cstr(token.kind));
             exit(1);
         }
 
@@ -1541,7 +1543,7 @@ static Node *parse_stmt(Parser *p) {
 
     case TOKEN_EXTERN: {
         if (p->state.in_extern) {
-            error_token(ERROR, token, "Cannot have nested externs");
+            error_token(EK_ERROR, token, "Cannot have nested externs");
             exit(1);
         }
 
@@ -1749,7 +1751,7 @@ Parse_Result parse_directory(Parser *p, const char *path) {
 
         empty = false;
         if (parse_file(p, it) != PARSE_OK) {
-            error_standalone(ERROR, "Could not read file '%s'", it);
+            error_standalone(EK_ERROR, "Could not read file '%s'", it);
             exit(1);
         }
     }

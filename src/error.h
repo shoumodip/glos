@@ -4,9 +4,9 @@
 #include "node.h"
 
 typedef enum {
-    ERROR,
-    NOTE, // TODO: Merge NOTE and INFO
-    INFO,
+    EK_ERROR,
+    EK_NOTE, // TODO: Merge NOTE and INFO
+    EK_INFO,
 } Error_Kind;
 
 void error_node_begin(Error_Kind kind, const Node *n);
