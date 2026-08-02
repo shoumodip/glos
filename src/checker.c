@@ -2972,6 +2972,56 @@ fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn_spec_raw, b
     return type_to_cstr((Type) {.kind = TYPE_FN, .spec.fn = &spec});
 }
 
+static Node_Fn *get_function_literal(Node *fn) {
+    if (fn->kind == NODE_ATOM && fn->token.kind == TOKEN_IDENT) {
+        Node_Atom *atom = (Node_Atom *) fn;
+        if (atom->definition->definition_spec->is_const_value_evaluated) {
+            const Const_Value value = atom->definition->definition_spec->const_value;
+            if (value.kind == CONST_VALUE_FN) {
+                return value.as.fn;
+            }
+        }
+    }
+
+    if (fn->kind == NODE_MEMBER) {
+        Node_Member *member = (Node_Member *) fn;
+        if (member->module_access_definition) {
+            Node_Atom        *atom = member->module_access_definition;
+            const Const_Value value = atom->definition_spec->const_value;
+            if (value.kind == CONST_VALUE_FN) {
+                return value.as.fn;
+            }
+        }
+
+        if (member->method) {
+            return member->method;
+        }
+    }
+    return NULL;
+}
+
+static void show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec) {
+    const char *label = is_method ? "method" : "function";
+
+    Node_Fn *literal = get_function_literal(fn);
+    Node    *literal_body = NULL;
+    if (literal) {
+        literal_body = literal->body;
+        literal->body = NULL;
+    }
+
+    error_node(
+        EK_NOTE,
+        literal ? (Node *) literal : fn,
+        "The %s being called has signature %s",
+        label,
+        fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
+
+    if (literal) {
+        literal->body = literal_body;
+    }
+}
+
 // If this is a cast, then do not pass 'fn_type_spec'
 static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn_spec) {
     typedef struct {
@@ -3052,12 +3102,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
 
             if (!expected) {
                 error_undefined(&it_name->token, "argument", true);
-                error_node(
-                    EK_NOTE,
-                    call->fn,
-                    "The %s being called is %s",
-                    is_method ? "method" : "function",
-                    fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
+                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                 exit(1);
             }
 
@@ -3095,12 +3140,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
 
             if (!ok) {
                 error_node(EK_ERROR, it, "Interpolated string is in the wrong position");
-                error_node(
-                    EK_NOTE,
-                    call->fn,
-                    "The %s being called is %s",
-                    is_method ? "method" : "function",
-                    fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
+                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                 exit(1);
             }
         }
@@ -3122,12 +3162,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                 assert(fn_spec->variadics_kind == VARIADICS_TYPED);
                 if (it_index != fn_spec->variadics_index) {
                     error_token(EK_ERROR, call->spread_token, "Spread is in the wrong position");
-                    error_node(
-                        EK_NOTE,
-                        call->fn,
-                        "The %s being called is %s",
-                        is_method ? "method" : "function",
-                        fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
+                    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                     exit(1);
                 }
 
@@ -3295,12 +3330,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                     error_finalize();
                 }
 
-                error_node(
-                    EK_ERROR,
-                    call->fn,
-                    "The %s being called is %s",
-                    is_method ? "method" : "function",
-                    fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
+                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                 exit(1);
             }
 
@@ -3314,26 +3344,43 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
         extra = "";
     }
 
+    Node *node = NULL;
     Token token = call->end;
     if (!has_maximum) {
         size_t iota = 0;
         ll_foreach(it, &call->args) {
             iota += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
             if (iota > args_count_max) {
+                node = it;
                 token = it->token;
                 break;
             }
         }
     }
 
-    error_token(
-        EK_ERROR,
-        token,
-        "%s arguments: Expected%s %zu, got %zu",
-        situation,
-        extra,
-        expected - is_method,
-        call->args_count - is_method);
+    const size_t expected_correct = expected - is_method;
+    const size_t actual_correct = call->args_count - is_method;
+    if (node) {
+        error_node(
+            EK_ERROR,
+            node,
+            "%s arguments: Expected%s %zu, got %zu",
+            situation,
+            extra,
+            expected_correct,
+            actual_correct);
+    } else {
+        error_token(
+            EK_ERROR,
+            token,
+            "%s arguments: Expected%s %zu, got %zu",
+            situation,
+            extra,
+            expected_correct,
+            actual_correct);
+    }
+
+    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
     exit(1);
 }
 

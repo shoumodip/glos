@@ -1,0 +1,5 @@
+main :: () {
+    foo :: (s: string) {}
+    bar := foo
+    bar()
+}
