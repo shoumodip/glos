@@ -6,11 +6,11 @@ tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_va
 
     foo(69, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:9: INFO: This argument provides one source
+tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:9: NOTE: This argument provides one source
 
     foo(69, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:13: INFO: But this named argument directly passes another variadic source
+tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:13: NOTE: But this named argument directly passes another variadic source
 
     foo(69, ns = xs)
 

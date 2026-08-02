@@ -12,7 +12,7 @@ tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:1: ER
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:30: INFO: Types of range beginning and end must be same: Expected 'i64', got 'i32'
+tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:30: NOTE: Types of range beginning and end must be same: Expected 'i64', got 'i32'
 
     range :: (this: Foo, a: i64, b: i32) {}
 

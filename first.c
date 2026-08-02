@@ -18,6 +18,9 @@
 
 #define TESTS_LIST_PATH "tests/tests.conf"
 
+static void error(const char *fmt, ...) Printf_Like(1);
+static void error_at(const char *path, size_t row, size_t col, const char *fmt, ...) Printf_Like(4);
+
 static void error(const char *fmt, ...) {
     afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
     fprintf(stderr, " ");
@@ -28,23 +31,47 @@ static void error(const char *fmt, ...) {
     fprintf(stderr, "\n");
 }
 
+static void error_at(const char *path, size_t row, size_t col, const char *fmt, ...) {
+    afprintf(stderr, ANSI_BOLD | ANSI_UNDERLINE, "%s:%zu:%zu:", path, row, col);
+    fprintf(stderr, " ");
+    afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
+    fprintf(stderr, " ");
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+}
+
 static void usage(FILE *f, const char *program) {
+    afprintf(f, ANSI_COLOR_CYAN | ANSI_BOLD, "Usage:\n");
+    afprintf(f, ANSI_COLOR_GREEN | ANSI_BOLD, "    %s", program);
     fprintf(
         f,
-        "Usage:\n"
-        "    %s [FLAGS...]\n"
-        "\n"
-        "Flags:\n"
-        "    -h              Show this message\n"
-        "    -t              Run tests\n"
-        "    -T              Run tests in non-interactive mode\n"
-        "    -j NPROCS       Set the maximum number of parallel processes. Default is 5\n",
-        program);
+        " [FLAGS...]\n"
+        "\n");
+
+    afprintf(f, ANSI_COLOR_CYAN | ANSI_BOLD, "Flags:\n");
+
+    static const struct {
+        const char *flag;
+        const char *desc;
+    } flags[] = {
+        {"h", "             Show this message"},
+        {"t", "             Run tests"},
+        {"T", "             Run tests in non-interactive mode"},
+        {"j", "NPROCS       Set the maximum number of parallel processes. Default is 5"},
+    };
+
+    for (size_t i = 0; i < len(flags); i++) {
+        afprintf(f, ANSI_COLOR_MAGENTA, "    -%s", flags[i].flag);
+        afprintf(f, ANSI_COLOR_DEFAULT, " %s\n", flags[i].desc);
+    }
 }
 
 static const char *shift(int *argc, char ***argv, const char *program, const char *expected) {
     if (*argc <= 0) {
-        fprintf(stderr, "ERROR: %s not provided\n\n", expected);
+        error("%s not provided\n", expected);
         usage(stderr, program);
         exit(1);
     }
@@ -59,24 +86,24 @@ static SV run_cmd_and_read_stdout(Cmd *cmd) {
     FILE *out = NULL;
     Proc  proc = cmd_run_async(cmd, (Cmd_Stdio) {.out = &out});
     if (proc.id == PROC_INVALID) {
-        fprintf(stderr, "ERROR: Could not execute command '%s'\n", name);
+        error("Could not execute command '%s'", name);
         exit(1);
     }
 
     if (!out) {
-        fprintf(stderr, "ERROR: Could not open standard output of command '%s'\n", name);
+        error("Could not open standard output of command '%s'", name);
         exit(1);
     }
 
     SV sv = {0};
     if (!read_fp(out, &sv, &default_arena)) {
-        fprintf(stderr, "ERROR: Could not read standard output of command '%s'\n", name);
+        error("Could not read standard output of command '%s'", name);
         exit(1);
     }
 
     int result = cmd_wait(proc);
     if (result) {
-        fprintf(stderr, "ERROR: Command '%s' exited abnormally with code %d\n", name, result);
+        error("Command '%s' exited abnormally with code %d", name, result);
         exit(1);
     }
 
@@ -88,7 +115,7 @@ static SV run_cmd_and_read_stdout(Cmd *cmd) {
 static void filter_cl_exe_output(Proc proc) {
     SV sv = {0};
     if (!read_fp(proc.out, &sv, &default_arena)) {
-        fprintf(stderr, "ERROR: Could not read standard output of 'cl.exe'\n");
+        error("Could not read standard output of 'cl.exe'");
         exit(1);
     }
     fclose(proc.out);
@@ -133,18 +160,18 @@ static void ensure_llvm(Cmd *cmd) {
     cmd_push(cmd, "curl", "-o", llvm_tar_path, "-L", url);
     Proc proc = cmd_run_async(cmd, (Cmd_Stdio) {0});
     if (proc.id == PROC_INVALID) {
-        fprintf(stderr, "ERROR: Could not execute 'curl'\n");
+        error("Could not execute 'curl'");
         goto note;
     }
 
     int code = cmd_wait(proc);
     if (code) {
-        fprintf(stderr, "ERROR: Command 'curl' exited abnormally with code %d\n", code);
+        error("Command 'curl' exited abnormally with code %d", code);
         goto note;
     }
 
     if (!create_directory(llvm_dir_path)) {
-        fprintf(stderr, "ERROR: Could not create directory '%s'\n", llvm_dir_path);
+        error("Could not create directory '%s'", llvm_dir_path);
         goto note;
     }
 
@@ -154,13 +181,13 @@ static void ensure_llvm(Cmd *cmd) {
     cmd_push(cmd, "tar", "fx", llvm_tar_path, "-C", llvm_dir_path, "--strip-components=1");
     proc = cmd_run_async(cmd, (Cmd_Stdio) {0});
     if (proc.id == PROC_INVALID) {
-        fprintf(stderr, "ERROR: Could not execute 'tar'\n");
+        error("Could not execute 'tar'");
         goto note;
     }
 
     code = cmd_wait(proc);
     if (code) {
-        fprintf(stderr, "ERROR: Command 'tar' exited abnormally with code %d\n", code);
+        error("Command 'tar' exited abnormally with code %d", code);
         goto note;
     }
 
@@ -257,18 +284,18 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         const char *proc_name = cmd->data[0];
         const Proc  proc = cmd_run_async(cmd, proc_stdio);
         if (proc.id == PROC_INVALID) {
-            fprintf(stderr, "ERROR: Could not start process '%s'\n", proc_name);
+            error("Could not start process '%s'", proc_name);
             exit(1);
         }
 
         if (!procs_push(&procs, proc)) {
-            fprintf(stderr, "ERROR: C Compiler exited abnormally\n");
+            error("C Compiler exited abnormally");
             exit(1);
         }
     }
 
     if (!procs_flush(&procs)) {
-        fprintf(stderr, "ERROR: C Compiler exited abnormally\n");
+        error("C Compiler exited abnormally");
         exit(1);
     }
 
@@ -322,7 +349,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
 
         const char *name = cmd->data[0];
         if (cmd_run_sync(cmd, (Cmd_Stdio) {0})) {
-            fprintf(stderr, "ERROR: Process '%s' exited abnormally\n", name);
+            error("Process '%s' exited abnormally", name);
             exit(1);
         }
     }
@@ -365,7 +392,7 @@ static char single_char_prompt(FILE *in, FILE *out, const char *choices, const c
         return choice;
     }
 
-    fprintf(stderr, "ERROR: Invalid choice '%c'\n", choice);
+    error("Invalid choice '%c'", choice);
     return 0;
 }
 
@@ -416,15 +443,7 @@ static bool parse_uint_from_sv(SV s, size_t *n) {
 static size_t parse_uint_value(SV value, const char *label, const char *path, size_t row, SV line) {
     size_t n = 0;
     if (!parse_uint_from_sv(value, &n)) {
-        fprintf(
-            stderr,
-            "%s:%zu:%zu: ERROR: Invalid %s '" SV_Fmt "'\n",
-            path,
-            row,
-            value.data - line.data + 1,
-            label,
-            SV_Arg(value));
-
+        error_at(path, row, value.data - line.data + 1, "Invalid %s '" SV_Fmt "'", label, SV_Arg(value));
         exit(1);
     }
 
@@ -439,14 +458,8 @@ static SV parse_bytes_value(SV value, SV *contents, const char *label, const cha
     arena_reset(&temp_arena, label_full);
 
     if (bytes.count >= contents->count) {
-        fprintf(
-            stderr,
-            "%s:%zu:1: ERROR: Expected %zu byte(s) and a newline, got %zu byte(s) instead\n",
-            path,
-            *row,
-            bytes.count,
-            contents->count);
-
+        error_at(
+            path, *row, 1, "Expected %zu byte(s) and a newline, got %zu byte(s) instead", bytes.count, contents->count);
         exit(1);
     }
 
@@ -550,7 +563,7 @@ static void tests_flush(Tests *tests, Cmd *cmd, bool interactive, Arena *arena, 
         Test_Info actual = {0};
         if (it->pout) {
             if (!read_fp(it->pout, &actual.out, arena)) {
-                fprintf(stderr, "ERROR: Could not read standard output of test case '%s'\n", it->name);
+                error("Could not read standard output of test case '%s'", it->name);
                 exit(1);
             }
             fclose(it->pout);
@@ -560,7 +573,7 @@ static void tests_flush(Tests *tests, Cmd *cmd, bool interactive, Arena *arena, 
 
         if (it->perr) {
             if (!read_fp(it->perr, &actual.err, arena)) {
-                fprintf(stderr, "ERROR: Could not read standard error of test case '%s'\n", it->name);
+                error("Could not read standard error of test case '%s'", it->name);
                 exit(1);
             }
             fclose(it->perr);
@@ -627,7 +640,7 @@ static void tests_flush(Tests *tests, Cmd *cmd, bool interactive, Arena *arena, 
         if (need_to_record) {
             FILE *f = fopen(it->record_path, "w");
             if (!f) {
-                fprintf(stderr, "ERROR: Could not write file '%s'\n", it->record_path);
+                error("Could not write file '%s'", it->record_path);
                 exit(1);
             }
 
@@ -676,7 +689,7 @@ static void build_test_library(Cmd *cmd, const char *library_path, const char *s
     const char *proc_name = cmd->data[0];
     const Proc  proc = cmd_run_async(cmd, proc_stdio);
     if (proc.id == PROC_INVALID) {
-        fprintf(stderr, "ERROR: Could not start process '%s'\n", proc_name);
+        error("Could not start process '%s'", proc_name);
         exit(1);
     }
 
@@ -686,7 +699,7 @@ static void build_test_library(Cmd *cmd, const char *library_path, const char *s
 
     int code = cmd_wait(proc);
     if (code) {
-        fprintf(stderr, "ERROR: C compiler exited abnormally\n");
+        error("C compiler exited abnormally");
         exit(1);
     }
 
@@ -706,7 +719,7 @@ static void build_test_library(Cmd *cmd, const char *library_path, const char *s
     proc_name = cmd->data[0];
     code = cmd_run_sync(cmd, (Cmd_Stdio) {0});
     if (code) {
-        fprintf(stderr, "ERROR: Process '%s' exited abnormally\n", proc_name);
+        error("Process '%s' exited abnormally", proc_name);
         exit(1);
     }
 
@@ -728,7 +741,7 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
 
     SV contents = {0};
     if (!read_file(TESTS_LIST_PATH, &contents, &default_arena)) {
-        fprintf(stderr, "ERROR: Could not read file '%s'\n", TESTS_LIST_PATH);
+        error("Could not read file '%s'", TESTS_LIST_PATH);
         exit(1);
     }
 
@@ -751,7 +764,10 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
         Test_Info expected = {0};
         if (record_exists) {
             for (size_t row = 1; contents.count; row++) {
-                SV line = sv_trim(sv_split_mut(&contents, '\n'), ' ');
+                SV          line = sv_split_mut(&contents, '\n');
+                const char *line_start = line.data;
+
+                line = sv_trim(line, ' ');
                 SV key = sv_split_mut(&line, ' ');
                 SV value = sv_trim(line, ' ');
                 if (sv_match(key, "EXIT")) {
@@ -761,7 +777,7 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
                 } else if (sv_match(key, "STDERR")) {
                     expected.err = parse_bytes_value(value, &contents, "standard error", record_path, &row, line);
                 } else {
-                    fprintf(stderr, "%s:%zu: ERROR: Invalid key '" SV_Fmt "'\n", record_path, row, SV_Arg(key));
+                    error_at(record_path, row, key.data - line_start + 1, "Invalid key '" SV_Fmt "'", SV_Arg(key));
                     exit(1);
                 }
             }
@@ -808,14 +824,14 @@ int main(int argc, char **argv) {
             exit(0);
         } else if (!strcmp(arg, "-t")) {
             if (tests) {
-                fprintf(stderr, "ERROR: Multiple test flags provided\n");
+                error("Multiple test flags provided");
                 exit(1);
             }
 
             tests = true;
         } else if (!strcmp(arg, "-T")) {
             if (tests) {
-                fprintf(stderr, "ERROR: Multiple test flags provided\n");
+                error("Multiple test flags provided");
                 exit(1);
             }
 
@@ -829,11 +845,11 @@ int main(int argc, char **argv) {
             }
 
             if (!parse_uint_from_sv(sv_from_cstr(arg), &nprocs) || nprocs == 0) {
-                fprintf(stderr, "ERROR: Invalid parallel process count '%s'\n", arg);
+                error("Invalid parallel process count '%s'", arg);
                 exit(1);
             }
         } else {
-            fprintf(stderr, "ERROR: Invalid flag '%s'\n\n", arg);
+            error("Invalid flag '%s'\n", arg);
             usage(stderr, program);
             exit(1);
         }
@@ -851,5 +867,3 @@ int main(int argc, char **argv) {
 }
 
 #include "src/basic.c"
-
-// TODO: Color everything

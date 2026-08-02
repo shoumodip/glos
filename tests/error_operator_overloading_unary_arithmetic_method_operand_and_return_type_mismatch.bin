@@ -12,7 +12,7 @@ tests/error_operator_overloading_unary_arithmetic_method_operand_and_return_type
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_unary_arithmetic_method_operand_and_return_type_mismatch.glos:2:23: INFO: Operand type and return type must be same: Expected to return 'Foo', got 'bool'
+tests/error_operator_overloading_unary_arithmetic_method_operand_and_return_type_mismatch.glos:2:23: NOTE: Operand type and return type must be same: Expected to return 'Foo', got 'bool'
 
     neg :: (this: Foo) -> bool {}
 

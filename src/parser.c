@@ -1210,15 +1210,15 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     if (call->spread) {
                         error_node(EK_ERROR, (Node *) call, "Multiple typed variadic sources found");
                         if (call->spread->kind == NODE_INTERPOLATION) {
-                            error_node(EK_INFO, call->spread, "This provides one source");
+                            error_node(EK_NOTE, call->spread, "This provides one source");
                         } else {
-                            error_token(EK_INFO, call->spread_token, "This provides one source");
+                            error_token(EK_NOTE, call->spread_token, "This provides one source");
                         }
 
                         if (arg->kind == NODE_INTERPOLATION) {
-                            error_node(EK_INFO, arg, "This provides another");
+                            error_node(EK_NOTE, arg, "This provides another");
                         } else {
-                            error_token(EK_INFO, token, "This provides another");
+                            error_token(EK_NOTE, token, "This provides another");
                         }
                         exit(1);
                     }

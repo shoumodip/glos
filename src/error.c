@@ -30,10 +30,6 @@ static void error_begin(Error_Kind kind) {
     case EK_NOTE:
         afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "NOTE:");
         break;
-
-    case EK_INFO:
-        afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "INFO:");
-        break;
     }
 
     fprintf(stderr, " ");

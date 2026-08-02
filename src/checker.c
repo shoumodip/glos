@@ -3161,9 +3161,9 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                                 if (variadic_arg->node == call->spread) {
                                     if (call->spread->kind == NODE_INTERPOLATION) {
                                         error_node(
-                                            EK_INFO, call->spread, "This interpolated string provide one source");
+                                            EK_NOTE, call->spread, "This interpolated string provide one source");
                                     } else {
-                                        error_token(EK_INFO, call->spread_token, "This spread provide one source");
+                                        error_token(EK_NOTE, call->spread_token, "This spread provide one source");
                                     }
                                 } else {
                                     bool following = false;
@@ -3176,14 +3176,14 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                                     }
 
                                     error_node(
-                                        EK_INFO,
+                                        EK_NOTE,
                                         variadic_arg->node,
                                         "This argument%s provides one source",
                                         following ? " and its following positional arguments" : "");
                                 }
 
                                 error_node(
-                                    EK_INFO,
+                                    EK_NOTE,
                                     it_name,
                                     "But this named argument directly passes another variadic source");
                                 exit(1);
@@ -3209,15 +3209,15 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
                             }
 
                             error_node(
-                                EK_INFO,
+                                EK_NOTE,
                                 it,
                                 "This argument%s provides one source",
                                 following ? " and its following positional arguments" : "");
 
                             if (call->spread->kind == NODE_INTERPOLATION) {
-                                error_node(EK_INFO, call->spread, "But this interpolated string provides another");
+                                error_node(EK_NOTE, call->spread, "But this interpolated string provides another");
                             } else {
-                                error_token(EK_INFO, call->spread_token, "But this spread provides another");
+                                error_token(EK_NOTE, call->spread_token, "But this spread provides another");
                             }
                             exit(1);
                         }
@@ -3394,7 +3394,7 @@ static void check_special_method_signature_args_count(
     if (fn_spec->args_count < args_count) {
         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
         error_token(
-            EK_INFO, fn->args_end_token, "Expected at least %zu arguments, got %zu", args_count, fn_spec->args_count);
+            EK_NOTE, fn->args_end_token, "Expected at least %zu arguments, got %zu", args_count, fn_spec->args_count);
         exit(1);
     }
 
@@ -3403,7 +3403,7 @@ static void check_special_method_signature_args_count(
         if (!it->has_default_value && i >= args_count) {
             error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
             error_parts(
-                EK_INFO,
+                EK_NOTE,
                 fn_spec->args[i].name,
                 fn_spec->args[i].pos,
                 "All arguments after the %zu%s argument must be optional",
@@ -4277,7 +4277,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!type_eq(rhs_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_parts(
-                            EK_INFO,
+                            EK_NOTE,
                             fn_spec->args[1].name,
                             fn_spec->args[1].pos,
                             "Operand types must be same: Expected %s, got %s",
@@ -4289,7 +4289,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!type_eq(*fn_spec->return_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_token(
-                            EK_INFO,
+                            EK_NOTE,
                             fn->returns.head ? fn->returns.head->token : fn->body->token,
                             "Operand types and return type must be same: Expected to return %s, got %s",
                             type_to_cstr(lhs_type),
@@ -4305,7 +4305,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!type_eq(*fn_spec->return_type, operand_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_token(
-                            EK_INFO,
+                            EK_NOTE,
                             fn->returns.head ? fn->returns.head->token : fn->body->token,
                             "Operand type and return type must be same: Expected to return %s, got %s",
                             type_to_cstr(operand_type),
@@ -4324,7 +4324,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!type_eq(rhs_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_parts(
-                            EK_INFO,
+                            EK_NOTE,
                             fn_spec->args[1].name,
                             fn_spec->args[1].pos,
                             "Operand types must be same: Expected %s, got %s",
@@ -4338,7 +4338,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_token(
-                            EK_INFO,
+                            EK_NOTE,
                             fn->returns.head ? fn->returns.head->token : fn->body->token,
                             "Expected to return %s or %s, got %s",
                             type_to_cstr(c->equivalence_type),
@@ -4357,7 +4357,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!type_eq(assign_type, (Type) {.kind = TYPE_BOOL})) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_parts(
-                            EK_INFO,
+                            EK_NOTE,
                             fn_spec->args[2].name,
                             fn_spec->args[2].pos,
                             "Expected the third argument to be %s, got %s",
@@ -4369,7 +4369,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!type_is_pointer(*fn_spec->return_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_token(
-                            EK_INFO,
+                            EK_NOTE,
                             fn->returns.head ? fn->returns.head->token : fn->body->token,
                             "Expected to return a pointer, got %s",
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
@@ -4385,7 +4385,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!type_eq(end_type, begin_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_parts(
-                            EK_INFO,
+                            EK_NOTE,
                             fn_spec->args[2].name,
                             fn_spec->args[2].pos,
                             "Types of range beginning and end must be same: Expected %s, got %s",
@@ -4397,7 +4397,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     if (fn_spec->returns_count != 1) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_token(
-                            EK_INFO,
+                            EK_NOTE,
                             fn->returns.head ? fn->returns.head->token : fn->body->token,
                             "The range operator cannot return %zu values",
                             fn_spec->returns_count);

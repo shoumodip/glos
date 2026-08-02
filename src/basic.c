@@ -83,32 +83,32 @@ bool ansi_set(FILE *f, ANSI ansi) {
             break;
 
         case ANSI_COLOR_RED:
-            fprintf(stderr, "\033[31m");
+            fprintf(f, "\033[31m");
             has_ansi = true;
             break;
 
         case ANSI_COLOR_GREEN:
-            fprintf(stderr, "\033[32m");
+            fprintf(f, "\033[32m");
             has_ansi = true;
             break;
 
         case ANSI_COLOR_YELLOW:
-            fprintf(stderr, "\033[33m");
+            fprintf(f, "\033[33m");
             has_ansi = true;
             break;
 
         case ANSI_COLOR_BLUE:
-            fprintf(stderr, "\033[34m");
+            fprintf(f, "\033[34m");
             has_ansi = true;
             break;
 
         case ANSI_COLOR_MAGENTA:
-            fprintf(stderr, "\033[35m");
+            fprintf(f, "\033[35m");
             has_ansi = true;
             break;
 
         case ANSI_COLOR_CYAN:
-            fprintf(stderr, "\033[36m");
+            fprintf(f, "\033[36m");
             has_ansi = true;
             break;
 
@@ -118,17 +118,17 @@ bool ansi_set(FILE *f, ANSI ansi) {
         }
 
         if (ansi & ANSI_BOLD) {
-            fprintf(stderr, "\033[1m");
+            fprintf(f, "\033[1m");
             has_ansi = true;
         }
 
         if (ansi & ANSI_ITALIC) {
-            fprintf(stderr, "\033[3m");
+            fprintf(f, "\033[3m");
             has_ansi = true;
         }
 
         if (ansi & ANSI_UNDERLINE) {
-            fprintf(stderr, "\033[4m");
+            fprintf(f, "\033[4m");
             has_ansi = true;
         }
     }

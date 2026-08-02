@@ -6,11 +6,11 @@ tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:5:
 
     foo(69, ...ns)
 
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:9: INFO: This argument provides one source
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:9: NOTE: This argument provides one source
 
     foo(69, ...ns)
 
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:13: INFO: But this spread provides another
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:13: NOTE: But this spread provides another
 
     foo(69, ...ns)
 

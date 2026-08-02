@@ -12,7 +12,7 @@ tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:20: INFO: Operand types must be same: Expected 'Foo', got 'i64'
+tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:20: NOTE: Operand types must be same: Expected 'Foo', got 'i64'
 
     mul :: (this: Foo, that: i64) {}
 

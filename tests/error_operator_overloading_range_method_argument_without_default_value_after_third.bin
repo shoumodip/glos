@@ -12,7 +12,7 @@ tests/error_operator_overloading_range_method_argument_without_default_value_aft
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_range_method_argument_without_default_value_after_third.glos:2:38: INFO: All arguments after the 3rd argument must be optional
+tests/error_operator_overloading_range_method_argument_without_default_value_after_third.glos:2:38: NOTE: All arguments after the 3rd argument must be optional
 
     range :: (this: Foo, a: i64, b: i64, other: bool) {}
 

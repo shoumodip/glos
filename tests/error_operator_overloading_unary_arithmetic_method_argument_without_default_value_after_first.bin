@@ -12,7 +12,7 @@ tests/error_operator_overloading_unary_arithmetic_method_argument_without_defaul
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_unary_arithmetic_method_argument_without_default_value_after_first.glos:2:20: INFO: All arguments after the 1st argument must be optional
+tests/error_operator_overloading_unary_arithmetic_method_argument_without_default_value_after_first.glos:2:20: NOTE: All arguments after the 1st argument must be optional
 
     neg :: (this: Foo, other: bool) {}
 

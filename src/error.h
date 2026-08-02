@@ -5,8 +5,7 @@
 
 typedef enum {
     EK_ERROR,
-    EK_NOTE, // TODO: Merge NOTE and INFO
-    EK_INFO,
+    EK_NOTE
 } Error_Kind;
 
 void error_node_begin(Error_Kind kind, const Node *n);

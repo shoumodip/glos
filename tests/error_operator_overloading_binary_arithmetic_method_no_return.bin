@@ -12,7 +12,7 @@ tests/error_operator_overloading_binary_arithmetic_method_no_return.glos:2:1: ER
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_arithmetic_method_no_return.glos:2:31: INFO: Operand types and return type must be same: Expected to return 'Foo', got nothing
+tests/error_operator_overloading_binary_arithmetic_method_no_return.glos:2:31: NOTE: Operand types and return type must be same: Expected to return 'Foo', got nothing
 
     div :: (this: Foo, that: Foo) {}
 

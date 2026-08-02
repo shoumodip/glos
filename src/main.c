@@ -227,7 +227,7 @@ int main(int argc, char **argv) {
             if (input_path) {
                 error_standalone(EK_ERROR, "Multiple input paths provided");
                 if (run) {
-                    error_standalone(EK_INFO, "When using '-r', pass program arguments after '--'");
+                    error_standalone(EK_NOTE, "When using '-r', pass program arguments after '--'");
                 }
                 exit(1);
             }
