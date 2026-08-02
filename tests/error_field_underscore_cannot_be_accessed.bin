@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 94
+STDERR 104
 tests/error_field_underscore_cannot_be_accessed.glos:5:7: ERROR: Field '_' cannot be accessed
+
+    f._
+
 

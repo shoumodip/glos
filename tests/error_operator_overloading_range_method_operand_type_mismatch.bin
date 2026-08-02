@@ -1,14 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 493
-tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:1: ERROR: The method 'range' implements an operator overload and thus must have a particular signature
+STDERR 604
+tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:1: ERROR: The method 'range' is special because it implements an operator overload
 
-```
-range :: (this: T, begin: A, end: A) -> V
-```
+    range :: (this: Foo, a: i64, b: i32) {}
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+    It should have this signature:
 
-tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:30: INFO: Types of range beginning and end must be same: Expected 'i64', got 'i32'
+        range :: (this: T, begin: A, end: A) -> V
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:30: NOTE: Types of range beginning and end must be same: Expected 'i64', got 'i32'
+
+    range :: (this: Foo, a: i64, b: i32) {}
+
 

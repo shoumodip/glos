@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 102
-tests/error_cannot_index_into_non_slice_type.glos:2:7: ERROR: Method 'index' is not defined for 'i64'
+STDERR 116
+tests/error_cannot_index_into_non_slice_type.glos:2:5: ERROR: Method 'index' is not defined for 'i64'
+
+    69[420]
+
 

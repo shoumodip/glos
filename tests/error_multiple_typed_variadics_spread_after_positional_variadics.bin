@@ -1,8 +1,17 @@
 EXIT 1
 STDOUT 0
 
-STDERR 364
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:8: ERROR: Multiple typed variadic sources found
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:9: ... This argument provides one source
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:13: ... But this spread provides another
+STDERR 431
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:5: ERROR: Multiple typed variadic sources found
+
+    foo(69, ...ns)
+
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:9: NOTE: This argument provides one source
+
+    foo(69, ...ns)
+
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:13: NOTE: But this spread provides another
+
+    foo(69, ...ns)
+
 

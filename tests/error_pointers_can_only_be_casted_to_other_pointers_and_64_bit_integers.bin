@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 125
+STDERR 144
 tests/error_pointers_can_only_be_casted_to_other_pointers_and_64_bit_integers.glos:5:10: ERROR: Cannot cast '&i64' to 'bool'
+
+    d := bool(a)
+
 

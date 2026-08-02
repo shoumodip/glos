@@ -1,14 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 485
-tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:1: ERROR: The method 'mul' implements an operator overload and thus must have a particular signature
+STDERR 582
+tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:1: ERROR: The method 'mul' is special because it implements an operator overload
 
-```
-mul :: (this: T, that: T) -> T
-```
+    mul :: (this: Foo, that: i64) {}
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+    It should have this signature:
 
-tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:20: INFO: Operand types must be same: Expected 'Foo', got 'i64'
+        mul :: (this: T, that: T) -> T
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:20: NOTE: Operand types must be same: Expected 'Foo', got 'i64'
+
+    mul :: (this: Foo, that: i64) {}
+
 

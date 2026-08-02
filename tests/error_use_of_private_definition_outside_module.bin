@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 97
+STDERR 111
 tests/error_use_of_private_definition_outside_module.glos:4:7: ERROR: Undefined identifier 'foo'
+
+    p.foo()
+
 

@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 104
+STDERR 120
 tests/error_unexpected_link_directive_in_local_scope.glos:2:5: ERROR: Unexpected '#link' in local scope
+
+    #link "y"
+
 

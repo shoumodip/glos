@@ -1,11 +1,29 @@
 EXIT 1
 STDOUT 0
 
-STDERR 751
-tests/error_type_does_not_satisfy_trait.glos:12:12: ERROR: Type 'Bar' does not implement 'Foo'
+STDERR 920
+tests/error_type_does_not_satisfy_trait.glos:12:9: ERROR: Type 'Bar' does not implement 'Foo'
+
+    Foo(Bar(69))
+
 tests/error_type_does_not_satisfy_trait.glos:2:5: NOTE: The method 'a' is not defined for type 'Bar'
+
+    a: ()           // Undefined
+
 tests/error_type_does_not_satisfy_trait.glos:15:1: NOTE: The method 'b' has wrong signature. Expected '(this: rawptr, _: i32)', got '(this: Bar)'
+
+    b :: (this: Bar) {}
+
 tests/error_type_does_not_satisfy_trait.glos:16:1: NOTE: The method 'c' has wrong signature. Expected '(this: rawptr, _: bool)', got '(this: Bar, _: string)'
+
+    c :: (this: Bar, _: string) {}
+
 tests/error_type_does_not_satisfy_trait.glos:17:1: NOTE: The method 'd' has wrong signature. Expected '(this: rawptr) -> string', got '(this: Bar)'
+
+    d :: (this: Bar) {}
+
 tests/error_type_does_not_satisfy_trait.glos:18:1: NOTE: The method 'e' has receiver '&Bar', not 'Bar'
+
+    e :: (this: &Bar) {}
+
 

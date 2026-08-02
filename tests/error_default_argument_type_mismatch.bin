@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 88
+STDERR 120
 tests/error_default_argument_type_mismatch.glos:1:18: ERROR: Expected 'i32', got 'bool'
+
+    foo :: (x: i32 = true) {}
+
 

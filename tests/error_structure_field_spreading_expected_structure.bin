@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 109
+STDERR 122
 tests/error_structure_field_spreading_expected_structure.glos:2:8: ERROR: Expected structure type, got 'i64'
+
+    ...i64
+
 

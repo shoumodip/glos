@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 74
+STDERR 86
 tests/error_distinct_type_mismatch.glos:7:9: ERROR: Expected 'A', got 'B'
+
+    a = b
+
 

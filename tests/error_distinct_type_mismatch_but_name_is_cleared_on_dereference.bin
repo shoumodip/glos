@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 111
+STDERR 124
 tests/error_distinct_type_mismatch_but_name_is_cleared_on_dereference.glos:7:9: ERROR: Expected 'A', got 'i64'
+
+    a = *b
+
 

@@ -263,6 +263,8 @@ struct Type_Struct_Field {
     SV     name;
     Type   type;
     size_t offset;
+
+    Node *spread;
 };
 
 void        sb_push_type(SB *sb, Type type);
@@ -509,6 +511,9 @@ typedef struct {
 
     Node_Fn *overload;
     Module  *module;
+
+    // For things like sizeof(), typeof()
+    Token end;
 } Node_Unary;
 
 typedef struct {
@@ -532,7 +537,10 @@ typedef struct {
     Node *lhs;
 
     Token dot;
-    Node *rhs; // Abstract.(Type)
+
+    // Abstract.(Type)
+    Node *rhs;
+    Token rhs_end;
 
     union {
         size_t field_index;
@@ -559,6 +567,7 @@ typedef struct {
     Node  node;
     Node *expr;
     Node *message;
+    Token end;
 } Node_Assert;
 
 struct Node_Import {
@@ -590,7 +599,7 @@ struct Node_Fn {
     Nodes  args;
     size_t args_count;     // Actual
     size_t args_count_min; // Minimum
-    Pos    args_end_pos;
+    Token  args_end_token;
 
     Variadics_Kind variadics_kind;
 
@@ -650,6 +659,8 @@ struct Node_Enum {
     Module  *module;
     Node_Fn *defined_in;
 
+    Token end;
+
     LLVMTypeRef     llvm;
     LLVMMetadataRef debug;
 };
@@ -666,6 +677,8 @@ struct Node_Trait {
     // The module this was parsed in
     Module *module;
 
+    Token end;
+
     Node_Fn *defined_in;
 };
 
@@ -681,6 +694,8 @@ struct Node_Union {
     // The module this was parsed in
     Module *module;
 
+    Token end;
+
     Node_Fn *defined_in;
 };
 
@@ -695,6 +710,8 @@ struct Node_Struct {
     // The module this was parsed in
     Module *module;
 
+    Token end;
+
     Node_Fn *defined_in;
 };
 
@@ -704,6 +721,8 @@ typedef struct {
 
     Nodes  children;
     size_t children_count;
+
+    Token end;
 
     // For designated initializers, each node of children is as follows:
     //
@@ -740,10 +759,10 @@ typedef struct {
     // be calculated at parse time.
     size_t args_count;
 
-    Pos end;
+    Token end;
 
     Node *spread;
-    Pos   spread_pos;
+    Token spread_token;
 
     bool   do_not_allocate_typed_variadic_array;
     size_t typed_variadics_array_count;
@@ -768,6 +787,8 @@ typedef struct {
 
     Node_Fn *overload;
     Module  *module;
+
+    Token end;
 } Node_Index;
 
 // This represents a type
@@ -784,8 +805,8 @@ struct Node_Define {
     Node *expr;
     Node *type;
 
-    bool has_spread;
-    Pos  spread_pos;
+    bool  has_spread;
+    Token spread_token;
 
     bool   is_const;
     bool   is_value_known_at_compile_time;
@@ -795,7 +816,7 @@ struct Node_Define {
 typedef struct {
     Node  node;
     Nodes body;
-    Pos   end;
+    Token end;
 } Node_Block;
 
 typedef struct {
@@ -848,6 +869,8 @@ typedef struct {
 
     bool       is_compile_time;
     Node_Case *compile_time_real;
+
+    Token end;
 } Node_Switch;
 
 typedef struct {
@@ -867,6 +890,7 @@ typedef struct {
 typedef struct {
     Node  node;
     Nodes nodes;
+    Token end;
 } Node_Extern;
 
 void node_debug(FILE *f, Node *n);

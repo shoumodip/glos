@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 144
+STDERR 154
 tests/error_structure_literal_cannot_have_ordered_after_designated_initializers.glos:9:9: ERROR: Cannot mix ordered and designated initializers
+
+    420
+
 

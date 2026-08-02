@@ -1,7 +1,20 @@
 EXIT 1
 STDOUT 0
 
-STDERR 231
+STDERR 454
 tests/error_structure_field_spreading_redefinition.glos:8:8: ERROR: While spreading this structure, we encountered a field 'x' that is already defined
-tests/error_structure_field_spreading_redefinition.glos:7:5: NOTE: Defined here
+
+    ...Vec2
+
+tests/error_structure_field_spreading_redefinition.glos:7:5: NOTE: It was first defined in this structure here
+
+    x: i32
+
+tests/error_structure_field_spreading_redefinition.glos:1:9: NOTE: Here is the structure we are spreading
+
+    Vec2 :: struct {
+        x: i32
+        y: i32
+    }
+
 

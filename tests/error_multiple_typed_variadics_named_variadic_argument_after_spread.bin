@@ -1,8 +1,17 @@
 EXIT 1
 STDOUT 0
 
-STDERR 401
-tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:8: ERROR: Multiple typed variadic sources found
-tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:9: ... This spread provide one source
-tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:16: ... But this named argument directly passes another variadic source
+STDERR 483
+tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:5: ERROR: Multiple typed variadic sources found
+
+    foo(...xs, ns = xs)
+
+tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:9: NOTE: This spread provide one source
+
+    foo(...xs, ns = xs)
+
+tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:16: NOTE: But this named argument directly passes another variadic source
+
+    foo(...xs, ns = xs)
+
 

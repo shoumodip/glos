@@ -1,7 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 164
+STDERR 190
 tests/error_global_variable_redefinition.glos:2:1: ERROR: Redefinition of 'x'
+
+    x: i64
+
 tests/error_global_variable_redefinition.glos:1:1: NOTE: Here is the first definition
+
+    x: i64
+
 

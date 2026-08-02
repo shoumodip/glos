@@ -1,7 +1,16 @@
 EXIT 1
 STDOUT 0
 
-STDERR 180
+STDERR 254
 tests/error_type_is_not_a_variant_of_union.glos:7:11: ERROR: Type 'bool' is not a variant of 'Value'
+
+    Value(true)
+
 tests/error_type_is_not_a_variant_of_union.glos:1:10: NOTE: Union defined here
+
+    Value :: union {
+        i64
+        string
+    }
+
 

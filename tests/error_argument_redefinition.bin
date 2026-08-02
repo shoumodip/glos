@@ -1,7 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 151
+STDERR 217
 tests/error_argument_redefinition.glos:1:17: ERROR: Redefinition of 'x'
+
+    add :: (x: i64, x: i64) {}
+
 tests/error_argument_redefinition.glos:1:9: NOTE: Here is the first definition
+
+    add :: (x: i64, x: i64) {}
+
 

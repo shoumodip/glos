@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 111
-tests/error_external_variable_cannot_have_assignment.glos:2:8: ERROR: External variable cannot have assignment
+STDERR 125
+tests/error_external_variable_cannot_have_assignment.glos:2:5: ERROR: External variable cannot have assignment
+
+    x := 69
+
 

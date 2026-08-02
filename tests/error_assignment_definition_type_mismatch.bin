@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 93
+STDERR 113
 tests/error_assignment_definition_type_mismatch.glos:1:10: ERROR: Expected 'i64', got 'bool'
+
+    x: i64 = true
+
 

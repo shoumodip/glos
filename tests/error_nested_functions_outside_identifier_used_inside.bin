@@ -1,7 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 241
+STDERR 270
 tests/error_nested_functions_outside_identifier_used_inside.glos:3:10: ERROR: Cannot use variable from stack frame of outer function
+
+    () { x }
+
 tests/error_nested_functions_outside_identifier_used_inside.glos:2:5: NOTE: Here is the variable being used
+
+    x := 69
+
 

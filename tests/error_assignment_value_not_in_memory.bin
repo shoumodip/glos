@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 97
+STDERR 111
 tests/error_assignment_value_not_in_memory.glos:2:5: ERROR: Cannot assign to value not in memory
+
+    10 = 10
+
 

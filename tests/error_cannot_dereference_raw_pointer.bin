@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 92
-tests/error_cannot_dereference_raw_pointer.glos:2:12: ERROR: Cannot dereference raw pointer
+STDERR 108
+tests/error_cannot_dereference_raw_pointer.glos:2:6: ERROR: Cannot dereference raw pointer
+
+    *rawptr(0)
+
 

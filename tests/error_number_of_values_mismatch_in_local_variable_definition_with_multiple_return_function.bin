@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 181
-tests/error_number_of_values_mismatch_in_local_variable_definition_with_multiple_return_function.glos:6:7: ERROR: Unequal number of values. There is 1 definition, and 2 assignments
+STDERR 198
+tests/error_number_of_values_mismatch_in_local_variable_definition_with_multiple_return_function.glos:6:5: ERROR: Unequal number of values. There is 1 definition, and 2 assignments
+
+    a := foo()
+
 

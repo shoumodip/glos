@@ -45,10 +45,10 @@
 // #include "basic.h"
 //
 // int main(int argc, char **argv) {
-//     atexit(basic_atexit);
+//     basic_init();
 // }
 // ```
-void basic_atexit(void);
+void basic_init(void);
 
 // AAAAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 //
@@ -97,6 +97,27 @@ static_assert(sizeof(u64) == 8, "");
     for (__typeof__((ll1)->head) a = (ll1)->head, b = (ll2)->head; a && b; a = a->next, b = b->next)
 
 #define add_trailing_s_if_plural(s, n) ((n) == 1 ? (s) : arena_sprintf(&temp_arena, "%ss", (s)))
+
+// ANSI printing
+typedef enum {
+    ANSI_COLOR_DEFAULT,
+    ANSI_COLOR_RED,
+    ANSI_COLOR_GREEN,
+    ANSI_COLOR_YELLOW,
+    ANSI_COLOR_BLUE,
+    ANSI_COLOR_MAGENTA,
+    ANSI_COLOR_CYAN,
+    ANSI_COLOR_MASK = 0xFF,
+
+    ANSI_BOLD = 1 << 8,
+    ANSI_ITALIC = 1 << 9,
+    ANSI_UNDERLINE = 1 << 10,
+} ANSI;
+
+bool ansi_set(FILE *f, ANSI ansi);
+void ansi_reset(FILE *f);
+
+void afprintf(FILE *f, ANSI ansi, const char *fmt, ...) Printf_Like(3);
 
 // Dynamic Array
 #define DA_INIT_CAP 128
@@ -247,6 +268,9 @@ bool ht_iter_impl(
 #define MSVC_SUPPRESS_4116
 #endif // _MSC_VER
 
+// Characters
+bool is_space(char ch);
+
 // String View
 typedef struct {
     const char *data;
@@ -261,12 +285,14 @@ SV sv_strip_suffix(SV a, SV b);
 
 bool sv_eq(SV a, SV b);
 bool sv_match(SV a, const char *b);
+bool sv_has_prefix(SV a, SV b);
 bool sv_has_suffix(SV a, SV b);
 bool sv_find(SV s, char ch, size_t *index);
 
 SV sv_trim(SV s, char ch);
 SV sv_drop(SV s, size_t count);
 SV sv_drop_mut(SV *s, size_t count);
+SV sv_drop_while_mut(SV *s, bool (*f)(char ch));
 SV sv_split(SV s, char ch);
 SV sv_split_mut(SV *s, char ch);
 SV sv_split_by(SV s, bool (*f)(char ch));
@@ -295,8 +321,10 @@ typedef struct {
     size_t capacity;
 } Arena;
 
-void  arena_free(Arena *a);
-void  arena_reset(Arena *a, const void *ptr);
+void arena_free(Arena *a);
+void arena_reset(Arena *a, const void *ptr);
+void arena_reset_noalign(Arena *a, const void *ptr);
+
 void *arena_alloc(Arena *a, size_t size);
 void *arena_clone(Arena *a, const void *data, size_t size);
 
@@ -308,7 +336,7 @@ extern Arena temp_arena;
 extern Arena default_arena;
 
 // FS
-bool read_fp(FILE *f, SV *out, Arena *a);
+bool read_fp(FILE *f, SV *out, Arena *a); // This appends a NULL at the end
 bool read_file(const char *path, SV *out, Arena *a);
 
 bool delete_file(const char *path);

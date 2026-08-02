@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 93
+STDERR 118
 tests/error_dereference_expected_pointer.glos:1:15: ERROR: Expected typed pointer, got 'i64'
+
+    main :: () { *10 }
+
 

@@ -1,14 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 449
-tests/error_operator_overloading_range_method_too_few_arguments.glos:2:1: ERROR: The method 'range' implements an operator overload and thus must have a particular signature
+STDERR 544
+tests/error_operator_overloading_range_method_too_few_arguments.glos:2:1: ERROR: The method 'range' is special because it implements an operator overload
 
-```
-range :: (this: T, begin: A, end: A) -> V
-```
+    range :: (this: Foo, a: i64) {}
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+    It should have this signature:
 
-tests/error_operator_overloading_range_method_too_few_arguments.glos:2:28: INFO: Expected at least 3 arguments, got 2
+        range :: (this: T, begin: A, end: A) -> V
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_operator_overloading_range_method_too_few_arguments.glos:2:28: NOTE: Expected at least 3 arguments, got 2
+
+    range :: (this: Foo, a: i64) {}
+
 

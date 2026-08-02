@@ -1,14 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 452
-tests/error_operator_overloading_range_method_too_many_returns.glos:2:1: ERROR: The method 'range' implements an operator overload and thus must have a particular signature
+STDERR 591
+tests/error_operator_overloading_range_method_too_many_returns.glos:2:1: ERROR: The method 'range' is special because it implements an operator overload
 
-```
-range :: (this: T, begin: A, end: A) -> V
-```
+    range :: (this: Foo, a: i64, b: i64) -> (i64, i64) {}
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+    It should have this signature:
 
-tests/error_operator_overloading_range_method_too_many_returns.glos:2:42: INFO: The range operator cannot return 2 values
+        range :: (this: T, begin: A, end: A) -> V
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_operator_overloading_range_method_too_many_returns.glos:2:42: NOTE: The range operator cannot return 2 values
+
+    range :: (this: Foo, a: i64, b: i64) -> (i64, i64) {}
+
 

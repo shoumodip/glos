@@ -1,14 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 534
-tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:1: ERROR: The method 'mod' implements an operator overload and thus must have a particular signature
+STDERR 647
+tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:1: ERROR: The method 'mod' is special because it implements an operator overload
 
-```
-mod :: (this: T, that: T) -> T
-```
+    mod :: (this: Foo, that: Foo) -> bool {}
 
-It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+    It should have this signature:
 
-tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:34: INFO: Operand types and return type must be same: Expected to return 'Foo', got 'bool'
+        mod :: (this: T, that: T) -> T
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:34: NOTE: Operand types and return type must be same: Expected to return 'Foo', got 'bool'
+
+    mod :: (this: Foo, that: Foo) -> bool {}
+
 

@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 96
+STDERR 112
 tests/error_global_variable_redefinition_of_builtin_type.glos:1:1: ERROR: Redefinition of 'i64'
+
+    i64 := 69
+
 

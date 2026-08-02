@@ -1,7 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 285
+STDERR 351
 tests/error_operator_overloading_range_method_cannot_infer_end_of_range.glos:9:5: ERROR: Cannot infer end of range from 'Foo'
-tests/error_operator_overloading_range_method_cannot_infer_end_of_range.glos:3:30: NOTE: The method 'range' does not have a default value for its end argument
+
+    f[..]
+
+tests/error_operator_overloading_range_method_cannot_infer_end_of_range.glos:3:30: ERROR: The method 'range' does not have a default value for its end argument
+
+    range :: (this: Foo, a := 0, b: i64) -> bool {
+
 
