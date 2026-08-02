@@ -603,7 +603,10 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
 
     token = peek_token(p);
     if (token.kind != TOKEN_SET && token.kind != TOKEN_COLON) {
+        const bool in_extern_save = p->state.in_extern;
+        p->state.in_extern = false;
         define->type = parse_expr(p, POWER_PRE, false, false, NULL);
+        p->state.in_extern = in_extern_save;
     }
 
     token = peek_token(p);
@@ -624,16 +627,24 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
             exit(1);
         }
 
+        const bool in_extern_save = p->state.in_extern;
+        p->state.in_extern = false;
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
+        p->state.in_extern = in_extern_save;
     } else if (token.kind == TOKEN_COLON) {
         if (define->has_spread) {
             error_token(EK_ERROR, token, "Cannot have default value here");
             exit(1);
         }
 
+        const bool in_extern_save = p->state.in_extern;
+        p->state.in_extern = false;
+
         p->state.peeked = false;
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
         define->is_const = true;
+
+        p->state.in_extern = in_extern_save;
 
         if (p->state.in_extern) {
             if (define->expr->kind != NODE_FN) {
@@ -1763,5 +1774,3 @@ Parse_Result parse_directory(Parser *p, const char *path) {
     }
     return PARSE_OK;
 }
-
-// TODO: Rework the FFI syntax. It is a bit hairy at the moment, and does not compose well with other concepts
