@@ -2845,8 +2845,6 @@ static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *r
                     type_to_cstr(receiver_type));
                 error_node(EK_NOTE, (Node *) method->defined_as, "This is the overload used");
                 exit(1);
-
-                // TODO: This is broken for single indirection
             }
 
             return method;
@@ -4320,6 +4318,17 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     check_special_method_signature_args_count(fn, 2, signature, note);
 
                     const Type lhs_type = fn_spec->args[0].type;
+                    if (lhs_type.ref) {
+                        error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                        error_parts(
+                            EK_NOTE,
+                            fn_spec->args[0].name,
+                            fn_spec->args[0].pos,
+                            "Operand cannot be a pointer. (Provided type is %s)",
+                            type_to_cstr(lhs_type));
+                        exit(1);
+                    }
+
                     const Type rhs_type = fn_spec->args[1].type;
                     if (!type_eq(rhs_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
@@ -4349,6 +4358,17 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     check_special_method_signature_args_count(fn, 1, signature, note);
 
                     const Type operand_type = fn_spec->args[0].type;
+                    if (operand_type.ref) {
+                        error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                        error_parts(
+                            EK_NOTE,
+                            fn_spec->args[0].name,
+                            fn_spec->args[0].pos,
+                            "Operand cannot be a pointer. (Provided type is %s)",
+                            type_to_cstr(operand_type));
+                        exit(1);
+                    }
+
                     if (!type_eq(*fn_spec->return_type, operand_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
                         error_token(
@@ -4367,6 +4387,17 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     check_special_method_signature_args_count(fn, 2, signature, note);
 
                     const Type lhs_type = fn_spec->args[0].type;
+                    if (lhs_type.ref) {
+                        error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                        error_parts(
+                            EK_NOTE,
+                            fn_spec->args[0].name,
+                            fn_spec->args[0].pos,
+                            "Operand cannot be a pointer. (Provided type is %s)",
+                            type_to_cstr(lhs_type));
+                        exit(1);
+                    }
+
                     const Type rhs_type = fn_spec->args[1].type;
                     if (!type_eq(rhs_type, lhs_type)) {
                         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);

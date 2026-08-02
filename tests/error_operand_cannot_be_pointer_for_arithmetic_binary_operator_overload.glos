@@ -1,0 +1,2 @@
+Foo :: distinct i64
+add :: (this: &Foo, that: Foo) {}
