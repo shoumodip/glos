@@ -8,6 +8,8 @@ typedef enum {
     EK_NOTE
 } Error_Kind;
 
+Pos get_leftmost_point_of_node(const Node *n);
+
 void error_node_begin(Error_Kind kind, const Node *n);
 void error_token_begin(Error_Kind kind, Token token);
 void error_parts_begin(Error_Kind kind, SV sv, Pos pos);

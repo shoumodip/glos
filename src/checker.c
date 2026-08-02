@@ -5130,7 +5130,7 @@ static void check_stmt(Compiler *c, Node *n) {
         }
 
         if (int128_is_zero(eval_const_expr(c, assertt->expr, false).as.integer)) {
-            fprintf(stderr, Pos_Fmt "Assertion failed", Pos_Arg(n->token.pos));
+            fprintf(stderr, Pos_Fmt " Assertion failed", Pos_Arg(n->token.pos));
             if (assertt->message) {
                 const SV message = eval_const_expr(c, assertt->message, false).as.string;
                 fprintf(stderr, ": " SV_Fmt, SV_Arg(message));

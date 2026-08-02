@@ -3,5 +3,5 @@ STDOUT 3
 69
 
 STDERR 79
-tests/operator_overloading_index_operator.glos:13:15: Key 'Bar' does not exist
+tests/operator_overloading_index_operator.glos:13:13: Key 'Bar' does not exist
 

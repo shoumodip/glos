@@ -10,7 +10,7 @@ typedef struct {
     SV          line;
 } Pos;
 
-#define Pos_Fmt    "%s:%zu:%zu: "
+#define Pos_Fmt    "%s:%zu:%zu:"
 #define Pos_Arg(p) ((p).path), ((p).row + 1), ((p).col + 1)
 
 typedef enum {

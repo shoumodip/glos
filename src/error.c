@@ -17,8 +17,7 @@ static void error_begin(Error_Kind kind) {
     assert(!active);
     active = true;
     if (view_pos.path) {
-        // TODO: Pos_Fmt has a space at the end. Remove it later, and then use it here
-        afprintf(stderr, ANSI_BOLD | ANSI_UNDERLINE, "%s:%zu:%zu:", view_pos.path, view_pos.row + 1, view_pos.col + 1);
+        afprintf(stderr, ANSI_BOLD | ANSI_UNDERLINE, Pos_Fmt, Pos_Arg(view_pos));
         fprintf(stderr, " ");
     }
 
@@ -227,6 +226,12 @@ static const char *get_end_from_parts(SV sv, Pos pos) {
         return sv_end;
     }
     return line_end;
+}
+
+Pos get_leftmost_point_of_node(const Node *n) {
+    Range r = {.begin = &n->token, .end = &n->token};
+    range_apply_node(&r, n);
+    return r.begin->pos;
 }
 
 void error_node_begin(Error_Kind kind, const Node *n) {

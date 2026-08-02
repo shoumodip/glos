@@ -117,7 +117,6 @@ static void error_invalid(Pos pos, SV sv, const char *label) {
     exit(1);
 }
 
-// TODO: This is broken
 static void error_unterminated(Lexer *l, Pos begin, const char *label) {
     error_range(EK_ERROR, begin, l->pos, "Unterminated %s", label);
     exit(1);

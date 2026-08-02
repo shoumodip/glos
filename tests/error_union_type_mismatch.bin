@@ -2,5 +2,5 @@ EXIT 134
 STDOUT 0
 
 STDERR 56
-tests/error_union_type_mismatch.glos:8:7: Type mismatch
+tests/error_union_type_mismatch.glos:8:5: Type mismatch
 

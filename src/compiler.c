@@ -2644,7 +2644,7 @@ static LLVMValueRef compile_binary_with_overloaded_operator(
     args[1].value = rhs;
     args[1].type = &fn_spec->args[1].type;
 
-    compile_optional_arguments(c, args, fn_spec, binary->node.token.pos);
+    compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node((Node *) binary));
     LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
 
     arena_reset(&temp_arena, checkpoint);
@@ -2761,7 +2761,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 args[0].value = value;
                 args[0].type = &fn_spec->args[0].type;
 
-                compile_optional_arguments(c, args, fn_spec, n->token.pos);
+                compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node(n));
                 LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
 
                 arena_reset(&temp_arena, checkpoint);
@@ -3171,8 +3171,9 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 // Failure
                 LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
                 {
-                    const char *message = arena_sprintf(
-                        &temp_arena, Pos_Fmt "Cannot access method of null trait\n", Pos_Arg(n->token.pos));
+                    const Pos   pos = get_leftmost_point_of_node(n);
+                    const char *message =
+                        arena_sprintf(&temp_arena, Pos_Fmt " Cannot access method of null trait\n", Pos_Arg(pos));
 
                     compile_panic(c, message, NULL, NULL, NULL);
                     arena_reset(&temp_arena, message);
@@ -3241,9 +3242,11 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 // Failure
                 LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
                 {
+                    const Pos pos = get_leftmost_point_of_node(n);
+
                     // TODO: Now that we have RTTI, this can be a better error message, like the one in constant
                     // expressions
-                    const char *message = arena_sprintf(&temp_arena, Pos_Fmt "Type mismatch\n", Pos_Arg(n->token.pos));
+                    const char *message = arena_sprintf(&temp_arena, Pos_Fmt " Type mismatch\n", Pos_Arg(pos));
                     compile_panic(c, message, NULL, NULL, NULL);
                     arena_reset(&temp_arena, message);
                 }
@@ -3510,7 +3513,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             c->group_values.count = group_values_count_save;
         }
 
-        compile_optional_arguments(c, args, fn_spec, call->fn->token.pos);
+        compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node((Node *) call));
 
         const bool   is_group = n->type.kind == TYPE_GROUP;
         LLVMValueRef result = compile_call(c, fn, args, args_count, is_trait_call, ref || is_group);
@@ -3566,7 +3569,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 args[2].type = &fn_spec->args[2].type;
             }
 
-            compile_optional_arguments(c, args, fn_spec, n->token.pos);
+            compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node(n));
             if (index->is_ranged) {
                 LLVMValueRef value = compile_call(c, fn, args, fn_spec->args_count, false, ref);
                 arena_reset(&temp_arena, checkpoint);
@@ -3668,7 +3671,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 {
                     const char *message = arena_sprintf(
                         &temp_arena,
-                        Pos_Fmt "Range (%%zd..%%zd) is invalid: Beginning of range is more than end\n",
+                        Pos_Fmt " Range (%%zd..%%zd) is invalid: Beginning of range is more than end\n",
                         Pos_Arg(n->token.pos));
 
                     compile_panic(c, message, a, b, NULL);
@@ -3703,7 +3706,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                     {
                         const char *message = arena_sprintf(
                             &temp_arena,
-                            Pos_Fmt "Range (%%zd..%%zd) is out of bounds in %s of length %%zd\n",
+                            Pos_Fmt " Range (%%zd..%%zd) is out of bounds in %s of length %%zd\n",
                             Pos_Arg(n->token.pos),
                             label);
 
@@ -3761,7 +3764,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             {
                 const char *message = arena_sprintf(
                     &temp_arena,
-                    Pos_Fmt "Index %%zd is out of bounds in %s of length %%zd\n",
+                    Pos_Fmt " Index %%zd is out of bounds in %s of length %%zd\n",
                     Pos_Arg(n->token.pos),
                     label);
 
@@ -4180,7 +4183,7 @@ static void compile_stmt(Compiler *c, Node *n) {
                         args[1].value = value;
                         args[1].type = &fn_spec->args[1].type;
 
-                        compile_optional_arguments(c, args, fn_spec, pred->token.pos);
+                        compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node(pred));
                         LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
 
                         arena_reset(&temp_arena, checkpoint);
@@ -4265,10 +4268,11 @@ static void compile_stmt(Compiler *c, Node *n) {
         if (sw->fallback) {
             compile_stmt(c, ((Node_Case *) sw->fallback)->body);
         } else if (sw->enumeration) {
+            const Pos   pos = get_leftmost_point_of_node(n);
             const char *message = arena_sprintf(
                 &temp_arena,
-                Pos_Fmt "Unreachable: Invalid enum value: %%%s\n",
-                Pos_Arg(n->token.pos),
+                Pos_Fmt " Unreachable: Invalid enum value: %%%s\n",
+                Pos_Arg(pos),
                 type_is_signed(sw->expr->type) ? "zd" : "zu");
 
             set_debug_pos(c, n->token.pos);
@@ -4276,8 +4280,9 @@ static void compile_stmt(Compiler *c, Node *n) {
             arena_reset(&temp_arena, message);
             jump_to_end = false;
         } else if (sw->unionn) {
+            const Pos   pos = get_leftmost_point_of_node(n);
             const char *message =
-                arena_sprintf(&temp_arena, Pos_Fmt "Unreachable: Invalid union tag: %%zd\n", Pos_Arg(n->token.pos));
+                arena_sprintf(&temp_arena, Pos_Fmt " Unreachable: Invalid union tag: %%zd\n", Pos_Arg(pos));
 
             set_debug_pos(c, n->token.pos);
             compile_panic(c, message, expr, NULL, NULL);
@@ -4598,5 +4603,3 @@ void compiler_build(Compiler *c, const char *output_path) {
     da_free(&c->defers);
     arena_reset(&temp_arena, checkpoint);
 }
-
-// TODO: Runtime error positions might be different now from the compile time ones
