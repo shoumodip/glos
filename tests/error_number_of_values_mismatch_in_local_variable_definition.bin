@@ -1,8 +1,8 @@
 EXIT 1
 STDOUT 0
 
-STDERR 182
-tests/error_number_of_values_mismatch_in_local_variable_definition.glos:2:10: ERROR: Unequal number of values. There are 2 definitions, and 3 assignments
+STDERR 181
+tests/error_number_of_values_mismatch_in_local_variable_definition.glos:2:5: ERROR: Unequal number of values. There are 2 definitions, and 3 assignments
 
     a, b := 69, 420, 1337
 

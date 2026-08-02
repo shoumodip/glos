@@ -2300,7 +2300,7 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
 
             if (lhs_count != rhs_count) {
                 error_number_of_values_mismatch(
-                    definition->node.token,
+                    (Node *) definition,
                     lhs_count,
                     rhs_count,
                     add_trailing_s_if_plural("definition", lhs_count),
@@ -2916,7 +2916,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
     const size_t lhs_count = is_lhs_group ? binary->lhs->type.spec.group.count : 1;
     const size_t rhs_count = is_rhs_group ? binary->rhs->type.spec.group.count : 1;
     if (lhs_count != rhs_count) {
-        error_number_of_values_mismatch(binary->node.token, lhs_count, rhs_count, NULL, NULL);
+        error_number_of_values_mismatch((Node *) binary, lhs_count, rhs_count, NULL, NULL);
     }
 
     if (is_lhs_group) {

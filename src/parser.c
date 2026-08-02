@@ -13,9 +13,8 @@
 #include <errno.h>
 #endif //  PLATFORM_X86_64_WINDOWS
 
-// TODO: Rework this using node
 void error_number_of_values_mismatch(
-    Token token, size_t lhs_count, size_t rhs_count, const char *lhs_label, const char *rhs_label) {
+    Node *node, size_t lhs_count, size_t rhs_count, const char *lhs_label, const char *rhs_label) {
     if (!lhs_label) {
         lhs_label = "on the left hand side";
     }
@@ -23,9 +22,9 @@ void error_number_of_values_mismatch(
     if (!rhs_label) {
         rhs_label = "on the right hand side";
     }
-    error_token(
+    error_node(
         EK_ERROR,
-        token,
+        node,
         "Unequal number of values. There %s %zu %s, and %zu %s",
         lhs_count == 1 ? "is" : "are",
         lhs_count,
@@ -430,7 +429,7 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
         if (define->expr && define->expr->kind == NODE_GROUP) {
             rhs_count = ((Node_Group *) define->expr)->count;
             error_number_of_values_mismatch(
-                define->node.token,
+                (Node *) define,
                 lhs_count,
                 rhs_count,
                 add_trailing_s_if_plural("definition", lhs_count),
@@ -446,7 +445,7 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
         if (is_assigned && define->is_value_known_at_compile_time) {
             if (define->expr->kind != NODE_GROUP) {
                 error_number_of_values_mismatch(
-                    define->node.token,
+                    (Node *) define,
                     lhs_count,
                     rhs_count,
 
@@ -459,7 +458,7 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
             rhs_count = rhs->count;
             if (lhs_count != rhs_count) {
                 error_number_of_values_mismatch(
-                    define->node.token,
+                    (Node *) define,
                     lhs_count,
                     rhs_count,
 
