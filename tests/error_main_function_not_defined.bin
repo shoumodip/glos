@@ -1,0 +1,10 @@
+EXIT 1
+STDOUT 0
+
+STDERR 63
+ERROR: Function 'main' is not defined
+
+    main :: () {
+    }
+
+

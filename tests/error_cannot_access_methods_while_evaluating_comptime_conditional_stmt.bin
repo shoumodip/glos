@@ -1,0 +1,18 @@
+EXIT 1
+STDOUT 0
+
+STDERR 613
+tests/error_cannot_access_methods_while_evaluating_comptime_conditional_stmt.glos:8:9: ERROR: Cannot access methods at this stage of compilation yet
+
+    #if Foo(Bar {}) {
+
+tests/error_cannot_access_methods_while_evaluating_comptime_conditional_stmt.glos:8:1: NOTE: Evaluating this conditional statement
+
+    #if Foo(Bar {}) {
+    }
+
+    The '#if' statements are evaluated immediately instead of waiting for all the definitions
+    to be registered. Therefore at this point of time, the methods might not be defined yet.
+    Thus, to prevent inconsistent behaviour, any operations involving them are disallowed.
+
+

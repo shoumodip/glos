@@ -1,0 +1,9 @@
+Foo :: trait {
+    foo: ()
+}
+
+Bar :: struct {}
+foo :: (this: Bar) {}
+
+#if Foo(Bar {}) {
+}
