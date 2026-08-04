@@ -28,8 +28,17 @@ static Type type_without_ref(Type t) {
     return t;
 }
 
-static void error_undefined(const Token *t, const char *label, bool no_exit) {
+static void error_undefined(Compiler *c, const Token *t, const char *label, bool no_exit) {
     error_token(EK_ERROR, *t, "Undefined %s '" SV_Fmt "'", label, SV_Arg(t->sv));
+    if (c->current_comptime_conditional_stmt) {
+        error_node(EK_NOTE, c->current_comptime_conditional_stmt, "Evaluating this conditional statement");
+        afprintf(
+            stderr,
+            ANSI_COLOR_YELLOW | ANSI_BOLD,
+            "    The '#if' statements are evaluated immediately instead of waiting for all the definitions to\n"
+            "    be registered. Thus, even though this identifier might be defined later, right now it isn't.\n\n");
+    }
+
     if (!no_exit) {
         exit(1);
     }
@@ -201,14 +210,14 @@ static inline void check_int_limit(Node *n, Int128 value) {
     check_int_limit_ex(n, value, false, NULL);
 }
 
-static i64 get_enum_value(Node_Enum *enumm, SV name, const Token *t) {
+static i64 get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t) {
     ll_foreach(it, &enumm->values) {
         if (sv_eq(it->token.sv, name)) {
             return it->token.as.integer;
         }
     }
 
-    error_undefined(t, "enumeration value", true);
+    error_undefined(c, t, "enumeration value", true);
     error_node(EK_NOTE, (Node *) enumm, "Enumeration defined here");
     exit(1);
 }
@@ -309,7 +318,7 @@ static void cast_untyped(Compiler *c, Node *n, Type expected) {
         if (member->is_enum) {
             assert(type_kind_eq(member->node.type, TYPE_UNKNOWN_ENUM));
             assert(type_kind_eq(expected, TYPE_ENUM));
-            member->enum_value = get_enum_value(expected.spec.enumm.definition, n->token.sv, &n->token);
+            member->enum_value = get_enum_value(c, expected.spec.enumm.definition, n->token.sv, &n->token);
             n->type = expected;
         } else {
             assert(member->module_access_definition); // Must be a module access
@@ -873,6 +882,19 @@ static Node_Fn *get_main(Compiler *c) {
 
     if (!main->definition_spec->is_const || main->definition_spec->assignment_node->kind != NODE_FN) {
         error_node(EK_ERROR, (Node *) main, "Identifier 'main' must be a function literal");
+        afprintf(
+            stderr,
+            ANSI_COLOR_YELLOW | ANSI_BOLD,
+            "    Expected this:\n"
+            "\n"
+            "        main :: () {\n"
+            "        }\n"
+            "\n"
+            "    This enforcement improves the debugger experience, since the entry function is guaranteed\n"
+            "    to have the link name of 'main.main'\n"
+            "\n");
+
+        // NOTE: If in the future, we change how namespaces are denoted in the link names, this needs to be updated.
         exit(1);
     }
 
@@ -1951,6 +1973,7 @@ static void make_sure_import_is_ready(Compiler *c, Node_Import *import) {
     }
 }
 
+// TODO: This performs more than just definitions...
 static_assert(COUNT_NODES == 28, "");
 static void define_orderless_node(Compiler *c, Node *n, const size_t block_start) {
     switch (n->kind) {
@@ -2057,6 +2080,9 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
     case NODE_IF: {
         Node_If *iff = (Node_If *) n;
         if (iff->is_compile_time) {
+            Node *current_comptime_conditional_stmt_save = c->current_comptime_conditional_stmt;
+            c->current_comptime_conditional_stmt = n;
+
             check_expr(c, iff->condition, REF_NONE);
             type_assert(c, iff->condition, (Type) {.kind = TYPE_BOOL});
 
@@ -2105,14 +2131,18 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
 
                 c->context.replace = iff->context_replace.outer;
             }
+
+            c->current_comptime_conditional_stmt = current_comptime_conditional_stmt_save;
         }
     } break;
 
     case NODE_SWITCH: {
         Node_Switch *sw = (Node_Switch *) n;
         if (sw->is_compile_time) {
-            check_switch_expr_and_alloc_preds(c, sw);
+            Node *current_comptime_conditional_stmt_save = c->current_comptime_conditional_stmt;
+            c->current_comptime_conditional_stmt = n;
 
+            check_switch_expr_and_alloc_preds(c, sw);
             const Const_Value value = eval_const_expr(c, sw->expr, false);
 
             size_t iota = 0;
@@ -2179,6 +2209,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
             }
 
             check_switch_exhaustive(sw);
+            c->current_comptime_conditional_stmt = current_comptime_conditional_stmt_save;
         }
     } break;
 
@@ -2511,19 +2542,43 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             }
         }
     } else {
-        error_undefined(&n->token, "identifier", false);
+        error_undefined(c, &n->token, "identifier", false);
     }
 }
 
-static bool
-get_method_spec(Compiler *c, Type receiver, SV name, Method_Spec *spec, Module *defining_in_module, bool *is_named) //
+static void check_that_methods_can_be_accessed(Compiler *c, Node *receiver, Module *definition) {
+    if (definition->orderless_check_status != CHECKED) {
+        error_node(EK_ERROR, receiver, "Cannot access methods at this stage of compilation yet");
+
+        assert(c->current_comptime_conditional_stmt);
+        error_node(EK_NOTE, c->current_comptime_conditional_stmt, "Evaluating this conditional statement");
+
+        afprintf(
+            stderr,
+            ANSI_COLOR_YELLOW | ANSI_BOLD,
+            "    The '#if' statements are evaluated immediately instead of waiting for all the definitions\n"
+            "    to be registered. Therefore at this point of time, the methods might not be defined yet.\n"
+            "    Thus, to prevent inconsistent behaviour, any operations involving them are disallowed.\n\n");
+
+        exit(1);
+    }
+}
+
+static bool get_method_spec(
+    Compiler    *c,
+    Node        *receiver_node,
+    Type         receiver_type,
+    SV           name,
+    Method_Spec *spec,
+    Module      *defining_in_module,
+    bool        *is_named) //
 {
     if (spec) {
         spec->name = name;
     }
 
-    if (type_kind_eq(receiver, TYPE_ENUM)) {
-        Node_Enum *definition = receiver.spec.enumm.definition;
+    if (type_kind_eq(receiver_type, TYPE_ENUM)) {
+        Node_Enum *definition = receiver_type.spec.enumm.definition;
         if (spec) {
             spec->uid = (uintptr_t) definition;
         }
@@ -2535,9 +2590,11 @@ get_method_spec(Compiler *c, Type receiver, SV name, Method_Spec *spec, Module *
 
             return defining_in_module == definition->module;
         }
+
+        check_that_methods_can_be_accessed(c, receiver_node, definition->module);
         return true;
-    } else if (type_kind_eq(receiver, TYPE_UNION)) {
-        Node_Union *definition = receiver.spec.unionn->definition;
+    } else if (type_kind_eq(receiver_type, TYPE_UNION)) {
+        Node_Union *definition = receiver_type.spec.unionn->definition;
         if (spec) {
             spec->uid = (uintptr_t) definition;
         }
@@ -2549,9 +2606,11 @@ get_method_spec(Compiler *c, Type receiver, SV name, Method_Spec *spec, Module *
 
             return defining_in_module == definition->module;
         }
+
+        check_that_methods_can_be_accessed(c, receiver_node, definition->module);
         return true;
-    } else if (type_kind_eq(receiver, TYPE_STRUCT)) {
-        Node_Struct *definition = receiver.spec.structt->definition;
+    } else if (type_kind_eq(receiver_type, TYPE_STRUCT)) {
+        Node_Struct *definition = receiver_type.spec.structt->definition;
         if (spec) {
             spec->uid = (uintptr_t) definition;
         }
@@ -2563,10 +2622,12 @@ get_method_spec(Compiler *c, Type receiver, SV name, Method_Spec *spec, Module *
 
             return defining_in_module == definition->module;
         }
+
+        check_that_methods_can_be_accessed(c, receiver_node, definition->module);
         return true;
-    } else if (receiver.distinct) {
+    } else if (receiver_type.distinct) {
         if (spec) {
-            spec->uid = (uintptr_t) receiver.distinct;
+            spec->uid = (uintptr_t) receiver_type.distinct;
         }
 
         if (defining_in_module) {
@@ -2574,13 +2635,15 @@ get_method_spec(Compiler *c, Type receiver, SV name, Method_Spec *spec, Module *
                 *is_named = true;
             }
 
-            return defining_in_module == receiver.distinct->module;
+            return defining_in_module == receiver_type.distinct->module;
         }
+
+        check_that_methods_can_be_accessed(c, receiver_node, receiver_type.distinct->module);
         return true;
     }
 
     static const Type string_type = {.kind = TYPE_STRING};
-    if (type_eq(receiver, string_type)) {
+    if (type_eq(receiver_type, string_type)) {
         if (spec) {
             spec->uid = (uintptr_t) &string_type;
         }
@@ -2592,6 +2655,8 @@ get_method_spec(Compiler *c, Type receiver, SV name, Method_Spec *spec, Module *
 
             return defining_in_module == c->builtin_module;
         }
+
+        check_that_methods_can_be_accessed(c, receiver_node, c->builtin_module);
         return true;
     }
 
@@ -2655,9 +2720,13 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
                 const Type_Trait_Method *it = &trait->methods[i];
 
                 Method_Spec spec = {0};
-                if (!get_method_spec(c, receiver, it->name, &spec, NULL, NULL)) {
+                if (!get_method_spec(c, n, receiver, it->name, &spec, NULL, NULL)) {
                     errors[i] = (Error) {.kind = UNDEFINED};
                     goto next;
+                }
+
+                {
+                    //
                 }
 
                 Node_Fn *fn = get_method(c, spec, n->module);
@@ -2812,13 +2881,13 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
     return trait->impls.head;
 }
 
-static bool is_indexable(Compiler *c, Type type, Module *module) {
+static bool is_indexable(Compiler *c, Node *n, Type type, Module *module) {
     if (type_kind_eq(type, TYPE_ARRAY) || type_kind_eq(type, TYPE_SLICE) || type_kind_eq(type, TYPE_STRING)) {
         return true;
     }
 
     Method_Spec spec = {0};
-    if (get_method_spec(c, type, sv_from_cstr("index"), &spec, NULL, NULL)) {
+    if (get_method_spec(c, n, type, sv_from_cstr("index"), &spec, NULL, NULL)) {
         return get_method(c, spec, module) != NULL;
     }
 
@@ -2827,7 +2896,7 @@ static bool is_indexable(Compiler *c, Type type, Module *module) {
 
 static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
     Method_Spec spec = {0};
-    if (get_method_spec(c, receiver->type, sv_from_cstr(operator), &spec, NULL, NULL)) {
+    if (get_method_spec(c, receiver, receiver->type, sv_from_cstr(operator), &spec, NULL, NULL)) {
         Node_Fn *method = get_method(c, spec, module);
         if (method) {
             const Type_Fn *method_spec = method->node.type.spec.fn;
@@ -3099,7 +3168,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call, const Type_Fn *fn
             }
 
             if (!expected) {
-                error_undefined(&it_name->token, "argument", true);
+                error_undefined(c, &it_name->token, "argument", true);
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                 exit(1);
             }
@@ -3502,7 +3571,7 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
                 }
 
                 if (!ok) {
-                    error_undefined(&it_field_name->node.token, "field", true);
+                    error_undefined(c, &it_field_name->node.token, "field", true);
                     error_node(EK_NOTE, (Node *) struct_spec->definition, "Structure defined here");
                     exit(1);
                 }
@@ -3962,7 +4031,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
             bool can_have_methods = false;
             {
                 Method_Spec spec = {0};
-                if (get_method_spec(c, member->lhs->type, n->token.sv, &spec, NULL, NULL)) {
+                if (get_method_spec(c, member->lhs, member->lhs->type, n->token.sv, &spec, NULL, NULL)) {
                     can_have_methods = true;
                     member->method = get_method(c, spec, member->module);
                     if (member->method) {
@@ -4008,7 +4077,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                 if (member->lhs->type.is_meta && member->lhs->type.kind == TYPE_ENUM) {
                     check_whether_member_access_is_valid(member);
                     Node_Enum *enumm = member->lhs->type.spec.enumm.definition;
-                    member->enum_value = get_enum_value(enumm, n->token.sv, &n->token);
+                    member->enum_value = get_enum_value(c, enumm, n->token.sv, &n->token);
                     member->is_enum = true;
                     n->type = member->lhs->type;
                     n->type.is_meta = false;
@@ -4044,7 +4113,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         }
 
                         if (!ok) {
-                            error_undefined(&n->token, "field or method", false);
+                            error_undefined(c, &n->token, "field or method", false);
                         }
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_UNION)) {
@@ -4060,7 +4129,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                             n->type = (Type) {.kind = TYPE_I64};
                             member->field_index = 0;
                         } else {
-                            error_undefined(&n->token, "field or method", false);
+                            error_undefined(c, &n->token, "field or method", false);
                         }
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_STRUCT)) {
@@ -4078,7 +4147,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                     }
 
                     if (!definition) {
-                        error_undefined(&n->token, "field or method", true);
+                        error_undefined(c, &n->token, "field or method", true);
                         error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
                         exit(1);
                     }
@@ -4094,7 +4163,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         n->type = (Type) {.kind = TYPE_I64};
                         member->field_index = 1;
                     } else {
-                        error_undefined(&n->token, "field", false);
+                        error_undefined(c, &n->token, "field", false);
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_SLICE)) {
                     check_whether_member_access_is_valid(member);
@@ -4106,7 +4175,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         n->type = (Type) {.kind = TYPE_I64};
                         member->field_index = 1;
                     } else {
-                        error_undefined(&n->token, "field", false);
+                        error_undefined(c, &n->token, "field", false);
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_STRING)) {
                     check_whether_member_access_is_valid(member);
@@ -4117,7 +4186,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         n->type = (Type) {.kind = TYPE_I64};
                         member->field_index = 1;
                     } else {
-                        error_undefined(&n->token, "field", false);
+                        error_undefined(c, &n->token, "field", false);
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_MODULE)) {
                     check_whether_member_access_is_valid(member);
@@ -4129,13 +4198,13 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                         receiver.is_meta = false;
 
                         Method_Spec spec = {0};
-                        if (get_method_spec(c, receiver, n->token.sv, &spec, NULL, NULL)) {
+                        if (get_method_spec(c, member->lhs, receiver, n->token.sv, &spec, NULL, NULL)) {
                             member->method = get_method(c, spec, member->module);
                             if (member->method) {
                                 ok = true;
                                 n->type = member->method->node.type;
                             } else {
-                                error_undefined(&n->token, "method", false);
+                                error_undefined(c, &n->token, "method", false);
                             }
                         } else {
                             error_node(EK_ERROR, n, "There are no methods defined on %s", type_to_cstr(receiver));
@@ -5041,7 +5110,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                 if (index->lhs->type.ref) {
                     error_node(
                         EK_ERROR, index->lhs, "Pointers must be converted into slices before they can be indexed");
-                    if (is_indexable(c, index->lhs->type, index->module)) {
+                    if (is_indexable(c, index->lhs, index->lhs->type, index->module)) {
                         afprintf(
                             stderr,
                             ANSI_COLOR_YELLOW | ANSI_BOLD,
@@ -5558,7 +5627,15 @@ void check_nodes(Compiler *c) {
 
             bool        is_named = false;
             Method_Spec spec = {0};
-            if (get_method_spec(c, receiver_type, name, &spec, fn->module, &is_named)) {
+            if (type_kind_eq(receiver_type, TYPE_TRAIT)) {
+                error_node(
+                    EK_ERROR,
+                    define->type,
+                    "Cannot define methods on %s. (It is a trait)",
+                    type_to_cstr(receiver_type));
+                error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
+                exit(1);
+            } else if (get_method_spec(c, define->type, receiver_type, name, &spec, fn->module, &is_named)) {
                 if (!is_named) {
                     error_node(EK_ERROR, define->type, "The receiver of a method cannot have an anonymous type");
                     error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
@@ -5603,11 +5680,8 @@ void check_nodes(Compiler *c) {
 }
 
 // TODO: Sometimes non-cyclic definitions are falsely flagged as cyclic
-// TODO: Should #if be deferred until end of orderless definitions?
 // TODO: Enum values is a bit broken (signedness)
 //
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?
-//
-// TODO: Show the method signature required for operator overloading

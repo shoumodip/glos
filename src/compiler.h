@@ -30,6 +30,8 @@ typedef struct {
     Type ordering_type;
     Type equivalence_type;
 
+    Node *current_comptime_conditional_stmt;
+
     // These are used both by the analyzer and the compiler
     Context context;
 
