@@ -23,10 +23,9 @@ void modules_free(Modules *ms) {
     ht_free(&ms->table);
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 void sb_push_type(SB *sb, Type type) {
     assert(!type.is_meta);
-
     if (type.distinct) {
         const Type distinct_type = type.distinct->node.type;
         if (distinct_type.ref <= type.ref) {
@@ -207,6 +206,10 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_cstr(sb, "string");
         break;
 
+    case TYPE_POLYMORPH:
+        sb_push_sv(sb, type.spec.polymorph.definition->name->node.token.sv);
+        break;
+
     case TYPE_GROUP:
         sb_push_cstr(sb, "(");
         for (size_t i = 0; i < type.spec.group.count; i++) {
@@ -322,7 +325,7 @@ static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
     return true;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_eq(Type a, Type b) {
     if (a.is_meta) {
         return b.is_meta;
@@ -330,6 +333,14 @@ bool type_eq(Type a, Type b) {
 
     if (b.is_meta) {
         return a.is_meta;
+    }
+
+    if (a.kind == TYPE_POLYMORPH) {
+        return b.ref >= a.ref;
+    }
+
+    if (b.kind == TYPE_POLYMORPH) {
+        return a.ref >= b.ref;
     }
 
     if (a.kind != b.kind || a.ref != b.ref) {
@@ -403,7 +414,7 @@ bool type_eq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_kind_eq(Type type, Type_Kind kind) {
     if (type.is_meta) {
         return false;
@@ -417,7 +428,7 @@ bool type_is_numeric(Type type) {
            type_kind_eq(type, TYPE_UNKNOWN_COMPOUND);
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_integer(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -465,7 +476,7 @@ bool type_is_scalar(Type type) {
     return false;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_signed(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -492,7 +503,7 @@ bool type_is_signed(Type type) {
     }
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_untyped(Type type) {
     if (type.is_meta || type.ref) {
         return false;
@@ -501,7 +512,7 @@ bool type_is_untyped(Type type) {
     return type.kind == TYPE_INT;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_unknown(Type type) {
     if (type.is_meta || type.ref) {
         return false;
@@ -606,8 +617,8 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
-Node *node_alloc(Module *module, Node_Kind kind, Token token) {
+static_assert(COUNT_NODES == 29, "");
+size_t node_size(Node_Kind kind) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(Node_Atom), // This comment is here to prevent clang-format from messing this up
         [NODE_GROUP] = sizeof(Node_Group),
@@ -617,6 +628,7 @@ Node *node_alloc(Module *module, Node_Kind kind, Token token) {
         [NODE_ASSERT] = sizeof(Node_Assert),
         [NODE_IMPORT] = sizeof(Node_Import),
         [NODE_DISTINCT] = sizeof(Node_Distinct),
+        [NODE_POLYMORPH] = sizeof(Node_Polymorph),
         [NODE_INTERPOLATION] = sizeof(Node_Interpolation),
 
         // This comment is here to prevent clang-format from messing this up
@@ -647,7 +659,11 @@ Node *node_alloc(Module *module, Node_Kind kind, Token token) {
     };
 
     assert(kind >= NODE_ATOM && kind < COUNT_NODES);
-    Node *node = arena_alloc(&default_arena, sizes[kind]);
+    return sizes[kind];
+}
+
+Node *node_alloc(Module *module, Node_Kind kind, Token token) {
+    Node *node = arena_alloc(&default_arena, node_size(kind));
     node->kind = kind;
     node->token = token;
     node->module = module;
@@ -697,7 +713,7 @@ static void nodes_debug_impl(FILE *f, Nodes ns, int depth, const char *label) {
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
+static_assert(COUNT_NODES == 29, "");
 static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     if (!n) {
         return;
@@ -760,6 +776,11 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
         fprintf(f, "Distinct {\n");
         node_debug_impl(f, distinct->value, depth + 1, "Value");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
+    } break;
+
+    case NODE_POLYMORPH: {
+        Node_Polymorph *polymorph = (Node_Polymorph *) n;
+        fprintf(f, "Polymorph '" SV_Fmt "'\n", SV_Arg(polymorph->name->node.token.sv));
     } break;
 
     case NODE_INTERPOLATION: {

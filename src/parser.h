@@ -21,7 +21,8 @@ typedef struct {
 
     bool after_private;
 
-    Node_Fn *fn_current;
+    Node_Fn    *fn_current;
+    Polymorphs *polymorphs;
 } Parser_State;
 
 typedef struct {

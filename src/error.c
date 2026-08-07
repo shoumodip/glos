@@ -49,7 +49,7 @@ static void range_apply_token(Range *r, const Token *t) {
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
+static_assert(COUNT_NODES == 29, "");
 static void range_apply_node(Range *r, const Node *n) {
     if (!n) {
         return;
@@ -97,6 +97,11 @@ static void range_apply_node(Range *r, const Node *n) {
     case NODE_IMPORT: {
         Node_Import *import = (Node_Import *) n;
         range_apply_token(r, &import->path);
+    } break;
+
+    case NODE_POLYMORPH: {
+        Node_Polymorph *polymorph = (Node_Polymorph *) n;
+        range_apply_node(r, (Node *) polymorph->name);
     } break;
 
     case NODE_DISTINCT: {

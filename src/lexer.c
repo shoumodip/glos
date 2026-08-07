@@ -220,7 +220,7 @@ Token lexer_get_string(Lexer *l, Pos pos, Pos start) {
     return token;
 }
 
-static_assert(COUNT_TOKENS == 77, "");
+static_assert(COUNT_TOKENS == 78, "");
 Token lexer_iter(Lexer *l) {
     skip_whitespace(l);
 
@@ -338,6 +338,10 @@ Token lexer_iter(Lexer *l) {
 
     case ',':
         token.kind = TOKEN_COMMA;
+        break;
+
+    case '$':
+        token.kind = TOKEN_DOLLAR;
         break;
 
     case '(':

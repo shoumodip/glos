@@ -32,7 +32,7 @@ void link_flags_add_libname(Link_Flags *ls, SV name) {
 #endif // PLATFORM_X86_64_WINDOWS
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static LLVMTypeRef compile_type(Compiler *c, Type *type) {
     if (!type) {
         return NULL;
@@ -98,6 +98,10 @@ static LLVMTypeRef compile_type(Compiler *c, Type *type) {
         type->llvm = definition->llvm;
     } break;
 
+    case TYPE_TRAIT:
+        type->llvm = c->llvm_trait_type;
+        break;
+
     case TYPE_UNION: {
         Type_Union *spec = type->spec.unionn;
         if (!spec->llvm) {
@@ -155,9 +159,8 @@ static LLVMTypeRef compile_type(Compiler *c, Type *type) {
         type->llvm = c->llvm_slice_type;
         break;
 
-    case TYPE_TRAIT:
-        type->llvm = c->llvm_trait_type;
-        break;
+    case TYPE_POLYMORPH:
+        unreachable();
 
     case TYPE_GROUP: {
         Type_Group *spec = &type->spec.group;
@@ -267,7 +270,7 @@ typedef struct {
     size_t      direct_types_count;
 } ABI_Info;
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static bool type_is_compound(Type type) {
     if (type.ref) {
         return false;
@@ -283,13 +286,16 @@ static bool type_is_compound(Type type) {
     case TYPE_GROUP:
         return true;
 
+    case TYPE_POLYMORPH:
+        unreachable();
+
     default:
         return false;
     }
 }
 
 #ifdef PLATFORM_X86_64_LINUX
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, LLVMTypeRef out[2]) {
     assert(type_is_compound(type));
     switch (type.kind) {
@@ -345,6 +351,9 @@ static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, L
         }
     } break;
 
+    case TYPE_POLYMORPH:
+        unreachable();
+
     default:
         unreachable();
     }
@@ -361,7 +370,7 @@ static ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         return info;
     }
 
-    static_assert(COUNT_TYPES == 25, "");
+    static_assert(COUNT_TYPES == 26, "");
     switch (type->kind) {
     case TYPE_UNIT:
         info.direct_types[info.direct_types_count++] = LLVMVoidTypeInContext(c->llvm_context);
@@ -680,7 +689,7 @@ get_debug_for_builtin_compound_type(Compiler *c, SV name, Builtin_Compound_Type_
     return typedef_metadata;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     assert(!type->is_meta);
     if (type->ref) {
@@ -1123,6 +1132,9 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         fields[1].type = (Type) {.kind = TYPE_I64};
         return get_debug_for_builtin_compound_type(c, sv_from_cstr("string"), fields, len(fields));
     }
+
+    case TYPE_POLYMORPH:
+        unreachable();
 
     case TYPE_GROUP: {
         compile_type(c, type);
@@ -2010,7 +2022,7 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
 
     SV name = {0};
     if (!type->ref) {
-        static_assert(COUNT_TYPES == 25, "");
+        static_assert(COUNT_TYPES == 26, "");
 
         Node_Atom *defined_as = NULL;
         if (type->distinct) {
@@ -2065,6 +2077,7 @@ static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip
 
 static LLVMValueRef compile_type_info_finalize(Compiler *c, Type_Info_Compiler *tic);
 
+static_assert(COUNT_TYPES == 26, "");
 static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
     if (tic->done) {
         return;
@@ -2268,7 +2281,6 @@ static LLVMValueRef compile_type_info_finalize(Compiler *c, Type_Info_Compiler *
     return real;
 }
 
-static_assert(COUNT_TYPES == 25, "");
 static LLVMValueRef compile_type_info(Compiler *c, Type *type) {
     Type_Info_Compiler tic = {0};
     compile_type_info_init(c, &tic, type);
@@ -2651,7 +2663,7 @@ static LLVMValueRef compile_binary_with_overloaded_operator(
     return result;
 }
 
-static_assert(COUNT_NODES == 28, "");
+static_assert(COUNT_NODES == 29, "");
 static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
     if (!n) {
         return NULL;
@@ -2673,7 +2685,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_ATOM: {
         Node_Atom *atom = (Node_Atom *) n;
 
-        static_assert(COUNT_TOKENS == 77, "");
+        static_assert(COUNT_TOKENS == 78, "");
         switch (n->token.kind) {
         case TOKEN_INT:
         case TOKEN_BOOL:
@@ -2739,7 +2751,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         Node_Unary  *unary = (Node_Unary *) n;
         LLVMValueRef value = NULL;
 
-        static_assert(COUNT_TOKENS == 77, "");
+        static_assert(COUNT_TOKENS == 78, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             value = compile_expr(c, unary->value, false);
@@ -2839,7 +2851,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 LLVMValueRef (*u)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
             } Op;
 
-            static_assert(COUNT_TOKENS == 77, "");
+            static_assert(COUNT_TOKENS == 78, "");
             static const Op ops[COUNT_TOKENS] = {
                 [TOKEN_ADD] = {.i = LLVMBuildAdd},
                 [TOKEN_SUB] = {.i = LLVMBuildSub},
@@ -2889,7 +2901,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 LLVMIntPredicate u;
             } Op;
 
-            static_assert(COUNT_TOKENS == 77, "");
+            static_assert(COUNT_TOKENS == 78, "");
             static const Op ops[COUNT_TOKENS] = {
                 [TOKEN_GT] = {.i = LLVMIntSGT, .u = LLVMIntUGT},
                 [TOKEN_GE] = {.i = LLVMIntSGE, .u = LLVMIntUGE},
@@ -2923,7 +2935,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 LLVMValueRef (*u)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
             } Op;
 
-            static_assert(COUNT_TOKENS == 77, "");
+            static_assert(COUNT_TOKENS == 78, "");
             static const Op ops[COUNT_TOKENS] = {
                 [TOKEN_ADD_SET] = {.i = LLVMBuildAdd},
                 [TOKEN_SUB_SET] = {.i = LLVMBuildSub},
@@ -3032,7 +3044,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             }
         }
 
-        static_assert(COUNT_TOKENS == 77, "");
+        static_assert(COUNT_TOKENS == 78, "");
         switch (n->token.kind) {
         case TOKEN_SET: {
             const size_t group_values_count_save = c->group_values.count;
@@ -3291,6 +3303,9 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_DISTINCT:
         unreachable();
+
+    case NODE_POLYMORPH:
+        todo(); // @polymorph
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interp = (Node_Interpolation *) n;
@@ -3591,7 +3606,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         if (index->lhs->type.ref) {
             element_type = n->type.spec.slice.element;
         } else {
-            static_assert(COUNT_TYPES == 25, "");
+            static_assert(COUNT_TYPES == 26, "");
             switch (index->lhs->type.kind) {
             case TYPE_ARRAY:
                 label = "array";
@@ -3905,7 +3920,7 @@ static void introduce_ghost_for_union(Compiler *c, Node_Atom *ghost, bool is_tra
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
+static_assert(COUNT_NODES == 29, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -4593,6 +4608,9 @@ void compiler_build(Compiler *c, const char *output_path) {
 
     ht_free(&c->methods_table);
     da_free(&c->methods_list);
+
+    ht_free(&c->monomorph_replacements);
+    da_free(&c->monomorph_parameters);
 
     da_free(&c->context.defines);
     da_free(&c->context.imports);

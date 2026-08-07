@@ -39,7 +39,8 @@ void context_restore_fn(Context *c, Context_Fn *save);
 void context_push_define(Context *c, Node_Atom *define);
 void context_push_import(Context *c, Node_Import *import);
 
-Node_Atom *context_find_define_ex(const Context *c, SV name, Module *skip);
+Node_Atom *context_find_define_in_fn(const Context *c, const Context_Fn *fn, SV name);
+Node_Atom *context_find_define_skipping(const Context *c, SV name, Module *skip);
 Node_Atom *context_find_define(const Context *c, SV name);
 
 void context_set_end(Context *c, size_t defines_end, size_t imports_end);

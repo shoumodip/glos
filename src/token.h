@@ -22,6 +22,7 @@ typedef enum {
     TOKEN_COMMA,
     TOKEN_RANGE,
     TOKEN_SPREAD,
+    TOKEN_DOLLAR,
 
     TOKEN_INT,
     TOKEN_BOOL,

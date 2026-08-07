@@ -2,6 +2,7 @@
 #define COMPILER_H
 
 #include "context.h"
+#include "node.h"
 #include "parser.h"
 
 #include <llvm-c/Target.h>
@@ -18,6 +19,11 @@ typedef struct {
 } Method_Spec;
 
 typedef struct {
+    Node_Polymorph *from;
+    Type            to;
+} Monomorph_Parameter;
+
+typedef struct {
     // These are used only by the analyzer
     Type main_fn_type;
     DA(Type_Struct_Field) struct_fields;
@@ -31,6 +37,9 @@ typedef struct {
     Type equivalence_type;
 
     Node *current_comptime_conditional_stmt;
+
+    HT(void *, void *) monomorph_replacements;
+    DA(Monomorph_Parameter) monomorph_parameters;
 
     // These are used both by the analyzer and the compiler
     Context context;

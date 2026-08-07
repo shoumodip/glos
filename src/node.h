@@ -13,12 +13,13 @@ typedef struct Node Node;
 typedef struct Node_Atom   Node_Atom;
 typedef struct Node_Define Node_Define;
 
-typedef struct Node_Fn     Node_Fn;
-typedef struct Node_Enum   Node_Enum;
-typedef struct Node_Trait  Node_Trait;
-typedef struct Node_Union  Node_Union;
-typedef struct Node_Struct Node_Struct;
-typedef struct Node_Import Node_Import;
+typedef struct Node_Fn        Node_Fn;
+typedef struct Node_Enum      Node_Enum;
+typedef struct Node_Trait     Node_Trait;
+typedef struct Node_Union     Node_Union;
+typedef struct Node_Struct    Node_Struct;
+typedef struct Node_Import    Node_Import;
+typedef struct Node_Polymorph Node_Polymorph;
 
 typedef struct {
     Node *head;
@@ -65,7 +66,7 @@ typedef struct {
 void modules_free(Modules *m);
 
 typedef enum {
-    TYPE_UNIT,
+    TYPE_UNIT, // TODO: Rename to TYPE_VOID
     TYPE_BOOL,
     TYPE_CHAR,
 
@@ -92,6 +93,8 @@ typedef enum {
     TYPE_SLICE,
     TYPE_STRING,
 
+    TYPE_POLYMORPH,
+
     TYPE_GROUP,
     TYPE_MODULE,
 
@@ -117,6 +120,9 @@ typedef struct {
     Type_Fn_Arg *args;
     size_t       args_count;
     size_t       args_count_min;
+
+    Node_Polymorph **polymorphs;
+    size_t           polymorphs_count;
 
     Variadics_Kind variadics_kind;
     size_t         variadics_index;
@@ -179,6 +185,11 @@ typedef struct {
 } Type_Slice;
 
 typedef struct {
+    Node_Polymorph *definition;
+    bool            is_definition;
+} Type_Polymorph;
+
+typedef struct {
     Type   *data;
     size_t *offsets;
     size_t  count;
@@ -206,6 +217,8 @@ struct Type {
 
         Type_Array array;
         Type_Slice slice;
+
+        Type_Polymorph polymorph;
 
         Type_Group group;
         Module    *module;
@@ -371,6 +384,7 @@ typedef enum {
     NODE_ASSERT,
     NODE_IMPORT,
     NODE_DISTINCT,
+    NODE_POLYMORPH,
     NODE_INTERPOLATION,
 
     NODE_FN,
@@ -427,6 +441,7 @@ struct Node {
     Node     *next;
 
     bool is_memory;
+    bool is_called;
 
     Type *emit_type_info;
 
@@ -436,6 +451,9 @@ struct Node {
 
     Module *module;
 };
+
+// The size of the Node* object
+size_t node_size(Node_Kind kind);
 
 Node *node_alloc(Module *module, Node_Kind kind, Token token);
 Node *node_iter(Node *it, Node *ll);
@@ -450,6 +468,11 @@ struct Context_Replace {
 
     Context_Replace *outer;
 };
+
+typedef struct {
+    Nodes  params;
+    size_t params_count;
+} Polymorphs;
 
 typedef struct {
     bool is_local;
@@ -491,6 +514,9 @@ struct Node_Atom {
 
     // When this atom is a definition
     Definition_Spec *definition_spec;
+
+    // When this atom is a polymorphic parameter definition
+    Node_Polymorph *polymorph;
 
     // When this atom is a reference to another defining atom
     Node_Atom *definition;
@@ -580,6 +606,14 @@ struct Node_Import {
     bool is_local;
 };
 
+struct Node_Polymorph {
+    Node       node;
+    Node_Atom *name;
+
+    bool is_monomorphized;
+    Type monomorphized_to;
+};
+
 typedef struct {
     Node       node;
     Node_Atom *defined_as;
@@ -606,6 +640,8 @@ struct Node_Fn {
     Nodes  returns;
     size_t returns_count;
 
+    Polymorphs polymorphs;
+
     Node *body;
 
     bool is_type;
@@ -616,9 +652,9 @@ struct Node_Fn {
     // Foo :: trait {
     //     foo: () // <- This function is a trait method type
     // }
-    Type *trait_method_type;
+    Type *trait_method_type; // TODO(@polymorph): Make this a 'Node_Trait *' to make polymorphism work
 
-    // For generating wrappers of trait implementation methods
+    // For generating wrappers of trait implementation methods. (These fields are only be the LLVM generator)
     Node_Fn    *wrapper;
     Type_Trait *wrapper_for_trait;
 
