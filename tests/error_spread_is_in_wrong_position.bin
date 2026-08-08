@@ -1,8 +1,8 @@
 EXIT 1
 STDOUT 0
 
-STDERR 271
-tests/error_spread_is_in_wrong_position.glos:4:9: ERROR: Spread is in the wrong position
+STDERR 280
+tests/error_spread_is_in_wrong_position.glos:4:9: ERROR: Cannot spread arguments at this position
 
     foo(...[]i64{})
 

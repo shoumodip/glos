@@ -764,18 +764,14 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_ISTRING: {
         node = node_alloc(p->module_current, NODE_INTERPOLATION, token);
         Node_Interpolation *interp = (Node_Interpolation *) node;
-
         nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
-        interp->children_count++;
 
         while (token.kind == TOKEN_ISTRING) {
             nodes_push(&interp->children, parse_expr(p, POWER_SET, false, true, NULL));
-            interp->children_count++;
             expect_token(p, TOKEN_RBRACE); // This also ensures that there is nothing left in the buffer
 
             token = lexer_get_string(&p->state.lexer, p->state.lexer.pos, node->token.pos);
             nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
-            interp->children_count++;
         }
     } break;
 
@@ -1237,44 +1233,28 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             call->fn = node;
             call->fn->is_called = true;
 
+            bool has_spread = false;
             bool has_named_args = false;
             while (!read_token(p, TOKEN_RPAREN)) {
+                Node *arg = NULL;
+                bool  is_spread = false;
+                bool  is_named_arg = false;
+
                 token = peek_token(p);
+                if (token.kind == TOKEN_SPREAD) {
+                    Node_Unary *unary = (Node_Unary *) node_alloc(p->module_current, NODE_UNARY, next_token(p));
+                    unary->value = parse_expr(p, POWER_SET, false, true, NULL);
 
-                bool need_to_spread = token.kind == TOKEN_SPREAD;
-                if (need_to_spread) {
-                    next_token(p);
-                }
-
-                Node *arg = parse_expr(p, POWER_SET, false, true, NULL);
-                if (arg->kind == NODE_INTERPOLATION) {
-                    if (need_to_spread) {
+                    if (unary->value->kind == NODE_INTERPOLATION) {
                         error_token(
                             EK_ERROR, token, "Redundant %s before interpolated string", token_kind_to_cstr(token.kind));
                         exit(1);
                     }
 
-                    need_to_spread = true;
-                }
-
-                if (need_to_spread) {
-                    if (call->spread) {
-                        error_node(EK_ERROR, (Node *) call, "Multiple typed variadic sources found");
-                        if (call->spread->kind == NODE_INTERPOLATION) {
-                            error_node(EK_NOTE, call->spread, "This provides one source");
-                        } else {
-                            error_token(EK_NOTE, call->spread_token, "This provides one source");
-                        }
-
-                        if (arg->kind == NODE_INTERPOLATION) {
-                            error_node(EK_NOTE, arg, "This provides another");
-                        } else {
-                            error_token(EK_NOTE, token, "This provides another");
-                        }
-                        exit(1);
-                    }
-
-                    call->spread_token = token;
+                    arg = (Node *) unary;
+                    is_spread = true;
+                } else {
+                    arg = parse_expr(p, POWER_SET, false, true, NULL);
                 }
 
                 token = peek_token(p);
@@ -1283,42 +1263,36 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                         error_unexpected(token);
                     }
 
+                    if (sv_match(arg->token.sv, "_")) {
+                        error_node(EK_ERROR, arg, "Cannot use '_' as a named argument");
+                        exit(1);
+                    }
+
                     Node_Binary *binary = (Node_Binary *) node_alloc(p->module_current, NODE_BINARY, next_token(p));
                     binary->lhs = arg;
                     binary->rhs = parse_expr(p, POWER_SET, false, true, NULL);
                     binary->module = p->module_current;
                     arg = (Node *) binary;
-                    has_named_args = true;
-
-                    if (need_to_spread) {
-                        error_node(EK_ERROR, arg, "Cannot spread a named argument");
-                        exit(1);
-                    }
-
-                    if (sv_match(binary->lhs->token.sv, "_")) {
-                        error_node(EK_ERROR, binary->lhs, "Cannot use '_' as a named argument");
-                        exit(1);
-                    }
-                } else {
-                    if (call->spread) {
-                        const char *label = "variadics spread";
-                        if (call->spread->kind == NODE_INTERPOLATION) {
-                            label = "interpolated string";
-                        }
-
-                        error_node(EK_ERROR, arg, "Cannot have positional arguments after %s", label);
-                        exit(1);
-                    }
-
-                    if (has_named_args) {
-                        error_node(EK_ERROR, arg, "Cannot have positional arguments after named arguments");
-                        exit(1);
-                    }
+                    is_named_arg = true;
                 }
 
-                if (need_to_spread) {
-                    call->spread = arg;
-                    call->do_not_allocate_typed_variadic_array = true;
+                if (is_named_arg) {
+                    has_named_args = true;
+                } else if (has_spread) {
+                    if (is_spread) {
+                        error_node(EK_ERROR, arg, "Cannot have multiple spreads");
+                        exit(1);
+                    } else {
+                        error_node(EK_ERROR, arg, "Cannot have positional arguments after a spread");
+                        exit(1);
+                    }
+                } else if (has_named_args) {
+                    error_node(EK_ERROR, arg, "Cannot have positional arguments after named arguments");
+                    exit(1);
+                }
+
+                if (arg->kind == NODE_UNARY && arg->token.kind == TOKEN_SPREAD) {
+                    has_spread = true;
                 }
 
                 nodes_push(&call->args, arg);

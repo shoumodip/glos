@@ -102,7 +102,7 @@ void sb_push_type(SB *sb, Type type) {
             if (i) {
                 sb_push_cstr(sb, ", ");
             }
-            sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
+            sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name)); // TODO: Can we get away with not printing this?
 
             Type it_type = it.type;
             if (type.spec.fn->variadics_kind == VARIADICS_TYPED && i == type.spec.fn->variadics_index) {

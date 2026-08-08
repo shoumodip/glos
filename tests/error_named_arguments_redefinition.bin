@@ -1,13 +1,17 @@
 EXIT 1
 STDOUT 0
 
-STDERR 219
-tests/error_named_arguments_redefinition.glos:4:17: ERROR: Redefinition of 'a'
+STDERR 367
+tests/error_named_arguments_redefinition.glos:4:17: ERROR: Duplication of argument 'a'
 
     foo(a = 69, a = 420)
 
-tests/error_named_arguments_redefinition.glos:4:9: NOTE: Here is the first definition
+tests/error_named_arguments_redefinition.glos:4:9: NOTE: Passed here already
 
     foo(a = 69, a = 420)
+
+tests/error_named_arguments_redefinition.glos:1:8: NOTE: The function being called has signature '(a: i64, b: i64)'
+
+    foo :: (a: i64, b: i64) {}
 
 

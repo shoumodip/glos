@@ -1,17 +1,21 @@
 EXIT 1
 STDOUT 0
 
-STDERR 431
+STDERR 580
 tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:5: ERROR: Multiple typed variadic sources found
 
     foo(69, ...ns)
 
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:9: NOTE: This argument provides one source
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:9: NOTE: This starts one source
 
     foo(69, ...ns)
 
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:13: NOTE: But this spread provides another
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:13: NOTE: This provides another
 
     foo(69, ...ns)
+
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:1:8: NOTE: The function being called has signature '(xs: ...i64)'
+
+    foo :: (xs: ...i64) {}
 
 

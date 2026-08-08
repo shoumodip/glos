@@ -1,0 +1,15 @@
+EXIT 1
+STDOUT 0
+
+STDERR 361
+tests/error_type_mismatch_after_monomorphization_of_polymorphic_type.glos:6:11: ERROR: Expected 'string', got 'i64'
+
+    first(69, "Urmom")
+
+tests/error_type_mismatch_after_monomorphization_of_polymorphic_type.glos:1:10: NOTE: The function being called has signature '(a: string, b: string) -> string'
+
+    first :: (a: T, b: $T) -> T {
+        return a
+    }
+
+

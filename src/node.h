@@ -625,6 +625,7 @@ typedef struct {
     Nodes  children;
     size_t children_count;
     bool   is_valid;
+    bool   do_not_allocate;
 } Node_Interpolation;
 
 struct Node_Fn {
@@ -797,11 +798,8 @@ typedef struct {
 
     Token end;
 
-    Node *spread;
-    Token spread_token;
-
-    bool   do_not_allocate_typed_variadic_array;
-    size_t typed_variadics_array_count;
+    bool   is_typed_variadics_direct;
+    size_t typed_variadics_count;
 
     bool      is_type_cast;
     Type_Cast type_cast;

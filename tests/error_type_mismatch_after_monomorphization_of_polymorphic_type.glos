@@ -1,0 +1,7 @@
+first :: (a: T, b: $T) -> T {
+    return a
+}
+
+main :: () {
+    first(69, "Urmom")
+}

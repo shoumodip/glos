@@ -30,7 +30,12 @@ static bool node_is_runtime_polymorphic_expression(Node *n) {
     return false;
 }
 
-static Type type_without_ref(Type t) {
+static inline Type type_with_ref(Type t, size_t ref) {
+    t.ref = ref;
+    return t;
+}
+
+static inline Type type_without_ref(Type t) {
     t.ref = 0;
     return t;
 }
@@ -480,7 +485,11 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
         return true;
     }
 
-    if (type_kind_eq(actual, TYPE_ARRAY) && type_kind_eq(expected, TYPE_SLICE) && !actual.ref && !expected.ref) {
+    if (type_kind_eq(actual, TYPE_ARRAY) &&                                //
+        type_kind_eq(expected, TYPE_SLICE) &&                              //
+        !actual.ref && !expected.ref &&                                    //
+        type_eq(*actual.spec.array.element, *expected.spec.slice.element)) //
+    {
         set_auto_cast(n, group_index, AUTO_CAST_ARRAY_TO_SLICE, actual, expected);
         return true;
     }
@@ -502,18 +511,25 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
     return false;
 }
 
-static Type type_assert(Compiler *c, Node *n, Type expected) {
+static bool type_assert_noexit(Compiler *c, Node *n, Type expected) {
     if (type_eq(n->type, expected)) {
-        return expected;
+        return true;
     }
 
     if (try_auto_cast(c, n, expected, -1)) {
-        return expected;
+        return true;
     }
 
     check_that_type_is_known(n);
     error_node(EK_ERROR, n, "Expected %s, got %s", type_to_cstr(expected), type_to_cstr(n->type));
     maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(n, expected);
+    return false;
+}
+
+static Type type_assert(Compiler *c, Node *n, Type expected) {
+    if (type_assert_noexit(c, n, expected)) {
+        return expected;
+    }
     exit(1);
 }
 
@@ -533,7 +549,7 @@ static const char *order_postfix(size_t n) {
     }
 }
 
-static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement) {
+static bool type_assert_grouped_noexit(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement) {
     Type actual = n->type;
 
     const bool is_group = group_index != -1 && type_kind_eq(actual, TYPE_GROUP);
@@ -542,12 +558,12 @@ static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_i
     }
 
     if (type_eq(actual, expected)) {
-        return expected;
+        return true;
     }
 
     if (!is_group) {
         if (try_auto_cast(c, n, expected, -1)) {
-            return expected;
+            return true;
         }
 
         check_that_type_is_known(n);
@@ -556,7 +572,7 @@ static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_i
     } else {
         check_that_type_is_known(n);
         if (try_auto_cast(c, n, expected, group_index)) {
-            return expected;
+            return true;
         }
 
         const char *postfix = order_postfix(group_index + 1);
@@ -575,6 +591,13 @@ static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_i
         }
     }
 
+    return false;
+}
+
+static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement) {
+    if (type_assert_grouped_noexit(c, n, expected, group_index, requirement)) {
+        return expected;
+    }
     exit(1);
 }
 
@@ -2281,8 +2304,8 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
         if (type_kind_eq(type->type, TYPE_UNIT)) {
             check_expr(c, type, REF_NONE);
             type_assert_type(type);
-            type->type.is_meta = false;
         }
+        type->type.is_meta = false;
         it->node.type = type->type;
     }
 
@@ -3044,20 +3067,6 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
     binary->node.type = (Type) {.kind = TYPE_UNIT};
 }
 
-static const Type *get_argument_type(const Type_Fn *spec, size_t index) {
-    const Type *type = NULL;
-    if (index < spec->args_count) {
-        type = &spec->args[index].type;
-    }
-
-    if (spec->variadics_kind == VARIADICS_TYPED && index >= spec->variadics_index) {
-        type = &spec->args[spec->variadics_index].type;
-        assert(type->kind == TYPE_SLICE);
-        type = type->spec.slice.element;
-    }
-    return type;
-}
-
 static const char *
 fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn_spec_raw, bool exclude_receiver) {
     Type_Fn spec = *fn_spec_raw;
@@ -3101,6 +3110,10 @@ static Node_Fn *get_function_literal(Node *fn) {
 }
 
 static void show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec) {
+    if (!fn_spec) {
+        return;
+    }
+
     const char *label = is_method ? "method" : "function";
 
     Node_Fn *literal = get_function_literal(fn);
@@ -3123,10 +3136,6 @@ static void show_note_about_the_function_being_called(Node *fn, bool is_method, 
 }
 
 static void add_monomorph_parameter(Compiler *c, Node_Polymorph *polymorph, Type type) {
-    if (!polymorph->node.type.spec.polymorph.is_definition) {
-        return;
-    }
-
     for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
         if (c->monomorph_parameters.data[i].from == polymorph) {
             return;
@@ -3138,6 +3147,40 @@ static void add_monomorph_parameter(Compiler *c, Node_Polymorph *polymorph, Type
         .to = type,
     };
     da_push(&c->monomorph_parameters, mp);
+}
+
+static void infer_monomorph_parameters(Compiler *c, Node *n, i64 group_index, Type *expected) {
+    if (!expected) {
+        return;
+    }
+
+    Type *actual = &n->type;
+    if (group_index != -1) {
+        assert(actual->kind == TYPE_GROUP);
+        actual = &actual->spec.group.data[group_index];
+    }
+
+    if (actual->is_meta) {
+        todo(); // TODO(@polymorphism): Type -> RTTI
+    }
+
+    // TODO(@polymorphism): This is incomplete, just to get the tests working again
+    if (expected->kind != TYPE_POLYMORPH) {
+        return;
+    }
+
+    if (!expected->spec.polymorph.is_definition) {
+        return;
+    }
+
+    if (group_index == -1) {
+        check_that_type_is_known(n);
+        finalize_untyped_type(c, n);
+    }
+
+    Node_Polymorph *polymorph = expected->spec.polymorph.definition;
+    assert(actual->ref >= expected->ref);
+    add_monomorph_parameter(c, polymorph, type_with_ref(*actual, actual->ref - expected->ref));
 }
 
 static void monomorphize_node(Compiler *c, Node **np, bool first);
@@ -3362,6 +3405,7 @@ static void monomorphize(Compiler *c, Node **np) {
     for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
         Monomorph_Parameter it = c->monomorph_parameters.data[i];
         Node_Polymorph     *polymorph = *(Node_Polymorph **) ht_get(&c->monomorph_replacements, it.from);
+
         polymorph->is_monomorphized = true;
         polymorph->monomorphized_to = it.to;
     }
@@ -3374,11 +3418,31 @@ static void monomorphize(Compiler *c, Node **np) {
     check_expr(c, *np, REF_NONE);
 }
 
-// TODO: This function needs some work done on it
+// TODO: Remove this
+static void ensure_interpolation_is_valid(Node_Interpolation *interpolation, bool noexit) {
+    if (!interpolation->is_valid) {
+        error_node(EK_ERROR, (Node *) interpolation, "Cannot use interpolated strings here");
+        afprintf(
+            stderr,
+            ANSI_COLOR_YELLOW | ANSI_BOLD,
+            "    Interpolated strings are compiled to a temporary '[]Any' value, and can only be used like this:\n"
+            "\n"
+            "        bar :: (vs: []Any) {}\n"
+            "        foo :: (vs: ...Any) {}\n"
+            "\n"
+            "        foo(\"Nice: \\{34 + 35}\")\n"
+            "        bar(\"Nice: \\{200 + 220}\")\n"
+            "\n");
+
+        if (!noexit) {
+            exit(1);
+        }
+    }
+}
+
 static void check_call_arguments(Compiler *c, Node_Call *call) {
     typedef struct {
-        const Node *node;
-        const Node *name;
+        Node *node;
     } Argument;
 
     Argument *args = NULL;
@@ -3386,398 +3450,383 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
     size_t    args_count_max = 1;
 
     const Type_Fn *fn_spec = NULL;
-    if (!call->fn->type.is_meta) {
+
+    bool is_trait = false;
+    bool is_method = false;
+    bool is_polymorph = false;
+    if (call->fn->type.is_meta) {
+        args = arena_alloc(&temp_arena, 1 * sizeof(*args));
+    } else {
         assert(call->fn->type.kind == TYPE_FN);
         fn_spec = call->fn->type.spec.fn;
-    }
 
-    const bool is_polymorph = node_is_runtime_polymorphic_expression(call->fn);
-    if (is_polymorph) {
-        ht_clear(&c->monomorph_replacements);
-        c->monomorph_parameters.count = 0;
-    }
-
-    bool is_method = false;
-    if (fn_spec) {
         args = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*args));
         args_count_min = fn_spec->args_count_min;
         args_count_max = fn_spec->variadics_kind != VARIADICS_NONE ? UINT64_MAX : fn_spec->args_count;
 
         if (call->fn->kind == NODE_MEMBER) {
             Node_Member *member = (Node_Member *) call->fn;
-            if ((member->method || member->is_trait) && !member->lhs->type.is_meta) {
+
+            is_trait = member->is_trait;
+            is_method = member->method != NULL;
+            if ((is_method || is_trait) && !member->lhs->type.is_meta) {
                 assert(member->lhs);
-
-                is_method = true;
-
-                // The reference level has already been checked.
-                // Technically the type has also been checked, and right now this is redundant. But later when
-                // compile time polymorphism will be implemented, this will be important.
-                //
-                // No need to check for traits, since it is runtime polymorphism
-                if (member->method) {
-                    Type expected = fn_spec->args[call->args_count].type;
-                    expected.ref = member->lhs->type.ref;
-                    type_assert(c, member->lhs, expected);
-                }
-
                 args[call->args_count++].node = member->lhs;
             }
         }
 
-        if (call->spread) {
-            if (fn_spec->variadics_kind != VARIADICS_TYPED) {
-                if (call->spread->kind != NODE_INTERPOLATION) {
-                    error_token(
-                        EK_ERROR,
-                        call->spread_token,
-                        "Cannot use %s in a call to a function that does not have typed variadics",
-                        token_kind_to_cstr(TOKEN_SPREAD));
-                    exit(1);
-                }
-            }
+        is_polymorph = node_is_runtime_polymorphic_expression(call->fn);
+        if (is_polymorph) {
+            ht_clear(&c->monomorph_replacements);
+            c->monomorph_parameters.count = 0;
         }
     }
 
-    ll_foreach(arg, &call->args) {
-        Node      *it = arg;
-        size_t     it_index = call->args_count;
-        const bool it_is_named = it->kind == NODE_BINARY && it->token.kind == TOKEN_SET;
-        Node      *it_name = NULL;
+    typedef enum {
+        VS_NONE,
+        VS_ARGS,
+        VS_DIRECT, // For named and spread
+    } VS_Kind;
 
-        const Type *expected = NULL;
-        if (it_is_named) {
+    // This is for typed variadics
+    Node   *variadic_source = NULL;
+    VS_Kind variadic_source_kind = VS_NONE;
+
+    Node *excess_argument = NULL;
+    ll_foreach(arg, &call->args) {
+        Node  *it = arg;
+        Node  *it_name = NULL;
+        size_t it_index = call->args_count;
+        if (it->kind == NODE_BINARY && it->token.kind == TOKEN_SET) {
             if (!fn_spec) {
-                error_node(EK_ERROR, it, "Cannot use named arguments in a cast expression");
+                error_node(EK_ERROR, arg, "Cannot use named arguments in a cast expression");
                 exit(1);
             }
 
-            it_name = ((Node_Binary *) it)->lhs;
-            assert(it_name->kind == NODE_ATOM && it_name->token.kind == TOKEN_IDENT);
+            Node_Binary *it_binary = (Node_Binary *) it;
+            it = it_binary->rhs;
+            it_name = it_binary->lhs;
 
+            bool ok = false;
             for (size_t i = 0; i < fn_spec->args_count; i++) {
                 const Type_Fn_Arg *arg = &fn_spec->args[i];
                 if (sv_eq(arg->name, it_name->token.sv)) {
                     it_index = i;
-                    expected = &arg->type;
+                    ok = true;
                     break;
                 }
             }
 
-            if (!expected) {
+            if (!ok) {
                 error_undefined(c, &it_name->token, "argument", true);
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                 exit(1);
             }
 
-            if (args[it_index].node) {
-                const Node *previous_named = args[it_index].name;
-                if (previous_named) {
-                    error_redefinition(it_name, &previous_named->token.pos);
-                }
-
-                if (fn_spec->variadics_kind != VARIADICS_TYPED || it_index != fn_spec->variadics_index) {
-                    error_redefinition(it_name, &args[it_index].node->token.pos);
-                }
-            } else {
-                args[it_index].name = it_name;
-            }
-
-            it->token.as.integer = it_index;
-            it = ((Node_Binary *) it)->rhs;
-        } else if (fn_spec) {
-            expected = get_argument_type(fn_spec, call->args_count);
+            arg->token.as.integer = it_index;
         }
 
-        if (it->kind == NODE_INTERPOLATION && fn_spec->variadics_kind == VARIADICS_TYPED) {
-            bool ok = false;
-            if (it_index == fn_spec->variadics_index) {
-                const Type *type = &fn_spec->args[fn_spec->variadics_index].type;
-                assert(type->kind == TYPE_SLICE);
-
-                type = type->spec.slice.element;
-                if (type_eq(*type, c->any_type)) {
-                    ok = true;
-                    ((Node_Interpolation *) it)->is_valid = true;
-                }
+        const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
+        if (is_spread) {
+            if (!fn_spec) {
+                error_node(EK_ERROR, it, "Cannot spread arguments in a cast expression");
+                exit(1);
             }
 
-            if (!ok) {
-                error_node(EK_ERROR, it, "Interpolated string is in the wrong position");
+            if (fn_spec->variadics_kind != VARIADICS_TYPED) {
+                error_node(
+                    EK_ERROR, it, "Cannot spread arguments in a call to a function that does not have typed variadics");
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                 exit(1);
             }
-        }
 
-        check_expr(c, it, REF_NONE);
+            Node_Unary *unary = (Node_Unary *) it;
+            it = unary->value;
+            check_expr(c, it, REF_NONE);
+        } else if (it->kind == NODE_INTERPOLATION) {
+            Node_Interpolation *interpolation = (Node_Interpolation *) it;
+            interpolation->is_valid = (fn_spec != NULL);
+            check_expr(c, it, REF_NONE);
+            interpolation->is_valid = false;
+        } else {
+            check_expr(c, it, REF_NONE);
+        }
 
         const size_t parts = type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
-        if (args) {
-            bool type_checked = false;
-            if (it_is_named) {
-                assert(expected);
-                if (fn_spec->variadics_kind == VARIADICS_TYPED && it_index == fn_spec->variadics_index) {
-                    expected = &fn_spec->args[fn_spec->variadics_index].type;
-                    call->do_not_allocate_typed_variadic_array = true;
+        for (size_t i = 0; i < parts; i++, it_index++) {
+            if (it_index >= args_count_max) {
+                if (!excess_argument) {
+                    excess_argument = arg;
                 }
-                type_assert(c, it, *expected);
-                type_checked = true;
-            } else if (arg == call->spread) {
-                assert(fn_spec->variadics_kind == VARIADICS_TYPED);
-                if (it_index != fn_spec->variadics_index) {
-                    error_token(EK_ERROR, call->spread_token, "Spread is in the wrong position");
-                    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                    exit(1);
-                }
-
-                expected = &fn_spec->args[fn_spec->variadics_index].type;
-                type_assert(c, it, *expected);
-                type_checked = true;
-            } else if (fn_spec->variadics_kind == VARIADICS_TYPED && it_index >= fn_spec->variadics_index) {
-                call->typed_variadics_array_count += parts;
+                continue;
             }
 
-            for (size_t i = 0; i < parts; i++) {
-                const size_t n = it_index + i;
-                if (!type_checked) {
-                    if (parts != 1) {
-                        expected = get_argument_type(fn_spec, n);
-                    }
+            if (!fn_spec) {
+                continue;
+            }
 
-                    if (expected) {
-                        type_assert_grouped(c, it, *expected, i, NULL);
-                    }
+            if (fn_spec->variadics_kind == VARIADICS_UNTYPED && it_index >= fn_spec->args_count) {
+                continue;
+            }
+
+            if (fn_spec->variadics_kind == VARIADICS_TYPED && it_index >= fn_spec->variadics_index) {
+                if (!it_name) {
+                    // This is a positional argument, therefore it must be variadic
+                    it_index = fn_spec->variadics_index;
                 }
+            }
 
-                if (fn_spec->variadics_kind == VARIADICS_TYPED && n >= fn_spec->variadics_index) {
-                    Argument *variadic_arg = &args[fn_spec->variadics_index];
-                    if (it_is_named) {
-                        if (n == fn_spec->variadics_index) {
-                            // Provide the variadic argument as a named argument
-                            if (variadic_arg->node) {
-                                // Variadic arguments was already started as a stack allocated array
-                                error_node(EK_ERROR, (Node *) call, "Multiple typed variadic sources found");
-                                if (variadic_arg->node == call->spread) {
-                                    if (call->spread->kind == NODE_INTERPOLATION) {
-                                        error_node(
-                                            EK_NOTE, call->spread, "This interpolated string provide one source");
-                                    } else {
-                                        error_token(EK_NOTE, call->spread_token, "This spread provide one source");
-                                    }
-                                } else {
-                                    bool following = false;
-                                    if (variadic_arg->node->next) {
-                                        following = true;
-                                        Node *next = variadic_arg->node->next;
-                                        if (next->kind == NODE_BINARY && next->token.kind == TOKEN_SET) {
-                                            following = false;
-                                        }
-                                    }
+            if (fn_spec->variadics_kind == VARIADICS_TYPED && it_index == fn_spec->variadics_index) {
+                if (variadic_source) {
+                    if (it_name && variadic_source->kind == NODE_BINARY && variadic_source->token.kind == TOKEN_SET) {
+                        error_node(
+                            EK_ERROR,
+                            arg,
+                            "Duplication of argument '" SV_Fmt "'",
+                            SV_Arg(fn_spec->args[it_index].name));
+                        error_node(EK_NOTE, variadic_source, "Passed here already");
+                        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                        exit(1);
+                    }
 
-                                    error_node(
-                                        EK_NOTE,
-                                        variadic_arg->node,
-                                        "This argument%s provides one source",
-                                        following ? " and its following positional arguments" : "");
-                                }
+                    if (is_spread || it_name || variadic_source_kind == VS_DIRECT) {
+                        error_node(EK_ERROR, (Node *) call, "Multiple typed variadic sources found");
 
-                                error_node(
-                                    EK_NOTE,
-                                    it_name,
-                                    "But this named argument directly passes another variadic source");
-                                exit(1);
-                            }
+                        bool is_variadic_source_direct = false;
+                        if (variadic_source->kind == NODE_UNARY && variadic_source->token.kind == TOKEN_SPREAD) {
+                            is_variadic_source_direct = true;
+                        } else if (variadic_source->kind == NODE_BINARY && variadic_source->token.kind == TOKEN_SET) {
+                            is_variadic_source_direct = true;
                         }
+
+                        error_node(
+                            EK_NOTE,
+                            variadic_source,
+                            "This %s one source",
+                            is_variadic_source_direct ? "provides" : "starts");
+                        error_node(EK_NOTE, arg, "This provides another");
+                        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                        exit(1);
+                    }
+
+                    if (it->kind == NODE_INTERPOLATION) {
+                        Node_Interpolation *interpolation = (Node_Interpolation *) it;
+                        interpolation->do_not_allocate = true;
+                        call->typed_variadics_count += interpolation->children_count;
                     } else {
-                        // Start the variadic arguments as a stack allocated array
-                        if (call->spread && call->spread != it) {
-                            // There is a spread later, but another variadic allocation starts here
-                            error_node(EK_ERROR, (Node *) call, "Multiple typed variadic sources found");
+                        call->typed_variadics_count++;
+                    }
+                } else {
+                    variadic_source = arg;
 
-                            bool following = false;
-                            if (it->next) {
-                                following = true;
-                                Node *next = it->next;
-                                if (next->kind == NODE_BINARY && next->token.kind == TOKEN_SET) {
-                                    following = false;
-                                }
-
-                                if (next == call->spread) {
-                                    following = false;
-                                }
-                            }
-
-                            error_node(
-                                EK_NOTE,
-                                it,
-                                "This argument%s provides one source",
-                                following ? " and its following positional arguments" : "");
-
-                            if (call->spread->kind == NODE_INTERPOLATION) {
-                                error_node(EK_NOTE, call->spread, "But this interpolated string provides another");
-                            } else {
-                                error_token(EK_NOTE, call->spread_token, "But this spread provides another");
-                            }
-                            exit(1);
+                    assert(variadic_source_kind == VS_NONE);
+                    if (is_spread || it_name) {
+                        variadic_source_kind = VS_DIRECT;
+                        call->is_typed_variadics_direct = true;
+                    } else {
+                        variadic_source_kind = VS_ARGS;
+                        if (it->kind == NODE_INTERPOLATION) {
+                            Node_Interpolation *interpolation = (Node_Interpolation *) it;
+                            interpolation->do_not_allocate = true;
+                            call->typed_variadics_count += interpolation->children_count;
+                        } else {
+                            call->typed_variadics_count++;
                         }
-
-                        if (!variadic_arg->node) {
-                            variadic_arg->node = it;
-                        }
-                        continue;
                     }
                 }
-
-                if (n < fn_spec->args_count) {
-                    args[n].node = it;
-                }
+                continue;
             }
-        } else {
-            check_that_type_is_known(it);
+
+            if (is_spread) {
+                error_node(EK_ERROR, arg, "Cannot spread arguments at this position");
+                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                exit(1);
+            }
+
+            Argument *argument = &args[it_index];
+            if (argument->node) {
+                error_node(EK_ERROR, arg, "Duplication of argument '" SV_Fmt "'", SV_Arg(fn_spec->args[it_index].name));
+                error_node(EK_NOTE, argument->node, "Passed here already");
+                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                exit(1);
+            }
+
+            argument->node = arg;
         }
 
-        if (is_polymorph) {
-            if (parts == 1) {
-                Type expected = fn_spec->args[it_index].type;
-                check_that_type_is_known(it);
-                finalize_untyped_type(c, it);
-
-                // TODO: Polymorphic types have not been implemented yet
-                if (type_kind_eq(expected, TYPE_POLYMORPH)) {
-                    Type actual = it->type;
-                    assert(actual.ref >= expected.ref);
-                    actual.ref -= expected.ref;
-                    add_monomorph_parameter(c, expected.spec.polymorph.definition, actual);
-                }
-            } else {
-                assert(type_kind_eq(it->type, TYPE_GROUP));
-                for (size_t i = 0; i < parts; i++) {
-                    Type expected = fn_spec->args[it_index + i].type;
-                    if (type_kind_eq(expected, TYPE_POLYMORPH)) {
-                        Type actual = it->type.spec.group.data[i];
-                        assert(actual.ref >= expected.ref);
-                        actual.ref -= expected.ref;
-                        add_monomorph_parameter(c, expected.spec.polymorph.definition, actual);
-                    }
-                }
-            }
-        }
         call->args_count += parts;
     }
 
-    bool   has_minimum = true;
-    bool   has_maximum = true;
-    size_t expected = 0;
-
-    const char *situation = "";
-    const char *extra = "";
-
     if (call->args_count < args_count_min) {
-        has_minimum = false;
-        expected = args_count_min;
-        situation = "Not enough";
-        extra = " at least";
+        error_token(
+            EK_ERROR,
+            call->end,
+            "Too few arguments: Expected%s %zu, got %zu",
+            args_count_min == args_count_max ? "" : " at least",
+            args_count_min - is_method,
+            call->args_count - is_method);
+        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+        exit(1);
     }
 
     if (call->args_count > args_count_max) {
-        has_maximum = false;
-        expected = args_count_max;
-        situation = "Too many";
-        // Not setting the extra here, since that situation does not exist
-    }
-
-    if (has_minimum && has_maximum) {
-        if (args) {
-            size_t not_provided_count = 0;
-            SV     not_provided_name = {0};
-            for (size_t i = 0; i < fn_spec->args_count; i++) {
-                if (fn_spec->variadics_kind == VARIADICS_TYPED && i == fn_spec->variadics_index) {
-                    continue;
-                }
-
-                const Type_Fn_Arg *it = &fn_spec->args[i];
-                if (!args[i].node && !it->has_default_value) {
-                    not_provided_count++;
-                    if (not_provided_count == 1) {
-                        not_provided_name = it->name;
-                    } else if (not_provided_count == 2) {
-                        error_token_begin(EK_ERROR, call->end);
-                        fprintf(
-                            stderr,
-                            "The following arguments are not provided: " SV_Fmt ", " SV_Fmt,
-                            SV_Arg(not_provided_name),
-                            SV_Arg(it->name));
-                    } else {
-                        fprintf(stderr, ", " SV_Fmt, SV_Arg(it->name));
-                    }
-                }
-            }
-
-            if (not_provided_count) {
-                if (not_provided_count == 1) {
-                    error_token(
-                        EK_ERROR, call->end, "Argument '" SV_Fmt "' is not provided", SV_Arg(not_provided_name));
-                } else {
-                    error_finalize();
-                }
-
-                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                exit(1);
-            }
-
-            arena_reset(&temp_arena, args);
-        }
-
-        if (is_polymorph) {
-            // TODO(@polymorph): Check the argument types again
-            monomorphize(c, &call->fn);
-        }
-
-        return;
-    }
-
-    if (args_count_min == args_count_max) {
-        extra = "";
-    }
-
-    Node *node = NULL;
-    Token token = call->end;
-    if (!has_maximum) {
-        size_t iota = 0;
-        ll_foreach(it, &call->args) {
-            iota += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
-            if (iota > args_count_max) {
-                node = it;
-                token = it->token;
-                break;
-            }
-        }
-    }
-
-    const size_t expected_correct = expected - is_method;
-    const size_t actual_correct = call->args_count - is_method;
-    if (node) {
         error_node(
             EK_ERROR,
-            node,
-            "%s arguments: Expected%s %zu, got %zu",
-            situation,
-            extra,
-            expected_correct,
-            actual_correct);
-    } else {
-        error_token(
-            EK_ERROR,
-            token,
-            "%s arguments: Expected%s %zu, got %zu",
-            situation,
-            extra,
-            expected_correct,
-            actual_correct);
+            excess_argument,
+            "Too many arguments: Expected %zu, got %zu",
+            args_count_max - is_method,
+            call->args_count - is_method);
+        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+        exit(1);
     }
 
-    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-    exit(1);
+    if (fn_spec) {
+        size_t not_provided_count = 0;
+        SV     not_provided_name = {0};
+        for (size_t i = 0; i < fn_spec->args_count; i++) {
+            if (fn_spec->variadics_kind == VARIADICS_TYPED && i == fn_spec->variadics_index) {
+                continue;
+            }
+
+            const Type_Fn_Arg *it = &fn_spec->args[i];
+            if (!args[i].node && !it->has_default_value) {
+                not_provided_count++;
+                if (not_provided_count == 1) {
+                    not_provided_name = it->name;
+                } else if (not_provided_count == 2) {
+                    error_token_begin(EK_ERROR, call->end);
+                    fprintf(
+                        stderr,
+                        "The following arguments are not provided: " SV_Fmt ", " SV_Fmt,
+                        SV_Arg(not_provided_name),
+                        SV_Arg(it->name));
+                } else {
+                    fprintf(stderr, ", " SV_Fmt, SV_Arg(it->name));
+                }
+            }
+        }
+
+        if (not_provided_count) {
+            if (not_provided_count == 1) {
+                error_token(EK_ERROR, call->end, "Argument '" SV_Fmt "' is not provided", SV_Arg(not_provided_name));
+            } else {
+                error_finalize();
+            }
+
+            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+            exit(1);
+        }
+    }
+
+    if (is_polymorph) {
+        assert(fn_spec);
+        assert(!is_trait); // TODO: Think about this
+
+        if (is_method) {
+            assert(call->fn->kind == NODE_MEMBER);
+            Node *receiver = ((Node_Member *) call->fn)->lhs;
+            Type  expected = type_with_ref(fn_spec->args[0].type, receiver->type.ref);
+            infer_monomorph_parameters(c, receiver, -1, &expected);
+        }
+
+        size_t it_index = is_method || is_trait;
+        ll_foreach(arg, &call->args) {
+            Node *it = arg;
+
+            const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
+            if (is_spread) {
+                it = ((Node_Unary *) it)->value;
+            }
+
+            const bool is_named = it->kind == NODE_BINARY && it->token.kind == TOKEN_SET;
+            if (is_named) {
+                it_index = it->token.as.integer;
+                it = ((Node_Binary *) it)->rhs;
+            }
+
+            if (type_kind_eq(it->type, TYPE_GROUP)) {
+                Type_Group *group = &it->type.spec.group;
+                for (size_t i = 0; i < group->count; i++, it_index++) {
+                    Type *expected = it_index < fn_spec->args_count ? &fn_spec->args[it_index].type : NULL;
+                    infer_monomorph_parameters(c, it, i, expected);
+                }
+            } else {
+                Type *expected = it_index < fn_spec->args_count ? &fn_spec->args[it_index].type : NULL;
+                infer_monomorph_parameters(c, it, -1, expected);
+                it_index++;
+            }
+        }
+
+        monomorphize(c, &call->fn);
+        fn_spec = call->fn->type.spec.fn;
+    }
+
+    if (fn_spec) {
+        if (is_method) {
+            assert(call->fn->kind == NODE_MEMBER);
+            Node *receiver = ((Node_Member *) call->fn)->lhs;
+            type_assert(c, receiver, type_with_ref(fn_spec->args[0].type, receiver->type.ref));
+        }
+
+        size_t it_index = is_method || is_trait;
+        ll_foreach(arg, &call->args) {
+            Node      *it = arg;
+            const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
+            if (is_spread) {
+                it = ((Node_Unary *) it)->value;
+            }
+
+            const bool is_named = it->kind == NODE_BINARY && it->token.kind == TOKEN_SET;
+            if (is_named) {
+                it_index = it->token.as.integer;
+                it = ((Node_Binary *) it)->rhs;
+
+                if (!type_assert_noexit(c, it, fn_spec->args[it_index].type)) {
+                    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                    exit(1);
+                }
+            } else {
+                const size_t parts = type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
+                for (size_t i = 0; i < parts; i++) {
+                    Type *expected = it_index < fn_spec->args_count ? &fn_spec->args[it_index].type : NULL;
+                    if (fn_spec->variadics_kind == VARIADICS_TYPED && it_index >= fn_spec->variadics_index) {
+                        if (!is_spread && !is_named) {
+                            // This is a positional argument, therefore it must be variadic
+                            it_index = fn_spec->variadics_index;
+
+                            expected = &fn_spec->args[it_index].type;
+                            assert(type_kind_eq(*expected, TYPE_SLICE));
+                            expected = expected->spec.slice.element;
+                        }
+                    }
+
+                    if (expected) {
+                        bool ok = true;
+                        if (parts == 1) {
+                            if (it->kind == NODE_INTERPOLATION &&               //
+                                fn_spec->variadics_kind == VARIADICS_TYPED &&   //
+                                it_index == fn_spec->variadics_index &&         //
+                                type_eq(fn_spec->args[it_index].type, it->type) //
+                            ) {
+                                // Pass
+                            } else {
+                                ok = type_assert_noexit(c, it, *expected);
+                            }
+                        } else {
+                            ok = type_assert_grouped_noexit(c, it, *expected, i, NULL);
+                        }
+
+                        if (!ok) {
+                            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                            exit(1);
+                        }
+                    }
+
+                    it_index++;
+                }
+            }
+        }
+    }
 }
 
 static void check_whether_member_access_is_valid(Node_Member *m) {
@@ -4594,18 +4643,13 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
     } break;
 
     case NODE_INTERPOLATION: {
-        Node_Interpolation *interp = (Node_Interpolation *) n;
-        if (!interp->is_valid) {
-            error_node(
-                EK_ERROR,
-                n,
-                "Cannot use interpolated string here. It can only be used as a variadic source of type 'any' in a function call");
-            exit(1);
-        }
+        Node_Interpolation *interpolation = (Node_Interpolation *) n;
+        ensure_interpolation_is_valid(interpolation, false);
 
-        ll_foreach(it, &interp->children) {
+        ll_foreach(it, &interpolation->children) {
             check_expr(c, it, REF_NONE);
             type_assert(c, it, c->any_type);
+            interpolation->children_count += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
         }
 
         n->type = c->interpolated_string_type;

@@ -1,17 +1,21 @@
 EXIT 1
 STDOUT 0
 
-STDERR 483
+STDERR 609
 tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:5: ERROR: Multiple typed variadic sources found
 
     foo(...xs, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:9: NOTE: This spread provide one source
+tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:9: NOTE: This provides one source
 
     foo(...xs, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:16: NOTE: But this named argument directly passes another variadic source
+tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5:16: NOTE: This provides another
 
     foo(...xs, ns = xs)
+
+tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:1:8: NOTE: The function being called has signature '(ns: ...i64)'
+
+    foo :: (ns: ...i64) {}
 
 
