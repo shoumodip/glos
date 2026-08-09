@@ -1,0 +1,7 @@
+foo :: (vs: [2]$T) {
+    println(vs)
+}
+
+main :: () {
+    foo([2]i64 {69})
+}

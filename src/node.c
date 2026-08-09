@@ -335,14 +335,6 @@ bool type_eq(Type a, Type b) {
         return a.is_meta;
     }
 
-    if (a.kind == TYPE_POLYMORPH) {
-        return b.ref >= a.ref;
-    }
-
-    if (b.kind == TYPE_POLYMORPH) {
-        return a.ref >= b.ref;
-    }
-
     if (a.kind != b.kind || a.ref != b.ref) {
         return false;
     }

@@ -10,6 +10,11 @@ void error_number_of_values_mismatch(
 typedef DA(const char *) Paths;
 
 typedef struct {
+    Polymorphs *polymorphs;
+    size_t      arg_index;
+} Polymorphs_Builder;
+
+typedef struct {
     Lexer lexer;
     Token ahead;
     bool  peeked;
@@ -21,8 +26,8 @@ typedef struct {
 
     bool after_private;
 
-    Node_Fn    *fn_current;
-    Polymorphs *polymorphs;
+    Node_Fn            *fn_current;
+    Polymorphs_Builder *pb;
 } Parser_State;
 
 typedef struct {

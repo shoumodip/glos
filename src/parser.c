@@ -570,15 +570,15 @@ bool parser_import(Parser *p, Node_Import *import) {
 }
 
 static Node *parse_define(
-    Parser     *p,
-    Node       *name,
-    Token       token,
-    bool        groups_allowed,
-    bool        spread_allowed,
-    bool        is_static,
-    Polymorphs *polymorphs) //
+    Parser             *p,
+    Node               *name,
+    Token               token,
+    bool                groups_allowed,
+    bool                spread_allowed,
+    bool                is_static,
+    Polymorphs_Builder *pb) //
 {
-    Polymorphs *polymorphs_save = p->state.polymorphs;
+    Polymorphs_Builder *pb_save = p->state.pb;
 
     Node_Define *define = (Node_Define *) node_alloc(p->module_current, NODE_DEFINE, token);
     if (spread_allowed && peek_token(p).kind == TOKEN_SPREAD) {
@@ -614,12 +614,12 @@ static Node *parse_define(
     if (token.kind != TOKEN_SET && token.kind != TOKEN_COLON) {
         const bool in_extern_save = p->state.in_extern;
         p->state.in_extern = false;
-        if (!p->state.polymorphs) {
-            p->state.polymorphs = polymorphs;
+        if (!p->state.pb) {
+            p->state.pb = pb;
         }
 
         define->type = parse_expr(p, POWER_PRE, false, true, NULL);
-        p->state.polymorphs = polymorphs_save;
+        p->state.pb = pb_save;
         p->state.in_extern = in_extern_save;
     }
 
@@ -643,9 +643,9 @@ static Node *parse_define(
 
         const bool in_extern_save = p->state.in_extern;
         p->state.in_extern = false;
-        p->state.polymorphs = NULL;
+        p->state.pb = NULL;
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
-        p->state.polymorphs = polymorphs_save;
+        p->state.pb = pb_save;
         p->state.in_extern = in_extern_save;
     } else if (token.kind == TOKEN_COLON) {
         if (define->has_spread) {
@@ -657,9 +657,9 @@ static Node *parse_define(
         p->state.in_extern = false;
 
         p->state.peeked = false;
-        p->state.polymorphs = NULL;
+        p->state.pb = NULL;
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
-        p->state.polymorphs = polymorphs_save;
+        p->state.pb = pb_save;
         define->is_const = true;
 
         p->state.in_extern = in_extern_save;
@@ -746,19 +746,20 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         break;
 
     case TOKEN_DOLLAR: {
-        if (!p->state.polymorphs) {
+        if (!p->state.pb) {
             error_token(EK_ERROR, token, "Cannot define polymorphic parameters here");
             exit(1);
         }
 
         node = node_alloc(p->module_current, NODE_POLYMORPH, token);
 
-        nodes_push(&p->state.polymorphs->params, node);
-        p->state.polymorphs->params_count++;
+        nodes_push(&p->state.pb->polymorphs->params, node);
+        p->state.pb->polymorphs->params_count++;
 
         Node_Polymorph *polymorph = (Node_Polymorph *) node;
         polymorph->name = (Node_Atom *) node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
         polymorph->name->polymorph = polymorph;
+        polymorph->arg_index = p->state.pb->arg_index;
     } break;
 
     case TOKEN_ISTRING: {
@@ -826,12 +827,15 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_LPAREN: {
-        Node_Fn *fn = NULL;
+        Node_Fn           *fn = NULL;
+        Polymorphs_Builder pb = {0};
         if (read_token(p, TOKEN_RPAREN)) {
             fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
             fn->outer_fn = p->state.fn_current;
             fn->module = p->module_current;
+
             p->state.fn_current = fn;
+            pb.polymorphs = &fn->polymorphs;
 
             assert(p->state.ahead.kind == TOKEN_RPAREN);
             fn->args_end_token = p->state.ahead;
@@ -841,9 +845,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
                 fn->outer_fn = p->state.fn_current;
                 fn->module = p->module_current;
-                p->state.fn_current = fn;
 
-                node = parse_define(p, node, next_token(p), false, true, false, &fn->polymorphs);
+                p->state.fn_current = fn;
+                pb.polymorphs = &fn->polymorphs;
+
+                node = parse_define(p, node, next_token(p), false, true, false, &pb);
             } else {
                 expect_token(p, TOKEN_RPAREN);
             }
@@ -906,6 +912,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 nodes_push(&fn->args, arg);
                 fn->args_count += define->count;
+                pb.arg_index = fn->args_count;
+
                 if (!define->expr && fn->variadics_kind == VARIADICS_NONE) {
                     fn->args_count_min += define->count;
                 }
@@ -937,7 +945,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                         "The argument 'this' is used to describe the receiver of a method, and therefore must be the first argument");
                     exit(1);
                 }
-                arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false, &fn->polymorphs);
+                arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false, &pb);
             }
 
             if (read_token(p, TOKEN_ARROW)) {

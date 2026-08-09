@@ -165,9 +165,17 @@ static void print_quoted_char(FILE *f, char ch, char quote) {
     }
 }
 
-static void check_that_type_is_known(const Node *n) {
+static bool check_that_type_is_known_noexit(const Node *n) {
     if (type_is_unknown(n->type)) {
         error_node(EK_ERROR, n, "Cannot infer type of this expression");
+        return false;
+    }
+
+    return true;
+}
+
+static void check_that_type_is_known(const Node *n) {
+    if (!check_that_type_is_known_noexit(n)) {
         exit(1);
     }
 }
@@ -520,7 +528,10 @@ static bool type_assert_noexit(Compiler *c, Node *n, Type expected) {
         return true;
     }
 
-    check_that_type_is_known(n);
+    if (!check_that_type_is_known_noexit(n)) {
+        return false;
+    }
+
     error_node(EK_ERROR, n, "Expected %s, got %s", type_to_cstr(expected), type_to_cstr(n->type));
     maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(n, expected);
     return false;
@@ -566,11 +577,17 @@ static bool type_assert_grouped_noexit(Compiler *c, Node *n, Type expected, i64 
             return true;
         }
 
-        check_that_type_is_known(n);
+        if (!check_that_type_is_known_noexit(n)) {
+            return false;
+        }
+
         error_node(EK_ERROR, n, "Expected %s, got %s", type_to_cstr(expected), type_to_cstr(actual));
         maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(n, expected);
     } else {
-        check_that_type_is_known(n);
+        if (!check_that_type_is_known_noexit(n)) {
+            return false;
+        }
+
         if (try_auto_cast(c, n, expected, group_index)) {
             return true;
         }
@@ -3149,38 +3166,80 @@ static void add_monomorph_parameter(Compiler *c, Node_Polymorph *polymorph, Type
     da_push(&c->monomorph_parameters, mp);
 }
 
-static void infer_monomorph_parameters(Compiler *c, Node *n, i64 group_index, Type *expected) {
-    if (!expected) {
-        return;
+static_assert(COUNT_TYPES == 26, "");
+static bool infer_monomorph_parameters(Compiler *c, Node *n, Type *actual, const Type *expected) {
+    if (actual->ref < expected->ref) {
+        return true; // Not the responsibility of this function to perform type checking.
     }
 
-    Type *actual = &n->type;
-    if (group_index != -1) {
-        assert(actual->kind == TYPE_GROUP);
-        actual = &actual->spec.group.data[group_index];
+    switch (expected->kind) {
+    case TYPE_FN:
+        if (type_kind_eq(*actual, expected->kind) && actual->ref == expected->ref) {
+            const Type_Fn *as = actual->spec.fn;
+            const Type_Fn *es = expected->spec.fn;
+            if (as->args_count == es->args_count && as->returns_count == es->returns_count) {
+                for (size_t i = 0; i < as->args_count; i++) {
+                    if (!infer_monomorph_parameters(c, n, &as->args[i].type, &es->args[i].type)) {
+                        return false;
+                    }
+                }
+
+                for (size_t i = 0; i < as->returns_count; i++) {
+                    if (!infer_monomorph_parameters(c, n, &as->returns[i], &es->returns[i])) {
+                        return false;
+                    }
+                }
+            }
+        }
+        break;
+
+    case TYPE_ARRAY:
+        if (type_kind_eq(*actual, expected->kind) && actual->ref == expected->ref && //
+            actual->spec.array.count == expected->spec.array.count)                  //
+        {
+            if (!infer_monomorph_parameters(c, n, actual->spec.array.element, expected->spec.array.element)) {
+                return false;
+            }
+        }
+        break;
+
+    case TYPE_SLICE:
+        if (actual->ref == expected->ref) {
+            Type *element = NULL;
+            if (type_kind_eq(*actual, TYPE_SLICE)) {
+                element = actual->spec.slice.element;
+            }
+
+            if (type_kind_eq(*actual, TYPE_ARRAY)) {
+                element = actual->spec.array.element;
+            }
+
+            if (element) {
+                if (!infer_monomorph_parameters(c, n, element, expected->spec.slice.element)) {
+                    return false;
+                }
+            }
+        }
+        break;
+
+    case TYPE_POLYMORPH:
+        if (expected->spec.polymorph.is_definition) {
+            if (!check_that_type_is_known_noexit(n)) {
+                return false;
+            }
+            finalize_untyped_type(c, n);
+
+            Node_Polymorph *polymorph = expected->spec.polymorph.definition;
+            add_monomorph_parameter(c, polymorph, type_with_ref(*actual, actual->ref - expected->ref));
+        }
+        break;
+
+    default:
+        // Pass
+        break;
     }
 
-    if (actual->is_meta) {
-        todo(); // TODO(@polymorphism): Type -> RTTI
-    }
-
-    // TODO(@polymorphism): This is incomplete, just to get the tests working again
-    if (expected->kind != TYPE_POLYMORPH) {
-        return;
-    }
-
-    if (!expected->spec.polymorph.is_definition) {
-        return;
-    }
-
-    if (group_index == -1) {
-        check_that_type_is_known(n);
-        finalize_untyped_type(c, n);
-    }
-
-    Node_Polymorph *polymorph = expected->spec.polymorph.definition;
-    assert(actual->ref >= expected->ref);
-    add_monomorph_parameter(c, polymorph, type_with_ref(*actual, actual->ref - expected->ref));
+    return true;
 }
 
 static void monomorphize_node(Compiler *c, Node **np, bool first);
@@ -3336,7 +3395,9 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     } break;
 
     case NODE_INDEXABLE: {
-        todo();
+        Node_Indexable *indexable = (Node_Indexable *) n;
+        monomorphize_node(c, &indexable->element, first);
+        monomorphize_node(c, &indexable->count, first);
     } break;
 
     case NODE_DEFINE: {
@@ -3437,6 +3498,59 @@ static void ensure_interpolation_is_valid(Node_Interpolation *interpolation, boo
         if (!noexit) {
             exit(1);
         }
+    }
+}
+
+static void show_error_for_uninferred_polymorphic_parameter_in_call(
+    Compiler *c, Node_Call *call, const Type_Fn *fn_spec, Node_Polymorph *polymorph) //
+{
+    size_t it_index = 0;
+    ll_foreach(arg, &call->args) {
+        Node *it = arg;
+
+        const bool is_named = it->kind == NODE_BINARY && it->token.kind == TOKEN_SET;
+        if (is_named) {
+            it_index = it->token.as.integer;
+            it = ((Node_Binary *) it)->rhs;
+        }
+
+        const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
+        if (is_spread) {
+            it = ((Node_Unary *) it)->value;
+        }
+
+        const size_t parts = type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
+        for (size_t i = 0; i < parts; i++) {
+            if (it_index == polymorph->arg_index) {
+                Type *expected = &fn_spec->args[it_index].type;
+                if (!is_named && !is_spread &&                                                          //
+                    fn_spec->variadics_kind == VARIADICS_TYPED && it_index >= fn_spec->variadics_index) //
+                {
+                    // It is not named, therefore it must be a variadic parameter
+                    expected = &fn_spec->args[fn_spec->variadics_index].type;
+                    assert(type_kind_eq(*expected, TYPE_SLICE));
+                    expected = expected->spec.slice.element;
+                }
+
+                if (check_that_type_is_known_noexit(it)) {
+                    if (parts == 1) {
+                        type_assert_noexit(c, it, *expected);
+                    } else {
+                        type_assert_grouped_noexit(c, it, *expected, i, NULL);
+                    }
+                }
+                return;
+            }
+            it_index++;
+        }
+    }
+
+    if (fn_spec->variadics_kind == VARIADICS_TYPED && polymorph->arg_index == fn_spec->variadics_index) {
+        error_node(
+            EK_ERROR,
+            (Node *) polymorph,
+            "Cannot infer the type of polymorphic parameter '" SV_Fmt "' because no variadic arguments were provided",
+            SV_Arg(polymorph->name->node.token.sv));
     }
 }
 
@@ -3718,6 +3832,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         }
     }
 
+    Node *call_fn_original = call->fn;
     if (is_polymorph) {
         assert(fn_spec);
         assert(!is_trait); // TODO: Think about this
@@ -3726,7 +3841,11 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             assert(call->fn->kind == NODE_MEMBER);
             Node *receiver = ((Node_Member *) call->fn)->lhs;
             Type  expected = type_with_ref(fn_spec->args[0].type, receiver->type.ref);
-            infer_monomorph_parameters(c, receiver, -1, &expected);
+            if (!infer_monomorph_parameters(c, receiver, &receiver->type, &expected)) {
+                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                exit(1);
+            }
         }
 
         size_t it_index = is_method || is_trait;
@@ -3744,17 +3863,51 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 it = ((Node_Binary *) it)->rhs;
             }
 
+            Type  *types = &it->type;
+            size_t count = 1;
             if (type_kind_eq(it->type, TYPE_GROUP)) {
                 Type_Group *group = &it->type.spec.group;
-                for (size_t i = 0; i < group->count; i++, it_index++) {
-                    Type *expected = it_index < fn_spec->args_count ? &fn_spec->args[it_index].type : NULL;
-                    infer_monomorph_parameters(c, it, i, expected);
-                }
-            } else {
-                Type *expected = it_index < fn_spec->args_count ? &fn_spec->args[it_index].type : NULL;
-                infer_monomorph_parameters(c, it, -1, expected);
-                it_index++;
+                types = group->data;
+                count = group->count;
             }
+
+            for (size_t i = 0; i < count; i++, it_index++) {
+                Type *expected = it_index < fn_spec->args_count ? &fn_spec->args[it_index].type : NULL;
+                if (!is_named && !is_spread &&                                                          //
+                    fn_spec->variadics_kind == VARIADICS_TYPED && it_index >= fn_spec->variadics_index) //
+                {
+                    // It is not named, therefore it must be a variadic parameter
+                    expected = &fn_spec->args[fn_spec->variadics_index].type;
+                    assert(type_kind_eq(*expected, TYPE_SLICE));
+                    expected = expected->spec.slice.element;
+                }
+
+                if (!infer_monomorph_parameters(c, it, &types[i], expected)) {
+                    error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                    exit(1);
+                }
+            }
+        }
+
+        if (c->monomorph_parameters.count != fn_spec->polymorphs_count) {
+            for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
+                Monomorph_Parameter it = c->monomorph_parameters.data[i];
+                it.from->is_monomorphized = true;
+                it.from->monomorphized_to = it.to;
+                // It does not matter that we mutate these, since we are about to die anyway
+            }
+
+            for (size_t i = 0; i < fn_spec->polymorphs_count; i++) {
+                Node_Polymorph *it = fn_spec->polymorphs[i];
+                if (!it->is_monomorphized) {
+                    show_error_for_uninferred_polymorphic_parameter_in_call(c, call, fn_spec, it);
+                }
+            }
+
+            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+            exit(1);
         }
 
         monomorphize(c, &call->fn);
@@ -3782,6 +3935,12 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 it = ((Node_Binary *) it)->rhs;
 
                 if (!type_assert_noexit(c, it, fn_spec->args[it_index].type)) {
+                    if (is_polymorph) {
+                        Node *call_fn_save = call->fn;
+                        call->fn = call_fn_original;
+                        error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                        call->fn = call_fn_save;
+                    }
                     show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                     exit(1);
                 }
@@ -3817,6 +3976,12 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                         }
 
                         if (!ok) {
+                            if (is_polymorph) {
+                                Node *call_fn_save = call->fn;
+                                call->fn = call_fn_original;
+                                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                                call->fn = call_fn_save;
+                            }
                             show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                             exit(1);
                         }
@@ -6109,3 +6274,5 @@ void check_nodes(Compiler *c) {
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?
+//
+// TODO: Implement ability to access polymorphic parameter inside monomorphed function

@@ -1,0 +1,8 @@
+foo :: (vs: []$T) {
+    println(vs)
+}
+
+main :: () {
+    foo([]i64 {69, 420})
+    foo([]char("Hi!"))
+}

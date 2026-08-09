@@ -1,8 +1,12 @@
 EXIT 1
 STDOUT 0
 
-STDERR 361
+STDERR 509
 tests/error_type_mismatch_after_monomorphization_of_polymorphic_type.glos:6:11: ERROR: Expected 'string', got 'i64'
+
+    first(69, "Urmom")
+
+tests/error_type_mismatch_after_monomorphization_of_polymorphic_type.glos:6:5: NOTE: While attempting to monomorphize this
 
     first(69, "Urmom")
 

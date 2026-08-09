@@ -609,6 +609,7 @@ struct Node_Import {
 struct Node_Polymorph {
     Node       node;
     Node_Atom *name;
+    size_t     arg_index;
 
     bool is_monomorphized;
     Type monomorphized_to;
