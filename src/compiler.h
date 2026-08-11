@@ -24,6 +24,14 @@ typedef struct {
 } Monomorph_Parameter;
 
 typedef struct {
+    Node *from; // The node that was monomorphized from
+    Node *into; // The node that was monomorphized into
+
+    Node_Call *site;    // The site of the monomorphization
+    Node_Fn   *site_fn; // The function in which the monomorphization occured
+} Monomorphization;
+
+typedef struct {
     // These are used only by the analyzer
     Type main_fn_type;
     DA(Type_Struct_Field) struct_fields;
@@ -41,6 +49,7 @@ typedef struct {
 
     HT(void *, void *) monomorph_replacements;
     DA(Monomorph_Parameter) monomorph_parameters;
+    DA(Monomorphization) monomorphization_stack;
 
     // These are used both by the analyzer and the compiler
     Context context;

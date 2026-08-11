@@ -11,6 +11,81 @@
 #include <assert.h>
 #include <stdint.h>
 
+static Node_Fn *get_function_literal(Node *fn) {
+    if (fn->kind == NODE_ATOM && fn->token.kind == TOKEN_IDENT) {
+        Node_Atom *atom = (Node_Atom *) fn;
+        if (atom->definition->definition_spec->is_const_value_evaluated) {
+            const Const_Value value = atom->definition->definition_spec->const_value;
+            if (value.kind == CONST_VALUE_FN) {
+                return value.as.fn;
+            }
+        }
+    }
+
+    if (fn->kind == NODE_MEMBER) {
+        Node_Member *member = (Node_Member *) fn;
+        if (member->module_access_definition) {
+            Node_Atom        *atom = member->module_access_definition;
+            const Const_Value value = atom->definition_spec->const_value;
+            if (value.kind == CONST_VALUE_FN) {
+                return value.as.fn;
+            }
+        }
+
+        if (member->method) {
+            return member->method;
+        }
+    }
+    return NULL;
+}
+
+static void show_current_monomorphization(Compiler *c) {
+    if (!c->monomorphization_stack.count) {
+        return;
+    }
+
+    const Monomorphization m = c->monomorphization_stack.data[c->monomorphization_stack.count - 1];
+    if (m.into->kind == NODE_FN) {
+        for (Context_Fn *context = c->context.fn; context; context = context->outer) {
+            if (context->fn == (Node_Fn *) m.into) {
+                m.site->fn = m.from;
+                error_node(EK_NOTE, (Node *) m.site, "While inside this monomorphization");
+
+                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "    Here are the polymorphic parameters used:\n\n");
+                ll_foreach(it, &context->fn->monomorphs.params) {
+                    Node_Polymorph *polymorph = (Node_Polymorph *) it;
+                    assert(polymorph->is_monomorphized);
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "        " SV_Fmt " :: %s\n",
+                        SV_Arg(polymorph->name->node.token.sv),
+                        type_to_cstr_raw(polymorph->monomorphized_to));
+                }
+                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
+
+                m.site->fn = m.into;
+
+                Node_Fn *from = get_function_literal(m.from);
+                assert(from); // It's polymorphic
+
+                Node *from_body_save = from->body;
+                from->body = NULL;
+                error_node(
+                    EK_NOTE,
+                    (Node *) from,
+                    "Here is the %s that was monomorphized",
+                    from->is_method ? "method" : "function");
+                from->body = from_body_save;
+            }
+        }
+    } else {
+        unreachable();
+    }
+}
+
+#define exit(c, code) (show_current_monomorphization(c), exit(code))
+
 static bool type_is_trait(Type type) {
     return !type.ref && type_kind_eq(type, TYPE_TRAIT);
 }
@@ -52,11 +127,11 @@ static void error_undefined(Compiler *c, const Token *t, const char *label, bool
     }
 
     if (!no_exit) {
-        exit(1);
+        exit(c, 1);
     }
 }
 
-static void error_redefinition(const Node *n, const Pos *previous_pos) {
+static void error_redefinition(Compiler *c, const Node *n, const Pos *previous_pos) {
     error_token(EK_ERROR, n->token, "Redefinition of '" SV_Fmt "'", SV_Arg(n->token.sv));
     if (previous_pos) {
         SV previous_sv = {0};
@@ -64,7 +139,7 @@ static void error_redefinition(const Node *n, const Pos *previous_pos) {
         previous_sv.count = n->token.sv.count;
         error_parts(EK_NOTE, previous_sv, *previous_pos, "Here is the first definition");
     }
-    exit(1);
+    exit(c, 1);
 }
 
 static void error_redefinition_add_helper_message_for_import(
@@ -89,8 +164,8 @@ static void error_redefinition_add_helper_message_for_import(
     }
 }
 
-static void
-error_redefinition_global(const Node *this, const Node *previous, const Module *module, const Context *context) //
+static void error_redefinition_global(
+    Compiler *c, const Node *this, const Node *previous, const Module *module, const Context *context) //
 {
     error_token(EK_ERROR, this->token, "Redefinition of '" SV_Fmt "'", SV_Arg(this->token.sv));
     if (this->module != module) {
@@ -103,10 +178,10 @@ error_redefinition_global(const Node *this, const Node *previous, const Module *
             error_redefinition_add_helper_message_for_import(previous, module, context, "first definition");
         }
     }
-    exit(1);
+    exit(c, 1);
 }
 
-static void error_number_of_return_values_mismatch(Token token, size_t expected, size_t actual) {
+static void error_number_of_return_values_mismatch(Compiler *c, Token token, size_t expected, size_t actual) {
     error_token(
         EK_ERROR,
         token,
@@ -114,7 +189,7 @@ static void error_number_of_return_values_mismatch(Token token, size_t expected,
         actual < expected ? "few" : "many",
         expected,
         actual);
-    exit(1);
+    exit(c, 1);
 }
 
 static void print_quoted_char(FILE *f, char ch, char quote) {
@@ -174,14 +249,14 @@ static bool check_that_type_is_known_noexit(const Node *n) {
     return true;
 }
 
-static void check_that_type_is_known(const Node *n) {
+static void check_that_type_is_known(Compiler *c, const Node *n) {
     if (!check_that_type_is_known_noexit(n)) {
-        exit(1);
+        exit(c, 1);
     }
 }
 
 static_assert(COUNT_TYPES == 26, "");
-static void check_int_limit_ex(Node *n, Int128 value, bool min_zero, const char *label) {
+static void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label) {
     const Type_Kind type_kind = type_kind_eq(n->type, TYPE_ENUM) ? n->type.spec.enumm.underlying : n->type.kind;
 
     typedef struct {
@@ -222,12 +297,12 @@ static void check_int_limit_ex(Node *n, Int128 value, bool min_zero, const char 
             label ? label : type_to_cstr(n->type),
             int128_to_cstr(limit.min),
             int128_to_cstr(limit.max));
-        exit(1);
+        exit(c, 1);
     }
 }
 
-static inline void check_int_limit(Node *n, Int128 value) {
-    check_int_limit_ex(n, value, false, NULL);
+static inline void check_int_limit(Compiler *c, Node *n, Int128 value) {
+    check_int_limit_ex(c, n, value, false, NULL);
 }
 
 static i64 get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t) {
@@ -239,10 +314,10 @@ static i64 get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t
 
     error_undefined(c, t, "enumeration value", true);
     error_node(EK_NOTE, (Node *) enumm, "Enumeration defined here");
-    exit(1);
+    exit(c, 1);
 }
 
-static size_t get_union_type_index(Node *n, Type unionn) {
+static size_t get_union_type_index(Compiler *c, Node *n, Type unionn) {
     assert(unionn.kind == TYPE_UNION);
     const Type_Union *spec = unionn.spec.unionn;
 
@@ -257,14 +332,14 @@ static size_t get_union_type_index(Node *n, Type unionn) {
 
     error_node(EK_ERROR, n, "Type %s is not a variant of %s", type_to_cstr(type), type_to_cstr(unionn));
     error_node(EK_NOTE, (Node *) spec->definition, "Union defined here");
-    exit(1);
+    exit(c, 1);
 }
 
 static void     check_compound_expr(Compiler *c, Node_Compound *compound);
 static void     check_binary_expr(Compiler *c, Node_Binary *binary, bool check_children);
 static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module);
 
-static void set_auto_cast(Node *n, i64 index, Auto_Cast_Kind kind, Type from, Type to) {
+static void set_auto_cast(Compiler *c, Node *n, i64 index, Auto_Cast_Kind kind, Type from, Type to) {
     if (!n->auto_casts) {
         n->auto_casts_count = type_kind_eq(n->type, TYPE_GROUP) ? n->type.spec.group.count : 1;
         n->auto_casts = arena_alloc(&default_arena, n->auto_casts_count * sizeof(*n->auto_casts));
@@ -275,7 +350,7 @@ static void set_auto_cast(Node *n, i64 index, Auto_Cast_Kind kind, Type from, Ty
     it->from = from;
     it->to = to;
     if (kind == AUTO_CAST_TO_UNION) {
-        it->union_index = get_union_type_index(n, to);
+        it->union_index = get_union_type_index(c, n, to);
     }
 
     if (index == -1) {
@@ -352,7 +427,7 @@ static void cast_untyped(Compiler *c, Node *n, Type expected) {
         n->type = expected;
         check_compound_expr(c, (Node_Compound *) n);
         if (type_kind_eq(n->type, TYPE_ARRAY) && type_kind_eq(expected, TYPE_SLICE)) {
-            set_auto_cast(n, -1, AUTO_CAST_ARRAY_TO_SLICE, n->type, expected);
+            set_auto_cast(c, n, -1, AUTO_CAST_ARRAY_TO_SLICE, n->type, expected);
         }
         break;
 
@@ -380,7 +455,7 @@ static bool try_auto_cast_untyped(Compiler *c, Node *n, Type expected) {
             const Const_Value value = eval_const_expr(c, n, false);
             assert(value.kind == CONST_VALUE_INT);
 
-            check_int_limit(n, value.as.integer);
+            check_int_limit(c, n, value.as.integer);
         }
         return true;
     }
@@ -431,7 +506,7 @@ static void finalize_untyped_type(Compiler *c, Node *n) {
         n->type.kind = TYPE_I64;
 
         assert(value.kind == CONST_VALUE_INT);
-        check_int_limit(n, value.as.integer);
+        check_int_limit(c, n, value.as.integer);
     }
 }
 
@@ -489,7 +564,7 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
     }
 
     if (type_is_union(expected) && !type_is_unknown(actual)) {
-        set_auto_cast(n, group_index, AUTO_CAST_TO_UNION, actual, expected);
+        set_auto_cast(c, n, group_index, AUTO_CAST_TO_UNION, actual, expected);
         return true;
     }
 
@@ -498,7 +573,7 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
         !actual.ref && !expected.ref &&                                    //
         type_eq(*actual.spec.array.element, *expected.spec.slice.element)) //
     {
-        set_auto_cast(n, group_index, AUTO_CAST_ARRAY_TO_SLICE, actual, expected);
+        set_auto_cast(c, n, group_index, AUTO_CAST_ARRAY_TO_SLICE, actual, expected);
         return true;
     }
 
@@ -511,7 +586,7 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
         finalize_untyped_type(c, n);
 
         Type_Trait_Impl *impl = check_type_satisfies_trait(c, actual, expected.spec.trait, n, group_index);
-        set_auto_cast(n, group_index, AUTO_CAST_TO_TRAIT, actual, expected);
+        set_auto_cast(c, n, group_index, AUTO_CAST_TO_TRAIT, actual, expected);
         n->auto_casts[group_index == -1 ? 0 : group_index].trait_impl = impl;
         return true;
     }
@@ -541,7 +616,7 @@ static Type type_assert(Compiler *c, Node *n, Type expected) {
     if (type_assert_noexit(c, n, expected)) {
         return expected;
     }
-    exit(1);
+    exit(c, 1);
 }
 
 static const char *order_postfix(size_t n) {
@@ -615,7 +690,7 @@ static Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_i
     if (type_assert_grouped_noexit(c, n, expected, group_index, requirement)) {
         return expected;
     }
-    exit(1);
+    exit(c, 1);
 }
 
 static Type type_assert_node(Compiler *c, Node *a, Node *b) {
@@ -631,14 +706,14 @@ static Type type_assert_node(Compiler *c, Node *a, Node *b) {
         return b->type;
     }
 
-    check_that_type_is_known(a);
-    check_that_type_is_known(b);
+    check_that_type_is_known(c, a);
+    check_that_type_is_known(c, b);
     error_node(EK_ERROR, a, "Expected %s, got %s", type_to_cstr(b->type), type_to_cstr(a->type));
     maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(a, b->type);
-    exit(1);
+    exit(c, 1);
 }
 
-static Type type_assert_numeric(const Node *n, bool pointers_allowed) {
+static Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed) {
     if (type_is_numeric(n->type)) {
         return n->type;
     }
@@ -647,7 +722,7 @@ static Type type_assert_numeric(const Node *n, bool pointers_allowed) {
         return n->type;
     }
 
-    check_that_type_is_known(n);
+    check_that_type_is_known(c, n);
 
     const char *label = "arithmetic";
     if (!pointers_allowed) {
@@ -655,27 +730,27 @@ static Type type_assert_numeric(const Node *n, bool pointers_allowed) {
     }
 
     error_node(EK_ERROR, n, "Expected %s value, got %s", label, type_to_cstr(n->type));
-    exit(1);
+    exit(c, 1);
 }
 
-static Type type_assert_scalar(const Node *n) {
+static Type type_assert_scalar(Compiler *c, const Node *n) {
     if (type_is_scalar(n->type)) {
         return n->type;
     }
 
-    check_that_type_is_known(n);
+    check_that_type_is_known(c, n);
     error_node(EK_ERROR, n, "Expected scalar value, got %s", type_to_cstr(n->type));
-    exit(1);
+    exit(c, 1);
 }
 
-static Type type_assert_type(const Node *n) {
-    check_that_type_is_known(n);
+static Type type_assert_type(Compiler *c, const Node *n) {
+    check_that_type_is_known(c, n);
     if (n->type.is_meta) {
         return n->type;
     }
 
     error_node(EK_ERROR, n, "Expected a type, got %s", type_to_cstr(n->type));
-    exit(1);
+    exit(c, 1);
 }
 
 static bool get_builtin_type_kind(SV name, Type_Kind *kind) {
@@ -924,7 +999,7 @@ static Node_Fn *get_main(Compiler *c) {
             "    main :: () {\n"
             "    }\n"
             "\n");
-        exit(1);
+        exit(c, 1);
     }
 
     if (!main->definition_spec->is_const || main->definition_spec->assignment_node->kind != NODE_FN) {
@@ -942,7 +1017,7 @@ static Node_Fn *get_main(Compiler *c) {
             "\n");
 
         // NOTE: If in the future, we change how namespaces are denoted in the link names, this needs to be updated.
-        exit(1);
+        exit(c, 1);
     }
 
     c->main_fn = (Node_Fn *) main->definition_spec->assignment_node;
@@ -952,13 +1027,13 @@ static Node_Fn *get_main(Compiler *c) {
     if (signature->args_count) {
         c->main_fn->body = NULL;
         error_node(EK_ERROR, (Node *) c->main_fn, "Function 'main' cannot take any arguments");
-        exit(1);
+        exit(c, 1);
     }
 
     if (signature->returns_count) {
         c->main_fn->body = NULL;
         error_node(EK_ERROR, (Node *) c->main_fn, "Function 'main' cannot return anything");
-        exit(1);
+        exit(c, 1);
     }
 
     return c->main_fn;
@@ -1120,8 +1195,8 @@ static Const_Value const_value_of_var(Compiler *c, Node_Atom *var) {
     return var->definition_spec->const_value;
 }
 
-static inline i64 i64_from_int128(Node *n, Int128 x, bool min_zero, const char *label) {
-    check_int_limit_ex(n, x, min_zero, label);
+static inline i64 i64_from_int128(Compiler *c, Node *n, Int128 x, bool min_zero, const char *label) {
+    check_int_limit_ex(c, n, x, min_zero, label);
     return x.low;
 }
 
@@ -1139,7 +1214,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     if (ref) {
         if (n->kind != NODE_ATOM || n->token.kind != TOKEN_IDENT) {
             error_node(EK_ERROR, n, "Can only take reference to variables in a constant expression");
-            exit(1);
+            exit(c, 1);
         }
     }
 
@@ -1167,7 +1242,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 if (atom->definition->definition_spec->is_local) {
                     error_node(EK_ERROR, n, "Cannot use local variables in a constant expression");
                     error_node(EK_NOTE, (Node *) atom->definition, "Here is the variable being used");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 if (ref) {
@@ -1187,7 +1262,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                     n,
                     "Cannot access pointers in constant expressions. (This string literal is auto casted to %s)",
                     type_to_cstr(n->type));
-                exit(1);
+                exit(c, 1);
             }
             return const_value_string(n->token.as.string);
 
@@ -1210,7 +1285,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         if (unary->overload) {
             error_node(EK_ERROR, n, "Cannot call operator overload in compile time expressions");
             error_node(EK_NOTE, (Node *) unary->overload->defined_as, "This is the overload used");
-            exit(1);
+            exit(c, 1);
         }
 
         Const_Value value = {0};
@@ -1228,7 +1303,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             }
 
             error_node(EK_ERROR, n, "This expression is not constant at compile time");
-            exit(1);
+            exit(c, 1);
             break;
 
         case TOKEN_BAND:
@@ -1266,7 +1341,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         if (binary->overload) {
             error_node(EK_ERROR, n, "Cannot call operator overload in compile time expressions");
             error_node(EK_NOTE, (Node *) binary->overload->defined_as, "This is the overload used");
-            exit(1);
+            exit(c, 1);
         }
 
         Const_Value lhs = {0};
@@ -1297,7 +1372,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
                 if ((n->token.kind == TOKEN_DIV || n->token.kind == TOKEN_MOD) && int128_is_zero(rhs.as.integer)) {
                     error_node(EK_ERROR, binary->rhs, "Cannot divide by zero");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 return const_value_int(op(lhs.as.integer, rhs.as.integer, type_is_signed(n->type)));
@@ -1384,7 +1459,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                         "Type mismatch: Accessing %s, but real type is %s",
                         type_to_cstr(n->type),
                         lhs.as.trait.type ? type_to_cstr(*lhs.as.trait.type) : "null");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 assert(lhs.as.trait.data); // The type is checked, that means a real value exists
@@ -1392,7 +1467,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             } else if (member->is_trait) {
                 if (!lhs.as.trait.impl) {
                     error_node(EK_ERROR, n, "Cannot access method of null trait");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 Node_Fn *fn = lhs.as.trait.impl->methods[member->trait_method].fn;
@@ -1406,7 +1481,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 return const_value_u64(0);
             } else if (member->field_index == 1 || member->field_index == 2) {
                 error_node(EK_ERROR, n, "Cannot access pointers in constant expressions");
-                exit(1);
+                exit(c, 1);
             } else {
                 unreachable();
             }
@@ -1422,7 +1497,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                         "Type mismatch: Accessing %s, but real type is %s",
                         member->union_index ? type_to_cstr(spec->variants[member->union_index - 1].type) : "null",
                         lhs.as.unionn.index ? type_to_cstr(spec->variants[lhs.as.unionn.index - 1].type) : "null");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 assert(lhs.as.unionn.real); // The type is checked, that means a real value exists
@@ -1439,7 +1514,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         case CONST_VALUE_ARRAY:
             if (member->field_index == 0) {
                 error_node(EK_ERROR, n, "Cannot access pointers in constant expressions");
-                exit(1);
+                exit(c, 1);
             } else if (member->field_index == 1) {
                 return const_value_u64(lhs.as.array.count);
             } else {
@@ -1449,7 +1524,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         case CONST_VALUE_STRING:
             if (member->field_index == 0) {
                 error_node(EK_ERROR, n, "Cannot access pointers in constant expressions");
-                exit(1);
+                exit(c, 1);
             } else if (member->field_index == 1) {
                 return const_value_u64(lhs.as.string.count);
             } else {
@@ -1466,7 +1541,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
             if (!definition->definition_spec->is_const) {
                 error_node(EK_ERROR, n, "Cannot use variables in a constant expression");
-                exit(1);
+                exit(c, 1);
             }
 
             return definition->definition_spec->const_value;
@@ -1541,13 +1616,13 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         Node_Call *call = (Node_Call *) n;
         if (!call->is_type_cast) {
             error_node(EK_ERROR, call->fn, "Cannot call functions in a constant expression");
-            exit(1);
+            exit(c, 1);
         }
 
         const Const_Value value = eval_const_expr(c, call->args.head, false);
         if (value.kind == CONST_VALUE_VAR || type_is_pointer(n->type)) {
             error_node(EK_ERROR, n, "This expression is not constant at compile time");
-            exit(1);
+            exit(c, 1);
         }
 
         static_assert(COUNT_TYPE_CASTS == 5, "");
@@ -1577,14 +1652,14 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         if (index->overload) {
             error_node(EK_ERROR, n, "Cannot call operator overload in compile time expressions");
             error_node(EK_NOTE, (Node *) index->overload->defined_as, "This is the overload used");
-            exit(1);
+            exit(c, 1);
         }
 
         const Const_Value lhs = eval_const_expr(c, index->lhs, false);
         if (index->is_ranged) {
             if (type_is_pointer(index->lhs->type)) {
                 error_node(EK_ERROR, n, "Cannot construct slices from pointers in constant expressions");
-                exit(1);
+                exit(c, 1);
             }
 
             static_assert(COUNT_CONST_VALUES == 10, "");
@@ -1595,20 +1670,20 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 i64 begin = 0;
                 if (index->a) {
                     begin = i64_from_int128(
-                        index->a, eval_const_expr(c, index->a, false).as.integer, true, "beginning of range");
+                        c, index->a, eval_const_expr(c, index->a, false).as.integer, true, "beginning of range");
                 }
 
                 i64 end = array.count;
                 if (index->b) {
-                    end =
-                        i64_from_int128(index->a, eval_const_expr(c, index->b, false).as.integer, true, "end of range");
+                    end = i64_from_int128(
+                        c, index->a, eval_const_expr(c, index->b, false).as.integer, true, "end of range");
                 }
 
                 if (begin > end) {
                     index->lhs = NULL;
                     error_node(
                         EK_ERROR, n, "Range (%zd..%zd) is invalid: Beginning of range is more than end", begin, end);
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 if (begin < 0 || end < 0 || (size_t) begin > array.count || (size_t) end > array.count) {
@@ -1620,7 +1695,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                         begin,
                         end,
                         array.count);
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 array.data += begin;
@@ -1635,27 +1710,27 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 i64 begin = 0;
                 if (index->a) {
                     begin = i64_from_int128(
-                        index->a, eval_const_expr(c, index->a, false).as.integer, true, "beginning of range");
+                        c, index->a, eval_const_expr(c, index->a, false).as.integer, true, "beginning of range");
                 }
 
                 i64 end = sv.count;
                 if (index->b) {
-                    end =
-                        i64_from_int128(index->a, eval_const_expr(c, index->b, false).as.integer, true, "end of range");
+                    end = i64_from_int128(
+                        c, index->a, eval_const_expr(c, index->b, false).as.integer, true, "end of range");
                 }
 
                 if (begin > end) {
                     index->lhs = NULL;
                     error_node(
                         EK_ERROR, n, "Range (%zd..%zd) is invalid: Beginning of range is more than end", begin, end);
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 if (begin < 0 || end < 0 || (size_t) begin > sv.count || (size_t) end > sv.count) {
                     index->lhs = NULL;
                     error_node(
                         EK_ERROR, n, "Range (%zd..%zd) is out of bounds in string of length %zu", begin, end, sv.count);
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 sv.data += begin;
@@ -1667,7 +1742,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 unreachable();
             }
         } else {
-            const i64 at = i64_from_int128(index->a, eval_const_expr(c, index->a, false).as.integer, true, "index");
+            const i64 at = i64_from_int128(c, index->a, eval_const_expr(c, index->a, false).as.integer, true, "index");
 
             static_assert(COUNT_CONST_VALUES == 10, "");
             switch (lhs.kind) {
@@ -1679,7 +1754,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                         "Index %zd is out of bounds in array of length %zu",
                         at,
                         lhs.as.array.count);
-                    exit(1);
+                    exit(c, 1);
                 };
 
                 return lhs.as.array.data[at];
@@ -1693,7 +1768,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                         "Index %zd is out of bounds in string of length %zu",
                         at,
                         lhs.as.string.count);
-                    exit(1);
+                    exit(c, 1);
                 };
 
                 return const_value_u64(lhs.as.string.data[at]);
@@ -1792,7 +1867,7 @@ static const char *operator_method_name_from_token_kind(Token_Kind kind) {
 static void check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw) {
     check_expr(c, sw->expr, REF_NONE);
     finalize_untyped_type(c, sw->expr);
-    check_that_type_is_known(sw->expr);
+    check_that_type_is_known(c, sw->expr);
 
     if (!sw->expr->type.ref && type_kind_eq(sw->expr->type, TYPE_ENUM)) {
         sw->enumeration = sw->expr->type.spec.enumm.definition;
@@ -1824,7 +1899,7 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
         if (node_is_null(pred)) {
             value = const_value_u64(0);
         } else {
-            type_assert_type(pred);
+            type_assert_type(c, pred);
             Type type = pred->type;
             type.is_meta = false;
             check_type_satisfies_trait(c, type, sw->trait->node.type.spec.trait, pred, -1);
@@ -1834,8 +1909,8 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
         if (node_is_null(pred)) {
             value = const_value_u64(0);
         } else {
-            type_assert_type(pred);
-            value = const_value_u64(get_union_type_index(pred, sw->expr->type));
+            type_assert_type(c, pred);
+            value = const_value_u64(get_union_type_index(c, pred, sw->expr->type));
         }
     } else {
         type_assert(c, pred, sw->expr->type);
@@ -1871,7 +1946,7 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
 
             error_finalize();
             error_node(EK_NOTE, sw->preds[i].pred, "Already here");
-            exit(1);
+            exit(c, 1);
         }
     }
 
@@ -1881,7 +1956,7 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
     return value;
 }
 
-static void check_switch_exhaustive(Node_Switch *sw) {
+static void check_switch_exhaustive(Compiler *c, Node_Switch *sw) {
     if (sw->enumeration) {
         if (sw->preds_count < sw->enumeration->values_count && !sw->fallback) {
             error_node(EK_ERROR, (Node *) sw, "This switch statement is not complete");
@@ -1903,7 +1978,7 @@ static void check_switch_exhaustive(Node_Switch *sw) {
             }
             afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
             error_node(EK_NOTE, (Node *) sw->enumeration, "Enumeration defined here");
-            exit(1);
+            exit(c, 1);
         }
     } else if (sw->unionn) {
         if (sw->preds_count < sw->unionn->variants_count + 1 && !sw->fallback) {
@@ -1934,7 +2009,7 @@ static void check_switch_exhaustive(Node_Switch *sw) {
             afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
 
             error_node(EK_NOTE, (Node *) sw->unionn, "Union defined here");
-            exit(1);
+            exit(c, 1);
         }
     }
 }
@@ -2002,7 +2077,7 @@ static void define_orderless_nodes_of_module(Compiler *c, Module *module, const 
     case CHECKING:
         assert(unqualified_import_token);
         error_token(EK_ERROR, *unqualified_import_token, "Cyclic unqualified import");
-        exit(1);
+        exit(c, 1);
         break;
 
     case CHECKED:
@@ -2055,7 +2130,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                     }
 
                     if (previous) {
-                        error_redefinition_global((Node *) *it.value, (Node *) previous, n->module, &c->context);
+                        error_redefinition_global(c, (Node *) *it.value, (Node *) previous, n->module, &c->context);
                     }
                 }
             }
@@ -2082,7 +2157,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                             }
 
                             if (sv_eq(it->node.token.sv, previous->node.token.sv)) {
-                                error_redefinition((Node *) it, &previous->node.token.pos);
+                                error_redefinition(c, (Node *) it, &previous->node.token.pos);
                                 break;
                             }
                         }
@@ -2093,7 +2168,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                     it->definition_spec->fn_context = c->context.fn;
                 } else {
                     if (get_builtin_type_kind(it->node.token.sv, NULL)) {
-                        error_redefinition((Node *) it, NULL);
+                        error_redefinition(c, (Node *) it, NULL);
                     }
 
                     bool is_method = false;
@@ -2109,7 +2184,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                     if (!is_method) {
                         Node_Atom *previous = module_globals_find(c, it->module, it->node.token.sv);
                         if (previous) {
-                            error_redefinition_global((Node *) it, (Node *) previous, it->module, &c->context);
+                            error_redefinition_global(c, (Node *) it, (Node *) previous, it->module, &c->context);
                         }
                         global_scope_push(&it->module->globals, it);
                     }
@@ -2258,7 +2333,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
                 c->context.replace = branch->context_replace.outer;
             }
 
-            check_switch_exhaustive(sw);
+            check_switch_exhaustive(c, sw);
             c->current_comptime_conditional_stmt = current_comptime_conditional_stmt_save;
         }
     } break;
@@ -2320,7 +2395,7 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
     if (type) {
         if (type_kind_eq(type->type, TYPE_UNIT)) {
             check_expr(c, type, REF_NONE);
-            type_assert_type(type);
+            type_assert_type(c, type);
         }
         type->type.is_meta = false;
         it->node.type = type->type;
@@ -2346,10 +2421,10 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
                     if (it_expr->kind == NODE_GROUP) {
                         Node_Group *group = (Node_Group *) it_expr;
                         ll_foreach(it, &group->nodes) {
-                            check_that_type_is_known(it);
+                            check_that_type_is_known(c, it);
                         }
                     } else {
-                        check_that_type_is_known(it_expr);
+                        check_that_type_is_known(c, it_expr);
                     }
                 }
 
@@ -2366,7 +2441,7 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
                         "Cannot store %s in a %s",
                         type_to_cstr(it_expr->type),
                         it->definition_spec->is_const ? "constant" : "variable");
-                    exit(1);
+                    exit(c, 1);
                 }
             }
         }
@@ -2464,7 +2539,7 @@ static void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_K
             // Reference to incomplete type definition is allowed
         } else {
             error_node(EK_ERROR, (Node *) definition, "Cyclic definition");
-            exit(1);
+            exit(c, 1);
         }
         break;
 
@@ -2494,7 +2569,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
 
     if (sv_match(n->token.sv, "_")) {
         error_token(EK_ERROR, n->token, "Identifier '_' cannot be used as a value");
-        exit(1);
+        exit(c, 1);
     }
 
     Node_Atom *definition = NULL;
@@ -2512,7 +2587,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                     {
                         error_node(EK_ERROR, n, "Cannot use variable from stack frame of outer function");
                         error_node(EK_NOTE, (Node *) definition, "Here is the variable being used");
-                        exit(1);
+                        exit(c, 1);
                     }
                 }
             }
@@ -2527,7 +2602,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                 n->type = (Type) {.kind = builtin_type_kind, .is_meta = true};
                 if (ref == REF_ASSIGN) {
                     error_node(EK_ERROR, n, "Cannot assign to compile time constant value");
-                    exit(1);
+                    exit(c, 1);
                 }
                 return;
             }
@@ -2587,7 +2662,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                 if (!n->type.is_meta) {
                     error_node(EK_ERROR, n, "Cannot take reference to compile time constant value");
                     error_node(EK_NOTE, (Node *) definition, "Here is the constant being used");
-                    exit(1);
+                    exit(c, 1);
                 }
                 break;
 
@@ -2595,21 +2670,21 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                 if (!n->type.is_meta && !type_kind_eq(definition->node.type, TYPE_MODULE)) {
                     error_node(EK_ERROR, n, "Cannot take reference to compile time constant value");
                     error_node(EK_NOTE, (Node *) definition, "Here is the constant being used");
-                    exit(1);
+                    exit(c, 1);
                 }
                 break;
 
             case REF_ASSIGN:
                 error_node(EK_ERROR, n, "Cannot assign to compile time constant value");
                 error_node(EK_NOTE, (Node *) definition, "Here is the constant being used");
-                exit(1);
+                exit(c, 1);
                 break;
 
             case REF_ASSIGN_MEMBER:
                 if (!type_kind_eq(definition->node.type, TYPE_MODULE)) {
                     error_node(EK_ERROR, n, "Cannot assign to compile time constant value");
                     error_node(EK_NOTE, (Node *) definition, "Here is the constant being used");
-                    exit(1);
+                    exit(c, 1);
                 }
                 break;
             }
@@ -2633,7 +2708,7 @@ static void check_that_methods_can_be_accessed(Compiler *c, Node *receiver, Modu
             "    to be registered. Therefore at this point of time, the methods might not be defined yet.\n"
             "    Thus, to prevent inconsistent behaviour, any operations involving them are disallowed.\n\n");
 
-        exit(1);
+        exit(c, 1);
     }
 }
 
@@ -2900,7 +2975,7 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
                     }
 
                     error_finalize();
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 switch (it.kind) {
@@ -2942,7 +3017,7 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
             }
 
             if (!ok) {
-                exit(1);
+                exit(c, 1);
             }
         }
         arena_reset(&temp_arena, errors);
@@ -2986,17 +3061,17 @@ static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *r
                     type_to_cstr(receiver->type),
                     type_to_cstr(receiver_type));
                 error_node(EK_NOTE, (Node *) method->defined_as, "This is the overload used");
-                exit(1);
+                exit(c, 1);
             }
 
             return method;
         }
     }
 
-    check_that_type_is_known(receiver);
+    check_that_type_is_known(c, receiver);
     error_node(
         EK_ERROR, op, "Method '" SV_Fmt "' is not defined for %s", SV_Arg(spec.name), type_to_cstr(receiver->type));
-    exit(1);
+    exit(c, 1);
 }
 
 static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *binary, Node *n) {
@@ -3016,7 +3091,7 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
         if (type_is_pointer(n->type)) {
             error_node(EK_ERROR, (Node *) binary, "This operation is not valid for pointers");
             error_node(EK_NOTE, n, "The operands are of type %s", type_to_cstr(n->type));
-            exit(1);
+            exit(c, 1);
         }
 
         if (!type_is_numeric(n->type)) {
@@ -3032,10 +3107,10 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
         if (type_is_pointer(n->type)) {
             error_node(EK_ERROR, (Node *) binary, "This operation is not valid for pointers");
             error_node(EK_NOTE, n, "The operands are of type %s", type_to_cstr(n->type));
-            exit(1);
+            exit(c, 1);
         }
 
-        type_assert_numeric(n, false);
+        type_assert_numeric(c, n, false);
         break;
 
     default:
@@ -3096,34 +3171,6 @@ fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn_spec_raw, b
     }
 
     return type_to_cstr((Type) {.kind = TYPE_FN, .spec.fn = &spec});
-}
-
-static Node_Fn *get_function_literal(Node *fn) {
-    if (fn->kind == NODE_ATOM && fn->token.kind == TOKEN_IDENT) {
-        Node_Atom *atom = (Node_Atom *) fn;
-        if (atom->definition->definition_spec->is_const_value_evaluated) {
-            const Const_Value value = atom->definition->definition_spec->const_value;
-            if (value.kind == CONST_VALUE_FN) {
-                return value.as.fn;
-            }
-        }
-    }
-
-    if (fn->kind == NODE_MEMBER) {
-        Node_Member *member = (Node_Member *) fn;
-        if (member->module_access_definition) {
-            Node_Atom        *atom = member->module_access_definition;
-            const Const_Value value = atom->definition_spec->const_value;
-            if (value.kind == CONST_VALUE_FN) {
-                return value.as.fn;
-            }
-        }
-
-        if (member->method) {
-            return member->method;
-        }
-    }
-    return NULL;
 }
 
 static void show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec) {
@@ -3275,7 +3322,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
         //
         // This will not be a problem here, but in the second pass, it will be a problem
         error_node(EK_ERROR, *np, "Loop");
-        exit(1);
+        exit(c, 1);
     }
 
     Node *n = *np;
@@ -3450,7 +3497,13 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     }
 }
 
-static void monomorphize(Compiler *c, Node **np) {
+static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
+    Monomorphization monomorphization = {
+        .from = *np,
+        .site = site,
+        .site_fn = c->context.fn ? c->context.fn->fn : NULL,
+    };
+
     const bool is_fn = type_kind_eq((*np)->type, TYPE_FN);
     if (is_fn) {
         Node_Fn *fn = get_function_literal(*np);
@@ -3469,18 +3522,32 @@ static void monomorphize(Compiler *c, Node **np) {
 
         polymorph->is_monomorphized = true;
         polymorph->monomorphized_to = it.to;
+
+        if (is_fn) {
+            Node_Fn *fn = ((Node_Fn *) *np);
+            nodes_push(&fn->monomorphs.params, (Node *) polymorph);
+            fn->monomorphs.params_count++;
+        } else {
+            unreachable();
+        }
     }
 
     if (is_fn) {
         Node_Fn *fn = (Node_Fn *) *np;
         memset(&fn->polymorphs, 0, sizeof(fn->polymorphs));
+    } else {
+        unreachable();
     }
 
+    monomorphization.into = *np;
+    da_push(&c->monomorphization_stack, monomorphization);
+
     check_expr(c, *np, REF_NONE);
+    c->monomorphization_stack.count--;
 }
 
 // TODO: Remove this
-static void ensure_interpolation_is_valid(Node_Interpolation *interpolation, bool noexit) {
+static void ensure_interpolation_is_valid(Compiler *c, Node_Interpolation *interpolation, bool noexit) {
     if (!interpolation->is_valid) {
         error_node(EK_ERROR, (Node *) interpolation, "Cannot use interpolated strings here");
         afprintf(
@@ -3496,7 +3563,7 @@ static void ensure_interpolation_is_valid(Node_Interpolation *interpolation, boo
             "\n");
 
         if (!noexit) {
-            exit(1);
+            exit(c, 1);
         }
     }
 }
@@ -3614,7 +3681,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         if (it->kind == NODE_BINARY && it->token.kind == TOKEN_SET) {
             if (!fn_spec) {
                 error_node(EK_ERROR, arg, "Cannot use named arguments in a cast expression");
-                exit(1);
+                exit(c, 1);
             }
 
             Node_Binary *it_binary = (Node_Binary *) it;
@@ -3634,7 +3701,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             if (!ok) {
                 error_undefined(c, &it_name->token, "argument", true);
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                exit(1);
+                exit(c, 1);
             }
 
             arg->token.as.integer = it_index;
@@ -3644,14 +3711,14 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         if (is_spread) {
             if (!fn_spec) {
                 error_node(EK_ERROR, it, "Cannot spread arguments in a cast expression");
-                exit(1);
+                exit(c, 1);
             }
 
             if (fn_spec->variadics_kind != VARIADICS_TYPED) {
                 error_node(
                     EK_ERROR, it, "Cannot spread arguments in a call to a function that does not have typed variadics");
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                exit(1);
+                exit(c, 1);
             }
 
             Node_Unary *unary = (Node_Unary *) it;
@@ -3700,7 +3767,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                             SV_Arg(fn_spec->args[it_index].name));
                         error_node(EK_NOTE, variadic_source, "Passed here already");
                         show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     if (is_spread || it_name || variadic_source_kind == VS_DIRECT) {
@@ -3720,7 +3787,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                             is_variadic_source_direct ? "provides" : "starts");
                         error_node(EK_NOTE, arg, "This provides another");
                         show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     if (it->kind == NODE_INTERPOLATION) {
@@ -3754,7 +3821,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             if (is_spread) {
                 error_node(EK_ERROR, arg, "Cannot spread arguments at this position");
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                exit(1);
+                exit(c, 1);
             }
 
             Argument *argument = &args[it_index];
@@ -3762,7 +3829,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 error_node(EK_ERROR, arg, "Duplication of argument '" SV_Fmt "'", SV_Arg(fn_spec->args[it_index].name));
                 error_node(EK_NOTE, argument->node, "Passed here already");
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                exit(1);
+                exit(c, 1);
             }
 
             argument->node = arg;
@@ -3780,7 +3847,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             args_count_min - is_method,
             call->args_count - is_method);
         show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-        exit(1);
+        exit(c, 1);
     }
 
     if (call->args_count > args_count_max) {
@@ -3791,7 +3858,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             args_count_max - is_method,
             call->args_count - is_method);
         show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-        exit(1);
+        exit(c, 1);
     }
 
     if (fn_spec) {
@@ -3828,7 +3895,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             }
 
             show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-            exit(1);
+            exit(c, 1);
         }
     }
 
@@ -3844,7 +3911,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             if (!infer_monomorph_parameters(c, receiver, &receiver->type, &expected)) {
                 error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                 show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                exit(1);
+                exit(c, 1);
             }
         }
 
@@ -3885,7 +3952,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 if (!infer_monomorph_parameters(c, it, &types[i], expected)) {
                     error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                     show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                    exit(1);
+                    exit(c, 1);
                 }
             }
         }
@@ -3907,10 +3974,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
             error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
             show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-            exit(1);
+            exit(c, 1);
         }
 
-        monomorphize(c, &call->fn);
+        monomorphize(c, &call->fn, call);
         fn_spec = call->fn->type.spec.fn;
     }
 
@@ -3942,7 +4009,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                         call->fn = call_fn_save;
                     }
                     show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                    exit(1);
+                    exit(c, 1);
                 }
             } else {
                 const size_t parts = type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
@@ -3983,7 +4050,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                                 call->fn = call_fn_save;
                             }
                             show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                            exit(1);
+                            exit(c, 1);
                         }
                     }
 
@@ -3994,17 +4061,17 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
     }
 }
 
-static void check_whether_member_access_is_valid(Node_Member *m) {
+static void check_whether_member_access_is_valid(Compiler *c, Node_Member *m) {
     if (m->rhs) {
         assert(m->lhs); // A bare '.(Type)' will error out at parse time
         if (!type_is_trait(m->lhs->type) && !type_is_union(m->lhs->type)) {
             error_node(EK_ERROR, (Node *) m, "Cannot access variant of %s", type_to_cstr(m->lhs->type));
-            exit(1);
+            exit(c, 1);
         }
     } else {
         if (sv_match(m->node.token.sv, "_")) {
             error_token(EK_ERROR, m->node.token, "Field '_' cannot be accessed");
-            exit(1);
+            exit(c, 1);
         }
     }
 }
@@ -4044,7 +4111,7 @@ static void error_special_method_wrong_signature(Token name, const char *signatu
 }
 
 static void check_special_method_signature_args_count(
-    Node_Fn *fn, const size_t args_count, const char *signature, const char *note) {
+    Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature, const char *note) {
     assert(fn->node.type.kind == TYPE_FN);
     const Type_Fn *fn_spec = fn->node.type.spec.fn;
 
@@ -4052,7 +4119,7 @@ static void check_special_method_signature_args_count(
         error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
         error_token(
             EK_NOTE, fn->args_end_token, "Expected at least %zu arguments, got %zu", args_count, fn_spec->args_count);
-        exit(1);
+        exit(c, 1);
     }
 
     for (size_t i = 0; i < fn_spec->args_count; i++) {
@@ -4066,7 +4133,7 @@ static void check_special_method_signature_args_count(
                 "All arguments after the %zu%s argument must be optional",
                 (size_t) args_count,
                 order_postfix(args_count));
-            exit(1);
+            exit(c, 1);
         }
     }
 
@@ -4099,7 +4166,7 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
             if (n->type.kind == TYPE_STRUCT) {
                 if (it_binary->lhs->kind != NODE_ATOM || it_binary->lhs->token.kind != TOKEN_IDENT) {
                     error_node(EK_ERROR, it_binary->lhs, "Expected designated initializer to be field name");
-                    exit(1);
+                    exit(c, 1);
                 }
                 Node_Atom *it_field_name = (Node_Atom *) it_binary->lhs;
 
@@ -4116,11 +4183,11 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
                 if (!ok) {
                     error_undefined(c, &it_field_name->node.token, "field", true);
                     error_node(EK_NOTE, (Node *) struct_spec->definition, "Structure defined here");
-                    exit(1);
+                    exit(c, 1);
                 }
             } else if (n->type.kind == TYPE_ARRAY || n->type.kind == TYPE_SLICE) {
                 check_expr(c, it_binary->lhs, REF_NONE);
-                type_assert_numeric(it_binary->lhs, false);
+                type_assert_numeric(c, it_binary->lhs, false);
 
                 const Const_Value value = eval_const_expr(c, it_binary->lhs, false);
                 assert(value.kind == CONST_VALUE_INT);
@@ -4134,10 +4201,10 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
                         "Index %s is out of bounds in array of length %zu",
                         int128_to_cstr(value.as.integer),
                         n->type.spec.array.count);
-                    exit(1);
+                    exit(c, 1);
                 }
 
-                it->token.as.integer = i64_from_int128(it_binary->lhs, value.as.integer, true, "index");
+                it->token.as.integer = i64_from_int128(c, it_binary->lhs, value.as.integer, true, "index");
             } else if (n->type.kind == TYPE_UNKNOWN_COMPOUND) {
                 // Nothing
             } else {
@@ -4151,7 +4218,7 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
                 if (it_iota >= struct_spec->fields_count) {
                     error_node(EK_ERROR, it, "Too many ordered initializers");
                     error_node(EK_NOTE, (Node *) struct_spec->definition, "Structure defined here");
-                    exit(1);
+                    exit(c, 1);
                 }
             } else if (n->type.kind == TYPE_ARRAY) {
                 if (it_iota >= n->type.spec.array.count) {
@@ -4161,7 +4228,7 @@ static void check_compound_expr(Compiler *c, Node_Compound *compound) {
                         "Index %zu is out of bounds in array of length %zu",
                         it_iota,
                         n->type.spec.array.count);
-                    exit(1);
+                    exit(c, 1);
                 }
             } else if (n->type.kind == TYPE_SLICE) {
                 // Pass
@@ -4235,7 +4302,7 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         if (type_is_pointer(binary->lhs->type)) {
             error_node(EK_ERROR, n, "This operation is not valid for pointers");
             error_node(EK_NOTE, binary->lhs, "The operands are of type %s", type_to_cstr(binary->lhs->type));
-            exit(1);
+            exit(c, 1);
         }
 
         if (!type_is_numeric(binary->lhs->type)) {
@@ -4258,10 +4325,10 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         if (type_is_pointer(binary->lhs->type)) {
             error_node(EK_ERROR, n, "This operation is not valid for pointers");
             error_node(EK_NOTE, binary->lhs, "The operands are of type %s", type_to_cstr(binary->lhs->type));
-            exit(1);
+            exit(c, 1);
         }
 
-        n->type = type_assert_numeric(binary->lhs, false);
+        n->type = type_assert_numeric(c, binary->lhs, false);
         break;
 
         // The following can never be ran as a result of autocast, therefore not considering 'check_children'
@@ -4299,7 +4366,7 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
                     SV_Arg(binary->overload->defined_as->node.token.sv),
                     type_to_cstr(*binary->overload->node.type.spec.fn->return_type),
                     type_to_cstr(c->ordering_type));
-                exit(1);
+                exit(c, 1);
             }
         }
         n->type = (Type) {.kind = TYPE_BOOL};
@@ -4312,7 +4379,7 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         if (type_is_trait(binary->lhs->type)) {
             binary->trait_check = binary->lhs;
             if (!node_is_null(binary->rhs)) {
-                type_assert_type(binary->rhs);
+                type_assert_type(c, binary->rhs);
                 binary->rhs->type.is_meta = false;
                 check_type_satisfies_trait(c, binary->rhs->type, binary->lhs->type.spec.trait, binary->rhs, -1);
                 binary->trait_check_type = arena_clone(&default_arena, &binary->rhs->type, sizeof(binary->rhs->type));
@@ -4321,7 +4388,7 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         } else if (type_is_trait(binary->rhs->type)) {
             binary->trait_check = binary->rhs;
             if (!node_is_null(binary->lhs)) {
-                type_assert_type(binary->lhs);
+                type_assert_type(c, binary->lhs);
                 binary->lhs->type.is_meta = false;
                 check_type_satisfies_trait(c, binary->lhs->type, binary->rhs->type.spec.trait, binary->lhs, -1);
                 binary->trait_check_type = arena_clone(&default_arena, &binary->lhs->type, sizeof(binary->lhs->type));
@@ -4330,18 +4397,18 @@ static void check_binary_expr(Compiler *c, Node_Binary *binary, bool check_child
         } else if (type_is_union(binary->lhs->type)) {
             binary->union_check = binary->lhs;
             if (!node_is_null(binary->rhs)) {
-                type_assert_type(binary->rhs);
-                binary->union_check_index = get_union_type_index(binary->rhs, binary->lhs->type);
+                type_assert_type(c, binary->rhs);
+                binary->union_check_index = get_union_type_index(c, binary->rhs, binary->lhs->type);
             }
         } else if (type_is_union(binary->rhs->type)) {
             binary->union_check = binary->rhs;
             if (!node_is_null(binary->lhs)) {
-                type_assert_type(binary->lhs);
-                binary->union_check_index = get_union_type_index(binary->lhs, binary->rhs->type);
+                type_assert_type(c, binary->lhs);
+                binary->union_check_index = get_union_type_index(c, binary->lhs, binary->rhs->type);
             }
         } else {
             type_assert_node(c, binary->rhs, binary->lhs);
-            check_that_type_is_known(binary->lhs);
+            check_that_type_is_known(c, binary->lhs);
 
             if (try_auto_cast_type_to_rtti(c, binary->lhs, c->type_info_pointer_type)) {
                 assert(try_auto_cast_type_to_rtti(c, binary->rhs, c->type_info_pointer_type));
@@ -4427,7 +4494,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 n,
                 "Cannot use %s here. It can only be used as the default value for a function argument",
                 token_kind_to_cstr(n->token.kind));
-            exit(1);
+            exit(c, 1);
             break;
 
         default:
@@ -4479,16 +4546,16 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
         case TOKEN_MUL: {
             check_expr(c, unary->value, REF_NONE);
-            check_that_type_is_known(unary->value);
+            check_that_type_is_known(c, unary->value);
 
             if (!unary->value->type.ref) {
                 if (type_kind_eq(unary->value->type, TYPE_RAWPTR)) {
                     error_node(EK_ERROR, unary->value, "Cannot dereference raw pointer");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 error_node(EK_ERROR, unary->value, "Expected typed pointer, got %s", type_to_cstr(unary->value->type));
-                exit(1);
+                exit(c, 1);
             }
 
             n->type = unary->value->type;
@@ -4503,14 +4570,14 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
         case TOKEN_BAND: {
             check_expr(c, unary->value, REF_ADDR);
-            check_that_type_is_known(unary->value);
+            check_that_type_is_known(c, unary->value);
             n->type = unary->value->type;
             n->type.ref++;
         } break;
 
         case TOKEN_BNOT:
             check_expr(c, unary->value, REF_NONE);
-            n->type = type_assert_numeric(unary->value, false);
+            n->type = type_assert_numeric(c, unary->value, false);
             break;
 
         case TOKEN_LNOT:
@@ -4520,13 +4587,13 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
         case TOKEN_SIZEOF:
             check_expr(c, unary->value, REF_NONE);
-            check_that_type_is_known(unary->value);
+            check_that_type_is_known(c, unary->value);
             n->type = (Type) {.kind = TYPE_INT};
             break;
 
         case TOKEN_TYPEOF:
             check_expr(c, unary->value, REF_NONE);
-            check_that_type_is_known(unary->value);
+            check_that_type_is_known(c, unary->value);
             n->type = unary->value->type;
 
             finalize_untyped_type(c, n);
@@ -4566,7 +4633,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 check_expr(c, member->lhs, ref_member);
             }
 
-            check_that_type_is_known(member->lhs);
+            check_that_type_is_known(c, member->lhs);
 
             is_ref_valid = true; // check_node() has already determined that the reference is valid
 
@@ -4593,7 +4660,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                 "This is of type %s, but the receiver is expected to be %s",
                                 type_to_cstr(member->lhs->type),
                                 type_to_cstr(receiver_type));
-                            exit(1);
+                            exit(c, 1);
                         }
 
                         if (receiver_type.ref > member->lhs->type.ref && !member->lhs->is_memory) {
@@ -4608,7 +4675,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                 EK_NOTE,
                                 member->lhs,
                                 "This value does not exist in memory, therefore cannot take reference to it");
-                            exit(1);
+                            exit(c, 1);
                         }
                         is_ref_valid = ref == REF_NONE;
                     }
@@ -4618,19 +4685,19 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             if (!member->method) {
                 n->is_memory = member->lhs->is_memory;
                 if (member->lhs->type.is_meta && member->lhs->type.kind == TYPE_ENUM) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
                     Node_Enum *enumm = member->lhs->type.spec.enumm.definition;
                     member->enum_value = get_enum_value(c, enumm, n->token.sv, &n->token);
                     member->is_enum = true;
                     n->type = member->lhs->type;
                     n->type.is_meta = false;
                 } else if (type_kind_eq(member->lhs->type, TYPE_TRAIT)) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
 
                     Type_Trait *spec = member->lhs->type.spec.trait;
                     if (member->rhs) {
                         check_expr(c, member->rhs, REF_NONE);
-                        type_assert_type(member->rhs);
+                        type_assert_type(c, member->rhs);
                         n->type = member->rhs->type;
                         n->type.is_meta = false;
                         check_type_satisfies_trait(c, n->type, spec, member->rhs, -1);
@@ -4660,11 +4727,11 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         }
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_UNION)) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
                     if (member->rhs) {
                         check_expr(c, member->rhs, REF_NONE);
-                        type_assert_type(member->rhs);
-                        member->union_index = get_union_type_index(member->rhs, member->lhs->type);
+                        type_assert_type(c, member->rhs);
+                        member->union_index = get_union_type_index(c, member->rhs, member->lhs->type);
                         n->type = member->rhs->type;
                         n->type.is_meta = false;
                     } else {
@@ -4676,7 +4743,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         }
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_STRUCT)) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
                     Type_Struct_Field *definition = NULL;
 
                     Type_Struct *spec = member->lhs->type.spec.structt;
@@ -4692,12 +4759,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     if (!definition) {
                         error_undefined(c, &n->token, "field or method", true);
                         error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     n->type = definition->type;
                 } else if (type_kind_eq(member->lhs->type, TYPE_ARRAY)) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
                     if (sv_match(n->token.sv, "data")) {
                         n->type = *member->lhs->type.spec.array.element;
                         n->type.ref++;
@@ -4709,7 +4776,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         error_undefined(c, &n->token, "field", false);
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_SLICE)) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
                     if (sv_match(n->token.sv, "data")) {
                         n->type = *member->lhs->type.spec.slice.element;
                         n->type.ref++;
@@ -4721,7 +4788,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         error_undefined(c, &n->token, "field", false);
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_STRING)) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
                     if (sv_match(n->token.sv, "data")) {
                         n->type = (Type) {.kind = TYPE_CHAR, .ref = 1};
                         member->field_index = 0;
@@ -4732,7 +4799,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         error_undefined(c, &n->token, "field", false);
                     }
                 } else if (type_kind_eq(member->lhs->type, TYPE_MODULE)) {
-                    check_whether_member_access_is_valid(member);
+                    check_whether_member_access_is_valid(c, member);
                     check_ident(c, n, ref);
                 } else {
                     bool ok = false;
@@ -4751,7 +4818,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             }
                         } else {
                             error_node(EK_ERROR, n, "There are no methods defined on %s", type_to_cstr(receiver));
-                            exit(1);
+                            exit(c, 1);
                         }
                     }
 
@@ -4761,12 +4828,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         } else {
                             error_node(EK_ERROR, n, "Cannot access field of %s", type_to_cstr(member->lhs->type));
                         }
-                        exit(1);
+                        exit(c, 1);
                     }
                 }
             }
         } else {
-            check_whether_member_access_is_valid(member);
+            check_whether_member_access_is_valid(c, member);
             n->type = (Type) {.kind = TYPE_UNKNOWN_ENUM};
             member->is_enum = true;
         }
@@ -4788,11 +4855,11 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         Node_Distinct *distinct = (Node_Distinct *) n;
         if (!distinct->defined_as) {
             error_node(EK_ERROR, n, "A distinct type must be defined as a constant before it can be used");
-            exit(1);
+            exit(c, 1);
         }
 
         check_expr(c, distinct->value, REF_NONE);
-        type_assert_type(distinct->value);
+        type_assert_type(c, distinct->value);
         n->type = distinct->value->type;
         n->type.distinct = distinct->defined_as;
     } break;
@@ -4809,7 +4876,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
-        ensure_interpolation_is_valid(interpolation, false);
+        ensure_interpolation_is_valid(c, interpolation, false);
 
         ll_foreach(it, &interpolation->children) {
             check_expr(c, it, REF_NONE);
@@ -4837,7 +4904,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     context_find_define_in_fn(&c->context, c->context.fn, polymorph->name->node.token.sv);
 
                 if (previous) {
-                    error_redefinition((Node *) polymorph->name, &previous->node.token.pos);
+                    error_redefinition(c, (Node *) polymorph->name, &previous->node.token.pos);
                 }
                 context_push_define(&c->context, polymorph->name);
 
@@ -4848,6 +4915,10 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     .is_meta = true,
                 };
                 fn_spec->polymorphs[fn_spec->polymorphs_count++] = polymorph;
+            }
+
+            ll_foreach(it, &fn->monomorphs.params) {
+                context_push_define(&c->context, ((Node_Polymorph *) it)->name);
             }
 
             fn_spec->args_count = fn->args_count;
@@ -4880,7 +4951,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 if (!sv_match(it->node.token.sv, "_")) {
                     Node_Atom *previous = context_find_define_in_fn(&c->context, c->context.fn, it->node.token.sv);
                     if (previous) {
-                        error_redefinition((Node *) it, &previous->node.token.pos);
+                        error_redefinition(c, (Node *) it, &previous->node.token.pos);
                     }
                 }
 
@@ -4915,7 +4986,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 size_t iota = 0;
                 ll_foreach(it, &fn->returns) {
                     check_expr(c, it, REF_NONE);
-                    type_assert_type(it);
+                    type_assert_type(c, it);
 
                     fn_spec->returns[iota] = it->type;
                     fn_spec->returns[iota].is_meta = false;
@@ -4951,7 +5022,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
                     error_node(EK_ERROR, (Node *) fn, "Anonymous function cannot be a method");
                     error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 assert(fn->defined_as);
@@ -4961,7 +5032,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 {
                     const char *signature = "(this: T, that: T) -> T";
                     const char *note = NULL;
-                    check_special_method_signature_args_count(fn, 2, signature, note);
+                    check_special_method_signature_args_count(c, fn, 2, signature, note);
 
                     const Type lhs_type = fn_spec->args[0].type;
                     if (lhs_type.ref) {
@@ -4972,7 +5043,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             fn_spec->args[0].pos,
                             "Operand cannot be a pointer. (Provided type is %s)",
                             type_to_cstr(lhs_type));
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     const Type rhs_type = fn_spec->args[1].type;
@@ -4985,7 +5056,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "Operand types must be same: Expected %s, got %s",
                             type_to_cstr(lhs_type),
                             type_to_cstr(rhs_type));
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     if (!type_eq(*fn_spec->return_type, lhs_type)) {
@@ -4996,12 +5067,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "Operand types and return type must be same: Expected to return %s, got %s",
                             type_to_cstr(lhs_type),
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                        exit(1);
+                        exit(c, 1);
                     }
                 } else if (sv_match(name, "neg")) {
                     const char *signature = "(this: T) -> T";
                     const char *note = NULL;
-                    check_special_method_signature_args_count(fn, 1, signature, note);
+                    check_special_method_signature_args_count(c, fn, 1, signature, note);
 
                     const Type operand_type = fn_spec->args[0].type;
                     if (operand_type.ref) {
@@ -5012,7 +5083,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             fn_spec->args[0].pos,
                             "Operand cannot be a pointer. (Provided type is %s)",
                             type_to_cstr(operand_type));
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     if (!type_eq(*fn_spec->return_type, operand_type)) {
@@ -5023,14 +5094,14 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "Operand type and return type must be same: Expected to return %s, got %s",
                             type_to_cstr(operand_type),
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                        exit(1);
+                        exit(c, 1);
                     }
                 } else if (sv_match(name, "compare")) {
                     const char *signature = "(this: T, that: T) -> Ordering | Equivalence";
                     const char *note =
                         "Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.\n"
                         "Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.\n";
-                    check_special_method_signature_args_count(fn, 2, signature, note);
+                    check_special_method_signature_args_count(c, fn, 2, signature, note);
 
                     const Type lhs_type = fn_spec->args[0].type;
                     if (lhs_type.ref) {
@@ -5041,7 +5112,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             fn_spec->args[0].pos,
                             "Operand cannot be a pointer. (Provided type is %s)",
                             type_to_cstr(lhs_type));
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     const Type rhs_type = fn_spec->args[1].type;
@@ -5054,7 +5125,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "Operand types must be same: Expected %s, got %s",
                             type_to_cstr(lhs_type),
                             type_to_cstr(rhs_type));
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     if (!type_eq(*fn_spec->return_type, c->equivalence_type) &&
@@ -5068,14 +5139,14 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             type_to_cstr(c->equivalence_type),
                             type_to_cstr(c->ordering_type),
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->ordering_type);
                 } else if (sv_match(name, "index")) {
                     const char *signature = "(this: T, key: K, assign: bool) -> &V";
                     const char *note = NULL;
-                    check_special_method_signature_args_count(fn, 3, signature, note);
+                    check_special_method_signature_args_count(c, fn, 3, signature, note);
 
                     const Type assign_type = fn_spec->args[2].type;
                     if (!type_eq(assign_type, (Type) {.kind = TYPE_BOOL})) {
@@ -5087,7 +5158,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "Expected the third argument to be %s, got %s",
                             type_to_cstr((Type) {.kind = TYPE_BOOL}),
                             type_to_cstr(assign_type));
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     if (!type_is_pointer(*fn_spec->return_type)) {
@@ -5097,12 +5168,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             fn->returns.head ? fn->returns.head->token : fn->body->token,
                             "Expected to return a pointer, got %s",
                             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                        exit(1);
+                        exit(c, 1);
                     }
                 } else if (sv_match(name, "range")) {
                     const char *signature = "(this: T, begin: A, end: A) -> V";
                     const char *note = NULL;
-                    check_special_method_signature_args_count(fn, 3, signature, note);
+                    check_special_method_signature_args_count(c, fn, 3, signature, note);
 
                     const Type begin_type = fn_spec->args[1].type;
                     const Type end_type = fn_spec->args[2].type;
@@ -5115,7 +5186,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "Types of range beginning and end must be same: Expected %s, got %s",
                             type_to_cstr(begin_type),
                             type_to_cstr(end_type));
-                        exit(1);
+                        exit(c, 1);
                     }
 
                     if (fn_spec->returns_count != 1) {
@@ -5125,7 +5196,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             fn->returns.head ? fn->returns.head->token : fn->body->token,
                             "The range operator cannot return %zu values",
                             fn_spec->returns_count);
-                        exit(1);
+                        exit(c, 1);
                     }
                 }
             }
@@ -5142,7 +5213,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         ((Node_Block *) fn->body)->end,
                         "Expected to return %s",
                         type_to_cstr(*fn_spec->return_type));
-                    exit(1);
+                    exit(c, 1);
                 }
             }
         }
@@ -5157,7 +5228,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         Type      underlying = {.kind = spec.underlying};
         if (enumm->underlying) {
             check_expr(c, enumm->underlying, REF_NONE);
-            type_assert_type(enumm->underlying);
+            type_assert_type(c, enumm->underlying);
 
             underlying = enumm->underlying->type;
             underlying.is_meta = false;
@@ -5167,7 +5238,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     enumm->underlying,
                     "Expected underlying type of the enumeration to be an integer, got %s",
                     type_to_cstr(underlying));
-                exit(1);
+                exit(c, 1);
             }
 
             spec.underlying = underlying.kind;
@@ -5182,7 +5253,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 }
 
                 if (sv_eq(it->token.sv, prev->token.sv)) {
-                    error_redefinition(it, &prev->token.pos);
+                    error_redefinition(c, it, &prev->token.pos);
                 }
             }
 
@@ -5194,12 +5265,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
                 const Const_Value value = eval_const_expr(c, unary->value, false);
                 assert(value.kind == CONST_VALUE_INT);
-                iota = i64_from_int128(unary->value, value.as.integer, false, NULL);
+                iota = i64_from_int128(c, unary->value, value.as.integer, false, NULL);
             }
             iota_max = max(iota_max, iota);
 
             it->type.kind = underlying.kind;
-            check_int_limit(it, int128_from_i64(iota));
+            check_int_limit(c, it, int128_from_i64(iota));
             it->type.kind = TYPE_UNIT;
             it->token.as.integer = iota++;
         }
@@ -5237,7 +5308,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             for (size_t i = 0; i < iota; i++) {
                 const Type_Trait_Method *previous = &spec->methods[i];
                 if (sv_eq(previous->name, it->node.token.sv)) {
-                    error_redefinition((const Node *) it, &previous->pos);
+                    error_redefinition(c, (const Node *) it, &previous->pos);
                 }
             }
 
@@ -5276,7 +5347,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         size_t iota = 0;
         ll_foreach(it, &unionn->variants) {
             check_expr(c, it, REF_NONE);
-            type_assert_type(it);
+            type_assert_type(c, it);
 
             Type_Union_Variant *variant = &spec->variants[iota];
             variant->pos = it->token.pos;
@@ -5286,7 +5357,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             for (size_t i = 0; i < iota; i++) {
                 const Type_Union_Variant *prev = &spec->variants[i];
                 if (type_eq(prev->type, variant->type)) {
-                    error_redefinition(it, &prev->pos);
+                    error_redefinition(c, it, &prev->pos);
                 }
             }
 
@@ -5342,9 +5413,9 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                             "Here is the structure we are spreading from");
                                     }
 
-                                    exit(1);
+                                    exit(c, 1);
                                 }
-                                error_redefinition((Node *) it, &previous.pos);
+                                error_redefinition(c, (Node *) it, &previous.pos);
                             }
                         }
                     }
@@ -5362,19 +5433,19 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             } else if (field->kind == NODE_UNARY && field->token.kind == TOKEN_SPREAD) {
                 Node_Unary *unary = (Node_Unary *) field;
                 check_expr(c, unary->value, REF_NONE);
-                type_assert_type(unary->value);
+                type_assert_type(c, unary->value);
 
                 Type from = unary->value->type;
                 from.is_meta = false;
                 if (!type_kind_eq(from, TYPE_STRUCT)) {
                     error_node(EK_ERROR, unary->value, "Expected structure type, got %s", type_to_cstr(from));
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 if (from.ref) {
                     error_node(
                         EK_ERROR, unary->value, "Cannot spread %s without dereferencing it first", type_to_cstr(from));
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 for (size_t i = 0; i < from.spec.structt->fields_count; i++) {
@@ -5400,7 +5471,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                     error_node(EK_NOTE, (Node *) definition, "Here is the structure we are spreading");
                                 }
 
-                                exit(1);
+                                exit(c, 1);
                             }
                         }
                     }
@@ -5429,14 +5500,14 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         Node_Compound *compound = (Node_Compound *) n;
         if (compound->lhs) {
             check_expr(c, compound->lhs, REF_NONE);
-            type_assert_type(compound->lhs);
+            type_assert_type(c, compound->lhs);
 
             n->type = compound->lhs->type;
             n->type.is_meta = false;
             if (n->type.ref ||
                 (n->type.kind != TYPE_STRUCT && n->type.kind != TYPE_ARRAY && n->type.kind != TYPE_SLICE)) {
                 error_node(EK_ERROR, compound->lhs, "Expected structure or array type, got %s", type_to_cstr(n->type));
-                exit(1);
+                exit(c, 1);
             }
         } else {
             n->type = (Type) {.kind = TYPE_UNKNOWN_COMPOUND};
@@ -5450,7 +5521,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
         check_expr(c, call->fn, REF_NONE);
-        check_that_type_is_known(call->fn);
+        check_that_type_is_known(c, call->fn);
 
         const Type *fn_type = &call->fn->type;
         if (fn_type->is_meta) {
@@ -5488,7 +5559,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     same = true;
                 } else {
                     error_node(EK_ERROR, call->fn, "Cannot cast to %s", type_to_cstr(*to_type));
-                    exit(1);
+                    exit(c, 1);
                 }
             }
 
@@ -5501,9 +5572,9 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         check_type_satisfies_trait(c, *from_type, to_type->spec.trait, call->args.head, -1);
                 } else if (to_union) {
                     finalize_untyped_type(c, call->args.head);
-                    call->type_cast_union_index = get_union_type_index(call->args.head, *to_type);
+                    call->type_cast_union_index = get_union_type_index(c, call->args.head, *to_type);
                 } else if (type_is_scalar(*to_type)) {
-                    type_assert_scalar(call->args.head);
+                    type_assert_scalar(c, call->args.head);
 
                     bool ok = true;
                     if (type_kind_eq(*from_type, TYPE_FN) && !from_type->ref) {
@@ -5539,7 +5610,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "Cannot cast %s to %s",
                             type_to_cstr(*from_type),
                             type_to_cstr(*to_type));
-                        exit(1);
+                        exit(c, 1);
                     }
                 } else {
                     unreachable();
@@ -5560,12 +5631,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         } else {
             if (!type_kind_eq(*fn_type, TYPE_FN)) {
                 error_node(EK_ERROR, call->fn, "Cannot call %s", type_to_cstr(*fn_type));
-                exit(1);
+                exit(c, 1);
             }
 
             if (fn_type->ref) {
                 error_node(EK_ERROR, call->fn, "Cannot call %s without deferencing it first", type_to_cstr(*fn_type));
-                exit(1);
+                exit(c, 1);
             }
 
             check_call_arguments(c, call);
@@ -5574,7 +5645,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             n->type = *fn_type->spec.fn->return_type;
             if (!call->is_stmt && type_kind_eq(n->type, TYPE_UNIT)) {
                 error_node(EK_ERROR, n, "This call cannot be used as a value as it does not return anything");
-                exit(1);
+                exit(c, 1);
             }
         }
     } break;
@@ -5582,31 +5653,31 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
     case NODE_INDEX: {
         Node_Index *index = (Node_Index *) n;
         check_expr(c, index->lhs, ref);
-        check_that_type_is_known(index->lhs);
+        check_that_type_is_known(c, index->lhs);
 
         is_ref_valid = true; // check_node() has already determined that the reference is valid
         index->is_assign = ref == REF_ASSIGN || ref == REF_ASSIGN_MEMBER;
         if (index->is_ranged) {
             if (index->lhs->type.is_meta) {
                 error_node(EK_ERROR, index->lhs, "Cannot take slice into %s", type_to_cstr(index->lhs->type));
-                exit(1);
+                exit(c, 1);
             }
 
             if (index->lhs->type.ref) {
                 // The beginning can be inferred to be 0
                 if (index->a) {
                     check_expr(c, index->a, REF_NONE);
-                    type_assert_numeric(index->a, false);
+                    type_assert_numeric(c, index->a, false);
                 }
 
                 // The ending CANNOT be inferred
                 if (!index->b) {
                     error_node(EK_ERROR, n, "Cannot infer end of range from %s", type_to_cstr(index->lhs->type));
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 check_expr(c, index->b, REF_NONE);
-                type_assert_numeric(index->b, false);
+                type_assert_numeric(c, index->b, false);
 
                 Type element_type = index->lhs->type;
                 element_type.ref--;
@@ -5621,13 +5692,13 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 // The beginning can be inferred to be the beginning of the slice
                 if (index->a) {
                     check_expr(c, index->a, REF_NONE);
-                    type_assert_numeric(index->a, false);
+                    type_assert_numeric(c, index->a, false);
                 }
 
                 // The ending can be inferred to be the ending of the slice
                 if (index->b) {
                     check_expr(c, index->b, REF_NONE);
-                    type_assert_numeric(index->b, false);
+                    type_assert_numeric(c, index->b, false);
                 }
 
                 n->type = index->lhs->type;
@@ -5649,7 +5720,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         fn_spec->args[1].name,
                         fn_spec->args[1].pos,
                         "The method 'range' does not have a default value for its beginning argument");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 if (index->b) {
@@ -5662,7 +5733,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         fn_spec->args[2].name,
                         fn_spec->args[2].pos,
                         "The method 'range' does not have a default value for its end argument");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 n->type = *fn_spec->return_type;
@@ -5673,15 +5744,15 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             n->is_memory = index->lhs->is_memory;
             if (type_kind_eq(index->lhs->type, TYPE_ARRAY) && !index->lhs->type.ref) {
                 check_expr(c, index->a, REF_NONE);
-                type_assert_numeric(index->a, false);
+                type_assert_numeric(c, index->a, false);
                 n->type = *index->lhs->type.spec.array.element;
             } else if (type_kind_eq(index->lhs->type, TYPE_SLICE) && !index->lhs->type.ref) {
                 check_expr(c, index->a, REF_NONE);
-                type_assert_numeric(index->a, false);
+                type_assert_numeric(c, index->a, false);
                 n->type = *index->lhs->type.spec.slice.element;
             } else if (type_kind_eq(index->lhs->type, TYPE_STRING) && !index->lhs->type.ref) {
                 check_expr(c, index->a, REF_NONE);
-                type_assert_numeric(index->a, false);
+                type_assert_numeric(c, index->a, false);
                 n->type = (Type) {.kind = TYPE_CHAR};
             } else {
                 if (index->lhs->type.ref) {
@@ -5694,7 +5765,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             "    Here the value is %s. Perhaps it was meant to be dereferenced before indexing?\n",
                             type_to_cstr(index->lhs->type));
                     }
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 index->overload = get_operator_overload(c, "index", index->lhs, n, index->module);
@@ -5718,12 +5789,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         size_t array_count = 0;
         if (indexable->count) {
             check_expr(c, indexable->count, REF_NONE);
-            type_assert_numeric(indexable->count, false);
+            type_assert_numeric(c, indexable->count, false);
 
             const Const_Value value = eval_const_expr(c, indexable->count, false);
             assert(value.kind == CONST_VALUE_INT);
 
-            check_int_limit_ex(indexable->count, value.as.integer, true, "array capacity");
+            check_int_limit_ex(c, indexable->count, value.as.integer, true, "array capacity");
             array_count = value.as.integer.low;
             check_expr(c, indexable->element, REF_NONE);
         } else {
@@ -5741,7 +5812,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         }
 
         Type *element_type = arena_alloc(&default_arena, sizeof(*element_type));
-        *element_type = type_assert_type(indexable->element);
+        *element_type = type_assert_type(c, indexable->element);
         element_type->is_meta = false;
 
         if (indexable->count) {
@@ -5776,14 +5847,14 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         case REF_ADDR_MEMBER:
             if (!n->type.is_meta) {
                 error_node(EK_ERROR, n, "Cannot take reference to value not in memory");
-                exit(1);
+                exit(c, 1);
             }
             break;
 
         case REF_ASSIGN:
         case REF_ASSIGN_MEMBER:
             error_node(EK_ERROR, n, "Cannot assign to value not in memory");
-            exit(1);
+            exit(c, 1);
             break;
         }
     }
@@ -5797,7 +5868,7 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     check_expr_impl(c, n, ref);
     if (node_is_runtime_polymorphic_expression(n) && !n->is_called) {
         error_node(EK_ERROR, n, "Polymorphic functions cannot be used as runtime expressions. (They must be called)");
-        exit(1);
+        exit(c, 1);
     }
 }
 
@@ -5825,7 +5896,7 @@ static void check_stmt(Compiler *c, Node *n) {
                 fprintf(stderr, ": " SV_Fmt, SV_Arg(message));
             }
             fprintf(stderr, "\n");
-            exit(1);
+            exit(c, 1);
         }
     } break;
 
@@ -5974,7 +6045,7 @@ static void check_stmt(Compiler *c, Node *n) {
             }
             assert(iota == sw->preds_count);
 
-            check_switch_exhaustive(sw);
+            check_switch_exhaustive(c, sw);
         }
     } break;
 
@@ -5997,7 +6068,7 @@ static void check_stmt(Compiler *c, Node *n) {
             const size_t actual_count = is_group ? returnn->value->type.spec.group.count : 1;
 
             if (actual_count != fn_type->returns_count) {
-                error_number_of_return_values_mismatch(n->token, fn_type->returns_count, actual_count);
+                error_number_of_return_values_mismatch(c, n->token, fn_type->returns_count, actual_count);
             }
 
             assert(actual_count == fn_type->returns_count);
@@ -6011,7 +6082,7 @@ static void check_stmt(Compiler *c, Node *n) {
             returnn->value->type = *fn_type->return_type;
         } else {
             if (fn_type->returns_count) {
-                error_number_of_return_values_mismatch(n->token, fn_type->returns_count, 0);
+                error_number_of_return_values_mismatch(c, n->token, fn_type->returns_count, 0);
             }
         }
 
@@ -6027,7 +6098,7 @@ static void check_stmt(Compiler *c, Node *n) {
 
     default:
         check_expr(c, n, REF_NONE);
-        check_that_type_is_known(n);
+        check_that_type_is_known(c, n);
         break;
     }
 }
@@ -6205,12 +6276,12 @@ void check_nodes(Compiler *c) {
             if (!fn->defined_as) {
                 error_node(EK_ERROR, (Node *) fn, "Anonymous function cannot be a method");
                 error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                exit(1);
+                exit(c, 1);
             }
             const SV name = fn->defined_as->node.token.sv;
 
             check_expr(c, define->type, REF_NONE);
-            type_assert_type(define->type);
+            type_assert_type(c, define->type);
             define->type->type.is_meta = false;
             const Type receiver_type = define->type->type;
 
@@ -6223,38 +6294,38 @@ void check_nodes(Compiler *c) {
                     "Cannot define methods on %s. (It is a trait)",
                     type_to_cstr(receiver_type));
                 error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                exit(1);
+                exit(c, 1);
             } else if (get_method_spec(c, define->type, receiver_type, name, &spec, fn->module, &is_named)) {
                 if (!is_named) {
                     error_node(EK_ERROR, define->type, "The receiver of a method cannot have an anonymous type");
                     error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                    exit(1);
+                    exit(c, 1);
                 }
 
                 if (type_kind_eq(receiver_type, TYPE_ENUM)) {
                     ll_foreach(it, &receiver_type.spec.enumm.definition->values) {
                         if (sv_eq(it->token.sv, name)) {
-                            error_redefinition((Node *) fn->defined_as, &it->token.pos);
+                            error_redefinition(c, (Node *) fn->defined_as, &it->token.pos);
                         }
                     }
                 } else if (type_kind_eq(receiver_type, TYPE_STRUCT)) {
                     for (size_t i = 0; i < receiver_type.spec.structt->fields_count; i++) {
                         const Type_Struct_Field it = receiver_type.spec.structt->fields[i];
                         if (sv_eq(it.name, name)) {
-                            error_redefinition((Node *) fn->defined_as, &it.pos);
+                            error_redefinition(c, (Node *) fn->defined_as, &it.pos);
                         }
                     }
                 }
 
                 Node_Fn **previous = ht_get(&c->methods_table, spec);
                 if (previous) {
-                    error_redefinition((Node *) fn->defined_as, &(*previous)->defined_as->node.token.pos);
+                    error_redefinition(c, (Node *) fn->defined_as, &(*previous)->defined_as->node.token.pos);
                 }
                 ht_set(&c->methods_table, spec, fn);
             } else {
                 error_node(EK_ERROR, define->type, "Can only define methods on types defined in the same module");
                 error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                exit(1);
+                exit(c, 1);
             }
         }
     }

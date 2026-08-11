@@ -643,6 +643,7 @@ struct Node_Fn {
     size_t returns_count;
 
     Polymorphs polymorphs;
+    Polymorphs monomorphs;
 
     Node *body;
 

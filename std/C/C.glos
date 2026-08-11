@@ -9,6 +9,8 @@ extern {
     abort :: ()
     exit :: (code: i32)
     memcmp :: (a: rawptr, b: rawptr, n: i64) -> i32
+    malloc :: (size: i64) -> rawptr
+    memcpy :: (dst: rawptr, src: rawptr, count: i64) -> rawptr
 }
 
 #if PLATFORM == {
