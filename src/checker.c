@@ -3979,6 +3979,17 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
         monomorphize(c, &call->fn, call);
         fn_spec = call->fn->type.spec.fn;
+
+        if (is_method) {
+            assert(call_fn_original->kind == NODE_MEMBER);
+            Node_Member *member = (Node_Member *) call_fn_original;
+
+            assert(call->fn->kind == NODE_FN);
+            member->method = (Node_Fn *) call->fn;
+
+            call_fn_original->type = call->fn->type;
+            call->fn = call_fn_original;
+        }
     }
 
     if (fn_spec) {
