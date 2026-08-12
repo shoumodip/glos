@@ -3276,6 +3276,13 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, Type *actual, const
             }
             finalize_untyped_type(c, n);
 
+            if (actual->is_meta) {
+                assert(n->type.is_meta && &n->type == actual);
+                n->emit_type_info = arena_clone(&default_arena, &n->type, sizeof(n->type));
+                n->emit_type_info->is_meta = false;
+                n->type = c->type_info_pointer_type;
+            }
+
             Node_Polymorph *polymorph = expected->spec.polymorph.definition;
             add_monomorph_parameter(c, polymorph, type_with_ref(*actual, actual->ref - expected->ref));
         }
