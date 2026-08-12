@@ -589,6 +589,23 @@ static void sb_push_nested_fn_name(Compiler *c, SB *sb, Node_Fn *fn, Module *mod
         }
         sb_sprintf(sb, ".anon.%zu", fn->defined_as_anon_iota);
     }
+
+    if (fn->monomorphs.params_count) {
+        sb_push(sb, '(');
+        ll_foreach(it, &fn->monomorphs.params) {
+            assert(it->kind == NODE_POLYMORPH);
+            Node_Polymorph *polymorph = (Node_Polymorph *) it;
+            assert(polymorph->is_monomorphized);
+
+            sb_sprintf(sb, SV_Fmt " = ", SV_Arg(polymorph->name->node.token.sv));
+            sb_push_type(sb, polymorph->monomorphized_to);
+
+            if (it->next) {
+                sb_push_cstr(sb, ", ");
+            }
+        }
+        sb_push(sb, ')');
+    }
 }
 
 static const char *temp_nested_fn_name(Compiler *c, Node_Fn *fn, Module *module) {
