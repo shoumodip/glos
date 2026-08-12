@@ -51,18 +51,18 @@ static void show_current_monomorphization(Compiler *c) {
                 m.site->fn = m.from;
                 error_node(EK_NOTE, (Node *) m.site, "While inside this monomorphization");
 
-                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "    Here are the polymorphic parameters used:\n\n");
+                ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
+                fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
                 ll_foreach(it, &context->fn->monomorphs.params) {
                     Node_Polymorph *polymorph = (Node_Polymorph *) it;
                     assert(polymorph->is_monomorphized);
-                    afprintf(
-                        stderr,
-                        ANSI_COLOR_YELLOW | ANSI_BOLD,
-                        "        " SV_Fmt " :: %s\n",
-                        SV_Arg(polymorph->name->node.token.sv),
-                        type_to_cstr_raw(polymorph->monomorphized_to));
+
+                    fprintf(stderr, "        " SV_Fmt " :: ", SV_Arg(polymorph->name->node.token.sv));
+                    const_value_debug(stderr, it->type, polymorph->monomorphization_value);
+                    fprintf(stderr, "\n");
                 }
-                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
+                fprintf(stderr, "\n");
+                ansi_reset(stderr);
 
                 m.site->fn = m.into;
 
@@ -190,54 +190,6 @@ static void error_number_of_return_values_mismatch(Compiler *c, Token token, siz
         expected,
         actual);
     exit(c, 1);
-}
-
-static void print_quoted_char(FILE *f, char ch, char quote) {
-    switch (ch) {
-    case 033:
-        fputs("\\e", f);
-        break;
-
-    case '\n':
-        fputs("\\n", f);
-        break;
-
-    case '\r':
-        fputs("\\r", f);
-        break;
-
-    case '\t':
-        fputs("\\t", f);
-        break;
-
-    case '\0':
-        fputs("\\0", f);
-        break;
-
-    case '\\':
-        fputs("\\\\", f);
-        break;
-
-    case '\'':
-        if (quote == '\'') {
-            fputs("\\'", f);
-        } else {
-            fputc(ch, f);
-        }
-        break;
-
-    case '"':
-        if (quote == '"') {
-            fputs("\\\"", f);
-        } else {
-            fputc(ch, f);
-        }
-        break;
-
-    default:
-        fputc(ch, f);
-        break;
-    }
 }
 
 static bool check_that_type_is_known_noexit(const Node *n) {
@@ -743,13 +695,20 @@ static Type type_assert_scalar(Compiler *c, const Node *n) {
     exit(c, 1);
 }
 
-static Type type_assert_type(Compiler *c, const Node *n) {
+static bool type_assert_type_noexit(Compiler *c, const Node *n) {
     check_that_type_is_known(c, n);
     if (n->type.is_meta) {
-        return n->type;
+        return true;
     }
 
     error_node(EK_ERROR, n, "Expected a type, got %s", type_to_cstr(n->type));
+    return false;
+}
+
+static Type type_assert_type(Compiler *c, const Node *n) {
+    if (type_assert_type_noexit(c, n)) {
+        return n->type;
+    }
     exit(c, 1);
 }
 
@@ -1211,7 +1170,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         return const_value_type(*n->emit_type_info);
     }
 
-    if (ref) {
+    if (ref && !n->type.is_meta) {
         if (n->kind != NODE_ATOM || n->token.kind != TOKEN_IDENT) {
             error_node(EK_ERROR, n, "Can only take reference to variables in a constant expression");
             exit(c, 1);
@@ -1922,26 +1881,13 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
             error_node_begin(EK_ERROR, pred);
             fprintf(stderr, "Duplicate case ");
 
+            // TODO: Can this just be const_value_debug()??
             if (sw->unionn) {
                 pred->type.is_meta = false;
                 fprintf(stderr, "%s", type_to_cstr(pred->type));
                 pred->type.is_meta = true;
             } else {
-                static_assert(COUNT_CONST_VALUES == 10, "");
-                switch (value.kind) {
-                case CONST_VALUE_INT:
-                    if (type_kind_eq(pred->type, TYPE_CHAR)) {
-                        fprintf(stderr, "'");
-                        print_quoted_char(stderr, value.as.integer.low, '\'');
-                        fprintf(stderr, "'");
-                    } else {
-                        fprintf(stderr, "%s", int128_to_cstr(value.as.integer));
-                    }
-                    break;
-
-                default:
-                    unreachable(); // TODO: Fix this. Now switch supports any type that implements comparisons
-                }
+                const_value_debug(stderr, pred->type, value);
             }
 
             error_finalize();
@@ -2397,7 +2343,11 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
             check_expr(c, type, REF_NONE);
             type_assert_type(c, type);
         }
+
         type->type.is_meta = false;
+        if (it->polymorph && type_eq(type->type, c->type_info_pointer_type)) {
+            it->polymorph->is_type = true;
+        }
         it->node.type = type->type;
     }
 
@@ -2504,7 +2454,7 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
     }
 
     if (it->definition_spec->is_local) {
-        if (!it->definition_spec->is_const && !sv_match(it->node.token.sv, "_")) {
+        if (!it->definition_spec->is_const && !sv_match(it->node.token.sv, "_") && !it->definition_spec->polymorph) {
             context_push_define(&c->context, it);
         }
     }
@@ -2636,15 +2586,15 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
 
     if (definition) {
         if (definition->polymorph) {
-            n->type = definition->node.type;
             if (definition->polymorph->is_monomorphized) {
-                if (n->type.kind == TYPE_UNIT) {
-                    Node *polymorph = (Node *) definition->polymorph;
-                    check_expr(c, polymorph, REF_NONE);
-                    n->type = polymorph->type;
-                }
+                n->type = definition->polymorph->node.type;
             } else {
+                n->type = definition->node.type;
                 n->type.spec.polymorph.is_definition = false;
+            }
+
+            if (definition->polymorph->is_type) {
+                n->type.is_meta = true;
             }
         } else {
             check_definition_if_needed(c, definition, ref);
@@ -3199,7 +3149,7 @@ static void show_note_about_the_function_being_called(Node *fn, bool is_method, 
     }
 }
 
-static void add_monomorph_parameter(Compiler *c, Node_Polymorph *polymorph, Type type) {
+static void add_monomorph_parameter(Compiler *c, Node_Polymorph *polymorph, Type type, Const_Value value) {
     for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
         if (c->monomorph_parameters.data[i].from == polymorph) {
             return;
@@ -3208,7 +3158,8 @@ static void add_monomorph_parameter(Compiler *c, Node_Polymorph *polymorph, Type
 
     const Monomorph_Parameter mp = {
         .from = polymorph,
-        .to = type,
+        .type = type,
+        .value = value,
     };
     da_push(&c->monomorph_parameters, mp);
 }
@@ -3284,7 +3235,8 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, Type *actual, const
             }
 
             Node_Polymorph *polymorph = expected->spec.polymorph.definition;
-            add_monomorph_parameter(c, polymorph, type_with_ref(*actual, actual->ref - expected->ref));
+            const Type      type = type_with_ref(*actual, actual->ref - expected->ref);
+            add_monomorph_parameter(c, polymorph, type, const_value_type(type));
         }
         break;
 
@@ -3324,16 +3276,16 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
         return;
     }
 
-    if (first && ht_get(&c->monomorph_replacements, *np)) {
+    Node *n = *np;
+    if (first && ht_get(&c->monomorph_replacements, n)) {
         // TODO(@polymorph): Consider whether it loops or not. Leaving it for now
         //
         // This will not be a problem here, but in the second pass, it will be a problem
-        error_node(EK_ERROR, *np, "Loop");
+        error_node(EK_ERROR, n, "Loop");
         exit(c, 1);
     }
 
-    Node *n = *np;
-    if ((*np)->kind == NODE_ATOM && (*np)->token.kind != TOKEN_IDENT) {
+    if (n->kind == NODE_ATOM && n->token.kind != TOKEN_IDENT) {
         return;
     }
 
@@ -3361,6 +3313,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
                 monomorphize_replace(c, (Node **) &atom->definition_spec->static_var_fn);
                 monomorphize_replace(c, (Node **) &atom->definition_spec->definition_node);
                 monomorphize_replace(c, (Node **) &atom->definition_spec->assignment_node);
+                monomorphize_replace(c, (Node **) &atom->definition_spec->polymorph);
             }
 
             monomorphize_replace(c, (Node **) &atom->definition);
@@ -3408,7 +3361,40 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_FN: {
         Node_Fn *fn = (Node_Fn *) n;
-        monomorphize_nodes(c, &fn->args, first);
+
+        // Arguments
+        {
+            Nodes from = fn->args;
+            memset(&fn->args, 0, sizeof(fn->args));
+
+            fn->args_count = 0;
+            fn->args_count_min = 0;
+
+            bool optional = false;
+            ll_foreach(it, &from) {
+                assert(it->kind == NODE_DEFINE);
+                Node_Define *define = (Node_Define *) it;
+                if (define->name_polymorph && define->name_polymorph->is_monomorphized) {
+                    monomorphize_node(c, (Node **) &define->name_polymorph, first);
+                    if (first) {
+                        nodes_push(&fn->args, it);
+                    }
+                } else {
+                    monomorphize_node(c, &it, first);
+                    nodes_push(&fn->args, it);
+                    fn->args_count++;
+
+                    if (define->has_spread || define->expr) {
+                        optional = true;
+                    }
+
+                    if (!optional) {
+                        fn->args_count_min++;
+                    }
+                }
+            }
+        }
+
         monomorphize_nodes(c, &fn->returns, first);
         monomorphize_node(c, &fn->body, first);
 
@@ -3456,7 +3442,12 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_DEFINE: {
         Node_Define *define = (Node_Define *) n;
-        monomorphize_node(c, &define->name, first);
+        if (define->name_polymorph) {
+            monomorphize_node(c, (Node **) &define->name_polymorph, first);
+        } else {
+            monomorphize_node(c, &define->name, first);
+        }
+
         monomorphize_node(c, &define->expr, first);
         monomorphize_node(c, &define->type, first);
     } break;
@@ -3521,26 +3512,25 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
         unreachable();
     }
 
-    monomorphize_node(c, np, true);
-    monomorphize_node(c, np, false);
     for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
         Monomorph_Parameter it = c->monomorph_parameters.data[i];
-        Node_Polymorph     *polymorph = *(Node_Polymorph **) ht_get(&c->monomorph_replacements, it.from);
-
-        polymorph->is_monomorphized = true;
-        polymorph->monomorphized_to = it.to;
-
-        if (is_fn) {
-            Node_Fn *fn = ((Node_Fn *) *np);
-            nodes_push(&fn->monomorphs.params, (Node *) polymorph);
-            fn->monomorphs.params_count++;
-        } else {
-            unreachable();
-        }
+        it.from->is_monomorphized = true;
+        it.from->monomorphization_value = it.value;
     }
+
+    monomorphize_node(c, np, true);
+    monomorphize_node(c, np, false);
 
     if (is_fn) {
         Node_Fn *fn = (Node_Fn *) *np;
+        for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
+            Monomorph_Parameter it = c->monomorph_parameters.data[i];
+            // if (it.from->is_arg) {
+            //     todo();
+            // } else {
+            nodes_push(&fn->monomorphs.params, *(Node **) ht_get(&c->monomorph_replacements, it.from));
+            fn->monomorphs.params_count++;
+        }
         memset(&fn->polymorphs, 0, sizeof(fn->polymorphs));
     } else {
         unreachable();
@@ -3923,7 +3913,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         }
 
         size_t it_index = is_method || is_trait;
-        ll_foreach(arg, &call->args) {
+        for (Node *prev = NULL, *arg = call->args.head; arg; prev = arg, arg = arg->next) {
             Node *it = arg;
 
             const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
@@ -3946,20 +3936,47 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             }
 
             for (size_t i = 0; i < count; i++, it_index++) {
-                Type *expected = it_index < fn_spec->args_count ? &fn_spec->args[it_index].type : NULL;
-                if (!is_named && !is_spread &&                                                          //
-                    fn_spec->variadics_kind == VARIADICS_TYPED && it_index >= fn_spec->variadics_index) //
-                {
-                    // It is not named, therefore it must be a variadic parameter
-                    expected = &fn_spec->args[fn_spec->variadics_index].type;
-                    assert(type_kind_eq(*expected, TYPE_SLICE));
-                    expected = expected->spec.slice.element;
-                }
+                Type_Fn_Arg *argument = it_index < fn_spec->args_count ? &fn_spec->args[it_index] : NULL;
+                if (argument && argument->polymorph) {
+                    if (argument->polymorph->is_type) {
+                        if (!type_assert_type_noexit(c, it)) {
+                            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                            exit(c, 1);
+                        }
 
-                if (!infer_monomorph_parameters(c, it, &types[i], expected)) {
-                    error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-                    exit(c, 1);
+                        Const_Value value = eval_const_expr(c, it, false);
+                        assert(value.kind == CONST_VALUE_TYPE);
+                        value.as.type.is_meta = false;
+
+                        add_monomorph_parameter(c, argument->polymorph, it->type, value);
+                    } else {
+                        todo();
+                    }
+
+                    assert(count == 1); // This is guaranteed to be a singular value.
+                    if (prev) {
+                        prev->next = arg->next;
+                    } else {
+                        call->args.head = arg->next;
+                    }
+                    call->args_count--;
+                } else {
+                    Type *expected = argument ? &argument->type : NULL;
+                    if (!is_named && !is_spread &&                                                          //
+                        fn_spec->variadics_kind == VARIADICS_TYPED && it_index >= fn_spec->variadics_index) //
+                    {
+                        // It is not named, therefore it must be a variadic parameter
+                        expected = &fn_spec->args[fn_spec->variadics_index].type;
+                        assert(type_kind_eq(*expected, TYPE_SLICE));
+                        expected = expected->spec.slice.element;
+                    }
+
+                    if (!infer_monomorph_parameters(c, it, &types[i], expected)) {
+                        error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                        exit(c, 1);
+                    }
                 }
             }
         }
@@ -3968,7 +3985,11 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
                 Monomorph_Parameter it = c->monomorph_parameters.data[i];
                 it.from->is_monomorphized = true;
-                it.from->monomorphized_to = it.to;
+                if (it.from->is_type) {
+                    it.from->monomorphization_value = it.value;
+                } else {
+                    todo();
+                }
                 // It does not matter that we mutate these, since we are about to die anyway
             }
 
@@ -4077,6 +4098,8 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             }
         }
     }
+
+    arena_reset(&temp_arena, args);
 }
 
 static void check_whether_member_access_is_valid(Compiler *c, Node_Member *m) {
@@ -4882,15 +4905,9 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         n->type.distinct = distinct->defined_as;
     } break;
 
-    case NODE_POLYMORPH: {
-        Node_Polymorph *polymorph = (Node_Polymorph *) n;
-        if (polymorph->is_monomorphized) {
-            n->type = polymorph->monomorphized_to;
-            n->type.is_meta = true; // TODO(@polymorph): For now, only considering types to be polymorphic
-        } else {
-            n->type = polymorph->name->node.type;
-        }
-    } break;
+    case NODE_POLYMORPH:
+        // Pass
+        break;
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
@@ -4932,11 +4949,25 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     .spec.polymorph.is_definition = true,
                     .is_meta = true,
                 };
+
+                assert(!polymorph->is_monomorphized);
+                it->type = polymorph->name->node.type;
                 fn_spec->polymorphs[fn_spec->polymorphs_count++] = polymorph;
             }
 
             ll_foreach(it, &fn->monomorphs.params) {
-                context_push_define(&c->context, ((Node_Polymorph *) it)->name);
+                Node_Polymorph *monomorph = (Node_Polymorph *) it;
+                assert(monomorph->is_monomorphized);
+
+                if (monomorph->is_type) {
+                    assert(monomorph->monomorphization_value.kind == CONST_VALUE_TYPE);
+                    it->type = monomorph->monomorphization_value.as.type;
+                    it->type.is_meta = true;
+                } else {
+                    todo();
+                }
+
+                context_push_define(&c->context, monomorph->name);
             }
 
             fn_spec->args_count = fn->args_count;
@@ -4968,7 +4999,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 Node_Atom *it = (Node_Atom *) define->name;
                 if (!sv_match(it->node.token.sv, "_")) {
                     Node_Atom *previous = context_find_define_in_fn(&c->context, c->context.fn, it->node.token.sv);
-                    if (previous) {
+                    if (previous && previous != it) {
                         error_redefinition(c, (Node *) it, &previous->node.token.pos);
                     }
                 }
@@ -4976,6 +5007,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 Type_Fn_Arg *it_arg = &fn_spec->args[iota];
                 it_arg->name = it->node.token.sv;
                 it_arg->pos = it->node.token.pos;
+                it_arg->polymorph = define->name_polymorph;
 
                 check_stmt(c, arg);
                 if (define->has_spread) {
@@ -6218,6 +6250,10 @@ void check_nodes(Compiler *c) {
         c->type_info_type = value.as.type;
         c->type_info_type.is_meta = false;
 
+        // TODO:
+        // ```
+        // Type :: distinct &Type_Info
+        // ```
         c->type_info_pointer_type = c->type_info_type;
         c->type_info_pointer_type.ref++;
 

@@ -1,0 +1,7 @@
+foo :: ($T: Type) {
+    println(T)
+}
+
+main :: () {
+    foo(&string)
+}

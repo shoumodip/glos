@@ -1,5 +1,6 @@
 #include "node.h"
 #include "basic.h"
+#include <stdio.h>
 
 void nodes_push(Nodes *ns, Node *n) {
     if (!n) {
@@ -25,6 +26,15 @@ void modules_free(Modules *ms) {
 
 static_assert(COUNT_TYPES == 26, "");
 void sb_push_type(SB *sb, Type type) {
+    // TODO: Remove
+    // if (type.is_meta) {
+    //     type.is_meta = false;
+    //     sb_push_cstr(sb, "#Type(");
+    //     sb_push_type(sb, type);
+    //     sb_push_cstr(sb, ")");
+    //     return;
+    // }
+
     assert(!type.is_meta);
     if (type.distinct) {
         const Type distinct_type = type.distinct->node.type;
@@ -607,6 +617,116 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     default:
         unreachable();
     }
+}
+
+static void sb_push_quoted_char(SB *sb, char ch, char quote) {
+    switch (ch) {
+    case 033:
+        sb_push_cstr(sb, "\\e");
+        break;
+
+    case '\n':
+        sb_push_cstr(sb, "\\n");
+        break;
+
+    case '\r':
+        sb_push_cstr(sb, "\\r");
+        break;
+
+    case '\t':
+        sb_push_cstr(sb, "\\t");
+        break;
+
+    case '\0':
+        sb_push_cstr(sb, "\\0");
+        break;
+
+    case '\\':
+        sb_push_cstr(sb, "\\\\");
+        break;
+
+    case '\'':
+        if (quote == '\'') {
+            sb_push_cstr(sb, "\\'");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    case '"':
+        if (quote == '"') {
+            sb_push_cstr(sb, "\\\"");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    default:
+        sb_push(sb, ch);
+        break;
+    }
+}
+
+static_assert(COUNT_CONST_VALUES == 10, "");
+void sb_push_const_value(SB *sb, Type type, Const_Value v) {
+    switch (v.kind) {
+    case CONST_VALUE_INT:
+        if (type_kind_eq(type, TYPE_CHAR)) {
+            sb_push(sb, '\'');
+            sb_push_quoted_char(sb, v.as.integer.low, '\'');
+            sb_push(sb, '\'');
+        } else {
+            sb_push_cstr(sb, int128_to_cstr(v.as.integer));
+        }
+        break;
+
+    case CONST_VALUE_FN:
+        todo();
+        break;
+
+    case CONST_VALUE_VAR:
+        todo();
+        break;
+
+    case CONST_VALUE_TYPE:
+        sb_push_type(sb, v.as.type);
+        break;
+
+    case CONST_VALUE_TRAIT:
+        todo();
+        break;
+
+    case CONST_VALUE_UNION:
+        todo();
+        break;
+
+    case CONST_VALUE_STRUCT:
+        todo();
+        break;
+
+    case CONST_VALUE_ARRAY:
+        todo();
+        break;
+
+    case CONST_VALUE_STRING:
+        todo();
+        break;
+
+    case CONST_VALUE_MODULE:
+        todo();
+        break;
+
+    default:
+        unreachable();
+    }
+}
+
+static_assert(COUNT_CONST_VALUES == 10, "");
+void const_value_debug(FILE *f, Type type, Const_Value v) {
+    const size_t start = default_sb.count;
+    sb_push_const_value(&default_sb, type, v);
+    fwrite(default_sb.data + start, default_sb.count - start, 1, f);
+    default_sb.count = start;
 }
 
 static_assert(COUNT_NODES == 29, "");

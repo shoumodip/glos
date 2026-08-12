@@ -598,7 +598,7 @@ static void sb_push_nested_fn_name(Compiler *c, SB *sb, Node_Fn *fn, Module *mod
             assert(polymorph->is_monomorphized);
 
             sb_sprintf(sb, SV_Fmt " = ", SV_Arg(polymorph->name->node.token.sv));
-            sb_push_type(sb, polymorph->monomorphized_to);
+            sb_push_const_value(sb, it->type, polymorph->monomorphization_value);
 
             if (it->next) {
                 sb_push_cstr(sb, ", ");

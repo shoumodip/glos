@@ -1,0 +1,6 @@
+EXIT 0
+STDOUT 8
+&string
+
+STDERR 0
+

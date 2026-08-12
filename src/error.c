@@ -170,6 +170,7 @@ static void range_apply_node(Range *r, const Node *n) {
         range_apply_node(r, define->name);
         range_apply_node(r, define->type);
         range_apply_node(r, define->expr);
+        range_apply_node(r, (Node *) define->name_polymorph);
     } break;
 
     case NODE_BLOCK: {

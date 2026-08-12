@@ -240,6 +240,9 @@ struct Type_Fn_Arg {
     bool         default_value_is_caller_location;
 
     bool has_default_value;
+
+    // $A: B
+    Node_Polymorph *polymorph;
 };
 
 typedef struct {
@@ -375,6 +378,9 @@ static_assert(COUNT_CONST_VALUES == 10, "");
 
 bool const_value_eq(Const_Value a, Const_Value b);
 
+void sb_push_const_value(SB *sb, Type type, Const_Value v);
+void const_value_debug(FILE *f, Type type, Const_Value v);
+
 typedef enum {
     NODE_ATOM,
     NODE_GROUP,
@@ -490,6 +496,9 @@ typedef struct {
 
     Node_Define *definition_node;
     Node        *assignment_node;
+
+    // $A: B
+    Node_Polymorph *polymorph;
 
     Context_Fn      *fn_context;
     Context_Replace *replace_context;
@@ -611,8 +620,16 @@ struct Node_Polymorph {
     Node_Atom *name;
     size_t     arg_index;
 
-    bool is_monomorphized;
-    Type monomorphized_to;
+    // `$A: B`    => true
+    // `A:  $B`   => false
+    bool is_arg;
+
+    // `A:  $B`   => true
+    // `$A: Type` => true
+    bool is_type;
+
+    bool        is_monomorphized;
+    Const_Value monomorphization_value;
 };
 
 typedef struct {
@@ -837,6 +854,9 @@ typedef struct {
 struct Node_Define {
     Node  node;
     Node *name;
+
+    // $T: <Type>
+    Node_Polymorph *name_polymorph;
 
     Node *expr;
     Node *type;

@@ -20,7 +20,8 @@ typedef struct {
 
 typedef struct {
     Node_Polymorph *from;
-    Type            to;
+    Type            type;
+    Const_Value     value;
 } Monomorph_Parameter;
 
 typedef struct {
