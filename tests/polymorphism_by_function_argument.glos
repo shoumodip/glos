@@ -1,7 +1,11 @@
-foo :: ($T: Type) {
-    println(T)
+Array :: ($T: Type, $N: i64) -> [N]T {
+    println("T = ", T)
+    println("N = ", N)
+
+    a: [N]T
+    return a
 }
 
 main :: () {
-    foo(&string)
+    println(Array(string, 2))
 }

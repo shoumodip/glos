@@ -1197,6 +1197,10 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             }
 
             assert(atom->definition);
+            if (atom->definition->polymorph) {
+                return atom->definition->polymorph->monomorphization_value;
+            }
+
             if (!atom->definition->definition_spec->is_const) {
                 if (atom->definition->definition_spec->is_local) {
                     error_node(EK_ERROR, n, "Cannot use local variables in a constant expression");
@@ -1516,7 +1520,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         return const_value_module(n->type.spec.module);
 
     case NODE_POLYMORPH:
-        todo(); //@polymorph
+        unreachable();
 
     case NODE_DISTINCT:
         assert(n->type.is_meta);
@@ -3515,6 +3519,7 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
     for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
         Monomorph_Parameter it = c->monomorph_parameters.data[i];
         it.from->is_monomorphized = true;
+        it.from->monomorphization_type = it.type;
         it.from->monomorphization_value = it.value;
     }
 
@@ -3525,9 +3530,6 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
         Node_Fn *fn = (Node_Fn *) *np;
         for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
             Monomorph_Parameter it = c->monomorph_parameters.data[i];
-            // if (it.from->is_arg) {
-            //     todo();
-            // } else {
             nodes_push(&fn->monomorphs.params, *(Node **) ht_get(&c->monomorph_replacements, it.from));
             fn->monomorphs.params_count++;
         }
@@ -3951,7 +3953,13 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
                         add_monomorph_parameter(c, argument->polymorph, it->type, value);
                     } else {
-                        todo();
+                        if (!type_assert_noexit(c, it, argument->type)) {
+                            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                            exit(c, 1);
+                        }
+
+                        add_monomorph_parameter(c, argument->polymorph, it->type, eval_const_expr(c, it, false));
                     }
 
                     assert(count == 1); // This is guaranteed to be a singular value.
@@ -3985,12 +3993,13 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
                 Monomorph_Parameter it = c->monomorph_parameters.data[i];
                 it.from->is_monomorphized = true;
-                if (it.from->is_type) {
-                    it.from->monomorphization_value = it.value;
-                } else {
-                    todo();
-                }
+
+                // Inference means that is not an argument
+                assert(!it.from->is_arg);
+                assert(it.from->is_type);
+
                 // It does not matter that we mutate these, since we are about to die anyway
+                it.from->monomorphization_value = it.value;
             }
 
             for (size_t i = 0; i < fn_spec->polymorphs_count; i++) {
@@ -4964,7 +4973,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     it->type = monomorph->monomorphization_value.as.type;
                     it->type.is_meta = true;
                 } else {
-                    todo();
+                    it->type = monomorph->monomorphization_type;
                 }
 
                 context_push_define(&c->context, monomorph->name);

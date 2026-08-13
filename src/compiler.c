@@ -1905,33 +1905,45 @@ static void compile_panic(Compiler *c, const char *fmt, LLVMValueRef v1, LLVMVal
 
 static LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, bool ref) {
     assert(definition);
-    if (definition->definition_spec->is_const) {
-        const Const_Value const_value = definition->definition_spec->const_value;
 
-        static_assert(COUNT_CONST_VALUES == 10, "");
-        switch (const_value.kind) {
-        case CONST_VALUE_TRAIT:
-        case CONST_VALUE_UNION:
-        case CONST_VALUE_STRUCT:
-        case CONST_VALUE_ARRAY:
-        case CONST_VALUE_STRING:
-            if (!definition->definition_spec->llvm) {
-                definition->definition_spec->llvm =
-                    compile_const_value_into_memory(c, compile_const_value(c, const_value, n->type));
-            }
+    // Constant value
+    {
+        const Const_Value *const_value = NULL;
+        if (definition->polymorph) {
+            assert(definition->polymorph->is_monomorphized);
+            const_value = &definition->polymorph->monomorphization_value;
+        }
 
-            if (ref) {
+        if (definition->definition_spec->is_const) {
+            const_value = &definition->definition_spec->const_value;
+        }
+
+        if (const_value) {
+            static_assert(COUNT_CONST_VALUES == 10, "");
+            switch (const_value->kind) {
+            case CONST_VALUE_TRAIT:
+            case CONST_VALUE_UNION:
+            case CONST_VALUE_STRUCT:
+            case CONST_VALUE_ARRAY:
+            case CONST_VALUE_STRING:
+                if (!definition->definition_spec->llvm) {
+                    definition->definition_spec->llvm =
+                        compile_const_value_into_memory(c, compile_const_value(c, *const_value, n->type));
+                }
+
+                if (ref) {
+                    return definition->definition_spec->llvm;
+                }
+
+                set_debug_pos(c, n->token.pos);
+                return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, definition->definition_spec->llvm, "");
+
+            default:
+                if (!definition->definition_spec->llvm) {
+                    definition->definition_spec->llvm = compile_const_value(c, *const_value, n->type);
+                }
                 return definition->definition_spec->llvm;
             }
-
-            set_debug_pos(c, n->token.pos);
-            return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, definition->definition_spec->llvm, "");
-
-        default:
-            if (!definition->definition_spec->llvm) {
-                definition->definition_spec->llvm = compile_const_value(c, const_value, n->type);
-            }
-            return definition->definition_spec->llvm;
         }
     }
 

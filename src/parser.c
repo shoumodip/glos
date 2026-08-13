@@ -969,6 +969,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                         exit(1);
                     }
                 } else {
+                    buffer_token(p, token);
                     name = parse_expr(p, POWER_SET, false, true, NULL);
                 }
 

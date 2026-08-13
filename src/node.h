@@ -629,6 +629,7 @@ struct Node_Polymorph {
     bool is_type;
 
     bool        is_monomorphized;
+    Type        monomorphization_type;
     Const_Value monomorphization_value;
 };
 

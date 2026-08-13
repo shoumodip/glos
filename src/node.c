@@ -837,9 +837,14 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     }
 
     switch (n->kind) {
-    case NODE_ATOM:
-        fprintf(f, "Atom " SV_Fmt "\n", SV_Arg(n->token.sv));
-        break;
+    case NODE_ATOM: {
+        Node_Atom *atom = (Node_Atom *) n;
+        if (atom->polymorph) {
+            fprintf(f, "Atom $" SV_Fmt "\n", SV_Arg(n->token.sv));
+        } else {
+            fprintf(f, "Atom " SV_Fmt "\n", SV_Arg(n->token.sv));
+        }
+    } break;
 
     case NODE_GROUP: {
         Node_Group *group = (Node_Group *) n;
@@ -979,6 +984,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     case NODE_INDEXABLE: {
         Node_Indexable *indexable = (Node_Indexable *) n;
         fprintf(f, "Indexable {\n");
+        node_debug_impl(f, indexable->count, depth + 1, "Count");
         node_debug_impl(f, indexable->element, depth + 1, "Element");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
