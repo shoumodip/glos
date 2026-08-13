@@ -1101,7 +1101,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             }
 
             Node_Fn *fn = (Node_Fn *) define->type;
-            fn->trait_method_type = &node->type;
+            fn->trait_method = trait;
 
             nodes_push(&trait->methods, method);
             trait->methods_count++;

@@ -673,7 +673,7 @@ struct Node_Fn {
     // Foo :: trait {
     //     foo: () // <- This function is a trait method type
     // }
-    Type *trait_method_type; // TODO(@polymorph): Make this a 'Node_Trait *' to make polymorphism work
+    Node_Trait *trait_method;
 
     // For generating wrappers of trait implementation methods. (These fields are only be the LLVM generator)
     Node_Fn    *wrapper;

@@ -4,8 +4,9 @@
 #include "node.h"
 
 typedef enum {
+    EK_NOTE,
     EK_ERROR,
-    EK_NOTE
+    EK_BLANK,
 } Error_Kind;
 
 Pos get_leftmost_point_of_node(const Node *n);

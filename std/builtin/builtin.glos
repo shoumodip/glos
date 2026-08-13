@@ -1,9 +1,9 @@
 assert :: (cond: bool, message: ...Any, location := #caller_location) {
     if !cond {
         if message.count == 0 {
-            eprintln("\{location} Assertion failed")
+            eprintln("\{location} Assertion Failed")
         } else {
-            eprint("\{location} Assertion failed: ")
+            eprint("\{location} Assertion Failed: ")
             eprintln(...message)
         }
 

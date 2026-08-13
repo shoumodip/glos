@@ -4,5 +4,5 @@ STDOUT 7
 420
 
 STDERR 44
-tests/assertions.glos:6:5: Assertion failed
+tests/assertions.glos:6:5: Assertion Failed
 

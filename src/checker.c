@@ -462,7 +462,10 @@ static void finalize_untyped_type(Compiler *c, Node *n) {
 // Nice name
 static void maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(Node *n, Type expected) {
     if (type_eq_without_distinct(n->type, expected)) {
-        error_node(EK_NOTE, n, "The underlying types seem to be equal, but distinct. Try an explicit cast.");
+        afprintf(
+            stderr,
+            ANSI_COLOR_YELLOW | ANSI_BOLD,
+            "    The underlying types seem to be equal, but distinct. Try an explicit cast.\n\n");
     }
 }
 
@@ -512,7 +515,7 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
         actual = actual.spec.group.data[group_index];
     }
 
-    if (type_is_union(expected) && !type_is_unknown(actual)) {
+    if (type_is_union(expected) && !type_is_unknown(actual) && !type_kind_eq(actual, TYPE_MODULE)) {
         set_auto_cast(c, n, group_index, AUTO_CAST_TO_UNION, actual, expected);
         return true;
     }
@@ -526,7 +529,9 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
         return true;
     }
 
-    if (type_kind_eq(expected, TYPE_TRAIT) && !expected.ref && !type_is_unknown(actual)) {
+    if (type_kind_eq(expected, TYPE_TRAIT) && !expected.ref &&          //
+        !type_is_unknown(actual) && !type_kind_eq(actual, TYPE_MODULE)) //
+    {
         if (actual.is_meta) {
             assert(group_index == -1); // Literals cannot be part of a group
             try_auto_cast_type_to_rtti(c, n, c->type_info_pointer_type);
@@ -3259,6 +3264,10 @@ static void monomorphize_nodes(Compiler *c, Nodes *ns, bool first) {
         monomorphize_node(c, &it, first);
         nodes_push(ns, it);
     }
+
+    if (ns->tail) {
+        ns->tail->next = NULL;
+    }
 }
 
 static void monomorphize_replace(Compiler *c, Node **from) {
@@ -3284,10 +3293,6 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
         // This will not be a problem here, but in the second pass, it will be a problem
         error_node(EK_ERROR, n, "Loop");
         exit(c, 1);
-    }
-
-    if (n->kind == NODE_ATOM && n->token.kind != TOKEN_IDENT) {
-        return;
     }
 
     if (first) {
@@ -3323,7 +3328,8 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     } break;
 
     case NODE_GROUP: {
-        todo();
+        Node_Group *group = (Node_Group *) n;
+        monomorphize_nodes(c, &group->nodes, first);
     } break;
 
     case NODE_UNARY: {
@@ -3332,23 +3338,33 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     } break;
 
     case NODE_BINARY: {
-        todo();
+        Node_Binary *binary = (Node_Binary *) n;
+        monomorphize_node(c, &binary->lhs, first);
+        monomorphize_node(c, &binary->rhs, first);
     } break;
 
     case NODE_MEMBER: {
-        todo();
+        Node_Member *member = (Node_Member *) n;
+        monomorphize_node(c, &member->lhs, first);
+        monomorphize_node(c, &member->rhs, first);
     } break;
 
     case NODE_ASSERT: {
-        todo();
+        Node_Assert *assertt = (Node_Assert *) n;
+        monomorphize_node(c, &assertt->expr, first);
+        monomorphize_node(c, &assertt->message, first);
     } break;
 
-    case NODE_IMPORT: {
-        todo();
-    } break;
+    case NODE_IMPORT:
+        // Pass
+        break;
 
     case NODE_DISTINCT: {
-        todo();
+        Node_Distinct *distinct = (Node_Distinct *) n;
+        monomorphize_node(c, &distinct->value, first);
+        if (!first) {
+            monomorphize_replace(c, (Node **) &distinct->defined_as);
+        }
     } break;
 
     case NODE_POLYMORPH: {
@@ -3357,7 +3373,8 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     } break;
 
     case NODE_INTERPOLATION: {
-        todo();
+        Node_Interpolation *interpolation = (Node_Interpolation *) n;
+        monomorphize_nodes(c, &interpolation->children, first);
     } break;
 
     case NODE_FN: {
@@ -3375,13 +3392,12 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
             ll_foreach(it, &from) {
                 assert(it->kind == NODE_DEFINE);
                 Node_Define *define = (Node_Define *) it;
+                monomorphize_node(c, &it, first);
                 if (define->name_polymorph && define->name_polymorph->is_monomorphized) {
-                    monomorphize_node(c, (Node **) &define->name_polymorph, first);
                     if (first) {
                         nodes_push(&fn->args, it);
                     }
                 } else {
-                    monomorphize_node(c, &it, first);
                     nodes_push(&fn->args, it);
                     fn->args_count++;
 
@@ -3394,6 +3410,10 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
                     }
                 }
             }
+
+            if (fn->args.tail) {
+                fn->args.tail->next = NULL;
+            }
         }
 
         monomorphize_nodes(c, &fn->returns, first);
@@ -3402,27 +3422,55 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
         if (!first) {
             monomorphize_replace(c, (Node **) &fn->outer_fn);
             monomorphize_replace(c, (Node **) &fn->defined_as);
+            monomorphize_replace(c, (Node **) &fn->trait_method);
         }
     } break;
 
     case NODE_ENUM: {
-        todo();
+        Node_Enum *enumm = (Node_Enum *) n;
+        monomorphize_node(c, &enumm->underlying, first);
+        monomorphize_nodes(c, &enumm->values, first);
+
+        if (!first) {
+            monomorphize_replace(c, (Node **) &enumm->defined_as);
+            monomorphize_replace(c, (Node **) &enumm->defined_in);
+        }
     } break;
 
     case NODE_TRAIT: {
-        todo();
+        Node_Trait *trait = (Node_Trait *) n;
+        monomorphize_nodes(c, &trait->methods, first);
+
+        if (!first) {
+            monomorphize_replace(c, (Node **) &trait->defined_as);
+            monomorphize_replace(c, (Node **) &trait->defined_in);
+        }
     } break;
 
     case NODE_UNION: {
-        todo();
+        Node_Union *unionn = (Node_Union *) n;
+        monomorphize_nodes(c, &unionn->variants, first);
+
+        if (!first) {
+            monomorphize_replace(c, (Node **) &unionn->defined_as);
+            monomorphize_replace(c, (Node **) &unionn->defined_in);
+        }
     } break;
 
     case NODE_STRUCT: {
-        todo();
+        Node_Struct *structt = (Node_Struct *) n;
+        monomorphize_nodes(c, &structt->fields, first);
+
+        if (!first) {
+            monomorphize_replace(c, (Node **) &structt->defined_as);
+            monomorphize_replace(c, (Node **) &structt->defined_in);
+        }
     } break;
 
     case NODE_COMPOUND: {
-        todo();
+        Node_Compound *compound = (Node_Compound *) n;
+        monomorphize_node(c, &compound->lhs, first);
+        monomorphize_nodes(c, &compound->children, first);
     } break;
 
     case NODE_CALL: {
@@ -3437,7 +3485,10 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     } break;
 
     case NODE_INDEX: {
-        todo();
+        Node_Index *index = (Node_Index *) n;
+        monomorphize_node(c, &index->lhs, first);
+        monomorphize_node(c, &index->a, first);
+        monomorphize_node(c, &index->b, first);
     } break;
 
     case NODE_INDEXABLE: {
@@ -3464,27 +3515,43 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     } break;
 
     case NODE_IF: {
-        todo();
+        Node_If *iff = (Node_If *) n;
+        monomorphize_node(c, &iff->condition, first);
+        monomorphize_node(c, &iff->consequence, first);
+        monomorphize_node(c, &iff->antecedence, first);
     } break;
 
     case NODE_FOR: {
-        todo();
+        Node_For *forr = (Node_For *) n;
+        monomorphize_node(c, &forr->init, first);
+        monomorphize_node(c, &forr->condition, first);
+        monomorphize_node(c, &forr->update, first);
+        monomorphize_node(c, &forr->body, first);
     } break;
 
     case NODE_CASE: {
-        todo();
+        Node_Case *case_ = (Node_Case *) n;
+        monomorphize_nodes(c, &case_->preds, first);
+        monomorphize_node(c, &case_->body, first);
     } break;
 
     case NODE_SWITCH: {
-        todo();
+        Node_Switch *sw = (Node_Switch *) n;
+        monomorphize_node(c, &sw->expr, first);
+        monomorphize_nodes(c, &sw->cases, first);
+
+        if (!first) {
+            monomorphize_replace(c, &sw->fallback);
+        }
     } break;
 
-    case NODE_JUMP: {
-        todo();
-    } break;
+    case NODE_JUMP:
+        // Pass
+        break;
 
     case NODE_DEFER: {
-        todo();
+        Node_Defer *defer = (Node_Defer *) n;
+        monomorphize_node(c, &defer->stmt, first);
     } break;
 
     case NODE_RETURN: {
@@ -3493,7 +3560,8 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     } break;
 
     case NODE_EXTERN: {
-        todo();
+        Node_Extern *externn = (Node_Extern *) n;
+        monomorphize_nodes(c, &externn->nodes, first);
     } break;
 
     default:
@@ -3942,6 +4010,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 Type_Fn_Arg *argument = it_index < fn_spec->args_count ? &fn_spec->args[it_index] : NULL;
                 if (argument && argument->polymorph) {
                     if (argument->polymorph->is_type) {
+                        // TODO: Should 'null' be allowed here? If so, then how should the implementation be changed?
                         if (!type_assert_type_noexit(c, it)) {
                             error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                             show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
@@ -4976,7 +5045,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
             fn_spec->args_count = fn->args_count;
             fn_spec->args_count_min = fn->args_count_min;
-            if (fn->trait_method_type) {
+            if (fn->trait_method) {
                 assert(fn->is_type);
                 fn_spec->args_count++;
                 fn_spec->args_count_min++;
@@ -4986,12 +5055,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             fn_spec->variadics_kind = fn->variadics_kind;
 
             size_t iota = 0;
-            if (fn->trait_method_type) {
-                assert(fn->trait_method_type->kind == TYPE_TRAIT);
+            if (fn->trait_method) {
+                assert(fn->trait_method->node.type.kind == TYPE_TRAIT);
 
                 Type_Fn_Arg *it_arg = &fn_spec->args[iota++];
                 it_arg->name = sv_from_cstr("this");
-                it_arg->pos = fn->trait_method_type->spec.trait->definition->node.token.pos;
+                it_arg->pos = fn->trait_method->node.type.spec.trait->definition->node.token.pos;
                 it_arg->type.kind = TYPE_RAWPTR;
             }
 
@@ -5946,12 +6015,14 @@ static void check_stmt(Compiler *c, Node *n) {
         }
 
         if (int128_is_zero(eval_const_expr(c, assertt->expr, false).as.integer)) {
-            fprintf(stderr, Pos_Fmt " Assertion failed", Pos_Arg(n->token.pos));
+            error_node_begin(EK_BLANK, n);
+            afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "Assertion Failed");
             if (assertt->message) {
                 const SV message = eval_const_expr(c, assertt->message, false).as.string;
-                fprintf(stderr, ": " SV_Fmt, SV_Arg(message));
+                afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, ": ");
+                fprintf(stderr, SV_Fmt, SV_Arg(message));
             }
-            fprintf(stderr, "\n");
+            error_finalize();
             exit(c, 1);
         }
     } break;

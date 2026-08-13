@@ -4,5 +4,5 @@ STDOUT 7
 420
 
 STDERR 87
-tests/assertions_custom_message.glos:6:5: Assertion failed: Custom message for testing
+tests/assertions_custom_message.glos:6:5: Assertion Failed: Custom message for testing
 

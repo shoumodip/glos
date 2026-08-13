@@ -1,13 +1,11 @@
 EXIT 1
 STDOUT 0
 
-STDERR 298
+STDERR 203
 tests/error_distinct_type_mismatch_with_note_about_same_underlying_type.glos:7:9: ERROR: Expected 'A', got 'B'
 
     a + b
 
-tests/error_distinct_type_mismatch_with_note_about_same_underlying_type.glos:7:9: NOTE: The underlying types seem to be equal, but distinct. Try an explicit cast.
-
-    a + b
+    The underlying types seem to be equal, but distinct. Try an explicit cast.
 
 
