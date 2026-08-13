@@ -4662,6 +4662,7 @@ void compiler_build(Compiler *c, const char *output_path) {
     ht_free(&c->methods_table);
     da_free(&c->methods_list);
 
+    ht_free(&c->monomorph_intern);
     ht_free(&c->monomorph_replacements);
     da_free(&c->monomorph_parameters);
     da_free(&c->monomorphization_stack);

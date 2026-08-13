@@ -33,6 +33,13 @@ typedef struct {
 } Monomorphization;
 
 typedef struct {
+    Node        *from;
+    Type        *param_types;
+    Const_Value *param_values;
+    size_t       params_count;
+} Monomorph_Spec;
+
+typedef struct {
     // These are used only by the analyzer
     Type main_fn_type;
     DA(Type_Struct_Field) struct_fields;
@@ -48,6 +55,7 @@ typedef struct {
 
     Node *current_comptime_conditional_stmt;
 
+    HT(Monomorph_Spec, Node *) monomorph_intern;
     HT(void *, void *) monomorph_replacements;
     DA(Monomorph_Parameter) monomorph_parameters;
     DA(Monomorphization) monomorphization_stack;

@@ -3569,6 +3569,41 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     }
 }
 
+static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t n) {
+    unused(n);
+
+    const Monomorph_Spec a = *(Monomorph_Spec *) va;
+    if (vb) {
+        const Monomorph_Spec b = *(Monomorph_Spec *) vb;
+        if (a.from != b.from) {
+            return false;
+        }
+
+        if (a.params_count != b.params_count) {
+            return false;
+        }
+
+        for (size_t i = 0; i < a.params_count; i++) {
+            if (!type_eq(a.param_types[i], b.param_types[i])) {
+                return false;
+            }
+
+            if (!const_value_eq(a.param_values[i], b.param_values[i])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // TODO: Make this more efficient
+    uint64_t hash = ht_hasheq_bytes(&a.from, NULL, sizeof(Node *));
+    hash = ht_hash_combine(hash, ht_hasheq_bytes(&a.params_count, NULL, sizeof(a.params_count)));
+    hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_types, NULL, a.params_count * sizeof(*a.param_types)));
+    hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_values, NULL, a.params_count * sizeof(*a.param_values)));
+    return hash;
+}
+
 static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
     Monomorphization monomorphization = {
         .from = *np,
@@ -3584,6 +3619,30 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
     } else {
         // TODO(@polymorph): Right now, only functions can be polymorphic
         unreachable();
+    }
+
+    Monomorph_Spec spec = {0};
+    {
+        spec.from = *np;
+        spec.params_count = c->monomorph_parameters.count;
+        spec.param_types = arena_alloc(&default_arena, spec.params_count * sizeof(*spec.param_types));
+        spec.param_values = arena_alloc(&default_arena, spec.params_count * sizeof(*spec.param_values));
+        for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
+            Monomorph_Parameter it = c->monomorph_parameters.data[i];
+            spec.param_types[i] = it.type;
+            spec.param_values[i] = it.value;
+        }
+
+        if (!c->monomorph_intern.hasheq) {
+            c->monomorph_intern.hasheq = ht_hasheq_monomorph_spec;
+        }
+
+        Node **into = ht_get(&c->monomorph_intern, spec);
+        if (into) {
+            arena_reset(&default_arena, spec.param_types);
+            *np = *into;
+            return;
+        }
     }
 
     for (size_t i = 0; i < c->monomorph_parameters.count; i++) {
@@ -3608,6 +3667,7 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
         unreachable();
     }
 
+    ht_set(&c->monomorph_intern, spec, *np);
     monomorphization.into = *np;
     da_push(&c->monomorphization_stack, monomorphization);
 
