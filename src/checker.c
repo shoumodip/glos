@@ -48,7 +48,6 @@ static void show_current_monomorphization(Compiler *c) {
     if (m.into->kind == NODE_FN) {
         for (Context_Fn *context = c->context.fn; context; context = context->outer) {
             if (context->fn == (Node_Fn *) m.into) {
-                m.site->fn = m.from;
                 error_node(EK_NOTE, (Node *) m.site, "While inside this monomorphization");
 
                 ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
@@ -63,8 +62,6 @@ static void show_current_monomorphization(Compiler *c) {
                 }
                 fprintf(stderr, "\n");
                 ansi_reset(stderr);
-
-                m.site->fn = m.into;
 
                 Node_Fn *from = get_function_literal(m.from);
                 assert(from); // It's polymorphic
@@ -1578,7 +1575,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
         if (!call->is_type_cast) {
-            error_node(EK_ERROR, call->fn, "Cannot call functions in a constant expression");
+            error_node(EK_ERROR, call->lhs, "Cannot call functions in a constant expression");
             exit(c, 1);
         }
 
@@ -3430,7 +3427,12 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
-        monomorphize_node(c, &call->fn, first);
+
+        // The body of a polymorphic function is not checked directly. Only the monomorphized copy is checked.
+        // Therefore this must be NULL.
+        assert(!call->fn);
+
+        monomorphize_node(c, &call->lhs, first);
         monomorphize_nodes(c, &call->args, first);
     } break;
 
@@ -3898,7 +3900,6 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         }
     }
 
-    Node *call_fn_original = call->fn;
     if (is_polymorph) {
         assert(fn_spec);
         assert(!is_trait); // TODO: Think about this
@@ -4018,14 +4019,14 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         fn_spec = call->fn->type.spec.fn;
 
         if (is_method) {
-            assert(call_fn_original->kind == NODE_MEMBER);
-            Node_Member *member = (Node_Member *) call_fn_original;
+            assert(call->lhs->kind == NODE_MEMBER);
+            Node_Member *member = (Node_Member *) call->lhs;
 
             assert(call->fn->kind == NODE_FN);
             member->method = (Node_Fn *) call->fn;
 
-            call_fn_original->type = call->fn->type;
-            call->fn = call_fn_original;
+            call->lhs->type = call->fn->type;
+            call->fn = call->lhs;
         }
     }
 
@@ -4051,10 +4052,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
                 if (!type_assert_noexit(c, it, fn_spec->args[it_index].type)) {
                     if (is_polymorph) {
-                        Node *call_fn_save = call->fn;
-                        call->fn = call_fn_original;
                         error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                        call->fn = call_fn_save;
                     }
                     show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                     exit(c, 1);
@@ -4092,10 +4090,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
                         if (!ok) {
                             if (is_polymorph) {
-                                Node *call_fn_save = call->fn;
-                                call->fn = call_fn_original;
                                 error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                                call->fn = call_fn_save;
                             }
                             show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
                             exit(c, 1);
@@ -5579,6 +5574,8 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
+        call->fn = call->lhs;
+
         check_expr(c, call->fn, REF_NONE);
         check_that_type_is_known(c, call->fn);
 
@@ -5617,7 +5614,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 } else if (type_eq(*from_type, string_type) && type_eq(*to_type, char_slice_type)) {
                     same = true;
                 } else {
-                    error_node(EK_ERROR, call->fn, "Cannot cast to %s", type_to_cstr(*to_type));
+                    error_node(EK_ERROR, call->lhs, "Cannot cast to %s", type_to_cstr(*to_type));
                     exit(c, 1);
                 }
             }
@@ -5689,12 +5686,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             }
         } else {
             if (!type_kind_eq(*fn_type, TYPE_FN)) {
-                error_node(EK_ERROR, call->fn, "Cannot call %s", type_to_cstr(*fn_type));
+                error_node(EK_ERROR, call->lhs, "Cannot call %s", type_to_cstr(*fn_type));
                 exit(c, 1);
             }
 
             if (fn_type->ref) {
-                error_node(EK_ERROR, call->fn, "Cannot call %s without deferencing it first", type_to_cstr(*fn_type));
+                error_node(EK_ERROR, call->lhs, "Cannot call %s without deferencing it first", type_to_cstr(*fn_type));
                 exit(c, 1);
             }
 

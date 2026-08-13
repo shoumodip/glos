@@ -1267,8 +1267,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         case TOKEN_LPAREN: {
             Node_Call *call = (Node_Call *) node_alloc(p->module_current, NODE_CALL, token);
-            call->fn = node;
-            call->fn->is_called = true;
+            call->lhs = node;
+            call->lhs->is_called = true;
 
             bool has_spread = false;
             bool has_named_args = false;

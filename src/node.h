@@ -805,15 +805,19 @@ typedef enum {
 } Type_Cast;
 
 typedef struct {
-    Node  node;
+    Node node;
+
+    // The function being called according to the source code.
+    //
+    // This field's ONLY purpose is error reporting and debug locations. DO NOT USE THIS!!!!
+    Node *lhs;
+
+    // The actual function being called. This will differ from 'lhs' in case of polymorphic functions
     Node *fn;
 
     Nodes args;
 
-    // Calculated at checking phase. The reason this is done like this is because in the future functions with
-    // multiple return values will be implemented. In such a case, when one of the elements of a call is another
-    // call to such a function, the actual argument count will be different from the apparent one, and thus cannot
-    // be calculated at parse time.
+    // Calculated at checking phase
     size_t args_count;
 
     Token end;
