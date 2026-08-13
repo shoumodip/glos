@@ -3690,7 +3690,42 @@ static void show_error_for_uninferred_polymorphic_parameter_in_call(
     }
 }
 
+static void check_call_arity(
+    Compiler *c, Node_Call *call, bool is_method, size_t args_count_min, size_t args_count_max, Node *excess_argument) {
+    if (call->args_count < args_count_min) {
+        error_token(
+            EK_ERROR,
+            call->end,
+            "Too few arguments: Expected%s %zu, got %zu",
+            args_count_min == args_count_max ? "" : " at least",
+            args_count_min - is_method,
+            call->args_count - is_method);
+
+        if (!call->fn->type.is_meta) {
+            show_note_about_the_function_being_called(call->fn, is_method, call->fn->type.spec.fn);
+        }
+        exit(c, 1);
+    }
+
+    if (call->args_count > args_count_max) {
+        error_node(
+            EK_ERROR,
+            excess_argument,
+            "Too many arguments: Expected %zu, got %zu",
+            args_count_max - is_method,
+            call->args_count - is_method);
+
+        if (!call->fn->type.is_meta) {
+            show_note_about_the_function_being_called(call->fn, is_method, call->fn->type.spec.fn);
+        }
+        exit(c, 1);
+    }
+}
+
 static void check_call_arguments(Compiler *c, Node_Call *call) {
+    assert(type_kind_eq(call->fn->type, TYPE_FN));
+    const Type_Fn *fn_spec = call->fn->type.spec.fn;
+
     typedef struct {
         Node *node;
     } Argument;
@@ -3699,37 +3734,29 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
     size_t    args_count_min = 1;
     size_t    args_count_max = 1;
 
-    const Type_Fn *fn_spec = NULL;
-
     bool is_trait = false;
     bool is_method = false;
     bool is_polymorph = false;
-    if (call->fn->type.is_meta) {
-        args = arena_alloc(&temp_arena, 1 * sizeof(*args));
-    } else {
-        assert(call->fn->type.kind == TYPE_FN);
-        fn_spec = call->fn->type.spec.fn;
 
-        args = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*args));
-        args_count_min = fn_spec->args_count_min;
-        args_count_max = fn_spec->variadics_kind != VARIADICS_NONE ? UINT64_MAX : fn_spec->args_count;
+    args = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*args));
+    args_count_min = fn_spec->args_count_min;
+    args_count_max = fn_spec->variadics_kind != VARIADICS_NONE ? UINT64_MAX : fn_spec->args_count;
 
-        if (call->fn->kind == NODE_MEMBER) {
-            Node_Member *member = (Node_Member *) call->fn;
+    if (call->fn->kind == NODE_MEMBER) {
+        Node_Member *member = (Node_Member *) call->fn;
 
-            is_trait = member->is_trait;
-            is_method = member->method != NULL;
-            if ((is_method || is_trait) && !member->lhs->type.is_meta) {
-                assert(member->lhs);
-                args[call->args_count++].node = member->lhs;
-            }
+        is_trait = member->is_trait;
+        is_method = member->method != NULL;
+        if ((is_method || is_trait) && !member->lhs->type.is_meta) {
+            assert(member->lhs);
+            args[call->args_count++].node = member->lhs;
         }
+    }
 
-        is_polymorph = node_is_runtime_polymorphic_expression(call->fn);
-        if (is_polymorph) {
-            ht_clear(&c->monomorph_replacements);
-            c->monomorph_parameters.count = 0;
-        }
+    is_polymorph = node_is_runtime_polymorphic_expression(call->fn);
+    if (is_polymorph) {
+        ht_clear(&c->monomorph_replacements);
+        c->monomorph_parameters.count = 0;
     }
 
     typedef enum {
@@ -3748,11 +3775,6 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         Node  *it_name = NULL;
         size_t it_index = call->args_count;
         if (it->kind == NODE_BINARY && it->token.kind == TOKEN_SET) {
-            if (!fn_spec) {
-                error_node(EK_ERROR, arg, "Cannot use named arguments in a cast expression");
-                exit(c, 1);
-            }
-
             Node_Binary *it_binary = (Node_Binary *) it;
             it = it_binary->rhs;
             it_name = it_binary->lhs;
@@ -3778,11 +3800,6 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
         const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
         if (is_spread) {
-            if (!fn_spec) {
-                error_node(EK_ERROR, it, "Cannot spread arguments in a cast expression");
-                exit(c, 1);
-            }
-
             if (fn_spec->variadics_kind != VARIADICS_TYPED) {
                 error_node(
                     EK_ERROR, it, "Cannot spread arguments in a call to a function that does not have typed variadics");
@@ -3795,7 +3812,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             check_expr(c, it, REF_NONE);
         } else if (it->kind == NODE_INTERPOLATION) {
             Node_Interpolation *interpolation = (Node_Interpolation *) it;
-            interpolation->is_valid = (fn_spec != NULL);
+            interpolation->is_valid = true;
             check_expr(c, it, REF_NONE);
             interpolation->is_valid = false;
         } else {
@@ -3808,10 +3825,6 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 if (!excess_argument) {
                     excess_argument = arg;
                 }
-                continue;
-            }
-
-            if (!fn_spec) {
                 continue;
             }
 
@@ -3907,30 +3920,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         call->args_count += parts;
     }
 
-    if (call->args_count < args_count_min) {
-        error_token(
-            EK_ERROR,
-            call->end,
-            "Too few arguments: Expected%s %zu, got %zu",
-            args_count_min == args_count_max ? "" : " at least",
-            args_count_min - is_method,
-            call->args_count - is_method);
-        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-        exit(c, 1);
-    }
+    check_call_arity(c, call, is_method, args_count_min, args_count_max, excess_argument);
 
-    if (call->args_count > args_count_max) {
-        error_node(
-            EK_ERROR,
-            excess_argument,
-            "Too many arguments: Expected %zu, got %zu",
-            args_count_max - is_method,
-            call->args_count - is_method);
-        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
-        exit(c, 1);
-    }
-
-    if (fn_spec) {
+    // Check for not provided arguments
+    {
         size_t not_provided_count = 0;
         SV     not_provided_name = {0};
         for (size_t i = 0; i < fn_spec->args_count; i++) {
@@ -3969,9 +3962,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
     }
 
     if (is_polymorph) {
-        assert(fn_spec);
         assert(!is_trait); // TODO: Think about this
-
         if (is_method) {
             assert(call->fn->kind == NODE_MEMBER);
             Node *receiver = ((Node_Member *) call->fn)->lhs;
@@ -4099,7 +4090,8 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
         }
     }
 
-    if (fn_spec) {
+    // Check the argument types
+    {
         if (is_method) {
             assert(call->fn->kind == NODE_MEMBER);
             Node *receiver = ((Node_Member *) call->fn)->lhs;
@@ -5654,7 +5646,29 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             n->type = *fn_type;
             n->type.is_meta = false;
 
-            check_call_arguments(c, call);
+            // Check the arguments and the arity
+            {
+                Node *excess_argument = NULL;
+                ll_foreach(it, &call->args) {
+                    if (it->kind == NODE_BINARY && it->token.kind == TOKEN_SET) {
+                        error_node(EK_ERROR, it, "Cannot use named arguments in a cast expression");
+                        exit(c, 1);
+                    }
+
+                    if (it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD) {
+                        error_node(EK_ERROR, it, "Cannot spread arguments in a cast expression");
+                        exit(c, 1);
+                    }
+
+                    check_expr(c, it, REF_NONE);
+                    call->args_count += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
+                    if (call->args_count > 1) {
+                        excess_argument = it;
+                    }
+                }
+                check_call_arity(c, call, false, 1, 1, excess_argument);
+            }
+
             Type *from_type = &call->args.head->type;
             Type *to_type = &n->type;
 
