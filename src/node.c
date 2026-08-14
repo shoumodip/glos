@@ -24,6 +24,26 @@ void modules_free(Modules *ms) {
     ht_free(&ms->table);
 }
 
+Type type_with_ref(Type t, size_t ref) {
+    t.ref = ref;
+    return t;
+}
+
+Type type_without_ref(Type t) {
+    t.ref = 0;
+    return t;
+}
+
+Type type_with_meta(Type t) {
+    t.is_meta = true;
+    return t;
+}
+
+Type type_without_meta(Type t) {
+    t.is_meta = false;
+    return t;
+}
+
 static_assert(COUNT_TYPES == 26, "");
 void sb_push_type(SB *sb, Type type) {
     // TODO: Remove
@@ -188,7 +208,31 @@ void sb_push_type(SB *sb, Type type) {
         if (defined_as) {
             sb_push_sv(sb, defined_as->node.token.sv);
         } else {
-            sb_push_cstr(sb, "struct {");
+            sb_push_cstr(sb, "struct");
+        }
+
+        if (spec->definition->monomorphs.params_count) {
+            sb_push(sb, '(');
+            ll_foreach(it, &spec->definition->monomorphs.params) {
+                Node_Polymorph *monomorph = (Node_Polymorph *) it;
+                assert(monomorph->is_monomorphized);
+
+                if (monomorph->is_type) {
+                    assert(monomorph->monomorphization_value.kind == CONST_VALUE_TYPE);
+                    sb_push_type(sb, type_without_meta(monomorph->monomorphization_value.as.type));
+                } else {
+                    sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
+                }
+
+                if (it->next) {
+                    sb_push_cstr(sb, ", ");
+                }
+            }
+            sb_push(sb, ')');
+        }
+
+        if (!defined_as) {
+            sb_push_cstr(sb, " {");
             for (size_t i = 0; i < spec->fields_count; i++) {
                 Type_Struct_Field it = spec->fields[i];
                 if (i) {
@@ -416,13 +460,12 @@ bool type_eq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 26, "");
 bool type_kind_eq(Type type, Type_Kind kind) {
-    if (type.is_meta) {
-        return false;
-    }
+    return !type.is_meta && type.kind == kind;
+}
 
-    return type.kind == kind;
+bool type_meta_kind_eq(Type type, Type_Kind kind) {
+    return type.is_meta && type.kind == kind;
 }
 
 bool type_is_numeric(Type type) {

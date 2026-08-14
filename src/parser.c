@@ -1135,7 +1135,26 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         structt->module = p->module_current;
         structt->defined_in = p->state.fn_current;
 
-        expect_token(p, TOKEN_LBRACE);
+        token = expect_token(p, TOKEN_LBRACE, TOKEN_LPAREN);
+        if (token.kind == TOKEN_LPAREN) {
+            Polymorphs_Builder pb = {.polymorphs = &structt->polymorphs};
+
+            Polymorphs_Builder *pb_save = p->state.pb;
+            p->state.pb = &pb;
+            while (!read_token(p, TOKEN_RPAREN)) {
+                buffer_token(p, expect_token(p, TOKEN_DOLLAR));
+                Node *name = parse_expr(p, POWER_SET, false, true, NULL);
+                parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false);
+
+                if (expect_token(p, TOKEN_COMMA, TOKEN_RPAREN).kind != TOKEN_COMMA) {
+                    break;
+                }
+            }
+            p->state.pb = pb_save;
+
+            token = expect_token(p, TOKEN_LBRACE);
+        }
+
         while (!read_token(p, TOKEN_RBRACE)) {
             token = peek_token(p);
             if (token.kind == TOKEN_SPREAD) {

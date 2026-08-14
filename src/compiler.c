@@ -1008,7 +1008,8 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 if (defined_as) {
                     const size_t start = default_sb.count;
                     sb_push_nested_fn_name(c, &default_sb, spec->definition->defined_in, spec->definition->module);
-                    sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
+                    sb_push(&default_sb, '.');
+                    sb_push_type(&default_sb, type_without_meta(*type));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
             }
@@ -2049,6 +2050,8 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
     tic->ti_fields[tic->ti_fields_iota++] = LLVMConstInt(
         LLVMInt64TypeInContext(c->llvm_context), LLVMABIAlignmentOfType(c->llvm_target_data, type->llvm), false);
 
+    const void *checkpoint = arena_alloc(&temp_arena, 0);
+
     SV name = {0};
     if (!type->ref) {
         static_assert(COUNT_TYPES == 26, "");
@@ -2063,7 +2066,14 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
         } else if (type->kind == TYPE_UNION) {
             defined_as = type->spec.unionn->definition->defined_as;
         } else if (type->kind == TYPE_STRUCT) {
-            defined_as = type->spec.structt->definition->defined_as;
+            Node_Struct *structt = (Node_Struct *) type->spec.structt->definition;
+            if (structt->defined_as && structt->monomorphs.params_count) {
+                const size_t start = default_sb.count;
+                sb_push_type(&default_sb, type_without_meta(structt->node.type));
+                name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
+            } else {
+                defined_as = structt->defined_as;
+            }
         }
 
         if (defined_as) {
@@ -2074,6 +2084,8 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
 
     tic->tiv_fields[tic->tiv_fields_iota++] =
         LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), tic->variant_index, false);
+
+    arena_reset(&temp_arena, checkpoint);
 }
 
 static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip_first_arg) {
@@ -3419,6 +3431,10 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
+        if (call->is_monomorphization_of_polymorphic_type) {
+            return NULL;
+        }
+
         if (call->is_type_cast) {
             Node *from = call->args.head;
             if (call->type_cast == TYPE_CAST_NOP) {

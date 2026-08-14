@@ -169,6 +169,9 @@ typedef struct {
     Type_Struct_Field *fields;
     size_t             fields_count;
 
+    Node_Polymorph **polymorphs;
+    size_t           polymorphs_count;
+
     Node_Struct *definition;
 
     LLVMTypeRef     llvm;
@@ -283,12 +286,19 @@ struct Type_Struct_Field {
     Node *spread;
 };
 
+Type type_with_ref(Type t, size_t ref);
+Type type_without_ref(Type t);
+
+Type type_with_meta(Type t);
+Type type_without_meta(Type t);
+
 void        sb_push_type(SB *sb, Type type);
 const char *type_to_cstr_raw(Type type);
 const char *type_to_cstr(Type type);
 
 bool type_eq(Type a, Type b);
 bool type_kind_eq(Type type, Type_Kind kind);
+bool type_meta_kind_eq(Type type, Type_Kind kind);
 bool type_is_numeric(Type type);
 bool type_is_integer(Type type);
 bool type_is_pointer(Type type);
@@ -761,6 +771,9 @@ struct Node_Struct {
     Node  node;
     Nodes fields;
 
+    Polymorphs polymorphs;
+    Polymorphs monomorphs;
+
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
 
@@ -831,6 +844,8 @@ typedef struct {
         Type_Trait_Impl *type_cast_trait_impl;
         size_t           type_cast_union_index;
     };
+
+    bool is_monomorphization_of_polymorphic_type;
 
     bool is_stmt;
 } Node_Call;
