@@ -1,12 +1,12 @@
-Box :: struct($T: Type) {
-    v: T
+Foo :: struct($T: Type, $N: i64) {
+    v: [N]T
 }
 
-show :: (b: Box($T)) {
+show :: (b: Foo($T, $N)) {
     println(b.v)
 }
 
 main :: () {
-    show(Box(i64)    {69})
-    show(Box(string) {"Urmom"})
+    show(Foo(i64, 2)    {{69, 420}})
+    show(Foo(string, 3) {{"Urmom", "Sucked on", "Deez nuts"}})
 }

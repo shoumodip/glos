@@ -1538,8 +1538,15 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         assert(n->type.kind == TYPE_MODULE);
         return const_value_module(n->type.spec.module);
 
-    case NODE_POLYMORPH:
-        return const_value_type(n->type);
+    case NODE_POLYMORPH: {
+        Node_Polymorph *polymorph = (Node_Polymorph *) n;
+        if (polymorph->is_type) {
+            return const_value_type(n->type);
+        }
+
+        // TODO: Is this correct?
+        return const_value_type(type_without_meta(n->type));
+    }
 
     case NODE_DISTINCT:
         assert(n->type.is_meta);
@@ -3195,7 +3202,7 @@ static void add_monomorph_parameter(
             "Add monomorph parameter (Currently %zu): " SV_Fmt " :: ",
             c->monomorph_parameters.count - c->monomorph_parameters.begin,
             SV_Arg(polymorph->name->node.token.sv));
-        const_value_debug(stderr, type, const_value_type(type_without_meta(type)));
+        const_value_debug(stderr, type, value);
         fprintf(stderr, "\n\n");
         ansi_reset(stderr);
     }
@@ -3221,7 +3228,7 @@ static void add_monomorph_parameter(
 // TODO: This function can currently only infer types. But ultimately we want support for arbritary constant
 // values.
 static_assert(COUNT_TYPES == 26, "");
-static bool infer_monomorph_parameters(Compiler *c, Node *n, Type *actual, const Type *expected) {
+static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const Type *expected) {
     if (actual->ref < expected->ref) {
         return true;
     }
@@ -3269,24 +3276,45 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, Type *actual, const
             size_t it_index = 0;
             ll_foreach(ap, &as->definition->monomorphs) {
                 Node_Polymorph *ep = es->polymorphs[it_index++];
+                if (ep->is_type) {
+                    assert(ap->is_type);
+                    const Type et = type_without_meta(ep->node.type);
+                    const Type at = type_without_meta(ap->node.type);
 
-                // TODO: Not implemented for other expressions
-                assert(ep->is_type);
-                Type at = type_without_meta(ap->node.type);
+                    if (log) {
+                        afprintf(
+                            stderr,
+                            ANSI_COLOR_BLUE | ANSI_BOLD,
+                            "    Infer %s against %s\n\n",
+                            type_to_cstr(at),
+                            type_to_cstr(et));
+                    }
 
-                assert(ap->is_type);
-                Type et = type_without_meta(ep->node.type);
+                    if (!infer_monomorph_parameters(c, n, &at, &et)) {
+                        return false;
+                    }
+                } else {
+                    assert(!ap->is_type);
+                    assert(type_meta_kind_eq(ep->node.type, TYPE_POLYMORPH));
+                    const Type_Polymorph et = ep->node.type.spec.polymorph;
+                    if (et.is_definition) {
+                        if (!check_that_type_is_known_noexit(n)) {
+                            return false;
+                        }
+                        finalize_untyped_type(c, n);
 
-                if (log) {
-                    afprintf(
-                        stderr,
-                        ANSI_COLOR_BLUE | ANSI_BOLD,
-                        "    Infer %s against %s\n\n",
-                        type_to_cstr(at),
-                        type_to_cstr(et));
+                        if (log) {
+                            ansi_set(stderr, ANSI_COLOR_BLUE | ANSI_BOLD);
+                            fprintf(stderr, "    Infer %s to be ", type_to_cstr(type_without_meta(ep->node.type)));
+                            const_value_debug(stderr, ap->monomorphization_type, ap->monomorphization_value);
+                            fprintf(stderr, "\n\n");
+                            ansi_reset(stderr);
+                        }
+
+                        add_monomorph_parameter(
+                            c, et.definition, ap->monomorphization_type, ap->monomorphization_value, NULL);
+                    }
                 }
-
-                infer_monomorph_parameters(c, n, &at, &et);
             }
         }
     } break;
@@ -3804,7 +3832,6 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
             ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
             ll_foreach(it, &fn->polymorphs) {
                 fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-
                 const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
                 fprintf(stderr, "\n");
             }
@@ -3816,7 +3843,6 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
             ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
             ll_foreach(it, &structt->polymorphs) {
                 fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-
                 const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
                 fprintf(stderr, "\n");
             }
@@ -4369,10 +4395,16 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 it.from->monomorphization_value = it.value;
             }
 
+            bool *shown = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*shown));
             for (size_t i = 0; i < fn_spec->polymorphs_count; i++) {
                 Node_Polymorph *it = fn_spec->polymorphs[i];
+                if (shown[it->arg_index]) {
+                    continue;
+                }
+
                 if (!it->is_monomorphized) {
                     show_error_for_uninferred_polymorphic_parameter_in_call(c, call, fn_spec, it);
+                    shown[it->arg_index] = true;
                 }
             }
 
@@ -6069,31 +6101,56 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             to_polymorph = (Node_Polymorph *) it;
                             to_polymorph->is_type = from_polymorph->is_type;
                             to_polymorph->is_arg = from_polymorph->is_arg;
-                            // to_polymorph->node.type = from_polymorph->node.type;
                         }
 
                         if (from_polymorph->is_type) {
-                            if (!to_polymorph) {
+                            bool done = false;
+                            if (to_polymorph) {
+                                if (to_polymorph->is_monomorphized) {
+                                    add_monomorph_parameter(
+                                        c,
+                                        from_polymorph,
+                                        to_polymorph->monomorphization_type,
+                                        to_polymorph->monomorphization_value,
+                                        to_polymorph);
+                                    done = true;
+                                }
+                            } else {
                                 if (!type_assert_type_noexit(c, it)) {
                                     error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                                     exit(c, 1);
                                 }
                             }
 
-                            Const_Value value = eval_const_expr(c, it, false);
-                            assert(value.kind == CONST_VALUE_TYPE);
-                            value.as.type.is_meta = false;
-                            add_monomorph_parameter(c, from_polymorph, it->type, value, to_polymorph);
+                            if (!done) {
+                                Const_Value value = eval_const_expr(c, it, false);
+                                assert(value.kind == CONST_VALUE_TYPE);
+                                value.as.type.is_meta = false;
+                                add_monomorph_parameter(c, from_polymorph, it->type, value, to_polymorph);
+                            }
                         } else {
-                            if (!to_polymorph) {
+                            bool done = false;
+                            if (to_polymorph) {
+                                if (to_polymorph->is_monomorphized) {
+                                    add_monomorph_parameter(
+                                        c,
+                                        from_polymorph,
+                                        to_polymorph->monomorphization_type,
+                                        to_polymorph->monomorphization_value,
+                                        to_polymorph);
+                                    done = true;
+                                }
+                            } else {
                                 if (!type_assert_noexit(c, it, from_polymorph->node.type)) {
                                     error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                                     exit(c, 1);
                                 }
                             }
 
-                            add_monomorph_parameter(
-                                c, from_polymorph, it->type, eval_const_expr(c, it, false), to_polymorph);
+                            if (!done) {
+                                add_monomorph_parameter(
+                                    c, from_polymorph, it->type, eval_const_expr(c, it, false), to_polymorph);
+                            }
                         }
                     }
 

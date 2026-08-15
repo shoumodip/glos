@@ -56,7 +56,7 @@ static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
                 sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
             }
         } else {
-            // TODO: Print as `$A: B`
+            sb_push(sb, '$');
             sb_push_sv(sb, monomorph->name->node.token.sv);
         }
 
@@ -274,9 +274,13 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_cstr(sb, "string");
         break;
 
-    case TYPE_POLYMORPH:
-        sb_push_sv(sb, type.spec.polymorph.definition->name->node.token.sv);
-        break;
+    case TYPE_POLYMORPH: {
+        const Type_Polymorph spec = type.spec.polymorph;
+        if (spec.is_definition) {
+            sb_push(sb, '$');
+        }
+        sb_push_sv(sb, spec.definition->name->node.token.sv);
+    } break;
 
     case TYPE_GROUP:
         sb_push_cstr(sb, "(");
@@ -371,17 +375,13 @@ static bool type_union_eq(Type_Union *a, Type_Union *b) {
     return true;
 }
 
-// TODO: Check the monomorphization UID as well
 static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
-    // TODO: Try this
-    //
-    // ```
-    // if (a->definition->defined_as != b->definition->defined_as) {
-    //     return false;
-    // }
-    // ```
-    if (a->definition->defined_as || b->definition->defined_as) {
-        return a->definition->defined_as == b->definition->defined_as;
+    if (a->definition == b->definition) {
+        return true;
+    }
+
+    if (a->definition->defined_as != b->definition->defined_as) {
+        return false;
     }
 
     if (a->fields_count != b->fields_count) {
@@ -1000,7 +1000,11 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
 
     case NODE_POLYMORPH: {
         Node_Polymorph *polymorph = (Node_Polymorph *) n;
-        fprintf(f, "Polymorph '" SV_Fmt "'\n", SV_Arg(polymorph->name->node.token.sv));
+        fprintf(
+            f,
+            "Polymorph (%s) '" SV_Fmt "'\n",
+            polymorph->is_type ? "Type" : "Not Type",
+            SV_Arg(polymorph->name->node.token.sv));
     } break;
 
     case NODE_INTERPOLATION: {

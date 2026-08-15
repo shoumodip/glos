@@ -1,8 +1,8 @@
 EXIT 1
 STDOUT 0
 
-STDERR 365
-tests/error_could_not_infer_polymorphic_parameter.glos:4:9: ERROR: Expected '&T', got 'i64'
+STDERR 367
+tests/error_could_not_infer_polymorphic_parameter.glos:4:9: ERROR: Expected '&$T', got 'i64'
 
     foo(69)
 
@@ -10,7 +10,7 @@ tests/error_could_not_infer_polymorphic_parameter.glos:4:5: NOTE: While attempti
 
     foo(69)
 
-tests/error_could_not_infer_polymorphic_parameter.glos:1:8: NOTE: The function being called has signature '(v: &T)'
+tests/error_could_not_infer_polymorphic_parameter.glos:1:8: NOTE: The function being called has signature '(v: &$T)'
 
     foo :: (v: &$T) {}
 

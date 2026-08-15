@@ -660,6 +660,8 @@ struct Node_Polymorph {
     Type        monomorphization_type;
     Const_Value monomorphization_value;
 
+    LLVMValueRef llvm;
+
     Node_Polymorph *next;
 };
 

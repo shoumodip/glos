@@ -1910,9 +1910,7 @@ static LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, b
         if (definition->polymorph) {
             assert(definition->polymorph->is_monomorphized);
             const_value = &definition->polymorph->monomorphization_value;
-        }
-
-        if (definition->definition_spec->is_const) {
+        } else if (definition->definition_spec->is_const) {
             const_value = &definition->definition_spec->const_value;
         }
 
@@ -1937,6 +1935,14 @@ static LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, b
                 return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, definition->definition_spec->llvm, "");
 
             default:
+                if (definition->polymorph) {
+                    if (!definition->polymorph->llvm) {
+                        definition->polymorph->llvm = compile_const_value(c, *const_value, n->type);
+                    }
+                    return definition->polymorph->llvm;
+                }
+
+                assert(definition->definition_spec);
                 if (!definition->definition_spec->llvm) {
                     definition->definition_spec->llvm = compile_const_value(c, *const_value, n->type);
                 }
