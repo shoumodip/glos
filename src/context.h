@@ -9,18 +9,6 @@ Node_Atom *local_scope_find(Local_Scope scope, SV name);
 void       global_scope_push(Global_Scope *scope, Node_Atom *node);
 Node_Atom *global_scope_find(Global_Scope *scope, SV name);
 
-struct Context_Fn {
-    Node_Fn *fn;
-
-    size_t defines_begin;
-    size_t defines_end;
-
-    size_t imports_begin;
-    size_t imports_end;
-
-    Context_Fn *outer;
-};
-
 typedef struct {
     Local_Scope  defines;
     Node_Imports imports;

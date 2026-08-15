@@ -22,6 +22,7 @@ typedef struct {
     Node_Polymorph *from;
     Type            type;
     Const_Value     value;
+    Node_Polymorph *to_polymorph;
 } Monomorph_Parameter;
 
 typedef struct {
@@ -57,7 +58,11 @@ typedef struct {
 
     HT(Monomorph_Spec, Node *) monomorph_intern;
     HT(void *, void *) monomorph_replacements;
-    DA(Monomorph_Parameter) monomorph_parameters;
+
+    struct {
+        DA_Fields(Monomorph_Parameter);
+        size_t begin;
+    } monomorph_parameters;
     DA(Monomorphization) monomorphization_stack;
 
     // These are used both by the analyzer and the compiler

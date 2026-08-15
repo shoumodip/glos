@@ -44,6 +44,30 @@ Type type_without_meta(Type t) {
     return t;
 }
 
+static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
+    sb_push(sb, '(');
+    ll_foreach(it, &ps) {
+        Node_Polymorph *monomorph = (Node_Polymorph *) it;
+        if (monomorph->is_monomorphized) {
+            if (monomorph->is_type) {
+                assert(monomorph->monomorphization_value.kind == CONST_VALUE_TYPE);
+                sb_push_type(sb, type_without_meta(monomorph->monomorphization_value.as.type));
+            } else {
+                sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
+            }
+        } else {
+            // TODO: Print as `$A: B`
+            sb_push_sv(sb, monomorph->name->node.token.sv);
+        }
+
+        if (it->next) {
+            sb_push_cstr(sb, ", ");
+        }
+    }
+    sb_push(sb, ')');
+}
+
+// TODO: Print the dollar for the polymorph definition
 static_assert(COUNT_TYPES == 26, "");
 void sb_push_type(SB *sb, Type type) {
     // TODO: Remove
@@ -211,24 +235,14 @@ void sb_push_type(SB *sb, Type type) {
             sb_push_cstr(sb, "struct");
         }
 
+        if (spec->definition->polymorphs.count) {
+            assert(!spec->definition->monomorphs.count);
+            sb_push_polymorphs(sb, spec->definition->polymorphs);
+        }
+
         if (spec->definition->monomorphs.count) {
-            sb_push(sb, '(');
-            ll_foreach(it, &spec->definition->monomorphs) {
-                Node_Polymorph *monomorph = (Node_Polymorph *) it;
-                assert(monomorph->is_monomorphized);
-
-                if (monomorph->is_type) {
-                    assert(monomorph->monomorphization_value.kind == CONST_VALUE_TYPE);
-                    sb_push_type(sb, type_without_meta(monomorph->monomorphization_value.as.type));
-                } else {
-                    sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
-                }
-
-                if (it->next) {
-                    sb_push_cstr(sb, ", ");
-                }
-            }
-            sb_push(sb, ')');
+            assert(!spec->definition->polymorphs.count);
+            sb_push_polymorphs(sb, spec->definition->monomorphs);
         }
 
         if (!defined_as) {
@@ -359,6 +373,13 @@ static bool type_union_eq(Type_Union *a, Type_Union *b) {
 
 // TODO: Check the monomorphization UID as well
 static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
+    // TODO: Try this
+    //
+    // ```
+    // if (a->definition->defined_as != b->definition->defined_as) {
+    //     return false;
+    // }
+    // ```
     if (a->definition->defined_as || b->definition->defined_as) {
         return a->definition->defined_as == b->definition->defined_as;
     }
@@ -875,8 +896,30 @@ static void nodes_debug_impl(FILE *f, Nodes ns, int depth, const char *label) {
     }
 
     const size_t child_depth = depth + (label != NULL);
-    for (Node *it = ns.head; it; it = it->next) {
+    ll_foreach(it, &ns) {
         node_debug_impl(f, it, child_depth, NULL);
+    }
+
+    if (label) {
+        fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
+    }
+}
+
+static void polymorphs_debug_impl(FILE *f, Polymorphs ns, int depth, const char *label) {
+    fprintf(f, Indent_Fmt, Indent_Arg(depth));
+    if (label) {
+        fprintf(f, "%s = {", label);
+        if (ns.head) {
+            fprintf(f, "\n");
+        } else {
+            fprintf(f, "}\n");
+            return;
+        }
+    }
+
+    const size_t child_depth = depth + (label != NULL);
+    ll_foreach(it, &ns) {
+        node_debug_impl(f, (Node *) it, child_depth, NULL);
     }
 
     if (label) {
@@ -891,6 +934,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     }
 
     fprintf(f, Indent_Fmt, Indent_Arg(depth));
+    fprintf(f, "(%s) ", type_to_cstr(n->type)); // @remove
     if (label) {
         fprintf(f, "%s = ", label);
     }
@@ -977,6 +1021,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
         } else {
             fprintf(f, "Function {\n");
         }
+        polymorphs_debug_impl(f, fn->polymorphs, depth + 1, "Polymorphs");
         nodes_debug_impl(f, fn->args, depth + 1, "Args");
         nodes_debug_impl(f, fn->returns, depth + 1, "Returns");
         node_debug_impl(f, fn->body, depth + 1, "Body");
@@ -1007,6 +1052,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     case NODE_STRUCT: {
         Node_Struct *structt = (Node_Struct *) n;
         fprintf(f, "Structure {\n");
+        polymorphs_debug_impl(f, structt->polymorphs, depth + 1, "Polymorphs");
         nodes_debug_impl(f, structt->fields, depth + 1, "Fields");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;

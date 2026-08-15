@@ -122,11 +122,14 @@ void afprintf(FILE *f, ANSI ansi, const char *fmt, ...) Printf_Like(3);
 // Dynamic Array
 #define DA_INIT_CAP 128
 
+#define DA_Fields(T)                                                                                                   \
+    T     *data;                                                                                                       \
+    size_t count;                                                                                                      \
+    size_t capacity
+
 #define DA(T)                                                                                                          \
     struct {                                                                                                           \
-        T     *data;                                                                                                   \
-        size_t count;                                                                                                  \
-        size_t capacity;                                                                                               \
+        DA_Fields(T);                                                                                                  \
     }
 
 #define da_grow(l, c) (da_resize((void **) &(l)->data, &(l)->capacity, sizeof(*(l)->data), c))

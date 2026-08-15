@@ -174,6 +174,9 @@ typedef struct {
 
     Node_Struct *definition;
 
+    // In case of monomorphized structures, this will point to the original polymorphic structure
+    Node_Struct *original_definition;
+
     LLVMTypeRef     llvm;
     LLVMMetadataRef debug;
 } Type_Struct;
@@ -474,6 +477,18 @@ size_t node_size(Node_Kind kind);
 Node *node_alloc(Module *module, Node_Kind kind, Token token);
 Node *node_iter(Node *it, Node *ll);
 
+struct Context_Fn {
+    Node_Fn *fn;
+
+    size_t defines_begin;
+    size_t defines_end;
+
+    size_t imports_begin;
+    size_t imports_end;
+
+    Context_Fn *outer;
+};
+
 // When the concrete type of an abstract value is resolved inside conditional statements
 //
 // This is only used for compile time if statements and switch statements. During runtime, it can be done simply using
@@ -698,7 +713,13 @@ struct Node_Fn {
     // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
     bool is_compare_operator_complete;
 
-    Node_Fn *outer_fn;
+    Node_Fn   *outer_fn;
+    Context_Fn context;
+
+    // Polymorphic functions are not checked immediately but rather upon monomorphization. Therefore the context needs
+    // to be preserved to maintain lexical scoping.
+    Context_Fn      *context_fn_reuse;
+    Context_Replace *context_replace_reuse;
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
