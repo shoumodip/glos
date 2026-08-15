@@ -2056,7 +2056,7 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
     const void *checkpoint = arena_alloc(&temp_arena, 0);
 
     SV name = {0};
-    if (!type->ref) {
+    {
         static_assert(COUNT_TYPES == 26, "");
 
         Node_Atom *defined_as = NULL;
@@ -2070,16 +2070,17 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
             defined_as = type->spec.unionn->definition->defined_as;
         } else if (type->kind == TYPE_STRUCT) {
             Node_Struct *structt = (Node_Struct *) type->spec.structt->definition;
-            if (structt->defined_as && structt->monomorphs.count) {
+            defined_as = structt->defined_as;
+
+            if (defined_as && defined_as->node.type.ref == type->ref && structt->monomorphs.count) {
                 const size_t start = default_sb.count;
                 sb_push_type(&default_sb, type_without_meta(structt->node.type));
                 name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
-            } else {
-                defined_as = structt->defined_as;
+                defined_as = NULL;
             }
         }
 
-        if (defined_as) {
+        if (defined_as && defined_as->node.type.ref == type->ref) {
             name = defined_as->node.token.sv;
         }
     }
