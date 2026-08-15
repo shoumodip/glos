@@ -6873,16 +6873,17 @@ void check_nodes(Compiler *c) {
 
     // Type info
     {
-        const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type_Info"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->type_info_type = type_without_meta(value.as.type);
+        {
+            const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type_Info"), NULL);
+            assert(value.kind == CONST_VALUE_TYPE);
+            c->type_info_type = type_without_meta(value.as.type);
+        }
 
-        // TODO:
-        // ```
-        // Type :: distinct &Type_Info
-        // ```
-        c->type_info_pointer_type = c->type_info_type;
-        c->type_info_pointer_type.ref++;
+        {
+            const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type"), NULL);
+            assert(value.kind == CONST_VALUE_TYPE);
+            c->type_info_pointer_type = type_without_meta(value.as.type);
+        }
 
         assert(c->type_info_pointer_type.kind == TYPE_STRUCT);
         const Type_Struct *type_info_structure = c->type_info_pointer_type.spec.structt;
