@@ -19,6 +19,10 @@ Node_Atom *local_scope_find(Local_Scope scope, SV name) {
 }
 
 void global_scope_push(Global_Scope *scope, Node_Atom *atom) {
+    if (!scope->hasheq) {
+        scope->hasheq = ht_hasheq_sv;
+    }
+
     ht_set(scope, atom->node.token.sv, atom);
 }
 

@@ -486,9 +486,12 @@ struct Context_Replace {
 };
 
 typedef struct {
-    Nodes  params;
-    size_t params_count;
+    Node_Polymorph *head;
+    Node_Polymorph *tail;
+    size_t          count;
 } Polymorphs;
+
+void polymorphs_push(Polymorphs *ps, Node_Polymorph *p);
 
 typedef struct {
     bool is_local;
@@ -641,6 +644,8 @@ struct Node_Polymorph {
     bool        is_monomorphized;
     Type        monomorphization_type;
     Const_Value monomorphization_value;
+
+    Node_Polymorph *next;
 };
 
 typedef struct {

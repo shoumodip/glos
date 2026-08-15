@@ -749,11 +749,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         }
 
         node = node_alloc(p->module_current, NODE_POLYMORPH, token);
-
-        nodes_push(&p->state.pb->polymorphs->params, node);
-        p->state.pb->polymorphs->params_count++;
-
         Node_Polymorph *polymorph = (Node_Polymorph *) node;
+        polymorphs_push(p->state.pb->polymorphs, polymorph);
+
         polymorph->name = (Node_Atom *) node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
         polymorph->name->polymorph = polymorph;
         polymorph->arg_index = p->state.pb->arg_index;
@@ -1004,7 +1002,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     exit(1);
                 }
 
-                if (fn->polymorphs.params.head) {
+                if (fn->polymorphs.count) {
                     error_node(EK_ERROR, (Node *) fn, "A polymorphic function must have a body");
                     exit(1);
                 }

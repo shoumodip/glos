@@ -211,9 +211,9 @@ void sb_push_type(SB *sb, Type type) {
             sb_push_cstr(sb, "struct");
         }
 
-        if (spec->definition->monomorphs.params_count) {
+        if (spec->definition->monomorphs.count) {
             sb_push(sb, '(');
-            ll_foreach(it, &spec->definition->monomorphs.params) {
+            ll_foreach(it, &spec->definition->monomorphs) {
                 Node_Polymorph *monomorph = (Node_Polymorph *) it;
                 assert(monomorph->is_monomorphized);
 
@@ -357,6 +357,7 @@ static bool type_union_eq(Type_Union *a, Type_Union *b) {
     return true;
 }
 
+// TODO: Check the monomorphization UID as well
 static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
     if (a->definition->defined_as || b->definition->defined_as) {
         return a->definition->defined_as == b->definition->defined_as;
@@ -839,6 +840,21 @@ Node *node_iter(Node *it, Node *ll) {
             return ll;
         }
     }
+}
+
+void polymorphs_push(Polymorphs *ps, Node_Polymorph *p) {
+    if (!p) {
+        return;
+    }
+
+    if (ps->tail) {
+        ps->tail->next = p;
+    } else {
+        ps->head = p;
+    }
+
+    ps->tail = p;
+    ps->count++;
 }
 
 #define Indent_Fmt    "%*s"

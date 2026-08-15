@@ -590,15 +590,12 @@ static void sb_push_nested_fn_name(Compiler *c, SB *sb, Node_Fn *fn, Module *mod
         sb_sprintf(sb, ".anon.%zu", fn->defined_as_anon_iota);
     }
 
-    if (fn->monomorphs.params_count) {
+    if (fn->monomorphs.count) {
         sb_push(sb, '(');
-        ll_foreach(it, &fn->monomorphs.params) {
-            assert(it->kind == NODE_POLYMORPH);
-            Node_Polymorph *polymorph = (Node_Polymorph *) it;
-            assert(polymorph->is_monomorphized);
-
-            sb_sprintf(sb, SV_Fmt " = ", SV_Arg(polymorph->name->node.token.sv));
-            sb_push_const_value(sb, it->type, polymorph->monomorphization_value);
+        ll_foreach(it, &fn->monomorphs) {
+            assert(it->is_monomorphized);
+            sb_sprintf(sb, SV_Fmt " = ", SV_Arg(it->name->node.token.sv));
+            sb_push_const_value(sb, it->node.type, it->monomorphization_value);
 
             if (it->next) {
                 sb_push_cstr(sb, ", ");
@@ -2067,7 +2064,7 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
             defined_as = type->spec.unionn->definition->defined_as;
         } else if (type->kind == TYPE_STRUCT) {
             Node_Struct *structt = (Node_Struct *) type->spec.structt->definition;
-            if (structt->defined_as && structt->monomorphs.params_count) {
+            if (structt->defined_as && structt->monomorphs.count) {
                 const size_t start = default_sb.count;
                 sb_push_type(&default_sb, type_without_meta(structt->node.type));
                 name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
