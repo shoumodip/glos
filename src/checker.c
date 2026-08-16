@@ -1585,10 +1585,8 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         return const_value_module(n->type.spec.module);
 
     case NODE_POLYMORPH: {
-        Node_Polymorph *polymorph = (Node_Polymorph *) n;
-
         Const_Value_Polymorph spec = {0};
-        spec.polymorph = polymorph;
+        spec.polymorph = (Node_Polymorph *) n;
         spec.is_definition = true;
         return const_value_polymorph(spec);
     }
@@ -1954,16 +1952,7 @@ static Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, s
         if (const_value_eq(sw->preds[i].value, value)) {
             error_node_begin(EK_ERROR, pred);
             fprintf(stderr, "Duplicate case ");
-
-            // TODO: Can this just be const_value_debug()??
-            if (sw->unionn) {
-                pred->type.is_meta = false;
-                fprintf(stderr, "%s", type_to_cstr(pred->type));
-                pred->type.is_meta = true;
-            } else {
-                const_value_debug(stderr, pred->type, value);
-            }
-
+            const_value_debug(stderr, pred->type, value);
             error_finalize();
             error_node(EK_NOTE, sw->preds[i].pred, "Already here");
             exit(c, 1);
@@ -3323,9 +3312,6 @@ static void add_monomorph_parameter(
 
 // The return type just indicates whether the inference was done against a known type.
 // It DOES NOT INDICATE TYPE VALIDITY. That is the responsibility of the pre-monomorphization analysis.
-//
-// TODO: This function can currently only infer types. But ultimately we want support for arbritary constant
-// values.
 static_assert(COUNT_TYPES == 26, "");
 static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const Type *expected) {
     if (actual->ref < expected->ref) {
@@ -3536,8 +3522,6 @@ static void monomorphize_replace(Compiler *c, Node **from) {
 
     Node **to = (Node **) ht_get(&c->monomorph_replacements, *from);
     if (to) {
-        // TODO: @remove
-        // fprintf(stderr, Pos_Fmt " Replace: %p -> %p\n", Pos_Arg((*from)->token.pos), (void *) *from, (void *) *to);
         *from = *to;
     }
 }
@@ -3548,14 +3532,6 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     }
 
     Node *n = *np;
-    if (first && ht_get(&c->monomorph_replacements, n)) {
-        // TODO(@polymorph): Consider whether it loops or not. Leaving it for now
-        //
-        // This will not be a problem here, but in the second pass, it will be a problem
-        error_node(EK_ERROR, n, "Loop");
-        exit(c, 1);
-    }
-
     if (first) {
         Node *copy = arena_clone(&default_arena, n, node_size(n->kind));
         memset(&copy->type, 0, sizeof(copy->type));
@@ -4422,7 +4398,6 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
     }
 
     if (cc->is_polymorph) {
-        assert(!cc->is_trait); // TODO: Think about this
         if (cc->is_method) {
             const Type expected = type_with_ref(fn_spec->args[0].type, cc->receiver->type.ref);
             if (!infer_monomorph_parameters(c, cc->receiver, &cc->receiver->type, &expected)) {
@@ -6205,22 +6180,63 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 if (type_meta_kind_eq(*fn_type, TYPE_STRUCT)) {
                     Type_Struct *spec = fn_type->spec.structt;
 
-                    Node *excess_argument = NULL;
-                    ll_foreach(it, &call->args) {
+                    Node **arguments = arena_alloc(&temp_arena, spec->polymorphs_count * sizeof(*arguments));
+                    Node  *excess_argument = NULL;
+                    ll_foreach(arg, &call->args) {
+                        Node *it = arg;
                         if (it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD) {
                             error_node(EK_ERROR, it, "Cannot spread arguments in a cast expression");
                             exit(c, 1);
                         }
 
-                        // TODO: Allow named arguments. (Implementation detail: Set `it->token.as.integer`)
+                        size_t it_index = call->args_count;
                         if (it->kind == NODE_BINARY && it->token.kind == TOKEN_SET) {
-                            error_node(EK_ERROR, it, "Cannot use named arguments in a cast expression");
-                            exit(c, 1);
+                            Node_Binary *it_binary = (Node_Binary *) it;
+                            it = it_binary->rhs;
+
+                            Node *it_name = it_binary->lhs;
+                            bool  ok = false;
+                            for (size_t i = 0; i < spec->polymorphs_count; i++) {
+                                Node_Polymorph *arg = spec->polymorphs[i];
+                                if (sv_eq(arg->name->node.token.sv, it_name->token.sv)) {
+                                    it_index = i;
+                                    ok = true;
+                                    break;
+                                }
+                            }
+
+                            if (!ok) {
+                                error_undefined(c, &it_name->token, "polymorphic parameter", true);
+                                error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
+                                exit(c, 1);
+                            }
+
+                            arg->token.as.integer = it_index;
+                        }
+                        check_expr(c, it, REF_NONE);
+
+                        const size_t parts = type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
+                        for (size_t i = 0; i < parts; i++) {
+                            const size_t n = it_index + i;
+                            if (n >= spec->polymorphs_count) {
+                                continue;
+                            }
+
+                            if (arguments[n]) {
+                                error_node(
+                                    EK_ERROR,
+                                    arg,
+                                    "Duplication of polymorphic parameter '" SV_Fmt "'",
+                                    SV_Arg(spec->polymorphs[n]->name->node.token.sv));
+
+                                error_node(EK_NOTE, arguments[n], "Passed here already");
+                                error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
+                                exit(c, 1);
+                            }
+                            arguments[n] = arg;
                         }
 
-                        check_expr(c, it, REF_NONE);
-                        call->args_count += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
-
+                        call->args_count += parts;
                         if (!excess_argument && call->args_count > spec->polymorphs_count) {
                             excess_argument = it;
                         }
@@ -6239,6 +6255,10 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     size_t it_index = 0;
                     ll_foreach(arg, &call->args) {
                         Node *it = arg;
+                        if (it->kind == NODE_BINARY && it->token.kind == TOKEN_SET) {
+                            it = ((Node_Binary *) it)->rhs;
+                            it_index = arg->token.as.integer;
+                        }
 
                         Node_Polymorph *from_polymorph = spec->polymorphs[it_index++];
                         Node_Polymorph *to_polymorph = NULL;
@@ -6290,6 +6310,9 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                 c, from_polymorph, it->type, eval_const_expr(c, it, false), to_polymorph);
                         }
                     }
+
+                    // TODO: Default arguments
+                    arena_reset(&temp_arena, arguments);
 
                     call->fn = monomorphize(c, call->fn, (Node *) call);
                     n->type = call->fn->type;
