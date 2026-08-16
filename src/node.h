@@ -184,6 +184,9 @@ typedef struct {
 typedef struct {
     Type  *element;
     size_t count;
+
+    // [$N]T
+    Node_Polymorph *count_polymorph;
 } Type_Array;
 
 typedef struct {

@@ -3331,12 +3331,30 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
     } break;
 
     case TYPE_ARRAY:
-        // TODO: Infer '[$N]T'
-        if (type_kind_eq(*actual, expected->kind) && actual->ref == expected->ref && //
-            actual->spec.array.count == expected->spec.array.count)                  //
-        {
-            if (!infer_monomorph_parameters(c, n, actual->spec.array.element, expected->spec.array.element)) {
-                return false;
+        if (type_kind_eq(*actual, expected->kind) && actual->ref == expected->ref) {
+            Type_Array as = actual->spec.array;
+            Type_Array es = expected->spec.array;
+            if (es.count_polymorph) {
+                if (log) {
+                    ansi_set(stderr, ANSI_COLOR_BLUE | ANSI_BOLD);
+                    fprintf(
+                        stderr,
+                        "    Infer %s to be %zu\n\n",
+                        type_to_cstr(type_without_meta(es.count_polymorph->node.type)),
+                        as.count);
+                    ansi_reset(stderr);
+                }
+
+                add_monomorph_parameter(
+                    c, es.count_polymorph, (Type) {.kind = TYPE_I64}, const_value_u64(as.count), NULL);
+
+                es.count = as.count;
+            }
+
+            if (as.count == es.count) {
+                if (!infer_monomorph_parameters(c, n, as.element, es.element)) {
+                    return false;
+                }
             }
         }
         break;
@@ -6456,17 +6474,31 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
     case NODE_INDEXABLE: {
         Node_Indexable *indexable = (Node_Indexable *) n;
 
+        bool   has_count = true;
         size_t array_count = 0;
         if (indexable->count) {
             check_expr(c, indexable->count, REF_NONE);
-            type_assert_numeric(c, indexable->count, false);
 
-            const Const_Value value = eval_const_expr(c, indexable->count, false);
-            if (value.kind == CONST_VALUE_INT) {
-                check_int_limit_ex(c, indexable->count, value.as.integer, true, "array capacity");
-                array_count = value.as.integer.low;
+            Const_Value count_value = {0};
+            if (indexable->count->kind == NODE_POLYMORPH) {
+                Node_Polymorph *polymorph = (Node_Polymorph *) indexable->count;
+                if (polymorph->is_monomorphized) {
+                    count_value = polymorph->monomorphization_value;
+                } else {
+                    has_count = false;
+                }
             } else {
-                assert(value.kind == CONST_VALUE_POLYMORPH);
+                type_assert_numeric(c, indexable->count, false);
+                count_value = eval_const_expr(c, indexable->count, false);
+            }
+
+            if (has_count) {
+                if (count_value.kind == CONST_VALUE_INT) {
+                    check_int_limit_ex(c, indexable->count, count_value.as.integer, true, "array capacity");
+                    array_count = count_value.as.integer.low;
+                } else {
+                    assert(count_value.kind == CONST_VALUE_POLYMORPH);
+                }
             }
             check_expr(c, indexable->element, REF_NONE);
         } else {
@@ -6487,12 +6519,16 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         *element_type = type_without_meta(type_assert_type(c, indexable->element));
 
         if (indexable->count) {
-            n->type = (Type) {
-                .kind = TYPE_ARRAY,
-                .is_meta = true,
-                .spec.array.element = element_type,
-                .spec.array.count = array_count,
-            };
+            Type_Array spec = {0};
+            spec.element = element_type;
+            spec.count = array_count;
+            if (!has_count) {
+                assert(indexable->count->kind == NODE_POLYMORPH);
+                spec.count_polymorph = (Node_Polymorph *) indexable->count;
+                spec.count_polymorph->is_type = false;
+            }
+
+            n->type = (Type) {.kind = TYPE_ARRAY, .is_meta = true, .spec.array = spec};
         } else {
             n->type = (Type) {
                 .kind = TYPE_SLICE,

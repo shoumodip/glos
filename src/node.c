@@ -49,18 +49,7 @@ static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
     ll_foreach(it, &ps) {
         Node_Polymorph *monomorph = (Node_Polymorph *) it;
         if (monomorph->is_monomorphized) {
-            // if (monomorph->is_type) {
-            //     Const_Value value = monomorph->monomorphization_value;
-            //     if (value.kind == CONST_VALUE_POLYMORPH) {
-            //         assert(value.as.polymorph.polymorph->is_monomorphized);
-            //         value = value.as.polymorph.polymorph->monomorphization_value;
-            //     }
-
-            //     assert(value.kind == CONST_VALUE_TYPE);
-            //     sb_push_type(sb, type_without_meta(monomorph->monomorphization_value.as.type));
-            // } else {
             sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
-            // }
         } else {
             sb_push(sb, '$');
             sb_push_sv(sb, monomorph->name->node.token.sv);
@@ -266,10 +255,17 @@ void sb_push_type(SB *sb, Type type) {
         }
     } break;
 
-    case TYPE_ARRAY:
-        sb_sprintf(sb, "[%zu]", type.spec.array.count);
-        sb_push_type(sb, *type.spec.array.element);
-        break;
+    case TYPE_ARRAY: {
+        const Type_Array array = type.spec.array;
+        sb_sprintf(sb, "[");
+        if (array.count_polymorph) {
+            sb_push_type(sb, type_without_meta(array.count_polymorph->node.type));
+        } else {
+            sb_sprintf(sb, "%zu", array.count);
+        }
+        sb_sprintf(sb, "]");
+        sb_push_type(sb, *array.element);
+    } break;
 
     case TYPE_SLICE:
         sb_push_cstr(sb, "[]");
