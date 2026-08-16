@@ -154,7 +154,7 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
-        range_apply_node(r, call->lhs);
+        range_apply_node(r, call->fn_source);
         range_apply_token(r, &call->end);
     } break;
 

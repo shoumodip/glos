@@ -29,8 +29,8 @@ typedef struct {
     Node *from; // The node that was monomorphized from
     Node *into; // The node that was monomorphized into
 
-    Node_Call *site;    // The site of the monomorphization
-    Node_Fn   *site_fn; // The function in which the monomorphization occured
+    Node    *site;    // The site of the monomorphization
+    Node_Fn *site_fn; // The function in which the monomorphization occured
 } Monomorphization;
 
 typedef struct {

@@ -861,7 +861,7 @@ typedef struct {
     // The function being called according to the source code.
     //
     // This field's ONLY purpose is error reporting and debug locations. DO NOT USE THIS!!!!
-    Node *lhs;
+    Node *fn_source;
 
     // The actual function being called. This will differ from 'lhs' in case of polymorphic functions
     Node *fn;

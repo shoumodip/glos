@@ -53,7 +53,7 @@ static void show_current_monomorphization(Compiler *c) {
     if (m.into->kind == NODE_FN) {
         for (Context_Fn *context = c->context.fn; context; context = context->outer) {
             if (context->fn == (Node_Fn *) m.into) {
-                error_node(EK_NOTE, (Node *) m.site, "While inside this monomorphization");
+                error_node(EK_NOTE, m.site, "While inside this monomorphization");
 
                 ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
                 fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
@@ -80,7 +80,7 @@ static void show_current_monomorphization(Compiler *c) {
             }
         }
     } else if (m.into->kind == NODE_STRUCT) {
-        error_node(EK_NOTE, (Node *) m.site, "While inside this monomorphization");
+        error_node(EK_NOTE, m.site, "While inside this monomorphization");
 
         ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
         fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
@@ -1611,7 +1611,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
         if (!call->is_type_cast) {
-            error_node(EK_ERROR, call->lhs, "Cannot call functions in a constant expression");
+            error_node(EK_ERROR, call->fn_source, "Cannot call functions in a constant expression");
             exit(c, 1);
         }
 
@@ -3651,7 +3651,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
-        monomorphize_node(c, &call->lhs, first);
+        monomorphize_node(c, &call->fn_source, first);
         monomorphize_nodes(c, &call->args, first);
 
         // The body of a polymorphic function is not checked directly. Only the monomorphized copy is checked.
@@ -3778,7 +3778,7 @@ static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t 
     return hash;
 }
 
-static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
+static void monomorphize(Compiler *c, Node **np, Node *site) {
     Node **np_provided = np;
     size_t ref_level = 0;
     while (*np && (*np)->kind == NODE_UNARY && (*np)->token.kind == TOKEN_BAND) {
@@ -4011,10 +4011,10 @@ static void ensure_interpolation_is_valid(Compiler *c, Node_Interpolation *inter
 }
 
 static void show_error_for_uninferred_polymorphic_parameter_in_call(
-    Compiler *c, Node_Call *call, const Type_Fn *fn_spec, Node_Polymorph *polymorph) //
+    Compiler *c, Nodes args, const Type_Fn *fn_spec, Node_Polymorph *polymorph) //
 {
     size_t it_index = 0;
-    ll_foreach(arg, &call->args) {
+    ll_foreach(arg, &args) {
         Node *it = arg;
 
         const bool is_named = it->kind == NODE_BINARY && it->token.kind == TOKEN_SET;
@@ -4064,40 +4064,79 @@ static void show_error_for_uninferred_polymorphic_parameter_in_call(
 }
 
 static void check_call_arity(
-    Compiler *c, Node_Call *call, bool is_method, size_t args_count_min, size_t args_count_max, Node *excess_argument) {
-    if (call->args_count < args_count_min) {
+    Compiler *c,
+    Node     *fn,
+    size_t    args_count,
+    Token     end,
+    bool      is_method,
+    size_t    args_count_min,
+    size_t    args_count_max,
+    Node     *excess_argument) //
+{
+    if (args_count < args_count_min) {
         error_token(
             EK_ERROR,
-            call->end,
+            end,
             "Too few arguments: Expected%s %zu, got %zu",
             args_count_min == args_count_max ? "" : " at least",
             args_count_min - is_method,
-            call->args_count - is_method);
+            args_count - is_method);
 
-        if (!call->fn->type.is_meta) {
-            show_note_about_the_function_being_called(call->fn, is_method, call->fn->type.spec.fn);
+        if (!fn->type.is_meta) {
+            show_note_about_the_function_being_called(fn, is_method, fn->type.spec.fn);
         }
         exit(c, 1);
     }
 
-    if (call->args_count > args_count_max) {
+    if (args_count > args_count_max) {
         error_node(
             EK_ERROR,
             excess_argument,
             "Too many arguments: Expected %zu, got %zu",
             args_count_max - is_method,
-            call->args_count - is_method);
+            args_count - is_method);
 
-        if (!call->fn->type.is_meta) {
-            show_note_about_the_function_being_called(call->fn, is_method, call->fn->type.spec.fn);
+        if (!fn->type.is_meta) {
+            show_note_about_the_function_being_called(fn, is_method, fn->type.spec.fn);
         }
         exit(c, 1);
     }
 }
 
-static void check_call_arguments(Compiler *c, Node_Call *call) {
-    assert(type_kind_eq(call->fn->type, TYPE_FN));
-    const Type_Fn *fn_spec = call->fn->type.spec.fn;
+typedef struct {
+#define in
+#define out
+#define inout
+
+    // The whole expression
+    in Node *expr;
+
+    // In case of a method
+    in Node *receiver;
+
+    inout Node *fn;        // The actual function, might differ in case of polymorphism
+    in Node    *fn_source; // The function as per the source code
+
+    inout Nodes args;
+    out size_t  args_count;
+
+    in bool  is_method;
+    in bool  is_trait;
+    out bool is_polymorph;
+
+    out bool   is_typed_variadics_direct;
+    out size_t typed_variadics_count;
+
+    in Token end;
+
+#undef in
+#undef out
+#undef inout
+} Call_Checker;
+
+static void check_call_arguments(Compiler *c, Call_Checker *cc) {
+    assert(type_kind_eq(cc->fn->type, TYPE_FN));
+    const Type_Fn *fn_spec = cc->fn->type.spec.fn;
 
     typedef struct {
         Node *node;
@@ -4111,24 +4150,11 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
     args_count_min = fn_spec->args_count_min;
     args_count_max = fn_spec->variadics_kind != VARIADICS_NONE ? UINT64_MAX : fn_spec->args_count;
 
-    bool is_trait = false;
-    bool is_method = false;
-    if (call->fn->kind == NODE_MEMBER) {
-        Node_Member *member = (Node_Member *) call->fn;
-
-        is_trait = member->is_trait;
-        is_method = member->method != NULL;
-        if ((is_method || is_trait) && !member->lhs->type.is_meta) {
-            assert(member->lhs);
-            args[call->args_count++].node = member->lhs;
+    if (cc->is_method || cc->is_trait) {
+        assert(cc->receiver);
+        if (!cc->receiver->type.is_meta) {
+            args[cc->args_count++].node = cc->receiver;
         }
-    }
-
-    const bool   is_polymorph = node_is_runtime_polymorphic_expression(call->fn);
-    const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
-    if (is_polymorph) {
-        ht_clear(&c->monomorph_replacements);
-        c->monomorph_parameters.begin = c->monomorph_parameters.count;
     }
 
     typedef enum {
@@ -4142,10 +4168,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
     VS_Kind variadic_source_kind = VS_NONE;
 
     Node *excess_argument = NULL;
-    ll_foreach(arg, &call->args) {
+    ll_foreach(arg, &cc->args) {
         Node  *it = arg;
         Node  *it_name = NULL;
-        size_t it_index = call->args_count;
+        size_t it_index = cc->args_count;
         if (it->kind == NODE_BINARY && it->token.kind == TOKEN_SET) {
             Node_Binary *it_binary = (Node_Binary *) it;
             it = it_binary->rhs;
@@ -4163,7 +4189,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
             if (!ok) {
                 error_undefined(c, &it_name->token, "argument", true);
-                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                 exit(c, 1);
             }
 
@@ -4175,7 +4201,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             if (fn_spec->variadics_kind != VARIADICS_TYPED) {
                 error_node(
                     EK_ERROR, it, "Cannot spread arguments in a call to a function that does not have typed variadics");
-                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                 exit(c, 1);
             }
 
@@ -4220,12 +4246,12 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                             "Duplication of argument '" SV_Fmt "'",
                             SV_Arg(fn_spec->args[it_index].name));
                         error_node(EK_NOTE, variadic_source, "Passed here already");
-                        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                         exit(c, 1);
                     }
 
                     if (is_spread || it_name || variadic_source_kind == VS_DIRECT) {
-                        error_node(EK_ERROR, (Node *) call, "Multiple typed variadic sources found");
+                        error_node(EK_ERROR, cc->expr, "Multiple typed variadic sources found");
 
                         bool is_variadic_source_direct = false;
                         if (variadic_source->kind == NODE_UNARY && variadic_source->token.kind == TOKEN_SPREAD) {
@@ -4240,16 +4266,16 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                             "This %s one source",
                             is_variadic_source_direct ? "provides" : "starts");
                         error_node(EK_NOTE, arg, "This provides another");
-                        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                         exit(c, 1);
                     }
 
                     if (it->kind == NODE_INTERPOLATION) {
                         Node_Interpolation *interpolation = (Node_Interpolation *) it;
                         interpolation->do_not_allocate = true;
-                        call->typed_variadics_count += interpolation->children_count;
+                        cc->typed_variadics_count += interpolation->children_count;
                     } else {
-                        call->typed_variadics_count++;
+                        cc->typed_variadics_count++;
                     }
                 } else {
                     variadic_source = arg;
@@ -4257,15 +4283,15 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                     assert(variadic_source_kind == VS_NONE);
                     if (is_spread || it_name) {
                         variadic_source_kind = VS_DIRECT;
-                        call->is_typed_variadics_direct = true;
+                        cc->is_typed_variadics_direct = true;
                     } else {
                         variadic_source_kind = VS_ARGS;
                         if (it->kind == NODE_INTERPOLATION) {
                             Node_Interpolation *interpolation = (Node_Interpolation *) it;
                             interpolation->do_not_allocate = true;
-                            call->typed_variadics_count += interpolation->children_count;
+                            cc->typed_variadics_count += interpolation->children_count;
                         } else {
-                            call->typed_variadics_count++;
+                            cc->typed_variadics_count++;
                         }
                     }
                 }
@@ -4274,7 +4300,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
             if (is_spread) {
                 error_node(EK_ERROR, arg, "Cannot spread arguments at this position");
-                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                 exit(c, 1);
             }
 
@@ -4282,20 +4308,21 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
             if (argument->node) {
                 error_node(EK_ERROR, arg, "Duplication of argument '" SV_Fmt "'", SV_Arg(fn_spec->args[it_index].name));
                 error_node(EK_NOTE, argument->node, "Passed here already");
-                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                 exit(c, 1);
             }
 
             argument->node = arg;
         }
 
-        call->args_count += parts;
+        cc->args_count += parts;
     }
 
-    check_call_arity(c, call, is_method, args_count_min, args_count_max, excess_argument);
-
-    // Check for not provided arguments
+    // Check that proper number of arguments is provided
     {
+        check_call_arity(
+            c, cc->fn, cc->args_count, cc->end, cc->is_method, args_count_min, args_count_max, excess_argument);
+
         size_t not_provided_count = 0;
         SV     not_provided_name = {0};
         for (size_t i = 0; i < fn_spec->args_count; i++) {
@@ -4309,7 +4336,7 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 if (not_provided_count == 1) {
                     not_provided_name = it->name;
                 } else if (not_provided_count == 2) {
-                    error_token_begin(EK_ERROR, call->end);
+                    error_token_begin(EK_ERROR, cc->end);
                     fprintf(
                         stderr,
                         "The following arguments are not provided: " SV_Fmt ", " SV_Fmt,
@@ -4323,31 +4350,34 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
 
         if (not_provided_count) {
             if (not_provided_count == 1) {
-                error_token(EK_ERROR, call->end, "Argument '" SV_Fmt "' is not provided", SV_Arg(not_provided_name));
+                error_token(EK_ERROR, cc->end, "Argument '" SV_Fmt "' is not provided", SV_Arg(not_provided_name));
             } else {
                 error_finalize();
             }
 
-            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
             exit(c, 1);
         }
     }
 
-    if (is_polymorph) {
-        assert(!is_trait); // TODO: Think about this
-        if (is_method) {
-            assert(call->fn->kind == NODE_MEMBER);
-            Node *receiver = ((Node_Member *) call->fn)->lhs;
-            Type  expected = type_with_ref(fn_spec->args[0].type, receiver->type.ref);
-            if (!infer_monomorph_parameters(c, receiver, &receiver->type, &expected)) {
-                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+    cc->is_polymorph = node_is_runtime_polymorphic_expression(cc->fn);
+    const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+    if (cc->is_polymorph) {
+        assert(!cc->is_trait); // TODO: Think about this
+
+        ht_clear(&c->monomorph_replacements);
+        c->monomorph_parameters.begin = c->monomorph_parameters.count;
+        if (cc->is_method) {
+            const Type expected = type_with_ref(fn_spec->args[0].type, cc->receiver->type.ref);
+            if (!infer_monomorph_parameters(c, cc->receiver, &cc->receiver->type, &expected)) {
+                error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                 exit(c, 1);
             }
         }
 
-        size_t it_index = is_method || is_trait;
-        for (Node *prev = NULL, *arg = call->args.head; arg; prev = arg, arg = arg->next) {
+        size_t it_index = cc->is_method || cc->is_trait;
+        for (Node *prev = NULL, *arg = cc->args.head; arg; prev = arg, arg = arg->next) {
             Node *it = arg;
 
             const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
@@ -4374,8 +4404,8 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 if (argument && argument->polymorph) {
                     if (argument->polymorph->is_type) {
                         if (!type_assert_type_noexit(c, it)) {
-                            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+                            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                             exit(c, 1);
                         }
 
@@ -4386,8 +4416,8 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                         add_monomorph_parameter(c, argument->polymorph, it->type, value, NULL);
                     } else {
                         if (!type_assert_noexit(c, it, argument->type)) {
-                            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+                            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                             exit(c, 1);
                         }
 
@@ -4398,9 +4428,9 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                     if (prev) {
                         prev->next = arg->next;
                     } else {
-                        call->args.head = arg->next;
+                        cc->args.head = arg->next;
                     }
-                    call->args_count--;
+                    cc->args_count--;
                 } else {
                     Type *expected = argument ? &argument->type : NULL;
                     if (!is_named && !is_spread &&                                                          //
@@ -4413,8 +4443,8 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                     }
 
                     if (!infer_monomorph_parameters(c, it, &types[i], expected)) {
-                        error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                        show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                        error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                         exit(c, 1);
                     }
                 }
@@ -4438,41 +4468,32 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 }
 
                 if (!it->is_monomorphized) {
-                    show_error_for_uninferred_polymorphic_parameter_in_call(c, call, fn_spec, it);
+                    show_error_for_uninferred_polymorphic_parameter_in_call(c, cc->args, fn_spec, it);
                     shown[it->arg_index] = true;
                 }
             }
 
-            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
             exit(c, 1);
         }
 
-        monomorphize(c, &call->fn, call);
-        fn_spec = call->fn->type.spec.fn;
+        monomorphize(c, &cc->fn, cc->expr);
+        fn_spec = cc->fn->type.spec.fn;
 
-        if (is_method) {
-            assert(call->lhs->kind == NODE_MEMBER);
-            Node_Member *member = (Node_Member *) call->lhs;
-
-            assert(call->fn->kind == NODE_FN);
-            member->method = (Node_Fn *) call->fn;
-
-            call->lhs->type = call->fn->type;
-            call->fn = call->lhs;
+        if (cc->is_method) {
+            cc->fn_source->type = cc->fn->type;
         }
     }
 
     // Check the argument types
     {
-        if (is_method) {
-            assert(call->fn->kind == NODE_MEMBER);
-            Node *receiver = ((Node_Member *) call->fn)->lhs;
-            type_assert(c, receiver, type_with_ref(fn_spec->args[0].type, receiver->type.ref));
+        if (cc->is_method) {
+            type_assert(c, cc->receiver, type_with_ref(fn_spec->args[0].type, cc->receiver->type.ref));
         }
 
-        size_t it_index = is_method || is_trait;
-        ll_foreach(arg, &call->args) {
+        size_t it_index = cc->is_method || cc->is_trait;
+        ll_foreach(arg, &cc->args) {
             Node      *it = arg;
             const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
             if (is_spread) {
@@ -4485,10 +4506,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                 it = ((Node_Binary *) it)->rhs;
 
                 if (!type_assert_noexit(c, it, fn_spec->args[it_index].type)) {
-                    if (is_polymorph) {
-                        error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                    if (cc->is_polymorph) {
+                        error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
                     }
-                    show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                    show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                     exit(c, 1);
                 }
             } else {
@@ -4523,10 +4544,10 @@ static void check_call_arguments(Compiler *c, Node_Call *call) {
                         }
 
                         if (!ok) {
-                            if (is_polymorph) {
-                                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                            if (cc->is_polymorph) {
+                                error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
                             }
-                            show_note_about_the_function_being_called(call->fn, is_method, fn_spec);
+                            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                             exit(c, 1);
                         }
                     }
@@ -6084,7 +6105,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             // Only way this is possible
             assert(call->is_monomorphization_of_polymorphic_type);
         } else {
-            call->fn = call->lhs;
+            call->fn = call->fn_source;
             check_expr(c, call->fn, REF_NONE);
             check_that_type_is_known(c, call->fn);
         }
@@ -6125,7 +6146,16 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             excess_argument = it;
                         }
                     }
-                    check_call_arity(c, call, false, spec->polymorphs_count, spec->polymorphs_count, excess_argument);
+
+                    check_call_arity(
+                        c,
+                        call->fn,
+                        call->args_count,
+                        call->end,
+                        false,
+                        spec->polymorphs_count,
+                        spec->polymorphs_count,
+                        excess_argument);
 
                     size_t it_index = 0;
                     ll_foreach(arg, &call->args) {
@@ -6182,7 +6212,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         }
                     }
 
-                    monomorphize(c, &call->fn, call);
+                    monomorphize(c, &call->fn, (Node *) call);
                     n->type = call->fn->type;
 
                     c->monomorph_parameters.count = c->monomorph_parameters.begin;
@@ -6214,7 +6244,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             excess_argument = it;
                         }
                     }
-                    check_call_arity(c, call, false, 1, 1, excess_argument);
+                    check_call_arity(c, call->fn, call->args_count, call->end, false, 1, 1, excess_argument);
                 }
 
                 Type *from_type = &call->args.head->type;
@@ -6245,7 +6275,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     } else if (type_eq(*from_type, string_type) && type_eq(*to_type, char_slice_type)) {
                         same = true;
                     } else {
-                        error_node(EK_ERROR, call->lhs, "Cannot cast to %s", type_to_cstr(*to_type));
+                        error_node(EK_ERROR, call->fn_source, "Cannot cast to %s", type_to_cstr(*to_type));
                         exit(c, 1);
                     }
                 }
@@ -6318,16 +6348,48 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             }
         } else {
             if (!type_kind_eq(*fn_type, TYPE_FN)) {
-                error_node(EK_ERROR, call->lhs, "Cannot call %s", type_to_cstr(*fn_type));
+                error_node(EK_ERROR, call->fn_source, "Cannot call %s", type_to_cstr(*fn_type));
                 exit(c, 1);
             }
 
             if (fn_type->ref) {
-                error_node(EK_ERROR, call->lhs, "Cannot call %s without deferencing it first", type_to_cstr(*fn_type));
+                error_node(
+                    EK_ERROR, call->fn_source, "Cannot call %s without deferencing it first", type_to_cstr(*fn_type));
                 exit(c, 1);
             }
 
-            check_call_arguments(c, call);
+            Call_Checker cc = {0};
+            cc.expr = (Node *) call;
+            cc.fn_source = call->fn_source;
+            cc.fn = call->fn;
+            cc.args = call->args;
+            cc.end = call->end;
+
+            if (call->fn->kind == NODE_MEMBER) {
+                Node_Member *member = (Node_Member *) call->fn;
+                cc.is_trait = member->is_trait;
+                cc.is_method = member->method != NULL;
+                if (cc.is_method || cc.is_trait) {
+                    cc.receiver = member->lhs;
+                }
+            }
+
+            check_call_arguments(c, &cc);
+            call->args = cc.args;
+            call->args_count = cc.args_count;
+            call->is_typed_variadics_direct = cc.is_typed_variadics_direct;
+            call->typed_variadics_count = cc.typed_variadics_count;
+
+            if (cc.is_method) {
+                if (cc.is_polymorph) {
+                    Node_Member *member = (Node_Member *) call->fn;
+                    assert(cc.fn->kind == NODE_FN);
+                    member->method = (Node_Fn *) cc.fn;
+                }
+            } else {
+                call->fn = cc.fn;
+            }
+
             fn_type = &call->fn->type;
 
             n->type = *fn_type->spec.fn->return_type;

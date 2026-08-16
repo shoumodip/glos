@@ -3457,7 +3457,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             LLVMValueRef from_value = compile_expr(c, from, false);
             LLVMTypeRef  from_type = from->type.llvm;
 
-            set_debug_pos(c, call->lhs->token.pos);
+            set_debug_pos(c, call->fn_source->token.pos);
             static_assert(COUNT_TYPE_CASTS == 5, "");
             switch (call->type_cast) {
             case TYPE_CAST_NORMAL:

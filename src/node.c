@@ -1089,7 +1089,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
         fprintf(f, "Call {\n");
-        node_debug_impl(f, call->lhs, depth + 1, "Fn");
+        node_debug_impl(f, call->fn_source, depth + 1, "Fn");
         nodes_debug_impl(f, call->args, depth + 1, "Args");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
