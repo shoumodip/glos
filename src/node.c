@@ -49,12 +49,18 @@ static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
     ll_foreach(it, &ps) {
         Node_Polymorph *monomorph = (Node_Polymorph *) it;
         if (monomorph->is_monomorphized) {
-            if (monomorph->is_type) {
-                assert(monomorph->monomorphization_value.kind == CONST_VALUE_TYPE);
-                sb_push_type(sb, type_without_meta(monomorph->monomorphization_value.as.type));
-            } else {
-                sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
-            }
+            // if (monomorph->is_type) {
+            //     Const_Value value = monomorph->monomorphization_value;
+            //     if (value.kind == CONST_VALUE_POLYMORPH) {
+            //         assert(value.as.polymorph.polymorph->is_monomorphized);
+            //         value = value.as.polymorph.polymorph->monomorphization_value;
+            //     }
+
+            //     assert(value.kind == CONST_VALUE_TYPE);
+            //     sb_push_type(sb, type_without_meta(monomorph->monomorphization_value.as.type));
+            // } else {
+            sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
+            // }
         } else {
             sb_push(sb, '$');
             sb_push_sv(sb, monomorph->name->node.token.sv);
@@ -588,7 +594,7 @@ bool type_is_unknown(Type type) {
     return type.kind == TYPE_UNKNOWN_ENUM || type.kind == TYPE_UNKNOWN_COMPOUND;
 }
 
-static_assert(COUNT_CONST_VALUES == 10, "");
+static_assert(COUNT_CONST_VALUES == 11, "");
 bool const_value_eq(Const_Value a, Const_Value b) {
     if (a.kind != b.kind) {
         return false;
@@ -679,6 +685,9 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     case CONST_VALUE_MODULE:
         unreachable();
 
+    case CONST_VALUE_POLYMORPH:
+        todo(); // @polymorph
+
     default:
         unreachable();
     }
@@ -732,7 +741,7 @@ static void sb_push_quoted_char(SB *sb, char ch, char quote) {
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 10, "");
+static_assert(COUNT_CONST_VALUES == 11, "");
 void sb_push_const_value(SB *sb, Type type, Const_Value v) {
     switch (v.kind) {
     case CONST_VALUE_INT:
@@ -754,7 +763,7 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
         break;
 
     case CONST_VALUE_TYPE:
-        sb_push_type(sb, v.as.type);
+        sb_push_type(sb, type_without_meta(v.as.type));
         break;
 
     case CONST_VALUE_TRAIT:
@@ -781,12 +790,24 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
         todo();
         break;
 
+    case CONST_VALUE_POLYMORPH: {
+        Node_Polymorph *polymorph = v.as.polymorph.polymorph;
+        if (polymorph->is_monomorphized) {
+            sb_push_const_value(sb, polymorph->monomorphization_type, polymorph->monomorphization_value);
+        } else {
+            if (v.as.polymorph.is_definition) {
+                sb_push(sb, '$');
+            }
+
+            sb_push_sv(sb, v.as.polymorph.polymorph->name->node.token.sv);
+        }
+    } break;
+
     default:
         unreachable();
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 10, "");
 void const_value_debug(FILE *f, Type type, Const_Value v) {
     const size_t start = default_sb.count;
     sb_push_const_value(&default_sb, type, v);

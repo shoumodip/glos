@@ -1,0 +1,11 @@
+Array :: struct($T: Type, $N: i64) {
+    items: [N]T
+}
+
+New_Array :: ($A: Type, $B: i64) -> Array(A, B) {
+    return Array(A, B) {}
+}
+
+main :: () {
+    println(New_Array(string, 2))
+}

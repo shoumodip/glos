@@ -1211,15 +1211,18 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             return const_value_u64(0);
 
         case TOKEN_IDENT:
+            if (atom->definition && atom->definition->polymorph) {
+                if (atom->definition->polymorph->is_monomorphized) {
+                    return atom->definition->polymorph->monomorphization_value;
+                }
+                return eval_const_expr(c, (Node *) atom->definition->polymorph, false);
+            }
+
             if (n->type.is_meta) {
                 return const_value_type(n->type);
             }
 
             assert(atom->definition);
-            if (atom->definition->polymorph) {
-                return atom->definition->polymorph->monomorphization_value;
-            }
-
             if (!atom->definition->definition_spec->is_const) {
                 if (atom->definition->definition_spec->is_local) {
                     error_node(EK_ERROR, n, "Cannot use local variables in a constant expression");
@@ -1430,7 +1433,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             lhs = const_value_of_var(c, lhs.as.var);
         }
 
-        static_assert(COUNT_CONST_VALUES == 10, "");
+        static_assert(COUNT_CONST_VALUES == 11, "");
         switch (lhs.kind) {
         case CONST_VALUE_TRAIT: {
             if (member->rhs) {
@@ -1540,12 +1543,11 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_POLYMORPH: {
         Node_Polymorph *polymorph = (Node_Polymorph *) n;
-        if (polymorph->is_type) {
-            return const_value_type(n->type);
-        }
 
-        // TODO: Is this correct?
-        return const_value_type(type_without_meta(n->type));
+        Const_Value_Polymorph spec = {0};
+        spec.polymorph = polymorph;
+        spec.is_definition = true;
+        return const_value_polymorph(spec);
     }
 
     case NODE_DISTINCT:
@@ -1651,7 +1653,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 exit(c, 1);
             }
 
-            static_assert(COUNT_CONST_VALUES == 10, "");
+            static_assert(COUNT_CONST_VALUES == 11, "");
             switch (lhs.kind) {
             case CONST_VALUE_ARRAY: {
                 Const_Value_Array array = lhs.as.array;
@@ -1733,7 +1735,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         } else {
             const i64 at = i64_from_int128(c, index->a, eval_const_expr(c, index->a, false).as.integer, true, "index");
 
-            static_assert(COUNT_CONST_VALUES == 10, "");
+            static_assert(COUNT_CONST_VALUES == 11, "");
             switch (lhs.kind) {
             case CONST_VALUE_ARRAY: {
                 if (at < 0 || (size_t) at >= lhs.as.array.count) {
@@ -2010,7 +2012,7 @@ static void push_context_replace(Compiler *c, Context_Replace *replace, Node_Ato
     if (replace->to->definition_spec->is_const) {
         Const_Value *value = &replace->to->definition_spec->const_value;
 
-        static_assert(COUNT_CONST_VALUES == 10, "");
+        static_assert(COUNT_CONST_VALUES == 11, "");
         switch (value->kind) {
         case CONST_VALUE_TRAIT: {
             const Const_Value_Trait trait = value->as.trait;
@@ -3195,6 +3197,11 @@ static void show_note_about_the_function_being_called(Node *fn, bool is_method, 
 static void add_monomorph_parameter(
     Compiler *c, Node_Polymorph *polymorph, Type type, Const_Value value, Node_Polymorph *to_polymorph) //
 {
+    if (value.kind == CONST_VALUE_POLYMORPH && value.as.polymorph.polymorph->is_monomorphized) {
+        type = value.as.polymorph.polymorph->monomorphization_type;
+        value = value.as.polymorph.polymorph->monomorphization_value;
+    }
+
     if (log) {
         ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
         fprintf(
@@ -3780,6 +3787,11 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
         for (size_t i = c->monomorph_parameters.begin; i < c->monomorph_parameters.count; i++) {
             Monomorph_Parameter it = c->monomorph_parameters.data[i];
             if (it.to_polymorph && !it.to_polymorph->is_monomorphized) {
+                is_complete = false;
+                break;
+            }
+
+            if (it.value.kind == CONST_VALUE_POLYMORPH && !it.value.as.polymorph.polymorph->is_monomorphized) {
                 is_complete = false;
                 break;
             }
@@ -6103,8 +6115,8 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                             to_polymorph->is_arg = from_polymorph->is_arg;
                         }
 
+                        bool done = false;
                         if (from_polymorph->is_type) {
-                            bool done = false;
                             if (to_polymorph) {
                                 if (to_polymorph->is_monomorphized) {
                                     add_monomorph_parameter(
@@ -6121,15 +6133,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                     exit(c, 1);
                                 }
                             }
-
-                            if (!done) {
-                                Const_Value value = eval_const_expr(c, it, false);
-                                assert(value.kind == CONST_VALUE_TYPE);
-                                value.as.type.is_meta = false;
-                                add_monomorph_parameter(c, from_polymorph, it->type, value, to_polymorph);
-                            }
                         } else {
-                            bool done = false;
                             if (to_polymorph) {
                                 if (to_polymorph->is_monomorphized) {
                                     add_monomorph_parameter(
@@ -6146,11 +6150,11 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                     exit(c, 1);
                                 }
                             }
+                        }
 
-                            if (!done) {
-                                add_monomorph_parameter(
-                                    c, from_polymorph, it->type, eval_const_expr(c, it, false), to_polymorph);
-                            }
+                        if (!done) {
+                            add_monomorph_parameter(
+                                c, from_polymorph, it->type, eval_const_expr(c, it, false), to_polymorph);
                         }
                     }
 
@@ -6452,10 +6456,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             type_assert_numeric(c, indexable->count, false);
 
             const Const_Value value = eval_const_expr(c, indexable->count, false);
-            assert(value.kind == CONST_VALUE_INT);
-
-            check_int_limit_ex(c, indexable->count, value.as.integer, true, "array capacity");
-            array_count = value.as.integer.low;
+            if (value.kind == CONST_VALUE_INT) {
+                check_int_limit_ex(c, indexable->count, value.as.integer, true, "array capacity");
+                array_count = value.as.integer.low;
+            } else {
+                assert(value.kind == CONST_VALUE_POLYMORPH);
+            }
             check_expr(c, indexable->element, REF_NONE);
         } else {
             // The type `[]T` gets compiled to:
@@ -7027,7 +7033,3 @@ void check_nodes(Compiler *c) {
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?
-//
-// TODO: Implement ability to access polymorphic parameter inside monomorphed function
-//
-// TODO: Do not have `next` in polymorphs

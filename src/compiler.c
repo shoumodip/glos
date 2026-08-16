@@ -1290,7 +1290,7 @@ static void compile_trait_impl(Compiler *c, Type_Trait_Impl *impl) {
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 10, "");
+static_assert(COUNT_CONST_VALUES == 11, "");
 static LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type type) {
     switch (value.kind) {
     case CONST_VALUE_INT:
@@ -1416,6 +1416,9 @@ static LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type typ
         return compile_string_into_const_value(c, value.as.string);
 
     case CONST_VALUE_MODULE:
+        unreachable();
+
+    case CONST_VALUE_POLYMORPH:
         unreachable();
 
     default:
@@ -1915,7 +1918,7 @@ static LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, b
         }
 
         if (const_value) {
-            static_assert(COUNT_CONST_VALUES == 10, "");
+            static_assert(COUNT_CONST_VALUES == 11, "");
             switch (const_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
@@ -1933,6 +1936,9 @@ static LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, b
 
                 set_debug_pos(c, n->token.pos);
                 return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, definition->definition_spec->llvm, "");
+
+            case CONST_VALUE_POLYMORPH:
+                unreachable();
 
             default:
                 if (definition->polymorph) {
@@ -2644,7 +2650,7 @@ compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_Fn *f
 
             value = LLVMBuildLoad2(c->llvm_builder, arg->type.llvm, memory, "");
         } else {
-            static_assert(COUNT_CONST_VALUES == 10, "");
+            static_assert(COUNT_CONST_VALUES == 11, "");
             switch (arg->default_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
@@ -2658,6 +2664,9 @@ compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_Fn *f
 
                 value = LLVMBuildLoad2(c->llvm_builder, arg->type.llvm, arg->default_value_llvm, "");
                 break;
+
+            case CONST_VALUE_POLYMORPH:
+                unreachable();
 
             default:
                 if (!arg->default_value_llvm) {
