@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 162
+tests/error_cannot_have_both_direct_and_inferred_polymorphism_simultaneously.glos:1:13: ERROR: Cannot define polymorphic parameters here
+
+    foo :: ($A: $B) {}
+
+

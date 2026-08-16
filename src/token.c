@@ -239,3 +239,66 @@ const char *token_kind_to_cstr(Token_Kind kind) {
         unreachable();
     }
 }
+
+static_assert(COUNT_TOKENS == 78, "");
+Power token_kind_to_power(Token_Kind kind) {
+    switch (kind) {
+    case TOKEN_DOT:
+    case TOKEN_LBRACE:
+    case TOKEN_LBRACKET:
+        return POWER_DOT;
+
+    case TOKEN_COLON:
+        return POWER_SET;
+
+    case TOKEN_COMMA:
+        return POWER_TUP;
+
+    case TOKEN_LPAREN:
+        return POWER_CALL;
+
+    case TOKEN_ADD:
+    case TOKEN_SUB:
+        return POWER_ADD;
+
+    case TOKEN_MUL:
+    case TOKEN_DIV:
+    case TOKEN_MOD:
+        return POWER_MUL;
+
+    case TOKEN_SHL:
+    case TOKEN_SHR:
+        return POWER_SHL;
+
+    case TOKEN_BOR:
+    case TOKEN_BAND:
+        return POWER_BOR;
+
+    case TOKEN_LOR:
+    case TOKEN_LAND:
+        return POWER_LOR;
+
+    case TOKEN_SET:
+    case TOKEN_ADD_SET:
+    case TOKEN_SUB_SET:
+    case TOKEN_MUL_SET:
+    case TOKEN_DIV_SET:
+    case TOKEN_MOD_SET:
+    case TOKEN_SHL_SET:
+    case TOKEN_SHR_SET:
+    case TOKEN_BOR_SET:
+    case TOKEN_BAND_SET:
+        return POWER_SET;
+
+    case TOKEN_GT:
+    case TOKEN_GE:
+    case TOKEN_LT:
+    case TOKEN_LE:
+    case TOKEN_EQ:
+    case TOKEN_NE:
+        return POWER_CMP;
+
+    default:
+        return POWER_NIL;
+    }
+}

@@ -594,7 +594,7 @@ static void sb_push_nested_fn_name(Compiler *c, SB *sb, Node_Fn *fn, Module *mod
         sb_push(sb, '(');
         ll_foreach(it, &fn->monomorphs) {
             assert(it->is_monomorphized);
-            sb_sprintf(sb, SV_Fmt " = ", SV_Arg(it->name->node.token.sv));
+            sb_sprintf(sb, "$" SV_Fmt " = ", SV_Arg(it->name->node.token.sv));
             sb_push_const_value(sb, it->node.type, it->monomorphization_value);
 
             if (it->next) {
@@ -1242,6 +1242,7 @@ static void set_debug_pos(Compiler *c, Pos pos) {
 static LLVMValueRef compile_const_value_into_memory(Compiler *c, LLVMValueRef value) {
     LLVMValueRef memory = LLVMAddGlobal(c->llvm_module, LLVMTypeOf(value), "");
     LLVMSetInitializer(memory, value);
+    LLVMSetLinkage(memory, LLVMPrivateLinkage);
     return memory;
 }
 

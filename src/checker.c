@@ -1332,14 +1332,48 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_BINARY: {
         Node_Binary *binary = (Node_Binary *) n;
+        Const_Value  lhs = {0};
+        Const_Value  rhs = {0};
+
+        if (type_eq(binary->lhs->type, (Type) {.kind = TYPE_STRING}) &&
+            token_kind_to_power(n->token.kind) == POWER_CMP) //
+        {
+            lhs = eval_const_expr(c, binary->lhs, false);
+            assert(lhs.kind == CONST_VALUE_STRING);
+
+            rhs = eval_const_expr(c, binary->rhs, false);
+            assert(rhs.kind == CONST_VALUE_STRING);
+
+            const int ordering = sv_cmp(lhs.as.string, rhs.as.string);
+            switch (n->token.kind) {
+            case TOKEN_GT:
+                return const_value_u64(ordering > 0);
+
+            case TOKEN_GE:
+                return const_value_u64(ordering >= 0);
+
+            case TOKEN_LT:
+                return const_value_u64(ordering < 0);
+
+            case TOKEN_LE:
+                return const_value_u64(ordering <= 0);
+
+            case TOKEN_EQ:
+                return const_value_u64(ordering == 0);
+
+            case TOKEN_NE:
+                return const_value_u64(ordering != 0);
+
+            default:
+                unreachable();
+            }
+        }
+
         if (binary->overload) {
             error_node(EK_ERROR, n, "Cannot call operator overload in compile time expressions");
             error_node(EK_NOTE, (Node *) binary->overload->defined_as, "This is the overload used");
             exit(c, 1);
         }
-
-        Const_Value lhs = {0};
-        Const_Value rhs = {0};
 
         // Arithmetic operations
         {
@@ -3259,6 +3293,12 @@ static void add_monomorph_parameter(
         value = value.as.polymorph.polymorph->monomorphization_value;
     }
 
+    for (size_t i = c->monomorph_parameters.begin; i < c->monomorph_parameters.count; i++) {
+        if (c->monomorph_parameters.data[i].from == polymorph) {
+            return;
+        }
+    }
+
     if (log) {
         ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
         fprintf(
@@ -3269,12 +3309,6 @@ static void add_monomorph_parameter(
         const_value_debug(stderr, type, value);
         fprintf(stderr, "\n\n");
         ansi_reset(stderr);
-    }
-
-    for (size_t i = c->monomorph_parameters.begin; i < c->monomorph_parameters.count; i++) {
-        if (c->monomorph_parameters.data[i].from == polymorph) {
-            return;
-        }
     }
 
     const Monomorph_Parameter mp = {
@@ -4469,6 +4503,29 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                         show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                         exit(c, 1);
                     }
+                }
+            }
+        }
+
+        for (size_t i = 0; i < fn_spec->args_count; i++) {
+            Type_Fn_Arg *arg = &fn_spec->args[i];
+            if (arg->polymorph && arg->has_default_value) {
+                if (arg->default_value) {
+                    add_monomorph_parameter(c, arg->polymorph, arg->type, *arg->default_value, NULL);
+                } else if (arg->default_value_is_caller_location) {
+                    Const_Value location = default_const_value(c, arg->type);
+                    assert(location.kind == CONST_VALUE_STRUCT);
+
+                    Const_Value_Struct *structure = &location.as.structt;
+                    assert(structure->spec->fields_count == 3);
+
+                    const Pos pos = get_leftmost_point_of_node(cc->expr);
+                    structure->fields[0] = const_value_string(sv_from_cstr(pos.path));
+                    structure->fields[1] = const_value_u64(pos.row + 1);
+                    structure->fields[2] = const_value_u64(pos.col + 1);
+                    add_monomorph_parameter(c, arg->polymorph, arg->type, location, NULL);
+                } else {
+                    unreachable();
                 }
             }
         }

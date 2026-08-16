@@ -770,16 +770,28 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
         todo();
         break;
 
-    case CONST_VALUE_STRUCT:
-        todo();
-        break;
+    case CONST_VALUE_STRUCT: {
+        Const_Value_Struct structure = v.as.structt;
+        sb_push(sb, '{');
+        for (size_t i = 0; i < structure.spec->fields_count; i++) {
+            if (i) {
+                sb_push_cstr(sb, ", ");
+            }
+            sb_push_const_value(sb, structure.spec->fields[i].type, structure.fields[i]);
+        }
+        sb_push(sb, '}');
+    } break;
 
     case CONST_VALUE_ARRAY:
         todo();
         break;
 
     case CONST_VALUE_STRING:
-        todo();
+        sb_push(sb, '"');
+        for (size_t i = 0; i < v.as.string.count; i++) {
+            sb_push_quoted_char(sb, v.as.string.data[i], '"');
+        }
+        sb_push(sb, '"');
         break;
 
     case CONST_VALUE_MODULE:

@@ -34,88 +34,8 @@ void error_number_of_values_mismatch(
     exit(1);
 }
 
-typedef enum {
-    POWER_NIL,
-    POWER_SET,
-    POWER_TUP,
-    POWER_LOR,
-    POWER_CMP,
-    POWER_SHL,
-    POWER_ADD,
-    POWER_BOR,
-    POWER_MUL,
-    POWER_PRE,
-    POWER_CALL,
-    POWER_REF,
-    POWER_DOT,
-} Power;
-
-static_assert(COUNT_TOKENS == 78, "");
-static Power token_kind_to_power(Token_Kind kind) {
-    switch (kind) {
-    case TOKEN_DOT:
-    case TOKEN_LBRACE:
-    case TOKEN_LBRACKET:
-        return POWER_DOT;
-
-    case TOKEN_COLON:
-        return POWER_SET;
-
-    case TOKEN_COMMA:
-        return POWER_TUP;
-
-    case TOKEN_LPAREN:
-        return POWER_CALL;
-
-    case TOKEN_ADD:
-    case TOKEN_SUB:
-        return POWER_ADD;
-
-    case TOKEN_MUL:
-    case TOKEN_DIV:
-    case TOKEN_MOD:
-        return POWER_MUL;
-
-    case TOKEN_SHL:
-    case TOKEN_SHR:
-        return POWER_SHL;
-
-    case TOKEN_BOR:
-    case TOKEN_BAND:
-        return POWER_BOR;
-
-    case TOKEN_LOR:
-    case TOKEN_LAND:
-        return POWER_LOR;
-
-    case TOKEN_SET:
-    case TOKEN_ADD_SET:
-    case TOKEN_SUB_SET:
-    case TOKEN_MUL_SET:
-    case TOKEN_DIV_SET:
-    case TOKEN_MOD_SET:
-    case TOKEN_SHL_SET:
-    case TOKEN_SHR_SET:
-    case TOKEN_BOR_SET:
-    case TOKEN_BAND_SET:
-        return POWER_SET;
-
-    case TOKEN_GT:
-    case TOKEN_GE:
-    case TOKEN_LT:
-    case TOKEN_LE:
-    case TOKEN_EQ:
-    case TOKEN_NE:
-        return POWER_CMP;
-
-    default:
-        return POWER_NIL;
-    }
-}
-
 Module *module_get(Parser *p, const char *path) {
     assert(p->modules);
-
     if (!p->modules->table.hasheq) {
         p->modules->table.hasheq = ht_hasheq_cstr;
     }
@@ -576,16 +496,17 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
     Polymorphs_Builder *pb_save = p->state.pb;
 
     Node_Define *define = (Node_Define *) node_alloc(p->module_current, NODE_DEFINE, token);
-    if (spread_allowed && peek_token(p).kind == TOKEN_SPREAD) {
-        define->has_spread = true;
-        define->spread_token = next_token(p);
-    }
-
     if (name->kind == NODE_POLYMORPH) {
         define->name_polymorph = (Node_Polymorph *) name;
         define->name_polymorph->is_arg = true;
         define->name_polymorph->is_type = false;
         name = (Node *) define->name_polymorph->name;
+        spread_allowed = false;
+    }
+
+    if (spread_allowed && peek_token(p).kind == TOKEN_SPREAD) {
+        define->has_spread = true;
+        define->spread_token = next_token(p);
     }
 
     {
@@ -616,17 +537,18 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
     if (token.kind != TOKEN_SET && token.kind != TOKEN_COLON) {
         const bool in_extern_save = p->state.in_extern;
         p->state.in_extern = false;
+
+        if (define->name_polymorph) {
+            p->state.pb = NULL;
+        }
         define->type = parse_expr(p, POWER_PRE, false, true, NULL);
+
+        p->state.pb = pb_save;
         p->state.in_extern = in_extern_save;
     }
 
     token = peek_token(p);
     if (token.kind == TOKEN_SET) {
-        if (define->has_spread) {
-            error_token(EK_ERROR, token, "Cannot have default value here");
-            exit(1);
-        }
-
         p->state.peeked = false;
         if (p->state.in_extern) {
             assert(p->state.ahead.kind == TOKEN_SET);
@@ -644,12 +566,12 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
         p->state.pb = pb_save;
         p->state.in_extern = in_extern_save;
-    } else if (token.kind == TOKEN_COLON) {
+
         if (define->has_spread) {
-            error_token(EK_ERROR, token, "Cannot have default value here");
+            error_node(EK_ERROR, define->expr, "Cannot have default value here");
             exit(1);
         }
-
+    } else if (token.kind == TOKEN_COLON) {
         const bool in_extern_save = p->state.in_extern;
         p->state.in_extern = false;
 
@@ -660,6 +582,11 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
         define->is_const = true;
 
         p->state.in_extern = in_extern_save;
+
+        if (define->has_spread) {
+            error_node(EK_ERROR, define->expr, "Cannot have default value here");
+            exit(1);
+        }
 
         if (p->state.in_extern) {
             if (define->expr->kind != NODE_FN) {
@@ -831,11 +758,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
             fn->outer_fn = p->state.fn_current;
             fn->module = p->module_current;
-
-            pb.polymorphs = &fn->polymorphs;
-            if (!p->state.pb) {
-                p->state.pb = &pb;
-            }
             p->state.fn_current = fn;
 
             assert(p->state.ahead.kind == TOKEN_RPAREN);
@@ -846,7 +768,15 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             fn->module = p->module_current;
 
             pb.polymorphs = &fn->polymorphs;
-            if (!p->state.pb) {
+            if (pb_save) {
+                // Do not allow this:
+                //
+                // ```
+                // foo :: (f: ($A: B)) {}
+                // ```
+                //
+                p->state.pb = NULL;
+            } else {
                 p->state.pb = &pb;
             }
             p->state.fn_current = fn;
@@ -861,7 +791,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 fn->module = p->module_current;
 
                 pb.polymorphs = &fn->polymorphs;
-                if (!p->state.pb) {
+                if (!pb_save) {
                     p->state.pb = &pb;
                 }
                 p->state.fn_current = fn;
@@ -967,6 +897,18 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                         exit(1);
                     }
                 } else {
+                    if (pb_save) {
+                        // Do not allow this:
+                        //
+                        // ```
+                        // foo :: (f: ($A: B)) {}
+                        // ```
+                        //
+                        p->state.pb = NULL;
+
+                        // This will fail immediately, so we don't need to worry about ruining the state
+                    }
+
                     buffer_token(p, token);
                     name = parse_expr(p, POWER_SET, false, true, NULL);
                 }
@@ -1042,6 +984,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_ENUM: {
+        Polymorphs_Builder *pb_save = p->state.pb;
+        p->state.pb = NULL;
+
         node = node_alloc(p->module_current, NODE_ENUM, token);
         Node_Enum *enumm = (Node_Enum *) node;
         enumm->defined_in = p->state.fn_current;
@@ -1068,9 +1013,14 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         assert(p->state.ahead.kind == TOKEN_RBRACE);
         enumm->end = p->state.ahead;
+
+        p->state.pb = pb_save;
     } break;
 
     case TOKEN_TRAIT: {
+        Polymorphs_Builder *pb_save = p->state.pb;
+        p->state.pb = NULL;
+
         node = node_alloc(p->module_current, NODE_TRAIT, token);
         Node_Trait *trait = (Node_Trait *) node;
         trait->module = p->module_current;
@@ -1108,9 +1058,14 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         assert(p->state.ahead.kind == TOKEN_RBRACE);
         trait->end = p->state.ahead;
+
+        p->state.pb = pb_save;
     } break;
 
     case TOKEN_UNION: {
+        Polymorphs_Builder *pb_save = p->state.pb;
+        p->state.pb = NULL;
+
         node = node_alloc(p->module_current, NODE_UNION, token);
         Node_Union *unionn = (Node_Union *) node;
         unionn->module = p->module_current;
@@ -1125,6 +1080,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         assert(p->state.ahead.kind == TOKEN_RBRACE);
         unionn->end = p->state.ahead;
+
+        p->state.pb = pb_save;
     } break;
 
     case TOKEN_STRUCT: {
@@ -1153,6 +1110,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             token = expect_token(p, TOKEN_LBRACE);
         }
 
+        Polymorphs_Builder *pb_save = p->state.pb;
+        p->state.pb = NULL;
         while (!read_token(p, TOKEN_RBRACE)) {
             token = peek_token(p);
             if (token.kind == TOKEN_SPREAD) {
@@ -1182,6 +1141,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             }
             expect_stmt_terminator(p);
         }
+        p->state.pb = pb_save;
 
         assert(p->state.ahead.kind == TOKEN_RBRACE);
         structt->end = p->state.ahead;
@@ -1471,6 +1431,15 @@ static Node *parse_stmt(Parser *p) {
                 Node_Fn *fn = (Node_Fn *) define->expr;
                 if (fn->body || p->state.in_extern) {
                     ok = true;
+                }
+
+                if (fn->polymorphs.count) {
+                    Node *body = fn->body;
+                    fn->body = NULL;
+                    error_node(
+                        EK_ERROR, node, "Cannot apply %s to polymorphic functions", token_kind_to_cstr(token.kind));
+                    fn->body = body;
+                    exit(1);
                 }
             }
 

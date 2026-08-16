@@ -287,6 +287,7 @@ SV sv_from_cstr(const char *cstr);
 SV sv_strip_suffix(SV a, SV b);
 
 bool sv_eq(SV a, SV b);
+int  sv_cmp(SV a, SV b);
 bool sv_match(SV a, const char *b);
 bool sv_has_prefix(SV a, SV b);
 bool sv_has_suffix(SV a, SV b);

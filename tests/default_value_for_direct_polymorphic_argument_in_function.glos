@@ -1,0 +1,8 @@
+main :: () {
+    foo :: ($N := 69) {
+        println(N)
+    }
+
+    foo()
+    foo(420)
+}
