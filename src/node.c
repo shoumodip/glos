@@ -898,7 +898,7 @@ void polymorphs_push(Polymorphs *ps, Node_Polymorph *p) {
 #define Indent_Fmt    "%*s"
 #define Indent_Arg(d) (d) * 4, ""
 
-static void node_debug_impl(FILE *f, Node *n, int depth, const char *label);
+static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label);
 
 static void nodes_debug_impl(FILE *f, Nodes ns, int depth, const char *label) {
     fprintf(f, Indent_Fmt, Indent_Arg(depth));
@@ -945,7 +945,7 @@ static void polymorphs_debug_impl(FILE *f, Polymorphs ns, int depth, const char 
 }
 
 static_assert(COUNT_NODES == 29, "");
-static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
+static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label) {
     if (!n) {
         return;
     }
@@ -1216,7 +1216,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     }
 }
 
-void node_debug(FILE *f, Node *n) {
+void node_debug(FILE *f, const Node *n) {
     node_debug_impl(f, n, 0, NULL);
 }
 

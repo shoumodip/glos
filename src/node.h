@@ -1007,7 +1007,7 @@ typedef struct {
     Token end;
 } Node_Extern;
 
-void node_debug(FILE *f, Node *n);
+void node_debug(FILE *f, const Node *n);
 void nodes_debug(FILE *f, Nodes ns);
 
 Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, size_t method_index);

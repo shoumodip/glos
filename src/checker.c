@@ -16,6 +16,10 @@
 static bool log = false;
 
 static Node_Fn *get_function_literal(Node *fn) {
+    if (fn->kind == NODE_FN) {
+        return (Node_Fn *) fn;
+    }
+
     if (fn->kind == NODE_ATOM && fn->token.kind == TOKEN_IDENT) {
         Node_Atom *atom = (Node_Atom *) fn;
         if (atom->definition->definition_spec->is_const_value_evaluated) {
@@ -3041,6 +3045,39 @@ static bool is_indexable(Compiler *c, Node *n, Type type, Module *module) {
     return false;
 }
 
+typedef struct {
+#define in
+#define out
+#define inout
+
+    // The whole expression
+    in Node *expr;
+
+    // In case of a method
+    in Node *receiver;
+
+    inout Node *fn;        // The actual function, might differ in case of polymorphism
+    in Node    *fn_source; // The function as per the source code
+
+    inout Nodes args;
+    out size_t  args_count;
+
+    in bool    is_method;
+    in bool    is_trait;
+    inout bool is_polymorph;
+
+    out bool   is_typed_variadics_direct;
+    out size_t typed_variadics_count;
+
+    in Token end;
+
+#undef in
+#undef out
+#undef inout
+} Call_Checker;
+
+static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_provided);
+
 static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
     Method_Spec spec = {0};
     if (get_method_spec(c, receiver, receiver->type, sv_from_cstr(operator), &spec, NULL, NULL)) {
@@ -3063,6 +3100,22 @@ static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *r
                 exit(c, 1);
             }
 
+            if (method->polymorphs.count) {
+                Call_Checker cc = {0};
+                cc.expr = op;
+                cc.fn_source = op;
+                cc.fn = (Node *) method;
+                cc.end = op->token;
+
+                cc.is_method = true;
+                cc.receiver = receiver;
+                cc.is_polymorph = true;
+
+                check_call_arguments(c, &cc, false);
+                assert(cc.fn->kind == NODE_FN);
+
+                method = (Node_Fn *) cc.fn;
+            }
             return method;
         }
     }
@@ -3230,6 +3283,7 @@ static void add_monomorph_parameter(
         .value = value,
         .to_polymorph = to_polymorph,
     };
+
     da_push(&c->monomorph_parameters, mp);
 }
 
@@ -3743,6 +3797,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     }
 }
 
+// TODO: Use a custom hasher instead of just operating on the raw bytes
 static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t n) {
     unused(n);
 
@@ -3770,14 +3825,20 @@ static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t 
         return true;
     }
 
-    // TODO: Make this more efficient
     uint64_t hash = ht_hasheq_bytes(&a.from, NULL, sizeof(Node *));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(&a.params_count, NULL, sizeof(a.params_count)));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_types, NULL, a.params_count * sizeof(*a.param_types)));
-    hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_values, NULL, a.params_count * sizeof(*a.param_values)));
+
+    for (size_t i = 0; i < a.params_count; i++) {
+        const Const_Value *it = &a.param_values[i];
+        hash = ht_hash_combine(hash, ht_hasheq_bytes(&it->kind, NULL, sizeof(it->kind)));
+        hash = ht_hash_combine(hash, ht_hasheq_bytes(&it->as, NULL, sizeof(it->as)));
+    }
+
     return hash;
 }
 
+// TODO: This is broken for multiple monomorphizations
 static void monomorphize(Compiler *c, Node **np, Node *site) {
     Node **np_provided = np;
     size_t ref_level = 0;
@@ -4103,38 +4164,7 @@ static void check_call_arity(
     }
 }
 
-typedef struct {
-#define in
-#define out
-#define inout
-
-    // The whole expression
-    in Node *expr;
-
-    // In case of a method
-    in Node *receiver;
-
-    inout Node *fn;        // The actual function, might differ in case of polymorphism
-    in Node    *fn_source; // The function as per the source code
-
-    inout Nodes args;
-    out size_t  args_count;
-
-    in bool  is_method;
-    in bool  is_trait;
-    out bool is_polymorph;
-
-    out bool   is_typed_variadics_direct;
-    out size_t typed_variadics_count;
-
-    in Token end;
-
-#undef in
-#undef out
-#undef inout
-} Call_Checker;
-
-static void check_call_arguments(Compiler *c, Call_Checker *cc) {
+static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_provided) {
     assert(type_kind_eq(cc->fn->type, TYPE_FN));
     const Type_Fn *fn_spec = cc->fn->type.spec.fn;
 
@@ -4155,6 +4185,16 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc) {
         if (!cc->receiver->type.is_meta) {
             args[cc->args_count++].node = cc->receiver;
         }
+    }
+
+    if (!cc->is_polymorph) {
+        cc->is_polymorph = node_is_runtime_polymorphic_expression(cc->fn);
+    }
+
+    const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+    if (cc->is_polymorph) {
+        ht_clear(&c->monomorph_replacements);
+        c->monomorph_parameters.begin = c->monomorph_parameters.count;
     }
 
     typedef enum {
@@ -4319,7 +4359,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc) {
     }
 
     // Check that proper number of arguments is provided
-    {
+    if (check_arguments_provided) {
         check_call_arity(
             c, cc->fn, cc->args_count, cc->end, cc->is_method, args_count_min, args_count_max, excess_argument);
 
@@ -4360,13 +4400,8 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc) {
         }
     }
 
-    cc->is_polymorph = node_is_runtime_polymorphic_expression(cc->fn);
-    const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
     if (cc->is_polymorph) {
         assert(!cc->is_trait); // TODO: Think about this
-
-        ht_clear(&c->monomorph_replacements);
-        c->monomorph_parameters.begin = c->monomorph_parameters.count;
         if (cc->is_method) {
             const Type expected = type_with_ref(fn_spec->args[0].type, cc->receiver->type.ref);
             if (!infer_monomorph_parameters(c, cc->receiver, &cc->receiver->type, &expected)) {
@@ -6360,8 +6395,8 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
             Call_Checker cc = {0};
             cc.expr = (Node *) call;
-            cc.fn_source = call->fn_source;
             cc.fn = call->fn;
+            cc.fn_source = call->fn_source;
             cc.args = call->args;
             cc.end = call->end;
 
@@ -6374,7 +6409,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 }
             }
 
-            check_call_arguments(c, &cc);
+            check_call_arguments(c, &cc, true);
             call->args = cc.args;
             call->args_count = cc.args_count;
             call->is_typed_variadics_direct = cc.is_typed_variadics_direct;
@@ -7137,3 +7172,5 @@ void check_nodes(Compiler *c) {
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?
+//
+// TODO: Replace all uint64_t with u64
