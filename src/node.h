@@ -171,6 +171,7 @@ typedef struct {
 
     Node_Polymorph **polymorphs;
     size_t           polymorphs_count;
+    size_t           polymorphs_count_min;
 
     Node_Struct *definition;
 

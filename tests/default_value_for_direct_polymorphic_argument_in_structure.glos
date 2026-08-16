@@ -1,0 +1,8 @@
+Array :: struct($T: Type, $N := 10) {
+    items: [N]T
+}
+
+main :: () {
+    xs: Array(string)
+    println(xs)
+}

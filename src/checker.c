@@ -4161,6 +4161,32 @@ static void check_call_arity(
     }
 }
 
+static void add_monomorph_parameter_default_value(
+    Compiler       *c,
+    Node_Polymorph *polymorph,
+    Type            type,
+    Const_Value    *default_value,
+    Node           *default_value_as_caller_location) //
+{
+    if (default_value) {
+        add_monomorph_parameter(c, polymorph, type, *default_value, NULL);
+    } else if (default_value_as_caller_location) {
+        Const_Value location = default_const_value(c, type);
+        assert(location.kind == CONST_VALUE_STRUCT);
+
+        Const_Value_Struct *structure = &location.as.structt;
+        assert(structure->spec->fields_count == 3);
+
+        const Pos pos = get_leftmost_point_of_node(default_value_as_caller_location);
+        structure->fields[0] = const_value_string(sv_from_cstr(pos.path));
+        structure->fields[1] = const_value_u64(pos.row + 1);
+        structure->fields[2] = const_value_u64(pos.col + 1);
+        add_monomorph_parameter(c, polymorph, type, location, NULL);
+    } else {
+        unreachable();
+    }
+}
+
 static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_provided) {
     assert(type_kind_eq(cc->fn->type, TYPE_FN));
     const Type_Fn *fn_spec = cc->fn->type.spec.fn;
@@ -4485,23 +4511,12 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
         for (size_t i = 0; i < fn_spec->args_count; i++) {
             Type_Fn_Arg *arg = &fn_spec->args[i];
             if (arg->polymorph && arg->has_default_value) {
-                if (arg->default_value) {
-                    add_monomorph_parameter(c, arg->polymorph, arg->type, *arg->default_value, NULL);
-                } else if (arg->default_value_is_caller_location) {
-                    Const_Value location = default_const_value(c, arg->type);
-                    assert(location.kind == CONST_VALUE_STRUCT);
-
-                    Const_Value_Struct *structure = &location.as.structt;
-                    assert(structure->spec->fields_count == 3);
-
-                    const Pos pos = get_leftmost_point_of_node(cc->expr);
-                    structure->fields[0] = const_value_string(sv_from_cstr(pos.path));
-                    structure->fields[1] = const_value_u64(pos.row + 1);
-                    structure->fields[2] = const_value_u64(pos.col + 1);
-                    add_monomorph_parameter(c, arg->polymorph, arg->type, location, NULL);
-                } else {
-                    unreachable();
-                }
+                add_monomorph_parameter_default_value(
+                    c,
+                    arg->polymorph,
+                    arg->type,
+                    arg->default_value,
+                    arg->default_value_is_caller_location ? cc->expr : NULL);
             }
         }
 
@@ -5970,11 +5985,29 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
                 if (it->name->definition_spec) {
                     Node_Define *define = it->name->definition_spec->definition_node;
+                    if (define->type) {
+                        check_expr(c, define->type, REF_NONE);
+                        it->name->node.type = type_without_meta(type_assert_type(c, define->type));
+                    }
 
-                    assert(define->type); // Polymorphic arguments are not allowed to have default values
-                    check_expr(c, define->type, REF_NONE);
+                    if (define->expr) {
+                        check_expr(c, define->expr, REF_NONE);
+                        if (define->type) {
+                            type_assert(c, define->expr, it->name->node.type);
+                        } else {
+                            if (define->expr->type.is_meta) {
+                                it->name->node.type = c->type_info_pointer_type;
+                            } else {
+                                it->name->node.type = define->expr->type;
+                            }
+                        }
 
-                    it->name->node.type = type_without_meta(type_assert_type(c, define->type));
+                        it->name->definition_spec->const_value = eval_const_expr(c, define->expr, false);
+                        it->name->definition_spec->is_const_value_evaluated = true;
+                    } else {
+                        spec->polymorphs_count_min++;
+                    }
+
                     it->node.type = it->name->node.type;
                     if (type_eq(it->node.type, c->type_info_pointer_type)) {
                         it->is_type = true;
@@ -6180,7 +6213,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 if (type_meta_kind_eq(*fn_type, TYPE_STRUCT)) {
                     Type_Struct *spec = fn_type->spec.structt;
 
-                    Node **arguments = arena_alloc(&temp_arena, spec->polymorphs_count * sizeof(*arguments));
+                    Node **parameters = arena_alloc(&temp_arena, spec->polymorphs_count * sizeof(*parameters));
                     Node  *excess_argument = NULL;
                     ll_foreach(arg, &call->args) {
                         Node *it = arg;
@@ -6222,18 +6255,18 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                 continue;
                             }
 
-                            if (arguments[n]) {
+                            if (parameters[n]) {
                                 error_node(
                                     EK_ERROR,
                                     arg,
                                     "Duplication of polymorphic parameter '" SV_Fmt "'",
                                     SV_Arg(spec->polymorphs[n]->name->node.token.sv));
 
-                                error_node(EK_NOTE, arguments[n], "Passed here already");
+                                error_node(EK_NOTE, parameters[n], "Passed here already");
                                 error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
                                 exit(c, 1);
                             }
-                            arguments[n] = arg;
+                            parameters[n] = arg;
                         }
 
                         call->args_count += parts;
@@ -6242,15 +6275,54 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         }
                     }
 
-                    check_call_arity(
-                        c,
-                        call->fn,
-                        call->args_count,
-                        call->end,
-                        false,
-                        spec->polymorphs_count,
-                        spec->polymorphs_count,
-                        excess_argument);
+                    // Ensure that all arguments are provided
+                    {
+                        check_call_arity(
+                            c,
+                            call->fn,
+                            call->args_count,
+                            call->end,
+                            false,
+                            spec->polymorphs_count_min,
+                            spec->polymorphs_count,
+                            excess_argument);
+
+                        size_t not_provided_count = 0;
+                        SV     not_provided_name = {0};
+                        for (size_t i = 0; i < spec->polymorphs_count; i++) {
+                            Node_Polymorph *it = spec->polymorphs[i];
+                            if (!parameters[i] && !it->name->definition_spec->is_const_value_evaluated) {
+                                not_provided_count++;
+                                if (not_provided_count == 1) {
+                                    not_provided_name = it->name->node.token.sv;
+                                } else if (not_provided_count == 2) {
+                                    error_token_begin(EK_ERROR, call->end);
+                                    fprintf(
+                                        stderr,
+                                        "The following polymorphic parameters are not provided: " SV_Fmt ", " SV_Fmt,
+                                        SV_Arg(not_provided_name),
+                                        SV_Arg(it->name->node.token.sv));
+                                } else {
+                                    fprintf(stderr, ", " SV_Fmt, SV_Arg(it->name->node.token.sv));
+                                }
+                            }
+                        }
+
+                        if (not_provided_count) {
+                            if (not_provided_count == 1) {
+                                error_token(
+                                    EK_ERROR,
+                                    call->end,
+                                    "Polymorphic parameter '" SV_Fmt "' is not provided",
+                                    SV_Arg(not_provided_name));
+                            } else {
+                                error_finalize();
+                            }
+
+                            error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
+                            exit(c, 1);
+                        }
+                    }
 
                     size_t it_index = 0;
                     ll_foreach(arg, &call->args) {
@@ -6311,8 +6383,19 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         }
                     }
 
-                    // TODO: Default arguments
-                    arena_reset(&temp_arena, arguments);
+                    for (size_t i = 0; i < spec->polymorphs_count; i++) {
+                        Node_Polymorph *polymorph = spec->polymorphs[i];
+                        if (polymorph->name->definition_spec->is_const_value_evaluated) {
+                            add_monomorph_parameter_default_value(
+                                c,
+                                polymorph,
+                                polymorph->node.type,
+                                &polymorph->name->definition_spec->const_value,
+                                NULL);
+                        }
+                    }
+
+                    arena_reset(&temp_arena, parameters);
 
                     call->fn = monomorphize(c, call->fn, (Node *) call);
                     n->type = call->fn->type;
