@@ -151,6 +151,7 @@ wprint :: (w: Writer, vs: ...Any) {
         wprint(w, "\{l.path}:\{l.row}:\{l.col}:")
     }
 
+    // TODO: Make the character and string printers respect special characters if nested
     write :: (w: Writer, a: Any, nested: bool) {
         if a.type == Type {
             write_type(w, *&Type(a.data))
@@ -177,6 +178,8 @@ wprint :: (w: Writer, vs: ...Any) {
                 w.write([]char("'"))
                 if ch == '\'' {
                     w.write([]char("\\'"))
+                } else if ch == '\0' {
+                    w.write([]char("\\0"))
                 } else {
                     w.write((&ch)[..1])
                 }

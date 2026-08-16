@@ -1307,6 +1307,11 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             return const_value_u64(int128_is_zero(value.as.integer));
 
         case TOKEN_SIZEOF:
+            if (unary->value->type.kind == TYPE_POLYMORPH &&
+                !unary->value->type.spec.polymorph.definition->is_monomorphized) //
+            {
+                return const_value_u64(0);
+            }
             return const_value_u64(compile_sizeof(c, &unary->value->type));
 
         case TOKEN_TYPEOF: {
