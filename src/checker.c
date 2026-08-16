@@ -2125,6 +2125,7 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
         while ((it = (Node_Atom *) node_iter((Node *) it, define->name))) {
             if (!sv_match(it->node.token.sv, "_")) {
                 if (it->definition_spec->is_local) {
+                    it->definition_spec->fn_context = c->context.fn;
                     if (it->definition_spec->is_const) {
                         const Context_Fn *fn = c->context.fn;
 
@@ -2145,8 +2146,6 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
 
                         context_push_define(&c->context, it);
                     }
-
-                    it->definition_spec->fn_context = c->context.fn;
                 } else {
                     if (get_builtin_type_kind(it->node.token.sv, NULL)) {
                         error_redefinition(c, (Node *) it, NULL);
@@ -3469,6 +3468,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
                 atom->definition_spec =
                     arena_clone(&default_arena, atom->definition_spec, sizeof(*atom->definition_spec));
                 atom->definition_spec->check_status = UNCHECKED;
+                atom->definition_spec->fn_context = NULL;
             }
         } else {
             if (atom->definition_spec) {
@@ -3576,6 +3576,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
         monomorphize_node(c, &fn->body, first);
 
         if (!first) {
+            monomorphize_polymorphs(c, &fn->polymorphs, first);
             monomorphize_replace(c, (Node **) &fn->outer_fn);
             monomorphize_replace(c, (Node **) &fn->defined_as);
             monomorphize_replace(c, (Node **) &fn->trait_method);
@@ -3885,7 +3886,6 @@ static void monomorphize(Compiler *c, Node **np, Node_Call *site) {
         Node_Fn *fn = (Node_Fn *) *np;
         fn->monomorphs = fn->polymorphs;
         memset(&fn->polymorphs, 0, sizeof(fn->polymorphs));
-        monomorphize_polymorphs(c, &fn->monomorphs, false);
 
         if (log) {
             error_node(EK_NOTE, *np, "Monomorphized this node");
@@ -4907,21 +4907,22 @@ static bool check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool only_check_pol
 
     Node *n = (Node *) fn;
     bool  is_ref_valid = false;
-    bool  reused = false;
 
-    if (fn->context_fn_reuse) {
-        fn->context_fn_reuse->fn = fn;
-        context_push_fn(&c->context, fn->context_fn_reuse);
-        c->context.replace = fn->context_replace_reuse;
-        reused = true;
+    Context_Fn context = {0};
+    context.fn = fn;
+    if (fn->checked) {
+        for (Context_Fn *f = c->context.fn; f; f = f->outer) {
+            if (f->fn == fn->outer_fn) {
+                context.outer = f;
+                break;
+            }
+        }
+
+        c->context.replace = fn->context_replace;
     } else {
-        fn->context.fn = fn;
-        fn->context.outer = c->context.fn;
-        context_push_fn(&c->context, &fn->context);
-
-        fn->context_fn_reuse = c->context.fn;
-        fn->context_replace_reuse = c->context.replace;
+        context.outer = c->context.fn;
     }
+    context_push_fn(&c->context, &context);
 
     {
         Type_Fn *fn_spec = arena_alloc(&default_arena, sizeof(*fn_spec));
@@ -4992,6 +4993,8 @@ static bool check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool only_check_pol
 
             assert(define->name->kind == NODE_ATOM);
             Node_Atom *it = (Node_Atom *) define->name;
+            it->definition_spec->fn_context = c->context.fn;
+
             if (!sv_match(it->node.token.sv, "_")) {
                 Node_Atom *previous = context_find_define_in_fn(&c->context, c->context.fn, it->node.token.sv);
                 if (previous && previous != it) {
@@ -5258,15 +5261,13 @@ static bool check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool only_check_pol
                 exit(c, 1);
             }
         }
+
+        fn->checked = true;
     }
 
 end:
-    if (reused) {
-        context_restore_fn(&c->context, context_fn_save);
-        c->context.replace = context_replace_save;
-    } else {
-        context_pop_fn(&c->context);
-    }
+    context_restore_fn(&c->context, context_fn_save);
+    c->context.replace = context_replace_save;
     return is_ref_valid;
 }
 

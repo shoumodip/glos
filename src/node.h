@@ -723,13 +723,12 @@ struct Node_Fn {
     // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
     bool is_compare_operator_complete;
 
-    Node_Fn   *outer_fn;
-    Context_Fn context;
+    Node_Fn *outer_fn;
 
     // Polymorphic functions are not checked immediately but rather upon monomorphization. Therefore the context needs
     // to be preserved to maintain lexical scoping.
-    Context_Fn      *context_fn_reuse;
-    Context_Replace *context_replace_reuse;
+    bool             checked;
+    Context_Replace *context_replace;
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;

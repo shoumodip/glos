@@ -21,7 +21,6 @@ typedef struct {
 //   - begin
 //   - end
 void context_push_fn(Context *c, Context_Fn *fn);
-void context_pop_fn(Context *c);
 void context_restore_fn(Context *c, Context_Fn *save);
 
 void context_push_define(Context *c, Node_Atom *define);

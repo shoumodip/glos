@@ -45,13 +45,6 @@ void context_push_fn(Context *c, Context_Fn *fn) {
     c->fn = fn;
 }
 
-void context_pop_fn(Context *c) {
-    assert(c->fn);
-    c->defines.count = c->fn->defines_begin;
-    c->imports.count = c->fn->imports_begin;
-    c->fn = c->fn->outer;
-}
-
 void context_restore_fn(Context *c, Context_Fn *save) {
     c->fn = save;
     if (c->fn) {
