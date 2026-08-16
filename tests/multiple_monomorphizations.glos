@@ -1,0 +1,23 @@
+Array :: struct($T: Type, $N: i64) {
+    items: [N]T
+}
+
+index :: (this: &Array($T, $N), n: i64, assign: bool) -> &T {
+    assert(n < this.items.count)
+    return &this.items[n]
+}
+
+main :: () {
+    xs: Array(i64, 4)
+    xs[0] = 69
+    xs[1] = 420
+    xs[2] = 1337
+    xs[3] = 80085
+    println(xs)
+
+    xs: Array(string, 3)
+    xs[0] = "Suckon"
+    xs[1] = "Deez"
+    xs[2] = "Nuts"
+    println(xs)
+}
