@@ -173,7 +173,7 @@ void da_resize(void **data, size_t *capacity, size_t size, size_t count) {
         }
 
         *data = realloc(*data, *capacity * size);
-        assert(data);
+        assert(*data);
     }
 }
 

@@ -1343,6 +1343,10 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             return const_value_u64(int128_is_zero(value.as.integer));
 
         case TOKEN_SIZEOF:
+            if (c->dont_allow_polymorphs) {
+                eval_const_expr(c, unary->value, false);
+            }
+
             if (unary->value->type.kind == TYPE_POLYMORPH &&
                 !unary->value->type.spec.polymorph.definition->is_monomorphized) //
             {
@@ -2903,6 +2907,39 @@ static Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module) {
     return method;
 }
 
+typedef struct {
+#define in
+#define out
+#define inout
+
+    // The whole expression
+    in Node *expr;
+
+    // In case of a method
+    in Node *receiver;
+
+    inout Node *fn;        // The actual function, might differ in case of polymorphism
+    in Node    *fn_source; // The function as per the source code
+
+    inout Nodes args;
+    out size_t  args_count;
+
+    in bool    is_method;
+    in bool    is_trait;
+    inout bool is_polymorph;
+
+    out bool   is_typed_variadics_direct;
+    out size_t typed_variadics_count;
+
+    in Token end;
+
+#undef in
+#undef out
+#undef inout
+} Call_Checker;
+
+static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_provided);
+
 static Type_Trait_Impl *
 check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) //
 {
@@ -2945,14 +2982,27 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
                     goto next;
                 }
 
-                {
-                    //
-                }
-
                 Node_Fn *fn = get_method(c, spec, n->module);
                 if (!fn) {
                     errors[i] = (Error) {.kind = UNDEFINED};
                     goto next;
+                }
+
+                if (fn->polymorphs.count) {
+                    Call_Checker cc = {0};
+                    cc.expr = n;
+                    cc.fn_source = n;
+                    cc.fn = (Node *) fn;
+                    cc.end = n->token;
+
+                    cc.is_method = true;
+                    cc.receiver = n;
+                    cc.is_polymorph = true;
+
+                    check_call_arguments(c, &cc, false);
+                    assert(cc.fn->kind == NODE_FN);
+
+                    fn = (Node_Fn *) cc.fn;
                 }
 
                 assert(it->type.kind == TYPE_FN);
@@ -3113,39 +3163,6 @@ static bool is_indexable(Compiler *c, Node *n, Type type, Module *module) {
 
     return false;
 }
-
-typedef struct {
-#define in
-#define out
-#define inout
-
-    // The whole expression
-    in Node *expr;
-
-    // In case of a method
-    in Node *receiver;
-
-    inout Node *fn;        // The actual function, might differ in case of polymorphism
-    in Node    *fn_source; // The function as per the source code
-
-    inout Nodes args;
-    out size_t  args_count;
-
-    in bool    is_method;
-    in bool    is_trait;
-    inout bool is_polymorph;
-
-    out bool   is_typed_variadics_direct;
-    out size_t typed_variadics_count;
-
-    in Token end;
-
-#undef in
-#undef out
-#undef inout
-} Call_Checker;
-
-static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_provided);
 
 static Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
     Method_Spec spec = {0};
@@ -4613,7 +4630,10 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
         fn_spec = cc->fn->type.spec.fn;
 
         if (cc->is_method) {
-            cc->fn_source->type = cc->fn->type;
+            // 'fn_source' and 'receiver' are same in case of traits
+            if (cc->fn_source != cc->receiver) {
+                cc->fn_source->type = cc->fn->type;
+            }
         }
     }
 

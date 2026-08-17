@@ -1,0 +1,19 @@
+Display :: trait {
+    display: ()
+}
+
+display :: (s: Display) {
+    s.display()
+}
+
+Array :: struct($T: Type, $N: i64) {
+    items: [N]T
+}
+
+display :: (this: Array($T, $N)) {
+    println(this.items)
+}
+
+main :: () {
+    display(Array(i64, 2) {{69, 420}})
+}
