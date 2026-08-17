@@ -17,7 +17,7 @@ Platform :: enum {
 PLATFORM :: #platform
 
 // RTTI
-Type :: &Type_Info
+Type :: distinct &Type_Info
 
 Type_Info :: struct {
     size: i64

@@ -1,0 +1,9 @@
+main :: () {
+    println(*clone(69))
+}
+
+clone :: (x: $T) -> &T {
+    return &T(memcpy(malloc(sizeof(T)), rawptr(&x), sizeof(T)))
+}
+
+#import "C"

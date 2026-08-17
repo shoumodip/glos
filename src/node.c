@@ -1,5 +1,6 @@
 #include "node.h"
 #include "basic.h"
+#include <stdio.h>
 
 void nodes_push(Nodes *ns, Node *n) {
     if (!n) {
@@ -23,10 +24,47 @@ void modules_free(Modules *ms) {
     ht_free(&ms->table);
 }
 
-static_assert(COUNT_TYPES == 25, "");
+Type type_with_ref(Type t, size_t ref) {
+    t.ref = ref;
+    return t;
+}
+
+Type type_without_ref(Type t) {
+    t.ref = 0;
+    return t;
+}
+
+Type type_with_meta(Type t) {
+    t.is_meta = true;
+    return t;
+}
+
+Type type_without_meta(Type t) {
+    t.is_meta = false;
+    return t;
+}
+
+static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
+    sb_push(sb, '(');
+    ll_foreach(it, &ps) {
+        Node_Polymorph *monomorph = (Node_Polymorph *) it;
+        if (monomorph->is_monomorphized) {
+            sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
+        } else {
+            sb_push(sb, '$');
+            sb_push_sv(sb, monomorph->name->node.token.sv);
+        }
+
+        if (it->next) {
+            sb_push_cstr(sb, ", ");
+        }
+    }
+    sb_push(sb, ')');
+}
+
+static_assert(COUNT_TYPES == 26, "");
 void sb_push_type(SB *sb, Type type) {
     assert(!type.is_meta);
-
     if (type.distinct) {
         const Type distinct_type = type.distinct->node.type;
         if (distinct_type.ref <= type.ref) {
@@ -102,6 +140,10 @@ void sb_push_type(SB *sb, Type type) {
             Type_Fn_Arg it = type.spec.fn->args[i];
             if (i) {
                 sb_push_cstr(sb, ", ");
+            }
+
+            if (it.polymorph) {
+                sb_push(sb, '$');
             }
             sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
 
@@ -179,7 +221,21 @@ void sb_push_type(SB *sb, Type type) {
         if (defined_as) {
             sb_push_sv(sb, defined_as->node.token.sv);
         } else {
-            sb_push_cstr(sb, "struct {");
+            sb_push_cstr(sb, "struct");
+        }
+
+        if (spec->definition->polymorphs.count) {
+            assert(!spec->definition->monomorphs.count);
+            sb_push_polymorphs(sb, spec->definition->polymorphs);
+        }
+
+        if (spec->definition->monomorphs.count) {
+            assert(!spec->definition->polymorphs.count);
+            sb_push_polymorphs(sb, spec->definition->monomorphs);
+        }
+
+        if (!defined_as) {
+            sb_push_cstr(sb, " {");
             for (size_t i = 0; i < spec->fields_count; i++) {
                 Type_Struct_Field it = spec->fields[i];
                 if (i) {
@@ -193,10 +249,17 @@ void sb_push_type(SB *sb, Type type) {
         }
     } break;
 
-    case TYPE_ARRAY:
-        sb_sprintf(sb, "[%zu]", type.spec.array.count);
-        sb_push_type(sb, *type.spec.array.element);
-        break;
+    case TYPE_ARRAY: {
+        const Type_Array array = type.spec.array;
+        sb_sprintf(sb, "[");
+        if (array.count_polymorph) {
+            sb_push_type(sb, type_without_meta(array.count_polymorph->node.type));
+        } else {
+            sb_sprintf(sb, "%zu", array.count);
+        }
+        sb_sprintf(sb, "]");
+        sb_push_type(sb, *array.element);
+    } break;
 
     case TYPE_SLICE:
         sb_push_cstr(sb, "[]");
@@ -206,6 +269,14 @@ void sb_push_type(SB *sb, Type type) {
     case TYPE_STRING:
         sb_push_cstr(sb, "string");
         break;
+
+    case TYPE_POLYMORPH: {
+        const Type_Polymorph spec = type.spec.polymorph;
+        if (spec.is_definition) {
+            sb_push(sb, '$');
+        }
+        sb_push_sv(sb, spec.definition->name->node.token.sv);
+    } break;
 
     case TYPE_GROUP:
         sb_push_cstr(sb, "(");
@@ -301,8 +372,12 @@ static bool type_union_eq(Type_Union *a, Type_Union *b) {
 }
 
 static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
-    if (a->definition->defined_as || b->definition->defined_as) {
-        return a->definition->defined_as == b->definition->defined_as;
+    if (a->definition == b->definition) {
+        return true;
+    }
+
+    if (a->definition->defined_as != b->definition->defined_as) {
+        return false;
     }
 
     if (a->fields_count != b->fields_count) {
@@ -322,7 +397,7 @@ static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
     return true;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_eq(Type a, Type b) {
     if (a.is_meta) {
         return b.is_meta;
@@ -403,13 +478,12 @@ bool type_eq(Type a, Type b) {
     }
 }
 
-static_assert(COUNT_TYPES == 25, "");
 bool type_kind_eq(Type type, Type_Kind kind) {
-    if (type.is_meta) {
-        return false;
-    }
+    return !type.is_meta && type.kind == kind;
+}
 
-    return type.kind == kind;
+bool type_meta_kind_eq(Type type, Type_Kind kind) {
+    return type.is_meta && type.kind == kind;
 }
 
 bool type_is_numeric(Type type) {
@@ -417,7 +491,7 @@ bool type_is_numeric(Type type) {
            type_kind_eq(type, TYPE_UNKNOWN_COMPOUND);
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_integer(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -465,7 +539,7 @@ bool type_is_scalar(Type type) {
     return false;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_signed(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -492,7 +566,7 @@ bool type_is_signed(Type type) {
     }
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_untyped(Type type) {
     if (type.is_meta || type.ref) {
         return false;
@@ -501,7 +575,7 @@ bool type_is_untyped(Type type) {
     return type.kind == TYPE_INT;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 bool type_is_unknown(Type type) {
     if (type.is_meta || type.ref) {
         return false;
@@ -510,7 +584,7 @@ bool type_is_unknown(Type type) {
     return type.kind == TYPE_UNKNOWN_ENUM || type.kind == TYPE_UNKNOWN_COMPOUND;
 }
 
-static_assert(COUNT_CONST_VALUES == 10, "");
+static_assert(COUNT_CONST_VALUES == 11, "");
 bool const_value_eq(Const_Value a, Const_Value b) {
     if (a.kind != b.kind) {
         return false;
@@ -601,13 +675,187 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     case CONST_VALUE_MODULE:
         unreachable();
 
+    case CONST_VALUE_POLYMORPH:
+        // I don't know why but this branch never triggers. Perhaps it is indeed unreachable, although that would need
+        // more usage to conclude.
+        unreachable();
+
     default:
         unreachable();
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
-Node *node_alloc(Module *module, Node_Kind kind, Token token) {
+static void sb_push_quoted_char(SB *sb, char ch, char quote) {
+    switch (ch) {
+    case 033:
+        sb_push_cstr(sb, "\\e");
+        break;
+
+    case '\n':
+        sb_push_cstr(sb, "\\n");
+        break;
+
+    case '\r':
+        sb_push_cstr(sb, "\\r");
+        break;
+
+    case '\t':
+        sb_push_cstr(sb, "\\t");
+        break;
+
+    case '\0':
+        sb_push_cstr(sb, "\\0");
+        break;
+
+    case '\\':
+        sb_push_cstr(sb, "\\\\");
+        break;
+
+    case '\'':
+        if (quote == '\'') {
+            sb_push_cstr(sb, "\\'");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    case '"':
+        if (quote == '"') {
+            sb_push_cstr(sb, "\\\"");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    default:
+        sb_push(sb, ch);
+        break;
+    }
+}
+
+static_assert(COUNT_CONST_VALUES == 11, "");
+void sb_push_const_value(SB *sb, Type type, Const_Value v) {
+    switch (v.kind) {
+    case CONST_VALUE_INT:
+        if (type_kind_eq(type, TYPE_CHAR)) {
+            sb_push(sb, '\'');
+            sb_push_quoted_char(sb, v.as.integer.low, '\'');
+            sb_push(sb, '\'');
+        } else {
+            sb_push_cstr(sb, int128_to_cstr(v.as.integer));
+        }
+        break;
+
+    case CONST_VALUE_FN:
+        sb_push_fn_name(sb, v.as.fn, v.as.fn->module);
+        break;
+
+    case CONST_VALUE_VAR: {
+        Node_Atom *definition = v.as.var;
+        assert(definition->definition_spec); // This is a variable
+        sb_push(sb, '&');
+        sb_push_fn_name(sb, definition->definition_spec->static_var_fn, definition->module);
+        sb_sprintf(sb, "." SV_Fmt, SV_Arg(definition->node.token.sv));
+    } break;
+
+    case CONST_VALUE_TYPE:
+        sb_push_type(sb, type_without_meta(v.as.type));
+        break;
+
+    case CONST_VALUE_TRAIT: {
+        Node_Trait *trait = v.as.trait.impl->trait->definition;
+        sb_push_type(sb, type_without_meta(trait->node.type));
+        if (!trait->defined_as) {
+            sb_push(sb, ' ');
+        }
+
+        sb_push(sb, '(');
+        if (v.as.trait.data) {
+            sb_push_const_value(sb, *v.as.trait.type, *v.as.trait.data);
+        } else {
+            sb_push_cstr(sb, "null");
+        }
+        sb_push(sb, ')');
+    } break;
+
+    case CONST_VALUE_UNION: {
+        Node_Union *unionn = v.as.unionn.spec->definition;
+        sb_push_type(sb, type_without_meta(unionn->node.type));
+        if (!unionn->defined_as) {
+            sb_push(sb, ' ');
+        }
+
+        sb_push(sb, '(');
+        if (v.as.unionn.real) {
+            sb_push_const_value(sb, v.as.unionn.spec->variants[v.as.unionn.index].type, *v.as.unionn.real);
+        } else {
+            sb_push_cstr(sb, "null");
+        }
+        sb_push(sb, ')');
+    } break;
+
+    case CONST_VALUE_STRUCT: {
+        Const_Value_Struct structure = v.as.structt;
+        sb_push(sb, '{');
+        for (size_t i = 0; i < structure.spec->fields_count; i++) {
+            if (i) {
+                sb_push_cstr(sb, ", ");
+            }
+            sb_push_const_value(sb, structure.spec->fields[i].type, structure.fields[i]);
+        }
+        sb_push(sb, '}');
+    } break;
+
+    case CONST_VALUE_ARRAY: {
+        Const_Value_Array array = v.as.array;
+        sb_push(sb, '{');
+        for (size_t i = 0; i < array.count; i++) {
+            if (i) {
+                sb_push_cstr(sb, ", ");
+            }
+            sb_push_const_value(sb, *array.element_type, array.data[i]);
+        }
+        sb_push(sb, '}');
+    } break;
+
+    case CONST_VALUE_STRING:
+        sb_push(sb, '"');
+        for (size_t i = 0; i < v.as.string.count; i++) {
+            sb_push_quoted_char(sb, v.as.string.data[i], '"');
+        }
+        sb_push(sb, '"');
+        break;
+
+    case CONST_VALUE_MODULE:
+        unreachable();
+
+    case CONST_VALUE_POLYMORPH: {
+        Node_Polymorph *polymorph = v.as.polymorph.polymorph;
+        if (polymorph->is_monomorphized) {
+            sb_push_const_value(sb, polymorph->monomorphization_type, polymorph->monomorphization_value);
+        } else {
+            if (v.as.polymorph.is_definition) {
+                sb_push(sb, '$');
+            }
+
+            sb_push_sv(sb, v.as.polymorph.polymorph->name->node.token.sv);
+        }
+    } break;
+
+    default:
+        unreachable();
+    }
+}
+
+void const_value_debug(FILE *f, Type type, Const_Value v) {
+    const size_t start = default_sb.count;
+    sb_push_const_value(&default_sb, type, v);
+    fwrite(default_sb.data + start, default_sb.count - start, 1, f);
+    default_sb.count = start;
+}
+
+static_assert(COUNT_NODES == 29, "");
+size_t node_size(Node_Kind kind) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(Node_Atom), // This comment is here to prevent clang-format from messing this up
         [NODE_GROUP] = sizeof(Node_Group),
@@ -617,6 +865,7 @@ Node *node_alloc(Module *module, Node_Kind kind, Token token) {
         [NODE_ASSERT] = sizeof(Node_Assert),
         [NODE_IMPORT] = sizeof(Node_Import),
         [NODE_DISTINCT] = sizeof(Node_Distinct),
+        [NODE_POLYMORPH] = sizeof(Node_Polymorph),
         [NODE_INTERPOLATION] = sizeof(Node_Interpolation),
 
         // This comment is here to prevent clang-format from messing this up
@@ -647,7 +896,11 @@ Node *node_alloc(Module *module, Node_Kind kind, Token token) {
     };
 
     assert(kind >= NODE_ATOM && kind < COUNT_NODES);
-    Node *node = arena_alloc(&default_arena, sizes[kind]);
+    return sizes[kind];
+}
+
+Node *node_alloc(Module *module, Node_Kind kind, Token token) {
+    Node *node = arena_alloc(&default_arena, node_size(kind));
     node->kind = kind;
     node->token = token;
     node->module = module;
@@ -670,10 +923,85 @@ Node *node_iter(Node *it, Node *ll) {
     }
 }
 
+void polymorphs_push(Polymorphs *ps, Node_Polymorph *p) {
+    if (!p) {
+        return;
+    }
+
+    if (ps->tail) {
+        ps->tail->next = p;
+    } else {
+        ps->head = p;
+    }
+
+    ps->tail = p;
+    ps->count++;
+}
+
+void sb_push_fn_name(SB *sb, Node_Fn *fn, Module *module) {
+    if (!fn) {
+        sb_push_sv(sb, module->name);
+        return;
+    }
+
+    if (fn->wrapper) {
+        assert(fn->defined_as && !fn->outer_fn && fn->wrapper_for_trait);
+
+        Node_Trait *definition = fn->wrapper_for_trait->definition;
+        sb_push_fn_name(sb, definition->defined_in, definition->module);
+        sb_push(sb, '.');
+        sb_push_type(sb, (Type) {.kind = TYPE_TRAIT, .spec.trait = fn->wrapper_for_trait});
+        sb_push(sb, '(');
+        sb_push_fn_name(sb, fn->wrapper, fn->module);
+        sb_push(sb, ')');
+        return;
+    }
+
+    sb_push_fn_name(sb, fn->outer_fn, module);
+    if (fn->is_method) {
+        assert(fn->defined_as);
+        assert(!fn->outer_fn);
+
+        assert(fn->node.type.kind == TYPE_FN);
+        const Type_Fn *fn_spec = fn->node.type.spec.fn;
+
+        assert(fn_spec->args_count);
+        sb_sprintf(sb, ".");
+
+        Type receiver = fn_spec->args[0].type;
+        receiver.ref = 0;
+        sb_push_type(sb, receiver);
+    }
+
+    if (fn->defined_as) {
+        sb_sprintf(sb, "." SV_Fmt, SV_Arg(fn->defined_as->node.token.sv));
+    } else {
+        if (!fn->defined_as_anon_iota) {
+            static size_t iota = 0;
+            fn->defined_as_anon_iota = ++iota;
+        }
+        sb_sprintf(sb, ".anon.%zu", fn->defined_as_anon_iota);
+    }
+
+    if (fn->monomorphs.count) {
+        sb_push(sb, '(');
+        ll_foreach(it, &fn->monomorphs) {
+            assert(it->is_monomorphized);
+            sb_sprintf(sb, "$" SV_Fmt " = ", SV_Arg(it->name->node.token.sv));
+            sb_push_const_value(sb, it->node.type, it->monomorphization_value);
+
+            if (it->next) {
+                sb_push_cstr(sb, ", ");
+            }
+        }
+        sb_push(sb, ')');
+    }
+}
+
 #define Indent_Fmt    "%*s"
 #define Indent_Arg(d) (d) * 4, ""
 
-static void node_debug_impl(FILE *f, Node *n, int depth, const char *label);
+static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label);
 
 static void nodes_debug_impl(FILE *f, Nodes ns, int depth, const char *label) {
     fprintf(f, Indent_Fmt, Indent_Arg(depth));
@@ -688,7 +1016,7 @@ static void nodes_debug_impl(FILE *f, Nodes ns, int depth, const char *label) {
     }
 
     const size_t child_depth = depth + (label != NULL);
-    for (Node *it = ns.head; it; it = it->next) {
+    ll_foreach(it, &ns) {
         node_debug_impl(f, it, child_depth, NULL);
     }
 
@@ -697,21 +1025,49 @@ static void nodes_debug_impl(FILE *f, Nodes ns, int depth, const char *label) {
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
-static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
+static void polymorphs_debug_impl(FILE *f, Polymorphs ns, int depth, const char *label) {
+    fprintf(f, Indent_Fmt, Indent_Arg(depth));
+    if (label) {
+        fprintf(f, "%s = {", label);
+        if (ns.head) {
+            fprintf(f, "\n");
+        } else {
+            fprintf(f, "}\n");
+            return;
+        }
+    }
+
+    const size_t child_depth = depth + (label != NULL);
+    ll_foreach(it, &ns) {
+        node_debug_impl(f, (Node *) it, child_depth, NULL);
+    }
+
+    if (label) {
+        fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
+    }
+}
+
+static_assert(COUNT_NODES == 29, "");
+static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label) {
     if (!n) {
         return;
     }
 
     fprintf(f, Indent_Fmt, Indent_Arg(depth));
+    fprintf(f, "[%p] (%s) ", (void *) n, type_to_cstr(n->type)); // @remove
     if (label) {
         fprintf(f, "%s = ", label);
     }
 
     switch (n->kind) {
-    case NODE_ATOM:
-        fprintf(f, "Atom " SV_Fmt "\n", SV_Arg(n->token.sv));
-        break;
+    case NODE_ATOM: {
+        Node_Atom *atom = (Node_Atom *) n;
+        if (atom->polymorph) {
+            fprintf(f, "Atom $" SV_Fmt "\n", SV_Arg(n->token.sv));
+        } else {
+            fprintf(f, "Atom " SV_Fmt "\n", SV_Arg(n->token.sv));
+        }
+    } break;
 
     case NODE_GROUP: {
         Node_Group *group = (Node_Group *) n;
@@ -762,6 +1118,15 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
 
+    case NODE_POLYMORPH: {
+        Node_Polymorph *polymorph = (Node_Polymorph *) n;
+        fprintf(
+            f,
+            "Polymorph (%s) '" SV_Fmt "'\n",
+            polymorph->is_type ? "Type" : "Not Type",
+            SV_Arg(polymorph->name->node.token.sv));
+    } break;
+
     case NODE_INTERPOLATION: {
         Node_Interpolation *interp = (Node_Interpolation *) n;
         fprintf(f, "Interpolation {\n");
@@ -780,6 +1145,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
         } else {
             fprintf(f, "Function {\n");
         }
+        polymorphs_debug_impl(f, fn->polymorphs, depth + 1, "Polymorphs");
         nodes_debug_impl(f, fn->args, depth + 1, "Args");
         nodes_debug_impl(f, fn->returns, depth + 1, "Returns");
         node_debug_impl(f, fn->body, depth + 1, "Body");
@@ -810,6 +1176,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     case NODE_STRUCT: {
         Node_Struct *structt = (Node_Struct *) n;
         fprintf(f, "Structure {\n");
+        polymorphs_debug_impl(f, structt->polymorphs, depth + 1, "Polymorphs");
         nodes_debug_impl(f, structt->fields, depth + 1, "Fields");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
@@ -825,7 +1192,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
         fprintf(f, "Call {\n");
-        node_debug_impl(f, call->fn, depth + 1, "Fn");
+        node_debug_impl(f, call->fn_source, depth + 1, "Fn");
         nodes_debug_impl(f, call->args, depth + 1, "Args");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
@@ -846,6 +1213,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     case NODE_INDEXABLE: {
         Node_Indexable *indexable = (Node_Indexable *) n;
         fprintf(f, "Indexable {\n");
+        node_debug_impl(f, indexable->count, depth + 1, "Count");
         node_debug_impl(f, indexable->element, depth + 1, "Element");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
@@ -951,7 +1319,7 @@ static void node_debug_impl(FILE *f, Node *n, int depth, const char *label) {
     }
 }
 
-void node_debug(FILE *f, Node *n) {
+void node_debug(FILE *f, const Node *n) {
     node_debug_impl(f, n, 0, NULL);
 }
 

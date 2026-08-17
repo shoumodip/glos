@@ -1,0 +1,8 @@
+id :: (x: $T) -> T {
+    return x
+}
+
+main :: () {
+    println(id(69))
+    println(id("Urmom"))
+}

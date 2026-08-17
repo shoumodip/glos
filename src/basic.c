@@ -358,6 +358,14 @@ bool sv_eq(SV a, SV b) {
     return a.count == b.count && memcmp(a.data, b.data, b.count) == 0;
 }
 
+int sv_cmp(SV a, SV b) {
+    const int diff = memcmp(a.data, b.data, min(a.count, b.count));
+    if (diff) {
+        return diff;
+    }
+    return (a.count > b.count) - (a.count < b.count);
+}
+
 bool sv_match(SV a, const char *b) {
     return a.count == strlen(b) && memcmp(b, a.data, a.count) == 0;
 }

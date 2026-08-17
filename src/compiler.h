@@ -2,6 +2,7 @@
 #define COMPILER_H
 
 #include "context.h"
+#include "node.h"
 #include "parser.h"
 
 #include <llvm-c/Target.h>
@@ -18,10 +19,33 @@ typedef struct {
 } Method_Spec;
 
 typedef struct {
+    Node_Polymorph *from;
+    Type            type;
+    Const_Value     value;
+    Node_Polymorph *to_polymorph;
+} Monomorph_Parameter;
+
+typedef struct {
+    Node *from; // The node that was monomorphized from
+    Node *into; // The node that was monomorphized into
+
+    Node    *site;    // The site of the monomorphization
+    Node_Fn *site_fn; // The function in which the monomorphization occured
+} Monomorphization;
+
+typedef struct {
+    Node        *from;
+    Type        *param_types;
+    Const_Value *param_values;
+    size_t       params_count;
+} Monomorph_Spec;
+
+typedef struct {
     // These are used only by the analyzer
     Type main_fn_type;
     DA(Type_Struct_Field) struct_fields;
 
+    // TODO: This should be an array
     Type interpolated_string_type;
 
     HT(Method_Spec, Node_Fn *) methods_table;
@@ -31,6 +55,17 @@ typedef struct {
     Type equivalence_type;
 
     Node *current_comptime_conditional_stmt;
+
+    HT(Monomorph_Spec, Node *) monomorph_intern;
+    HT(void *, void *) monomorph_replacements;
+
+    struct {
+        DA_Fields(Monomorph_Parameter);
+        size_t begin;
+    } monomorph_parameters;
+    DA(Monomorphization) monomorphization_stack;
+
+    bool dont_allow_polymorphs;
 
     // These are used both by the analyzer and the compiler
     Context context;
@@ -100,8 +135,6 @@ typedef struct {
     LLVMTypeRef llvm_trait_type;
 
     // TODO: Cache the debug for these types as well
-
-    size_t iota_anonymous_fn;
 } Compiler;
 
 size_t compile_sizeof(Compiler *c, Type *type);

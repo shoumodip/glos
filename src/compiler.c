@@ -32,7 +32,7 @@ void link_flags_add_libname(Link_Flags *ls, SV name) {
 #endif // PLATFORM_X86_64_WINDOWS
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static LLVMTypeRef compile_type(Compiler *c, Type *type) {
     if (!type) {
         return NULL;
@@ -98,6 +98,10 @@ static LLVMTypeRef compile_type(Compiler *c, Type *type) {
         type->llvm = definition->llvm;
     } break;
 
+    case TYPE_TRAIT:
+        type->llvm = c->llvm_trait_type;
+        break;
+
     case TYPE_UNION: {
         Type_Union *spec = type->spec.unionn;
         if (!spec->llvm) {
@@ -155,9 +159,8 @@ static LLVMTypeRef compile_type(Compiler *c, Type *type) {
         type->llvm = c->llvm_slice_type;
         break;
 
-    case TYPE_TRAIT:
-        type->llvm = c->llvm_trait_type;
-        break;
+    case TYPE_POLYMORPH:
+        unreachable();
 
     case TYPE_GROUP: {
         Type_Group *spec = &type->spec.group;
@@ -267,7 +270,7 @@ typedef struct {
     size_t      direct_types_count;
 } ABI_Info;
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static bool type_is_compound(Type type) {
     if (type.ref) {
         return false;
@@ -283,13 +286,16 @@ static bool type_is_compound(Type type) {
     case TYPE_GROUP:
         return true;
 
+    case TYPE_POLYMORPH:
+        unreachable();
+
     default:
         return false;
     }
 }
 
 #ifdef PLATFORM_X86_64_LINUX
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, LLVMTypeRef out[2]) {
     assert(type_is_compound(type));
     switch (type.kind) {
@@ -345,6 +351,9 @@ static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, L
         }
     } break;
 
+    case TYPE_POLYMORPH:
+        unreachable();
+
     default:
         unreachable();
     }
@@ -361,7 +370,7 @@ static ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         return info;
     }
 
-    static_assert(COUNT_TYPES == 25, "");
+    static_assert(COUNT_TYPES == 26, "");
     switch (type->kind) {
     case TYPE_UNIT:
         info.direct_types[info.direct_types_count++] = LLVMVoidTypeInContext(c->llvm_context);
@@ -537,54 +546,9 @@ static LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn);
 static LLVMValueRef compile_expr(Compiler *c, Node *n, bool ref);
 static void         compile_stmt(Compiler *c, Node *n);
 
-static void sb_push_nested_fn_name(Compiler *c, SB *sb, Node_Fn *fn, Module *module) {
-    if (!fn) {
-        sb_push_sv(sb, module->name);
-        return;
-    }
-
-    if (fn->wrapper) {
-        assert(fn->defined_as && !fn->outer_fn && fn->wrapper_for_trait);
-
-        Node_Trait *definition = fn->wrapper_for_trait->definition;
-        sb_push_nested_fn_name(c, sb, definition->defined_in, definition->module);
-        sb_push(sb, '.');
-        sb_push_type(sb, (Type) {.kind = TYPE_TRAIT, .spec.trait = fn->wrapper_for_trait});
-        sb_push(sb, '(');
-        sb_push_nested_fn_name(c, sb, fn->wrapper, fn->module);
-        sb_push(sb, ')');
-        return;
-    }
-
-    sb_push_nested_fn_name(c, sb, fn->outer_fn, module);
-    if (fn->is_method) {
-        assert(fn->defined_as);
-        assert(!fn->outer_fn);
-
-        assert(fn->node.type.kind == TYPE_FN);
-        const Type_Fn *fn_spec = fn->node.type.spec.fn;
-
-        assert(fn_spec->args_count);
-        sb_sprintf(sb, ".");
-
-        Type receiver = fn_spec->args[0].type;
-        receiver.ref = 0;
-        sb_push_type(sb, receiver);
-    }
-
-    if (fn->defined_as) {
-        sb_sprintf(sb, "." SV_Fmt, SV_Arg(fn->defined_as->node.token.sv));
-    } else {
-        if (!fn->defined_as_anon_iota) {
-            fn->defined_as_anon_iota = ++c->iota_anonymous_fn;
-        }
-        sb_sprintf(sb, ".anon.%zu", fn->defined_as_anon_iota);
-    }
-}
-
-static const char *temp_nested_fn_name(Compiler *c, Node_Fn *fn, Module *module) {
+static const char *temp_nested_fn_name(Node_Fn *fn, Module *module) {
     const size_t start = default_sb.count;
-    sb_push_nested_fn_name(c, &default_sb, fn, module);
+    sb_push_fn_name(&default_sb, fn, module);
     return arena_sb_to_cstr(&temp_arena, &default_sb, start);
 }
 
@@ -680,7 +644,7 @@ get_debug_for_builtin_compound_type(Compiler *c, SV name, Builtin_Compound_Type_
     return typedef_metadata;
 }
 
-static_assert(COUNT_TYPES == 25, "");
+static_assert(COUNT_TYPES == 26, "");
 static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     assert(!type->is_meta);
     if (type->ref) {
@@ -779,7 +743,7 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_nested_fn_name(c, &default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
@@ -814,7 +778,7 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_nested_fn_name(c, &default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
@@ -981,8 +945,9 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_nested_fn_name(c, &default_sb, spec->definition->defined_in, spec->definition->module);
-                    sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push(&default_sb, '.');
+                    sb_push_type(&default_sb, type_without_meta(*type));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
             }
@@ -1124,6 +1089,9 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         return get_debug_for_builtin_compound_type(c, sv_from_cstr("string"), fields, len(fields));
     }
 
+    case TYPE_POLYMORPH:
+        unreachable();
+
     case TYPE_GROUP: {
         compile_type(c, type);
 
@@ -1215,6 +1183,7 @@ static void set_debug_pos(Compiler *c, Pos pos) {
 static LLVMValueRef compile_const_value_into_memory(Compiler *c, LLVMValueRef value) {
     LLVMValueRef memory = LLVMAddGlobal(c->llvm_module, LLVMTypeOf(value), "");
     LLVMSetInitializer(memory, value);
+    LLVMSetLinkage(memory, LLVMPrivateLinkage);
     return memory;
 }
 
@@ -1263,7 +1232,7 @@ static void compile_trait_impl(Compiler *c, Type_Trait_Impl *impl) {
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 10, "");
+static_assert(COUNT_CONST_VALUES == 11, "");
 static LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type type) {
     switch (value.kind) {
     case CONST_VALUE_INT:
@@ -1391,6 +1360,9 @@ static LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type typ
     case CONST_VALUE_MODULE:
         unreachable();
 
+    case CONST_VALUE_POLYMORPH:
+        unreachable();
+
     default:
         unreachable();
     }
@@ -1465,7 +1437,7 @@ static void compile_var_def(Compiler *c, Node_Atom *it) {
         name = sv_from_cstr(arena_sv_to_cstr(&temp_arena, name));
     } else if (it->definition_spec->static_var_fn) {
         const size_t start = default_sb.count;
-        sb_push_nested_fn_name(c, &default_sb, it->definition_spec->static_var_fn, it->module);
+        sb_push_fn_name(&default_sb, it->definition_spec->static_var_fn, it->module);
         sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(name));
         name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
     } else if (!it->definition_spec->is_local) {
@@ -1620,7 +1592,7 @@ static LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
         Compile_Fn_Backup backup = {0};
         compile_fn_backup_save(c, &backup);
 
-        SV fn_name = sv_from_cstr(temp_nested_fn_name(c, fn, fn->module));
+        SV fn_name = sv_from_cstr(temp_nested_fn_name(fn, fn->module));
         if (!link_as.count) {
             link_as = fn_name;
         }
@@ -1876,33 +1848,54 @@ static void compile_panic(Compiler *c, const char *fmt, LLVMValueRef v1, LLVMVal
 
 static LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, bool ref) {
     assert(definition);
-    if (definition->definition_spec->is_const) {
-        const Const_Value const_value = definition->definition_spec->const_value;
 
-        static_assert(COUNT_CONST_VALUES == 10, "");
-        switch (const_value.kind) {
-        case CONST_VALUE_TRAIT:
-        case CONST_VALUE_UNION:
-        case CONST_VALUE_STRUCT:
-        case CONST_VALUE_ARRAY:
-        case CONST_VALUE_STRING:
-            if (!definition->definition_spec->llvm) {
-                definition->definition_spec->llvm =
-                    compile_const_value_into_memory(c, compile_const_value(c, const_value, n->type));
-            }
+    // Constant value
+    {
+        const Const_Value *const_value = NULL;
+        if (definition->polymorph) {
+            assert(definition->polymorph->is_monomorphized);
+            const_value = &definition->polymorph->monomorphization_value;
+        } else if (definition->definition_spec->is_const) {
+            const_value = &definition->definition_spec->const_value;
+        }
 
-            if (ref) {
+        if (const_value) {
+            static_assert(COUNT_CONST_VALUES == 11, "");
+            switch (const_value->kind) {
+            case CONST_VALUE_TRAIT:
+            case CONST_VALUE_UNION:
+            case CONST_VALUE_STRUCT:
+            case CONST_VALUE_ARRAY:
+            case CONST_VALUE_STRING:
+                if (!definition->definition_spec->llvm) {
+                    definition->definition_spec->llvm =
+                        compile_const_value_into_memory(c, compile_const_value(c, *const_value, n->type));
+                }
+
+                if (ref) {
+                    return definition->definition_spec->llvm;
+                }
+
+                set_debug_pos(c, n->token.pos);
+                return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, definition->definition_spec->llvm, "");
+
+            case CONST_VALUE_POLYMORPH:
+                unreachable();
+
+            default:
+                if (definition->polymorph) {
+                    if (!definition->polymorph->llvm) {
+                        definition->polymorph->llvm = compile_const_value(c, *const_value, n->type);
+                    }
+                    return definition->polymorph->llvm;
+                }
+
+                assert(definition->definition_spec);
+                if (!definition->definition_spec->llvm) {
+                    definition->definition_spec->llvm = compile_const_value(c, *const_value, n->type);
+                }
                 return definition->definition_spec->llvm;
             }
-
-            set_debug_pos(c, n->token.pos);
-            return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, definition->definition_spec->llvm, "");
-
-        default:
-            if (!definition->definition_spec->llvm) {
-                definition->definition_spec->llvm = compile_const_value(c, const_value, n->type);
-            }
-            return definition->definition_spec->llvm;
         }
     }
 
@@ -2008,9 +2001,11 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
     tic->ti_fields[tic->ti_fields_iota++] = LLVMConstInt(
         LLVMInt64TypeInContext(c->llvm_context), LLVMABIAlignmentOfType(c->llvm_target_data, type->llvm), false);
 
+    const void *checkpoint = arena_alloc(&temp_arena, 0);
+
     SV name = {0};
-    if (!type->ref) {
-        static_assert(COUNT_TYPES == 25, "");
+    {
+        static_assert(COUNT_TYPES == 26, "");
 
         Node_Atom *defined_as = NULL;
         if (type->distinct) {
@@ -2022,10 +2017,18 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
         } else if (type->kind == TYPE_UNION) {
             defined_as = type->spec.unionn->definition->defined_as;
         } else if (type->kind == TYPE_STRUCT) {
-            defined_as = type->spec.structt->definition->defined_as;
+            Node_Struct *structt = (Node_Struct *) type->spec.structt->definition;
+            defined_as = structt->defined_as;
+
+            if (defined_as && defined_as->node.type.ref == type->ref && structt->monomorphs.count) {
+                const size_t start = default_sb.count;
+                sb_push_type(&default_sb, type_without_meta(structt->node.type));
+                name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
+                defined_as = NULL;
+            }
         }
 
-        if (defined_as) {
+        if (defined_as && defined_as->node.type.ref == type->ref) {
             name = defined_as->node.token.sv;
         }
     }
@@ -2033,6 +2036,8 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
 
     tic->tiv_fields[tic->tiv_fields_iota++] =
         LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), tic->variant_index, false);
+
+    arena_reset(&temp_arena, checkpoint);
 }
 
 static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip_first_arg) {
@@ -2065,6 +2070,7 @@ static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip
 
 static LLVMValueRef compile_type_info_finalize(Compiler *c, Type_Info_Compiler *tic);
 
+static_assert(COUNT_TYPES == 26, "");
 static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
     if (tic->done) {
         return;
@@ -2268,7 +2274,6 @@ static LLVMValueRef compile_type_info_finalize(Compiler *c, Type_Info_Compiler *
     return real;
 }
 
-static_assert(COUNT_TYPES == 25, "");
 static LLVMValueRef compile_type_info(Compiler *c, Type *type) {
     Type_Info_Compiler tic = {0};
     compile_type_info_init(c, &tic, type);
@@ -2587,7 +2592,7 @@ compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_Fn *f
 
             value = LLVMBuildLoad2(c->llvm_builder, arg->type.llvm, memory, "");
         } else {
-            static_assert(COUNT_CONST_VALUES == 10, "");
+            static_assert(COUNT_CONST_VALUES == 11, "");
             switch (arg->default_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
@@ -2601,6 +2606,9 @@ compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_Fn *f
 
                 value = LLVMBuildLoad2(c->llvm_builder, arg->type.llvm, arg->default_value_llvm, "");
                 break;
+
+            case CONST_VALUE_POLYMORPH:
+                unreachable();
 
             default:
                 if (!arg->default_value_llvm) {
@@ -2651,7 +2659,7 @@ static LLVMValueRef compile_binary_with_overloaded_operator(
     return result;
 }
 
-static_assert(COUNT_NODES == 28, "");
+static_assert(COUNT_NODES == 29, "");
 static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
     if (!n) {
         return NULL;
@@ -2673,7 +2681,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_ATOM: {
         Node_Atom *atom = (Node_Atom *) n;
 
-        static_assert(COUNT_TOKENS == 77, "");
+        static_assert(COUNT_TOKENS == 78, "");
         switch (n->token.kind) {
         case TOKEN_INT:
         case TOKEN_BOOL:
@@ -2739,7 +2747,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         Node_Unary  *unary = (Node_Unary *) n;
         LLVMValueRef value = NULL;
 
-        static_assert(COUNT_TOKENS == 77, "");
+        static_assert(COUNT_TOKENS == 78, "");
         switch (n->token.kind) {
         case TOKEN_SUB:
             value = compile_expr(c, unary->value, false);
@@ -2839,7 +2847,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 LLVMValueRef (*u)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
             } Op;
 
-            static_assert(COUNT_TOKENS == 77, "");
+            static_assert(COUNT_TOKENS == 78, "");
             static const Op ops[COUNT_TOKENS] = {
                 [TOKEN_ADD] = {.i = LLVMBuildAdd},
                 [TOKEN_SUB] = {.i = LLVMBuildSub},
@@ -2889,7 +2897,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 LLVMIntPredicate u;
             } Op;
 
-            static_assert(COUNT_TOKENS == 77, "");
+            static_assert(COUNT_TOKENS == 78, "");
             static const Op ops[COUNT_TOKENS] = {
                 [TOKEN_GT] = {.i = LLVMIntSGT, .u = LLVMIntUGT},
                 [TOKEN_GE] = {.i = LLVMIntSGE, .u = LLVMIntUGE},
@@ -2923,7 +2931,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 LLVMValueRef (*u)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
             } Op;
 
-            static_assert(COUNT_TOKENS == 77, "");
+            static_assert(COUNT_TOKENS == 78, "");
             static const Op ops[COUNT_TOKENS] = {
                 [TOKEN_ADD_SET] = {.i = LLVMBuildAdd},
                 [TOKEN_SUB_SET] = {.i = LLVMBuildSub},
@@ -3032,7 +3040,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             }
         }
 
-        static_assert(COUNT_TOKENS == 77, "");
+        static_assert(COUNT_TOKENS == 78, "");
         switch (n->token.kind) {
         case TOKEN_SET: {
             const size_t group_values_count_save = c->group_values.count;
@@ -3292,15 +3300,24 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
     case NODE_DISTINCT:
         unreachable();
 
+    case NODE_POLYMORPH:
+        unreachable();
+
     case NODE_INTERPOLATION: {
-        Node_Interpolation *interp = (Node_Interpolation *) n;
+        Node_Interpolation *interpolation = (Node_Interpolation *) n;
+        if (interpolation->do_not_allocate) {
+            ll_foreach(it, &interpolation->children) {
+                da_push(&c->group_values, compile_expr(c, it, false));
+            }
+            return NULL;
+        }
 
         assert(c->interpolated_string_type.kind == TYPE_SLICE);
         LLVMTypeRef  element_type = compile_type(c, c->interpolated_string_type.spec.slice.element);
-        LLVMValueRef memory = compile_alloca(c, LLVMArrayType(element_type, interp->children_count));
+        LLVMValueRef memory = compile_alloca(c, LLVMArrayType(element_type, interpolation->children_count));
 
         size_t iota = 0;
-        ll_foreach(it, &interp->children) {
+        ll_foreach(it, &interpolation->children) {
             LLVMValueRef value = compile_expr(c, it, false);
             LLVMValueRef indices[] = {LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), iota++, true)};
             LLVMValueRef ptr = LLVMBuildGEP2(c->llvm_builder, element_type, memory, indices, len(indices), "");
@@ -3311,7 +3328,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         LLVMBuildStore(c->llvm_builder, memory, slice);
         LLVMBuildStore(
             c->llvm_builder,
-            LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), interp->children_count, true),
+            LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), interpolation->children_count, true),
             LLVMBuildStructGEP2(c->llvm_builder, n->type.llvm, slice, 1, ""));
 
         if (ref) {
@@ -3369,6 +3386,10 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
+        if (call->is_monomorphization_of_polymorphic_type) {
+            return NULL;
+        }
+
         if (call->is_type_cast) {
             Node *from = call->args.head;
             if (call->type_cast == TYPE_CAST_NOP) {
@@ -3378,7 +3399,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             LLVMValueRef from_value = compile_expr(c, from, false);
             LLVMTypeRef  from_type = from->type.llvm;
 
-            set_debug_pos(c, call->fn->token.pos);
+            set_debug_pos(c, call->fn_source->token.pos);
             static_assert(COUNT_TYPE_CASTS == 5, "");
             switch (call->type_cast) {
             case TYPE_CAST_NORMAL:
@@ -3430,13 +3451,13 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 
         LLVMTypeRef  variadics_type = NULL;
         LLVMValueRef variadics_memory = NULL;
-        if (fn_spec->variadics_kind == VARIADICS_TYPED && !call->do_not_allocate_typed_variadic_array) {
+        if (fn_spec->variadics_kind == VARIADICS_TYPED && !call->is_typed_variadics_direct) {
             Type *type = &fn_spec->args[fn_spec->variadics_index].type;
             assert(type->kind == TYPE_SLICE);
             variadics_type = compile_type(c, type->spec.slice.element);
 
-            if (call->typed_variadics_array_count) {
-                variadics_memory = compile_alloca(c, LLVMArrayType(variadics_type, call->typed_variadics_array_count));
+            if (call->typed_variadics_count) {
+                variadics_memory = compile_alloca(c, LLVMArrayType(variadics_type, call->typed_variadics_count));
             } else {
                 variadics_memory = LLVMConstNull(LLVMPointerTypeInContext(c->llvm_context, 0));
             }
@@ -3445,7 +3466,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             LLVMBuildStore(c->llvm_builder, variadics_memory, variadics_slice);
             LLVMBuildStore(
                 c->llvm_builder,
-                LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), call->typed_variadics_array_count, true),
+                LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), call->typed_variadics_count, true),
                 LLVMBuildStructGEP2(c->llvm_builder, c->llvm_slice_type, variadics_slice, 1, ""));
 
             Typed_LLVM_Value arg = {0};
@@ -3467,31 +3488,20 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 continue;
             }
 
+            if (arg->kind == NODE_UNARY && arg->token.kind == TOKEN_SPREAD) {
+                Node_Unary *unary = (Node_Unary *) arg;
+
+                LLVMValueRef expr = compile_expr(c, unary->value, false);
+                args[args_iota].type = &unary->value->type;
+                args[args_iota].value = expr;
+                args_iota++;
+                continue;
+            }
+
             const size_t group_values_count_save = c->group_values.count;
 
             LLVMValueRef expr = compile_expr(c, arg, false);
-            if (arg->type.kind == TYPE_GROUP) {
-                Type_Group *group = &arg->type.spec.group;
-                assert(c->group_values.count == group_values_count_save + group->count);
-                for (size_t i = 0; i < group->count; i++) {
-                    Typed_LLVM_Value tv = {0};
-                    tv.type = &group->data[i];
-                    tv.value = c->group_values.data[group_values_count_save + i];
-                    if (variadics_memory && args_iota >= fn_spec->variadics_index) {
-                        LLVMValueRef indices[] = {
-                            LLVMConstInt(
-                                LLVMInt64TypeInContext(c->llvm_context), args_iota - fn_spec->variadics_index, true),
-                        };
-
-                        LLVMValueRef dst =
-                            LLVMBuildGEP2(c->llvm_builder, variadics_type, variadics_memory, indices, len(indices), "");
-                        LLVMBuildStore(c->llvm_builder, tv.value, dst);
-                    } else {
-                        args[args_iota] = tv;
-                    }
-                    args_iota++;
-                }
-            } else {
+            if (c->group_values.count == group_values_count_save) {
                 Typed_LLVM_Value tv = {0};
                 tv.type = &arg->type;
                 tv.value = expr;
@@ -3508,6 +3518,35 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                     args[args_iota] = tv;
                 }
                 args_iota++;
+            } else {
+                Type  *types = NULL;
+                size_t count = c->group_values.count - group_values_count_save;
+                if (arg->type.kind == TYPE_GROUP) {
+                    Type_Group *group = &arg->type.spec.group;
+                    types = group->data;
+                    assert(count == group->count);
+                } else {
+                    assert(arg->kind == NODE_INTERPOLATION);
+                }
+
+                for (size_t i = 0; i < count; i++) {
+                    Typed_LLVM_Value tv = {0};
+                    tv.type = types ? &types[i] : &c->any_type;
+                    tv.value = c->group_values.data[group_values_count_save + i];
+                    if (variadics_memory && args_iota >= fn_spec->variadics_index) {
+                        LLVMValueRef indices[] = {
+                            LLVMConstInt(
+                                LLVMInt64TypeInContext(c->llvm_context), args_iota - fn_spec->variadics_index, true),
+                        };
+
+                        LLVMValueRef dst =
+                            LLVMBuildGEP2(c->llvm_builder, variadics_type, variadics_memory, indices, len(indices), "");
+                        LLVMBuildStore(c->llvm_builder, tv.value, dst);
+                    } else {
+                        args[args_iota] = tv;
+                    }
+                    args_iota++;
+                }
             }
 
             c->group_values.count = group_values_count_save;
@@ -3591,7 +3630,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         if (index->lhs->type.ref) {
             element_type = n->type.spec.slice.element;
         } else {
-            static_assert(COUNT_TYPES == 25, "");
+            static_assert(COUNT_TYPES == 26, "");
             switch (index->lhs->type.kind) {
             case TYPE_ARRAY:
                 label = "array";
@@ -3905,7 +3944,7 @@ static void introduce_ghost_for_union(Compiler *c, Node_Atom *ghost, bool is_tra
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
+static_assert(COUNT_NODES == 29, "");
 static void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -4593,6 +4632,11 @@ void compiler_build(Compiler *c, const char *output_path) {
 
     ht_free(&c->methods_table);
     da_free(&c->methods_list);
+
+    ht_free(&c->monomorph_intern);
+    ht_free(&c->monomorph_replacements);
+    da_free(&c->monomorph_parameters);
+    da_free(&c->monomorphization_stack);
 
     da_free(&c->context.defines);
     da_free(&c->context.imports);

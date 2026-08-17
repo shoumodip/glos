@@ -1,0 +1,7 @@
+foo :: (x: $T) {
+    println(x)
+}
+
+main :: () {
+    foo([]i64)
+}

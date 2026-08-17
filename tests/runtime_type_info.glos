@@ -89,13 +89,13 @@ main :: () {
     }
 }
 
-write_type :: (ti: &Type_Info) {
+write_type :: (ti: Type) {
     write_type(ti)
     write_string("\n")
 
-    write_type :: (ti: &Type_Info) {
+    write_type :: (ti: Type) {
         #static depth: i64
-        #static tm: [1024]&Type_Info
+        #static tm: [1024]Type
         #static tm_count: i64
         for i := 0; i < tm_count; i += 1 {
             if tm[i] == ti {

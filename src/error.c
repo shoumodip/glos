@@ -21,6 +21,7 @@ static void error_begin(Error_Kind kind) {
         fprintf(stderr, " ");
     }
 
+    // TODO: Do not print all caps
     switch (kind) {
     case EK_ERROR:
         afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
@@ -29,6 +30,9 @@ static void error_begin(Error_Kind kind) {
     case EK_NOTE:
         afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "NOTE:");
         break;
+
+    case EK_BLANK:
+        return;
     }
 
     fprintf(stderr, " ");
@@ -49,7 +53,7 @@ static void range_apply_token(Range *r, const Token *t) {
     }
 }
 
-static_assert(COUNT_NODES == 28, "");
+static_assert(COUNT_NODES == 29, "");
 static void range_apply_node(Range *r, const Node *n) {
     if (!n) {
         return;
@@ -99,6 +103,11 @@ static void range_apply_node(Range *r, const Node *n) {
         range_apply_token(r, &import->path);
     } break;
 
+    case NODE_POLYMORPH: {
+        Node_Polymorph *polymorph = (Node_Polymorph *) n;
+        range_apply_node(r, (Node *) polymorph->name);
+    } break;
+
     case NODE_DISTINCT: {
         Node_Distinct *distinct = (Node_Distinct *) n;
         range_apply_node(r, distinct->value);
@@ -145,7 +154,7 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
-        range_apply_node(r, call->fn);
+        range_apply_node(r, call->fn_source);
         range_apply_token(r, &call->end);
     } break;
 
@@ -165,6 +174,7 @@ static void range_apply_node(Range *r, const Node *n) {
         range_apply_node(r, define->name);
         range_apply_node(r, define->type);
         range_apply_node(r, define->expr);
+        range_apply_node(r, (Node *) define->name_polymorph);
     } break;
 
     case NODE_BLOCK: {

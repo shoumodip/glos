@@ -13,12 +13,13 @@ typedef struct Node Node;
 typedef struct Node_Atom   Node_Atom;
 typedef struct Node_Define Node_Define;
 
-typedef struct Node_Fn     Node_Fn;
-typedef struct Node_Enum   Node_Enum;
-typedef struct Node_Trait  Node_Trait;
-typedef struct Node_Union  Node_Union;
-typedef struct Node_Struct Node_Struct;
-typedef struct Node_Import Node_Import;
+typedef struct Node_Fn        Node_Fn;
+typedef struct Node_Enum      Node_Enum;
+typedef struct Node_Trait     Node_Trait;
+typedef struct Node_Union     Node_Union;
+typedef struct Node_Struct    Node_Struct;
+typedef struct Node_Import    Node_Import;
+typedef struct Node_Polymorph Node_Polymorph;
 
 typedef struct {
     Node *head;
@@ -65,7 +66,7 @@ typedef struct {
 void modules_free(Modules *m);
 
 typedef enum {
-    TYPE_UNIT,
+    TYPE_UNIT, // TODO: Rename to TYPE_VOID
     TYPE_BOOL,
     TYPE_CHAR,
 
@@ -92,6 +93,8 @@ typedef enum {
     TYPE_SLICE,
     TYPE_STRING,
 
+    TYPE_POLYMORPH,
+
     TYPE_GROUP,
     TYPE_MODULE,
 
@@ -117,6 +120,9 @@ typedef struct {
     Type_Fn_Arg *args;
     size_t       args_count;
     size_t       args_count_min;
+
+    Node_Polymorph **polymorphs;
+    size_t           polymorphs_count;
 
     Variadics_Kind variadics_kind;
     size_t         variadics_index;
@@ -163,7 +169,14 @@ typedef struct {
     Type_Struct_Field *fields;
     size_t             fields_count;
 
+    Node_Polymorph **polymorphs;
+    size_t           polymorphs_count;
+    size_t           polymorphs_count_min;
+
     Node_Struct *definition;
+
+    // In case of monomorphized structures, this will point to the original polymorphic structure
+    Node_Struct *original_definition;
 
     LLVMTypeRef     llvm;
     LLVMMetadataRef debug;
@@ -172,11 +185,19 @@ typedef struct {
 typedef struct {
     Type  *element;
     size_t count;
+
+    // [$N]T
+    Node_Polymorph *count_polymorph;
 } Type_Array;
 
 typedef struct {
     Type *element;
 } Type_Slice;
+
+typedef struct {
+    Node_Polymorph *definition;
+    bool            is_definition;
+} Type_Polymorph;
 
 typedef struct {
     Type   *data;
@@ -207,6 +228,8 @@ struct Type {
         Type_Array array;
         Type_Slice slice;
 
+        Type_Polymorph polymorph;
+
         Type_Group group;
         Module    *module;
     } spec;
@@ -227,6 +250,9 @@ struct Type_Fn_Arg {
     bool         default_value_is_caller_location;
 
     bool has_default_value;
+
+    // $A: B
+    Node_Polymorph *polymorph;
 };
 
 typedef struct {
@@ -267,12 +293,19 @@ struct Type_Struct_Field {
     Node *spread;
 };
 
+Type type_with_ref(Type t, size_t ref);
+Type type_without_ref(Type t);
+
+Type type_with_meta(Type t);
+Type type_without_meta(Type t);
+
 void        sb_push_type(SB *sb, Type type);
 const char *type_to_cstr_raw(Type type);
 const char *type_to_cstr(Type type);
 
 bool type_eq(Type a, Type b);
 bool type_kind_eq(Type type, Type_Kind kind);
+bool type_meta_kind_eq(Type type, Type_Kind kind);
 bool type_is_numeric(Type type);
 bool type_is_integer(Type type);
 bool type_is_pointer(Type type);
@@ -295,6 +328,7 @@ typedef enum {
     CONST_VALUE_STRING,
 
     CONST_VALUE_MODULE,
+    CONST_VALUE_POLYMORPH,
     COUNT_CONST_VALUES
 } Const_Value_Kind;
 
@@ -323,6 +357,11 @@ typedef struct {
     bool is_slice;
 } Const_Value_Array;
 
+typedef struct {
+    Node_Polymorph *polymorph;
+    bool            is_definition;
+} Const_Value_Polymorph;
+
 struct Const_Value {
     Const_Value_Kind kind;
     union {
@@ -338,11 +377,12 @@ struct Const_Value {
         Const_Value_Array array;
         SV                string;
 
-        Module *module;
+        Module               *module;
+        Const_Value_Polymorph polymorph;
     } as;
 };
 
-static_assert(COUNT_CONST_VALUES == 10, "");
+static_assert(COUNT_CONST_VALUES == 11, "");
 #define const_value_int(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = (v)})
 #define const_value_i64(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_i64(v)})
 #define const_value_u64(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_u64(v)})
@@ -358,9 +398,13 @@ static_assert(COUNT_CONST_VALUES == 10, "");
 #define const_value_array(v)  ((Const_Value) {.kind = CONST_VALUE_ARRAY, .as.array = (v)})
 #define const_value_string(v) ((Const_Value) {.kind = CONST_VALUE_STRING, .as.string = (v)})
 
-#define const_value_module(v) ((Const_Value) {.kind = CONST_VALUE_MODULE, .as.module = (v)})
+#define const_value_module(v)    ((Const_Value) {.kind = CONST_VALUE_MODULE, .as.module = (v)})
+#define const_value_polymorph(v) ((Const_Value) {.kind = CONST_VALUE_POLYMORPH, .as.polymorph = (v)})
 
 bool const_value_eq(Const_Value a, Const_Value b);
+
+void sb_push_const_value(SB *sb, Type type, Const_Value v);
+void const_value_debug(FILE *f, Type type, Const_Value v);
 
 typedef enum {
     NODE_ATOM,
@@ -371,6 +415,7 @@ typedef enum {
     NODE_ASSERT,
     NODE_IMPORT,
     NODE_DISTINCT,
+    NODE_POLYMORPH,
     NODE_INTERPOLATION,
 
     NODE_FN,
@@ -427,6 +472,8 @@ struct Node {
     Node     *next;
 
     bool is_memory;
+    bool is_called;
+    bool is_defined_as_constant;
 
     Type *emit_type_info;
 
@@ -437,8 +484,23 @@ struct Node {
     Module *module;
 };
 
+// The size of the Node* object
+size_t node_size(Node_Kind kind);
+
 Node *node_alloc(Module *module, Node_Kind kind, Token token);
 Node *node_iter(Node *it, Node *ll);
+
+struct Context_Fn {
+    Node_Fn *fn;
+
+    size_t defines_begin;
+    size_t defines_end;
+
+    size_t imports_begin;
+    size_t imports_end;
+
+    Context_Fn *outer;
+};
 
 // When the concrete type of an abstract value is resolved inside conditional statements
 //
@@ -450,6 +512,14 @@ struct Context_Replace {
 
     Context_Replace *outer;
 };
+
+typedef struct {
+    Node_Polymorph *head;
+    Node_Polymorph *tail;
+    size_t          count;
+} Polymorphs;
+
+void polymorphs_push(Polymorphs *ps, Node_Polymorph *p);
 
 typedef struct {
     bool is_local;
@@ -467,6 +537,9 @@ typedef struct {
 
     Node_Define *definition_node;
     Node        *assignment_node;
+
+    // $A: B
+    Node_Polymorph *polymorph;
 
     Context_Fn      *fn_context;
     Context_Replace *replace_context;
@@ -491,6 +564,9 @@ struct Node_Atom {
 
     // When this atom is a definition
     Definition_Spec *definition_spec;
+
+    // When this atom is a polymorphic parameter definition
+    Node_Polymorph *polymorph;
 
     // When this atom is a reference to another defining atom
     Node_Atom *definition;
@@ -580,6 +656,28 @@ struct Node_Import {
     bool is_local;
 };
 
+struct Node_Polymorph {
+    Node       node;
+    Node_Atom *name;
+    size_t     arg_index;
+
+    // `$A: B`    => true
+    // `A:  $B`   => false
+    bool is_arg;
+
+    // `A:  $B`   => true
+    // `$A: Type` => true
+    bool is_type;
+
+    bool        is_monomorphized;
+    Type        monomorphization_type;
+    Const_Value monomorphization_value;
+
+    LLVMValueRef llvm;
+
+    Node_Polymorph *next;
+};
+
 typedef struct {
     Node       node;
     Node_Atom *defined_as;
@@ -591,6 +689,7 @@ typedef struct {
     Nodes  children;
     size_t children_count;
     bool   is_valid;
+    bool   do_not_allocate;
 } Node_Interpolation;
 
 struct Node_Fn {
@@ -606,6 +705,9 @@ struct Node_Fn {
     Nodes  returns;
     size_t returns_count;
 
+    Polymorphs polymorphs;
+    Polymorphs monomorphs;
+
     Node *body;
 
     bool is_type;
@@ -616,9 +718,9 @@ struct Node_Fn {
     // Foo :: trait {
     //     foo: () // <- This function is a trait method type
     // }
-    Type *trait_method_type;
+    Node_Trait *trait_method;
 
-    // For generating wrappers of trait implementation methods
+    // For generating wrappers of trait implementation methods. (These fields are only be the LLVM generator)
     Node_Fn    *wrapper;
     Type_Trait *wrapper_for_trait;
 
@@ -627,6 +729,11 @@ struct Node_Fn {
     bool is_compare_operator_complete;
 
     Node_Fn *outer_fn;
+
+    // Polymorphic functions are not checked immediately but rather upon monomorphization. Therefore the context needs
+    // to be preserved to maintain lexical scoping.
+    bool             checked;
+    Context_Replace *context_replace;
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
@@ -637,6 +744,8 @@ struct Node_Fn {
     LLVMValueRef    llvm;
     LLVMMetadataRef llvm_debug_scope;
 };
+
+void sb_push_fn_name(SB *sb, Node_Fn *fn, Module *module);
 
 // This represents a type
 struct Node_Enum {
@@ -704,6 +813,9 @@ struct Node_Struct {
     Node  node;
     Nodes fields;
 
+    Polymorphs polymorphs;
+    Polymorphs monomorphs;
+
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
 
@@ -748,24 +860,25 @@ typedef enum {
 } Type_Cast;
 
 typedef struct {
-    Node  node;
+    Node node;
+
+    // The function being called according to the source code.
+    //
+    // This field's ONLY purpose is error reporting and debug locations. DO NOT USE THIS!!!!
+    Node *fn_source;
+
+    // The actual function being called. This will differ from 'lhs' in case of polymorphic functions
     Node *fn;
 
     Nodes args;
 
-    // Calculated at checking phase. The reason this is done like this is because in the future functions with
-    // multiple return values will be implemented. In such a case, when one of the elements of a call is another
-    // call to such a function, the actual argument count will be different from the apparent one, and thus cannot
-    // be calculated at parse time.
+    // Calculated at checking phase
     size_t args_count;
 
     Token end;
 
-    Node *spread;
-    Token spread_token;
-
-    bool   do_not_allocate_typed_variadic_array;
-    size_t typed_variadics_array_count;
+    bool   is_typed_variadics_direct;
+    size_t typed_variadics_count;
 
     bool      is_type_cast;
     Type_Cast type_cast;
@@ -773,6 +886,8 @@ typedef struct {
         Type_Trait_Impl *type_cast_trait_impl;
         size_t           type_cast_union_index;
     };
+
+    bool is_monomorphization_of_polymorphic_type;
 
     bool is_stmt;
 } Node_Call;
@@ -801,6 +916,9 @@ typedef struct {
 struct Node_Define {
     Node  node;
     Node *name;
+
+    // $T: <Type>
+    Node_Polymorph *name_polymorph;
 
     Node *expr;
     Node *type;
@@ -893,7 +1011,7 @@ typedef struct {
     Token end;
 } Node_Extern;
 
-void node_debug(FILE *f, Node *n);
+void node_debug(FILE *f, const Node *n);
 void nodes_debug(FILE *f, Nodes ns);
 
 Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, size_t method_index);

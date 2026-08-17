@@ -1,0 +1,12 @@
+EXIT 0
+STDOUT 66
+foo:
+{69, 420, 1337}
+N = 3
+bar:
+{"Deez", "Nuts"}
+N = 2
+T = string
+
+STDERR 0
+

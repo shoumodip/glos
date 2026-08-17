@@ -22,6 +22,7 @@ typedef enum {
     TOKEN_COMMA,
     TOKEN_RANGE,
     TOKEN_SPREAD,
+    TOKEN_DOLLAR,
 
     TOKEN_INT,
     TOKEN_BOOL,
@@ -123,5 +124,23 @@ typedef struct {
         SV  string;
     } as;
 } Token;
+
+typedef enum {
+    POWER_NIL,
+    POWER_SET,
+    POWER_TUP,
+    POWER_LOR,
+    POWER_CMP,
+    POWER_SHL,
+    POWER_ADD,
+    POWER_BOR,
+    POWER_MUL,
+    POWER_PRE,
+    POWER_CALL,
+    POWER_REF,
+    POWER_DOT,
+} Power;
+
+Power token_kind_to_power(Token_Kind kind);
 
 #endif // TOKEN_H

@@ -1,8 +1,8 @@
 EXIT 1
 STDOUT 0
 
-STDERR 222
-tests/error_too_few_arguments.glos:3:9: ERROR: Not enough arguments: Expected 1, got 0
+STDERR 219
+tests/error_too_few_arguments.glos:3:9: ERROR: Too few arguments: Expected 1, got 0
 
     foo()
 

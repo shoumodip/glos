@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 129
+tests/error_cannot_have_spread_after_direct_polymorphic_argument.glos:1:13: ERROR: Unexpected '...'
+
+    foo :: ($N: ...i64) {}
+
+

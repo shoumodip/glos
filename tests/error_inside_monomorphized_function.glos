@@ -1,0 +1,7 @@
+main :: () {
+    foo(69)
+}
+
+foo :: (x: $T) {
+    y: string = x
+}

@@ -1,0 +1,12 @@
+main :: () {
+    foo :: ($L := #caller_location) {
+        println(L)
+    }
+
+    bar :: ($L := #caller_location) {
+        foo()
+        foo(L)
+    }
+
+    bar()
+}

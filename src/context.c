@@ -19,6 +19,10 @@ Node_Atom *local_scope_find(Local_Scope scope, SV name) {
 }
 
 void global_scope_push(Global_Scope *scope, Node_Atom *atom) {
+    if (!scope->hasheq) {
+        scope->hasheq = ht_hasheq_sv;
+    }
+
     ht_set(scope, atom->node.token.sv, atom);
 }
 
@@ -41,13 +45,6 @@ void context_push_fn(Context *c, Context_Fn *fn) {
     c->fn = fn;
 }
 
-void context_pop_fn(Context *c) {
-    assert(c->fn);
-    c->defines.count = c->fn->defines_begin;
-    c->imports.count = c->fn->imports_begin;
-    c->fn = c->fn->outer;
-}
-
 void context_restore_fn(Context *c, Context_Fn *save) {
     c->fn = save;
     if (c->fn) {
@@ -68,13 +65,22 @@ void context_push_import(Context *c, Node_Import *import) {
     c->fn->imports_end++;
 }
 
-Node_Atom *context_find_define_ex(const Context *c, SV name, Module *skip) {
+Node_Atom *context_find_define_in_fn(const Context *c, const Context_Fn *fn, SV name) {
+    for (size_t i = fn->defines_end; i > fn->defines_begin; i--) {
+        Node_Atom *it = c->defines.data[i - 1];
+        if (sv_eq(it->node.token.sv, name)) {
+            return it;
+        }
+    }
+
+    return NULL;
+}
+
+Node_Atom *context_find_define_skipping(const Context *c, SV name, Module *skip) {
     for (Context_Fn *fn = c->fn; fn; fn = fn->outer) {
-        for (size_t i = fn->defines_end; i > fn->defines_begin; i--) {
-            Node_Atom *it = c->defines.data[i - 1];
-            if (sv_eq(it->node.token.sv, name)) {
-                return it;
-            }
+        Node_Atom *it = context_find_define_in_fn(c, fn, name);
+        if (it) {
+            return it;
         }
     }
 
@@ -96,7 +102,7 @@ Node_Atom *context_find_define_ex(const Context *c, SV name, Module *skip) {
 }
 
 Node_Atom *context_find_define(const Context *c, SV name) {
-    return context_find_define_ex(c, name, NULL);
+    return context_find_define_skipping(c, name, NULL);
 }
 
 void context_set_end(Context *c, size_t defines_end, size_t imports_end) {

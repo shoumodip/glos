@@ -1,8 +1,8 @@
 EXIT 1
 STDOUT 0
 
-STDERR 265
-tests/error_wrong_signature_of_call_to_variable_function.glos:4:9: ERROR: Not enough arguments: Expected 1, got 0
+STDERR 262
+tests/error_wrong_signature_of_call_to_variable_function.glos:4:9: ERROR: Too few arguments: Expected 1, got 0
 
     bar()
 

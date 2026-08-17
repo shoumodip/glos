@@ -1,0 +1,12 @@
+Foo :: struct {
+    x: i32
+}
+
+bar :: (this: Foo, that: $T) {
+    println(this, ' ', that)
+}
+
+main :: () {
+    f := Foo {69}
+    f.bar("Urmom")
+}

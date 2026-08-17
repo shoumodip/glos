@@ -1,0 +1,7 @@
+foo :: (vs: ...$T) {
+    println(vs)
+}
+
+main :: () {
+    foo(69, 420)
+}

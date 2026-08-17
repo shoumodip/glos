@@ -1,9 +1,17 @@
 EXIT 1
 STDOUT 0
 
-STDERR 197
-tests/error_cannot_use_interpolated_string_here.glos:2:5: ERROR: Cannot use interpolated string here. It can only be used as a variadic source of type 'any' in a function call
+STDERR 353
+tests/error_cannot_use_interpolated_string_here.glos:2:5: ERROR: Cannot use interpolated strings here
 
     "foobar \{69}"
+
+    Interpolated strings are compiled to a temporary '[]Any' value, and can only be used like this:
+
+        bar :: (vs: []Any) {}
+        foo :: (vs: ...Any) {}
+
+        foo("Nice: \{34 + 35}")
+        bar("Nice: \{200 + 220}")
 
 

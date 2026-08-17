@@ -1,6 +1,9 @@
 EXIT 1
 STDOUT 0
 
-STDERR 57
-tests/compile_time_assertions.glos:2:1: Assertion failed
+STDERR 82
+tests/compile_time_assertions.glos:2:1: Assertion Failed
+
+    #assert(69 == 420)
+
 

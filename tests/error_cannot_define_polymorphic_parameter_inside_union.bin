@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 155
+tests/error_cannot_define_polymorphic_parameter_inside_union.glos:1:20: ERROR: Cannot define polymorphic parameters here
+
+    foo :: (x: union { $T }) {}
+
+

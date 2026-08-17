@@ -1,0 +1,15 @@
+main :: () {
+    foo :: (x: $T) {
+        bar :: (x: i64) {
+            baz :: (y: $A, z: $B) {
+                println("\{y} \{z}")
+            }
+
+            baz(x, "Urmom")
+        }
+
+        bar(x)
+    }
+
+    foo(69)
+}

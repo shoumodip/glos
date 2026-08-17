@@ -1,9 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 201
-tests/error_cannot_spread_in_a_call_to_a_function_that_does_not_have_typed_variadics.glos:4:9: ERROR: Cannot use '...' in a call to a function that does not have typed variadics
+STDERR 387
+tests/error_cannot_spread_in_a_call_to_a_function_that_does_not_have_typed_variadics.glos:4:9: ERROR: Cannot spread arguments in a call to a function that does not have typed variadics
 
     foo(...[]i64 {})
+
+tests/error_cannot_spread_in_a_call_to_a_function_that_does_not_have_typed_variadics.glos:1:8: NOTE: The function being called has signature '(ns: i64)'
+
+    foo :: (ns: i64) {}
 
 

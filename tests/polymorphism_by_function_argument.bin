@@ -1,0 +1,8 @@
+EXIT 0
+STDOUT 26
+T = string
+N = 2
+{"", ""}
+
+STDERR 0
+

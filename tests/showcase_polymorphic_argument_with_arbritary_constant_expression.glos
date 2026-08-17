@@ -1,0 +1,23 @@
+foo :: ($A: Any) {
+    println(A)
+}
+
+bar :: ($A: &i32) {
+    assert(A == &x)
+}
+
+baz :: ($A: ()) {
+    assert(A == main)
+}
+
+x: i32
+
+main :: () {
+    foo(69)
+    foo(i64)
+    foo(union { i64; string }     ("Hello, world!"))
+    foo(struct { x: i64; y: i64 } {420, 1337})
+    foo([]char {'H', 'i', '!'})
+    bar(&x)
+    baz(main)
+}

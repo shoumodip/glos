@@ -1,0 +1,2 @@
+#link "bar"
+foo :: (x: $T) {}

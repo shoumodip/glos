@@ -1,0 +1,17 @@
+main :: () {
+    foo :: (xs: [$N]i64) {
+        println("foo:")
+        println(xs)
+        println("N = \{N}")
+    }
+
+    bar :: (xs: [$N]$T) {
+        println("bar:")
+        println(xs)
+        println("N = \{N}")
+        println("T = \{T}")
+    }
+
+    foo([]i64 {69, 420, 1337})
+    bar([]string {"Deez", "Nuts"})
+}

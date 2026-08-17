@@ -1,0 +1,13 @@
+main :: () {
+    println(make_opaque(69))
+}
+
+Opaque :: struct($T: Type) {
+    data: [sizeof(T)]char
+}
+
+make_opaque :: (x: $T) -> Opaque(T) {
+    opaque: Opaque(T)
+    *&T(&opaque) = x
+    return opaque
+}

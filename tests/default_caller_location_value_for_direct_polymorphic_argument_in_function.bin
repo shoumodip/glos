@@ -1,0 +1,7 @@
+EXIT 0
+STDOUT 181
+tests/default_caller_location_value_for_direct_polymorphic_argument_in_function.glos:7:9:
+tests/default_caller_location_value_for_direct_polymorphic_argument_in_function.glos:11:5:
+
+STDERR 0
+

@@ -1,9 +1,13 @@
 EXIT 1
 STDOUT 0
 
-STDERR 231
+STDERR 433
 tests/error_type_mismatch_in_function_call_with_multiple_return_function_call_as_an_argument.glos:4:9: ERROR: Expected 2nd value of this to be 'i64', got 'bool'. The type of this entire expression is '(i64, bool)'
 
     bar(foo())
+
+tests/error_type_mismatch_in_function_call_with_multiple_return_function_call_as_an_argument.glos:3:12: NOTE: The function being called has signature '(_: i64, _: i64)'
+
+    bar :: (_: i64, _: i64) {}
 
 

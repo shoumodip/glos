@@ -1,0 +1,10 @@
+EXIT 0
+STDOUT 49
+69
+i64
+Hello, world!
+{420, 1337}
+{'H', 'i', '!'}
+
+STDERR 0
+
