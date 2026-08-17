@@ -12,8 +12,7 @@
 #include <iso646.h>
 #include <stdint.h>
 
-// TODO: @remove
-static bool log = false;
+#define MONOMORPHIZATION_LOG 0
 
 static Node_Fn *get_function_literal(Node *fn) {
     if (fn->kind == NODE_FN) {
@@ -3335,17 +3334,17 @@ static void add_monomorph_parameter(
         }
     }
 
-    if (log) {
-        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
-        fprintf(
-            stderr,
-            "Add monomorph parameter (Currently %zu): " SV_Fmt " :: ",
-            c->monomorph_parameters.count - c->monomorph_parameters.begin,
-            SV_Arg(polymorph->name->node.token.sv));
-        const_value_debug(stderr, type, value);
-        fprintf(stderr, "\n\n");
-        ansi_reset(stderr);
-    }
+#if MONOMORPHIZATION_LOG
+    ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+    fprintf(
+        stderr,
+        "Add monomorph parameter (Currently %zu): " SV_Fmt " :: ",
+        c->monomorph_parameters.count - c->monomorph_parameters.begin,
+        SV_Arg(polymorph->name->node.token.sv));
+    const_value_debug(stderr, type, value);
+    fprintf(stderr, "\n\n");
+    ansi_reset(stderr);
+#endif // MONOMORPHIZATION_LOG
 
     const Monomorph_Parameter mp = {
         .from = polymorph,
@@ -3388,9 +3387,10 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
 
     case TYPE_STRUCT: {
         const Type_Struct *es = expected->spec.structt;
-        if (log) {
-            error_node(EK_NOTE, n, "Match %s against %s", type_to_cstr(*actual), type_to_cstr(*expected));
-        }
+
+#if MONOMORPHIZATION_LOG
+        error_node(EK_NOTE, n, "Match %s against %s", type_to_cstr(*actual), type_to_cstr(*expected));
+#endif // MONOMORPHIZATION_LOG
 
         if (es->polymorphs_count && type_kind_eq(*actual, TYPE_STRUCT)) {
             const Type_Struct *as = actual->spec.structt;
@@ -3412,14 +3412,14 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
                     const Type et = type_without_meta(ep->node.type);
                     const Type at = type_without_meta(ap->node.type);
 
-                    if (log) {
-                        afprintf(
-                            stderr,
-                            ANSI_COLOR_BLUE | ANSI_BOLD,
-                            "    Infer %s against %s\n\n",
-                            type_to_cstr(at),
-                            type_to_cstr(et));
-                    }
+#if MONOMORPHIZATION_LOG
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_BLUE | ANSI_BOLD,
+                        "    Infer %s against %s\n\n",
+                        type_to_cstr(at),
+                        type_to_cstr(et));
+#endif // MONOMORPHIZATION_LOG
 
                     if (!infer_monomorph_parameters(c, n, &at, &et)) {
                         return false;
@@ -3434,13 +3434,13 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
                         }
                         finalize_untyped_type(c, n);
 
-                        if (log) {
-                            ansi_set(stderr, ANSI_COLOR_BLUE | ANSI_BOLD);
-                            fprintf(stderr, "    Infer %s to be ", type_to_cstr(type_without_meta(ep->node.type)));
-                            const_value_debug(stderr, ap->monomorphization_type, ap->monomorphization_value);
-                            fprintf(stderr, "\n\n");
-                            ansi_reset(stderr);
-                        }
+#if MONOMORPHIZATION_LOG
+                        ansi_set(stderr, ANSI_COLOR_BLUE | ANSI_BOLD);
+                        fprintf(stderr, "    Infer %s to be ", type_to_cstr(type_without_meta(ep->node.type)));
+                        const_value_debug(stderr, ap->monomorphization_type, ap->monomorphization_value);
+                        fprintf(stderr, "\n\n");
+                        ansi_reset(stderr);
+#endif // MONOMORPHIZATION_LOG
 
                         add_monomorph_parameter(
                             c, et.definition, ap->monomorphization_type, ap->monomorphization_value, NULL);
@@ -3455,15 +3455,15 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
             Type_Array as = actual->spec.array;
             Type_Array es = expected->spec.array;
             if (es.count_polymorph) {
-                if (log) {
-                    ansi_set(stderr, ANSI_COLOR_BLUE | ANSI_BOLD);
-                    fprintf(
-                        stderr,
-                        "    Infer %s to be %zu\n\n",
-                        type_to_cstr(type_without_meta(es.count_polymorph->node.type)),
-                        as.count);
-                    ansi_reset(stderr);
-                }
+#if MONOMORPHIZATION_LOG
+                ansi_set(stderr, ANSI_COLOR_BLUE | ANSI_BOLD);
+                fprintf(
+                    stderr,
+                    "    Infer %s to be %zu\n\n",
+                    type_to_cstr(type_without_meta(es.count_polymorph->node.type)),
+                    as.count);
+                ansi_reset(stderr);
+#endif // MONOMORPHIZATION_LOG
 
                 add_monomorph_parameter(
                     c, es.count_polymorph, (Type) {.kind = TYPE_I64}, const_value_u64(as.count), NULL);
@@ -3515,9 +3515,9 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
             Node_Polymorph *polymorph = expected->spec.polymorph.definition;
             const Type      type = type_with_ref(*actual, actual->ref - expected->ref);
 
-            if (log) {
-                error_node(EK_NOTE, (Node *) polymorph, "Infer to be %s", type_to_cstr(type));
-            }
+#if MONOMORPHIZATION_LOG
+            error_node(EK_NOTE, (Node *) polymorph, "Infer to be %s", type_to_cstr(type));
+#endif // MONOMORPHIZATION_LOG
 
             add_monomorph_parameter(c, polymorph, type, const_value_type(type), NULL);
         }
@@ -3894,9 +3894,9 @@ static Node *monomorphize(Compiler *c, Node *n, Node *site) {
         n = ((Node_Unary *) n)->value;
     }
 
-    if (log) {
-        afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "Monomorphize {\n\n");
-    }
+#if MONOMORPHIZATION_LOG
+    afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "Monomorphize {\n\n");
+#endif // MONOMORPHIZATION_LOG
 
     Monomorphization monomorphization = {
         .from = n,
@@ -3967,33 +3967,33 @@ static Node *monomorphize(Compiler *c, Node *n, Node *site) {
         }
     }
 
-    if (log) {
-        if (is_fn) {
-            Node_Fn *fn = (Node_Fn *) n;
-            error_node(EK_NOTE, n, "Beginning to monomorphize this node");
-            ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
-            ll_foreach(it, &fn->polymorphs) {
-                fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
-                fprintf(stderr, "\n");
-            }
+#if MONOMORPHIZATION_LOG
+    if (is_fn) {
+        Node_Fn *fn = (Node_Fn *) n;
+        error_node(EK_NOTE, n, "Beginning to monomorphize this node");
+        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+        ll_foreach(it, &fn->polymorphs) {
+            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
             fprintf(stderr, "\n");
-            ansi_reset(stderr);
-        } else if (is_struct) {
-            Node_Struct *structt = (Node_Struct *) n;
-            error_node(EK_NOTE, n, "Beginning to monomorphize this node");
-            ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
-            ll_foreach(it, &structt->polymorphs) {
-                fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
-                fprintf(stderr, "\n");
-            }
-            fprintf(stderr, "\n");
-            ansi_reset(stderr);
-        } else {
-            unreachable();
         }
+        fprintf(stderr, "\n");
+        ansi_reset(stderr);
+    } else if (is_struct) {
+        Node_Struct *structt = (Node_Struct *) n;
+        error_node(EK_NOTE, n, "Beginning to monomorphize this node");
+        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+        ll_foreach(it, &structt->polymorphs) {
+            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "\n");
+        ansi_reset(stderr);
+    } else {
+        unreachable();
     }
+#endif // MONOMORPHIZATION_LOG
 
     monomorphize_node(c, &n, true);
     monomorphize_node(c, &n, false);
@@ -4011,10 +4011,29 @@ static Node *monomorphize(Compiler *c, Node *n, Node *site) {
         fn->monomorphs = fn->polymorphs;
         memset(&fn->polymorphs, 0, sizeof(fn->polymorphs));
 
-        if (log) {
+#if MONOMORPHIZATION_LOG
+        error_node(EK_NOTE, n, "Monomorphized this node");
+        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+        ll_foreach(it, &fn->monomorphs) {
+            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "\n");
+        ansi_reset(stderr);
+        show_current_monomorphization(c);
+#endif // MONOMORPHIZATION_LOG
+
+    } else if (is_struct) {
+        Node_Struct *structt = (Node_Struct *) n;
+        if (is_complete) {
+            structt->monomorphs = structt->polymorphs;
+            memset(&structt->polymorphs, 0, sizeof(structt->polymorphs));
+
+#if MONOMORPHIZATION_LOG
             error_node(EK_NOTE, n, "Monomorphized this node");
             ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
-            ll_foreach(it, &fn->monomorphs) {
+            ll_foreach(it, &structt->monomorphs) {
                 fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
                 const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
                 fprintf(stderr, "\n");
@@ -4022,42 +4041,25 @@ static Node *monomorphize(Compiler *c, Node *n, Node *site) {
             fprintf(stderr, "\n");
             ansi_reset(stderr);
             show_current_monomorphization(c);
-        }
-    } else if (is_struct) {
-        Node_Struct *structt = (Node_Struct *) n;
-        if (is_complete) {
-            structt->monomorphs = structt->polymorphs;
-            memset(&structt->polymorphs, 0, sizeof(structt->polymorphs));
+#endif // MONOMORPHIZATION_LOG
 
-            if (log) {
-                error_node(EK_NOTE, n, "Monomorphized this node");
-                ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
-                ll_foreach(it, &structt->monomorphs) {
-                    fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-                    const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
-                    fprintf(stderr, "\n");
-                }
-                fprintf(stderr, "\n");
-                ansi_reset(stderr);
-                show_current_monomorphization(c);
-            }
         } else {
             ll_foreach(it, &structt->polymorphs) {
                 it->node.type = it->monomorphization_type;
             }
 
-            if (log) {
-                error_node(EK_NOTE, n, "Monomorphized this node partially");
-                ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
-                ll_foreach(it, &structt->polymorphs) {
-                    fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-                    const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
-                    fprintf(stderr, "\n");
-                }
+#if MONOMORPHIZATION_LOG
+            error_node(EK_NOTE, n, "Monomorphized this node partially");
+            ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+            ll_foreach(it, &structt->polymorphs) {
+                fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
                 fprintf(stderr, "\n");
-                ansi_reset(stderr);
-                show_current_monomorphization(c);
             }
+            fprintf(stderr, "\n");
+            ansi_reset(stderr);
+            show_current_monomorphization(c);
+#endif // MONOMORPHIZATION_LOG
         }
     } else {
         unreachable();
@@ -4083,16 +4085,16 @@ end:
         into->type.spec.structt->original_definition = from->type.spec.structt->original_definition;
     }
 
-    if (log) {
-        error_node(EK_NOTE, n, "Type checked to %s", type_to_cstr(type_without_meta(n->type)));
-        show_current_monomorphization(c);
-        afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "}\n\n");
-    }
+#if MONOMORPHIZATION_LOG
+    error_node(EK_NOTE, n, "Type checked to %s", type_to_cstr(type_without_meta(n->type)));
+    show_current_monomorphization(c);
+    afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "}\n\n");
+#endif // MONOMORPHIZATION_LOG
 
     return n;
 }
 
-// TODO: @remove
+// TODO: Allow string interpolation anywhere
 static void ensure_interpolation_is_valid(Compiler *c, Node_Interpolation *interpolation, bool noexit) {
     if (!interpolation->is_valid) {
         error_node(EK_ERROR, (Node *) interpolation, "Cannot use interpolated strings here");

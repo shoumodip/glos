@@ -1870,5 +1870,3 @@ Parse_Result parse_directory(Parser *p, const char *path) {
     }
     return PARSE_OK;
 }
-
-// TODO: Distinguish between '$this' and 'this'
