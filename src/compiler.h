@@ -65,6 +65,8 @@ typedef struct {
     } monomorph_parameters;
     DA(Monomorphization) monomorphization_stack;
 
+    bool dont_allow_polymorphs;
+
     // These are used both by the analyzer and the compiler
     Context context;
 

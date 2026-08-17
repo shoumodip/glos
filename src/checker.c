@@ -934,6 +934,7 @@ static bool always_returns(Node *n) {
 typedef enum {
     REF_NONE,
     REF_ADDR,
+    REF_SLICE,
     REF_ASSIGN,
 
     REF_ADDR_MEMBER,
@@ -1195,6 +1196,13 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     }
 
     if (n->emit_type_info) {
+        if (c->dont_allow_polymorphs) {
+            Type *emit_type_info_save = n->emit_type_info;
+            n->emit_type_info = NULL;
+            eval_const_expr(c, n, ref);
+            n->emit_type_info = emit_type_info_save;
+        }
+
         return const_value_type(*n->emit_type_info);
     }
 
@@ -1221,17 +1229,33 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
         case TOKEN_IDENT:
             if (atom->definition && atom->definition->polymorph) {
-                if (atom->definition->polymorph->is_monomorphized) {
-                    return atom->definition->polymorph->monomorphization_value;
+                Node_Polymorph *polymorph = atom->definition->polymorph;
+                if (polymorph->is_monomorphized) {
+                    return polymorph->monomorphization_value;
                 }
-                return eval_const_expr(c, (Node *) atom->definition->polymorph, false);
+
+                if (c->dont_allow_polymorphs) {
+                    error_node(
+                        EK_ERROR,
+                        n,
+                        "Cannot use polymorphic parameters in a constant expression before they are monomorphized");
+                    error_node(EK_NOTE, (Node *) polymorph, "Here is the polymorphic parameter being used");
+                    exit(c, 1);
+                }
+
+                return eval_const_expr(c, (Node *) polymorph, false);
             }
 
             if (n->type.is_meta) {
                 return const_value_type(n->type);
             }
 
-            assert(atom->definition);
+            if (!atom->definition) {
+                // The only reason why it reached this point
+                assert(c->dont_allow_polymorphs);
+                return const_value_u64(0);
+            }
+
             if (!atom->definition->definition_spec->is_const) {
                 if (atom->definition->definition_spec->is_local) {
                     error_node(EK_ERROR, n, "Cannot use local variables in a constant expression");
@@ -1817,8 +1841,14 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         }
     }
 
-    case NODE_INDEXABLE:
+    case NODE_INDEXABLE: {
+        Node_Indexable *indexable = (Node_Indexable *) n;
+        if (c->dont_allow_polymorphs) {
+            eval_const_expr(c, indexable->count, false);
+            eval_const_expr(c, indexable->element, false);
+        }
         return const_value_type(n->type);
+    }
 
     default:
         unreachable();
@@ -2398,9 +2428,12 @@ static Node *get_node_from_group(Node *n, size_t index, i64 *group_index) {
 }
 
 static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
+    const bool dont_allow_polymorphs_save = c->dont_allow_polymorphs;
+    c->dont_allow_polymorphs = false;
+
     assert(it->definition_spec->check_status != CHECKING); // It is already checked
     if (it->definition_spec->check_status == CHECKED) {
-        return;
+        goto end;
     }
     it->definition_spec->check_status = CHECKING;
 
@@ -2526,6 +2559,9 @@ static void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *ty
     }
 
     it->definition_spec->check_status = CHECKED;
+
+end:
+    c->dont_allow_polymorphs = dont_allow_polymorphs_save;
 }
 
 static void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_Kind ref) {
@@ -2551,7 +2587,7 @@ static void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_K
     } break;
 
     case CHECKING:
-        if (ref == REF_ADDR && definition->node.type.is_meta) {
+        if ((ref == REF_ADDR || ref == REF_SLICE) && definition->node.type.is_meta) {
             // Reference to incomplete type definition is allowed
         } else {
             error_node(EK_ERROR, (Node *) definition, "Cyclic definition");
@@ -2686,6 +2722,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
         if (!n->is_memory) {
             switch (ref) {
             case REF_NONE:
+            case REF_SLICE:
                 // OK
                 break;
 
@@ -4437,8 +4474,11 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
             }
         }
 
+        Nodes  final_args = {0};
+        size_t final_args_count = 0;
+
         size_t it_index = cc->is_method || cc->is_trait;
-        for (Node *prev = NULL, *arg = cc->args.head; arg; prev = arg, arg = arg->next) {
+        ll_foreach(arg, &cc->args) {
             Node *it = arg;
 
             const bool is_spread = it->kind == NODE_UNARY && it->token.kind == TOKEN_SPREAD;
@@ -4462,6 +4502,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
 
             for (size_t i = 0; i < count; i++, it_index++) {
                 Type_Fn_Arg *argument = it_index < fn_spec->args_count ? &fn_spec->args[it_index] : NULL;
+                bool         add_to_final_args = true;
                 if (argument && argument->polymorph) {
                     if (argument->polymorph->is_type) {
                         if (!type_assert_type_noexit(c, it)) {
@@ -4486,12 +4527,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                     }
 
                     assert(count == 1); // This is guaranteed to be a singular value.
-                    if (prev) {
-                        prev->next = arg->next;
-                    } else {
-                        cc->args.head = arg->next;
-                    }
-                    cc->args_count--;
+                    add_to_final_args = false;
                 } else {
                     Type *expected = argument ? &argument->type : NULL;
                     if (!is_named && !is_spread &&                                                          //
@@ -4509,7 +4545,22 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                         exit(c, 1);
                     }
                 }
+
+                if (add_to_final_args) {
+                    nodes_push(&final_args, arg);
+                    final_args_count++;
+                }
             }
+        }
+
+        if (final_args_count != cc->args_count) {
+            // Terminate at the last argument
+            if (final_args.tail) {
+                final_args.tail->next = NULL;
+            }
+
+            cc->args = final_args;
+            cc->args_count = final_args_count;
         }
 
         for (size_t i = 0; i < fn_spec->args_count; i++) {
@@ -5126,6 +5177,16 @@ static bool check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool only_check_pol
                 it->node.type.spec.slice.element = &define->type->type;
             }
 
+            const bool dont_allow_polymorphs_save = c->dont_allow_polymorphs;
+            if (define->name_polymorph) {
+                c->dont_allow_polymorphs = true;
+                if (define->type) {
+                    define->type->type.is_meta = true;
+                    eval_const_expr(c, define->type, false);
+                    define->type->type.is_meta = false;
+                }
+            }
+
             if (define->expr) {
                 if (is_node_caller_location(define->expr)) {
                     it_arg->default_value_is_caller_location = true;
@@ -5135,8 +5196,9 @@ static bool check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool only_check_pol
                 }
                 it_arg->has_default_value = true;
             }
-            it_arg->type = it->node.type;
+            c->dont_allow_polymorphs = dont_allow_polymorphs_save;
 
+            it_arg->type = it->node.type;
             iota += define->count;
         }
 
@@ -5569,6 +5631,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     break;
 
                 case REF_NONE:
+                case REF_SLICE:
                 case REF_ADDR_MEMBER:
                 case REF_ASSIGN_MEMBER:
                     // Pass
@@ -5994,6 +6057,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
                 if (it->name->definition_spec) {
                     Node_Define *define = it->name->definition_spec->definition_node;
+
                     if (define->type) {
                         check_expr(c, define->type, REF_NONE);
                         it->name->node.type = type_without_meta(type_assert_type(c, define->type));
@@ -6197,10 +6261,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
-        if (call->fn) {
-            // Only way this is possible
-            assert(call->is_monomorphization_of_polymorphic_type);
-        } else {
+        if (!call->fn) {
             call->fn = call->fn_source;
             check_expr(c, call->fn, REF_NONE);
             check_that_type_is_known(c, call->fn);
@@ -6768,7 +6829,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             // ```
             //
             // It is not immediately necessary to calculate the properties of T, which allows for recursive definitions.
-            check_expr(c, indexable->element, REF_ADDR);
+            check_expr(c, indexable->element, REF_SLICE);
         }
 
         Type *element_type = arena_alloc(&default_arena, sizeof(*element_type));
@@ -6803,6 +6864,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
     if (!is_ref_valid) {
         switch (ref) {
         case REF_NONE:
+        case REF_SLICE:
             // OK
             break;
 
