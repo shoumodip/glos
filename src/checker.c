@@ -3122,7 +3122,16 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
                         type_to_cstr(receiver));
                     break;
 
-                case WRONG_SIGNATURE:
+                case WRONG_SIGNATURE: {
+                    Type expected = trait->methods[i].type;
+                    assert(expected.kind == TYPE_FN);
+
+                    Type_Fn *spec = expected.spec.fn;
+                    assert(spec->args_count);
+
+                    const Type arg0_save = spec->args[0].type;
+                    spec->args[0].type = receiver;
+
                     it.fn->body = NULL;
                     error_node(
                         EK_NOTE,
@@ -3131,7 +3140,9 @@ check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *
                         SV_Arg(it.fn->defined_as->node.token.sv),
                         type_to_cstr(trait->methods[i].type),
                         type_to_cstr(it.fn->node.type));
-                    break;
+
+                    spec->args[0].type = arg0_save;
+                } break;
 
                 case OK:
                     break;
