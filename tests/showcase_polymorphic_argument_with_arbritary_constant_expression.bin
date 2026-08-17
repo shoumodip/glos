@@ -1,8 +1,6 @@
 EXIT 0
-STDOUT 79
+STDOUT 49
 69
-0x5569da62ddb0
-0x5569da634b48
 i64
 Hello, world!
 {420, 1337}
