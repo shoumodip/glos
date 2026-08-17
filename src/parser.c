@@ -490,8 +490,14 @@ bool parser_import(Parser *p, Node_Import *import) {
     return newly_imported;
 }
 
-static Node *
-parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool spread_allowed, bool is_static) //
+static Node *parse_define(
+    Parser *p,
+    Node   *name,
+    Token   token,
+    bool    groups_allowed,
+    bool    spread_allowed,
+    bool    name_can_be_this,
+    bool    is_static) //
 {
     Polymorphs_Builder *pb_save = p->state.pb;
 
@@ -502,6 +508,53 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
         define->name_polymorph->is_type = false;
         name = (Node *) define->name_polymorph->name;
         spread_allowed = false;
+    }
+
+    if (!name_can_be_this && sv_match(name->token.sv, "this")) {
+        error_node(
+            EK_ERROR,
+            name,
+            "The name 'this' is reserved for the receiver argument of a method, and therefore cannot be used here");
+
+        if (define->name_polymorph) {
+            assert(p->state.pb);
+            if (p->state.pb->is_fn && define->name_polymorph->arg_index == 0) {
+                // Show a good error message for this case because why not?
+                //
+                // Implementing the code generation of the compiler is the easy part. The actual point of difference
+                // between a regular compiler and a great compiler is the ability to display errors to the user in such
+                // a manner that:
+                //
+                //   - It is descriptive
+                //   - It does not have unnecessary noise
+                //   - It is cognitively easy to understand
+                //   - It shows any necessary context so that the user does not need to find that themselves
+                //   - It shows examples for small errors that the user might make
+                //   - It shows the correct thing to to be done (If that is possible to infer)
+                afprintf(
+                    stderr,
+                    ANSI_COLOR_YELLOW | ANSI_BOLD,
+                    "    This is the first argument in what looks to be a function. Normally this is perfectly valid and would define\n"
+                    "    the function as a method. However, this argument seems to be directly polymorphic, which is not allowed.\n"
+                    "\n"
+                    "    The receiver can have a polymorphic type, but the argument itself cannot be polymorphic.\n"
+                    "\n"
+                    "        foo :: (this: Foo(");
+                afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
+                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "T)) {}    ");
+                afprintf(stderr, ANSI_COLOR_GREEN | ANSI_BOLD, "// This is allowed\n");
+
+                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "        bar :: (");
+                afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
+                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "this: Bar)    {}    ");
+                afprintf(
+                    stderr,
+                    ANSI_COLOR_RED | ANSI_BOLD,
+                    "// This is not (Notice the difference in the position of the '$')\n");
+                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
+            }
+        }
+        exit(1);
     }
 
     if (spread_allowed && peek_token(p).kind == TOKEN_SPREAD) {
@@ -601,6 +654,15 @@ parse_define(Parser *p, Node *name, Token token, bool groups_allowed, bool sprea
 
             fn->is_type = false;
             fn->is_extern = true;
+        }
+
+        if (define->expr->kind == NODE_GROUP) {
+            Node_Group *group = (Node_Group *) define->expr;
+            ll_foreach(it, &group->nodes) {
+                it->is_defined_as_constant = true;
+            }
+        } else {
+            define->expr->is_defined_as_constant = true;
         }
     }
 
@@ -751,7 +813,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
     case TOKEN_LPAREN: {
         Node_Fn            *fn = NULL;
-        Polymorphs_Builder  pb = {0};
+        Polymorphs_Builder  pb = {.is_fn = true};
         Polymorphs_Builder *pb_save = p->state.pb;
 
         if (read_token(p, TOKEN_RPAREN)) {
@@ -782,7 +844,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             p->state.fn_current = fn;
 
             node = parse_expr(p, POWER_SET, false, true, NULL);
-            node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false);
+            node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false, false);
         } else {
             node = parse_expr(p, POWER_SET, false, true, NULL);
             if (peek_token(p).kind == TOKEN_COLON) {
@@ -796,7 +858,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 }
                 p->state.fn_current = fn;
 
-                node = parse_define(p, node, next_token(p), false, true, false);
+                node = parse_define(p, node, next_token(p), false, true, true, false);
             } else {
                 expect_token(p, TOKEN_RPAREN);
             }
@@ -889,14 +951,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 token = expect_token(p, TOKEN_IDENT, TOKEN_DOLLAR);
                 if (token.kind == TOKEN_IDENT) {
                     name = node_alloc(p->module_current, NODE_ATOM, token);
-                    if (sv_match(name->token.sv, "this")) {
-                        error_node(
-                            EK_ERROR,
-                            name,
-                            "The argument 'this' is used to describe the receiver of a method, and therefore must be the first argument");
-                        exit(1);
-                    }
-                } else {
+                } else if (token.kind == TOKEN_DOLLAR) {
                     if (pb_save) {
                         // Do not allow this:
                         //
@@ -911,9 +966,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                     buffer_token(p, token);
                     name = parse_expr(p, POWER_SET, false, true, NULL);
+                } else {
+                    unreachable();
                 }
 
-                arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false);
+                arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false, false);
             }
             p->state.pb = pb_save;
 
@@ -1030,7 +1087,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         while (!read_token(p, TOKEN_RBRACE)) {
             Node_Atom *name = (Node_Atom *) node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
             name->module = p->module_current;
-            Node *method = parse_define(p, (Node *) name, expect_token(p, TOKEN_COLON), false, false, false);
+            Node *method = parse_define(p, (Node *) name, expect_token(p, TOKEN_COLON), false, false, false, false);
 
             Node_Define *define = (Node_Define *) method;
             if (define->is_const) {
@@ -1099,7 +1156,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             while (!read_token(p, TOKEN_RPAREN)) {
                 buffer_token(p, expect_token(p, TOKEN_DOLLAR));
                 Node *name = parse_expr(p, POWER_SET, false, true, NULL);
-                parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false);
+                parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false, false);
 
                 if (expect_token(p, TOKEN_COMMA, TOKEN_RPAREN).kind != TOKEN_COMMA) {
                     break;
@@ -1222,7 +1279,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         } break;
 
         case TOKEN_COLON:
-            return parse_define(p, node, token, groups_allowed, false, false);
+            return parse_define(p, node, token, groups_allowed, false, false, false);
 
         case TOKEN_COMMA: {
             if (!groups_allowed) {

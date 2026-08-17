@@ -12,6 +12,7 @@ typedef DA(const char *) Paths;
 typedef struct {
     Polymorphs *polymorphs;
     size_t      arg_index;
+    bool        is_fn;
 } Polymorphs_Builder;
 
 typedef struct {

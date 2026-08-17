@@ -38,7 +38,7 @@ typedef struct {
     Type        *param_types;
     Const_Value *param_values;
     size_t       params_count;
-} Monomorph_Spec; // TODO: Rename to UID, since that is what this is
+} Monomorph_Spec;
 
 typedef struct {
     // These are used only by the analyzer

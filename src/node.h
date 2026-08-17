@@ -473,6 +473,7 @@ struct Node {
 
     bool is_memory;
     bool is_called;
+    bool is_defined_as_constant;
 
     Type *emit_type_info;
 

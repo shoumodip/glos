@@ -3360,7 +3360,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         unreachable();
 
     case NODE_POLYMORPH:
-        todo(); // @polymorph
+        unreachable();
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;

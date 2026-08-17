@@ -124,15 +124,20 @@ static bool node_is_null(Node *n) {
 }
 
 static bool node_is_runtime_polymorphic_expression(Node *n) {
+    if (n->is_defined_as_constant) {
+        return false;
+    }
+
     if (type_kind_eq(n->type, TYPE_FN) && n->type.spec.fn->polymorphs_count) {
         return n->kind != NODE_FN || ((Node_Fn *) n)->defined_as == NULL;
     }
 
     if (type_meta_kind_eq(n->type, TYPE_STRUCT) && n->type.spec.structt->polymorphs_count) {
-        if (n->kind == NODE_CALL && ((Node_Call *) n)->is_monomorphization_of_polymorphic_type) {
-            return false;
+        while (n->kind == NODE_UNARY && n->token.kind == TOKEN_BAND) {
+            n = ((Node_Unary *) n)->value;
         }
-        return n->kind != NODE_STRUCT || ((Node_Struct *) n)->defined_as == NULL;
+
+        return n->kind != NODE_CALL || !((Node_Call *) n)->is_monomorphization_of_polymorphic_type;
     }
 
     return false;
@@ -3348,7 +3353,6 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
         if (es->polymorphs_count && type_kind_eq(*actual, TYPE_STRUCT)) {
             const Type_Struct *as = actual->spec.structt;
 
-            // TODO: Make it so that polymorphic structures store a reference to the original structure
             if (as->definition->defined_as != es->definition->defined_as) {
                 return true;
             }
@@ -5974,6 +5978,11 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
         spec->original_definition = structt;
         spec->polymorphs = arena_alloc(&default_arena, structt->polymorphs.count * sizeof(*spec->polymorphs));
 
+        if (structt->polymorphs.count && !structt->defined_as) {
+            error_node(EK_NOTE, n, "A polymorphic type must be defined as a constant before it can be used");
+            exit(c, 1);
+        }
+
         ll_foreach(it, &structt->polymorphs) {
             if (!it->is_monomorphized) {
                 for (size_t i = 0; i < spec->polymorphs_count; i++) {
@@ -6825,7 +6834,6 @@ static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
             return;
         }
 
-        // TODO: Allow for assignment to a constant
         if (type_kind_eq(n->type, TYPE_FN)) {
             error_node(EK_ERROR, n, "Polymorphic functions cannot be used as runtime expressions. They must be called");
         } else if (type_meta_kind_eq(n->type, TYPE_STRUCT)) {

@@ -62,18 +62,8 @@ static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
     sb_push(sb, ')');
 }
 
-// TODO: Print the dollar for the polymorph definition
 static_assert(COUNT_TYPES == 26, "");
 void sb_push_type(SB *sb, Type type) {
-    // TODO: Remove
-    // if (type.is_meta) {
-    //     type.is_meta = false;
-    //     sb_push_cstr(sb, "#Type(");
-    //     sb_push_type(sb, type);
-    //     sb_push_cstr(sb, ")");
-    //     return;
-    // }
-
     assert(!type.is_meta);
     if (type.distinct) {
         const Type distinct_type = type.distinct->node.type;
@@ -151,7 +141,11 @@ void sb_push_type(SB *sb, Type type) {
             if (i) {
                 sb_push_cstr(sb, ", ");
             }
-            sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name)); // TODO: Can we get away with not printing this?
+
+            if (it.polymorph) {
+                sb_push(sb, '$');
+            }
+            sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
 
             Type it_type = it.type;
             if (type.spec.fn->variadics_kind == VARIADICS_TYPED && i == type.spec.fn->variadics_index) {
