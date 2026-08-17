@@ -546,68 +546,9 @@ static LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn);
 static LLVMValueRef compile_expr(Compiler *c, Node *n, bool ref);
 static void         compile_stmt(Compiler *c, Node *n);
 
-static void sb_push_nested_fn_name(Compiler *c, SB *sb, Node_Fn *fn, Module *module) {
-    if (!fn) {
-        sb_push_sv(sb, module->name);
-        return;
-    }
-
-    if (fn->wrapper) {
-        assert(fn->defined_as && !fn->outer_fn && fn->wrapper_for_trait);
-
-        Node_Trait *definition = fn->wrapper_for_trait->definition;
-        sb_push_nested_fn_name(c, sb, definition->defined_in, definition->module);
-        sb_push(sb, '.');
-        sb_push_type(sb, (Type) {.kind = TYPE_TRAIT, .spec.trait = fn->wrapper_for_trait});
-        sb_push(sb, '(');
-        sb_push_nested_fn_name(c, sb, fn->wrapper, fn->module);
-        sb_push(sb, ')');
-        return;
-    }
-
-    sb_push_nested_fn_name(c, sb, fn->outer_fn, module);
-    if (fn->is_method) {
-        assert(fn->defined_as);
-        assert(!fn->outer_fn);
-
-        assert(fn->node.type.kind == TYPE_FN);
-        const Type_Fn *fn_spec = fn->node.type.spec.fn;
-
-        assert(fn_spec->args_count);
-        sb_sprintf(sb, ".");
-
-        Type receiver = fn_spec->args[0].type;
-        receiver.ref = 0;
-        sb_push_type(sb, receiver);
-    }
-
-    if (fn->defined_as) {
-        sb_sprintf(sb, "." SV_Fmt, SV_Arg(fn->defined_as->node.token.sv));
-    } else {
-        if (!fn->defined_as_anon_iota) {
-            fn->defined_as_anon_iota = ++c->iota_anonymous_fn;
-        }
-        sb_sprintf(sb, ".anon.%zu", fn->defined_as_anon_iota);
-    }
-
-    if (fn->monomorphs.count) {
-        sb_push(sb, '(');
-        ll_foreach(it, &fn->monomorphs) {
-            assert(it->is_monomorphized);
-            sb_sprintf(sb, "$" SV_Fmt " = ", SV_Arg(it->name->node.token.sv));
-            sb_push_const_value(sb, it->node.type, it->monomorphization_value);
-
-            if (it->next) {
-                sb_push_cstr(sb, ", ");
-            }
-        }
-        sb_push(sb, ')');
-    }
-}
-
-static const char *temp_nested_fn_name(Compiler *c, Node_Fn *fn, Module *module) {
+static const char *temp_nested_fn_name(Node_Fn *fn, Module *module) {
     const size_t start = default_sb.count;
-    sb_push_nested_fn_name(c, &default_sb, fn, module);
+    sb_push_fn_name(&default_sb, fn, module);
     return arena_sb_to_cstr(&temp_arena, &default_sb, start);
 }
 
@@ -802,7 +743,7 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_nested_fn_name(c, &default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
@@ -837,7 +778,7 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_nested_fn_name(c, &default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
@@ -1004,7 +945,7 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_nested_fn_name(c, &default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
                     sb_push(&default_sb, '.');
                     sb_push_type(&default_sb, type_without_meta(*type));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
@@ -1496,7 +1437,7 @@ static void compile_var_def(Compiler *c, Node_Atom *it) {
         name = sv_from_cstr(arena_sv_to_cstr(&temp_arena, name));
     } else if (it->definition_spec->static_var_fn) {
         const size_t start = default_sb.count;
-        sb_push_nested_fn_name(c, &default_sb, it->definition_spec->static_var_fn, it->module);
+        sb_push_fn_name(&default_sb, it->definition_spec->static_var_fn, it->module);
         sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(name));
         name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
     } else if (!it->definition_spec->is_local) {
@@ -1651,7 +1592,7 @@ static LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
         Compile_Fn_Backup backup = {0};
         compile_fn_backup_save(c, &backup);
 
-        SV fn_name = sv_from_cstr(temp_nested_fn_name(c, fn, fn->module));
+        SV fn_name = sv_from_cstr(temp_nested_fn_name(fn, fn->module));
         if (!link_as.count) {
             link_as = fn_name;
         }

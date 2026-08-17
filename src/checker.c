@@ -1261,6 +1261,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
             if (!atom->definition->definition_spec->is_const) {
                 if (atom->definition->definition_spec->is_local) {
+                    // TODO: Static variables
                     error_node(EK_ERROR, n, "Cannot use local variables in a constant expression");
                     error_node(EK_NOTE, (Node *) atom->definition, "Here is the variable being used");
                     exit(c, 1);
@@ -2640,6 +2641,7 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                     if (definition->definition_spec->fn_context != c->context.fn &&
                         !definition->definition_spec->is_const) //
                     {
+                        // TODO: Static variables
                         error_node(EK_ERROR, n, "Cannot use variable from stack frame of outer function");
                         error_node(EK_NOTE, (Node *) definition, "Here is the variable being used");
                         exit(c, 1);
@@ -5235,6 +5237,9 @@ static bool check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool only_check_pol
             // The body of a function is irrelevant for outer expressions
             fn->defined_as->node.type = n->type;
             fn->defined_as->definition_spec->check_status = CHECKED;
+
+            fn->defined_as->definition_spec->const_value = const_value_fn(fn);
+            fn->defined_as->definition_spec->is_const_value_evaluated = true;
         }
 
         if (fn->is_method) {

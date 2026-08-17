@@ -745,6 +745,8 @@ struct Node_Fn {
     LLVMMetadataRef llvm_debug_scope;
 };
 
+void sb_push_fn_name(SB *sb, Node_Fn *fn, Module *module);
+
 // This represents a type
 struct Node_Enum {
     Node  node;

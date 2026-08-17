@@ -1,0 +1,15 @@
+foo :: ($A: Any) {
+    println(A)
+}
+
+x: i32
+
+main :: () {
+    foo(69)
+    foo(main)
+    foo(&x)
+    foo(i64)
+    foo(union { i64; string }     ("Hello, world!"))
+    foo(struct { x: i64; y: i64 } {420, 1337})
+    foo([]char {'H', 'i', '!'})
+}

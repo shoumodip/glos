@@ -135,8 +135,6 @@ typedef struct {
     LLVMTypeRef llvm_trait_type;
 
     // TODO: Cache the debug for these types as well
-
-    size_t iota_anonymous_fn;
 } Compiler;
 
 size_t compile_sizeof(Compiler *c, Type *type);

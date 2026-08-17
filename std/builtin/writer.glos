@@ -216,7 +216,7 @@ wprint :: (w: Writer, vs: ...Any) {
                 w.write([]char("null"))
             } else {
                 buffer: [32]char
-                count := C.snprintf(buffer.data, buffer.count, "0x%x".data, ptr)
+                count := C.snprintf(buffer.data, buffer.count, "0x%zx".data, ptr)
                 w.write(buffer[..count])
             }
 

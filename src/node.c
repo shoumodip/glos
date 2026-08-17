@@ -676,7 +676,9 @@ bool const_value_eq(Const_Value a, Const_Value b) {
         unreachable();
 
     case CONST_VALUE_POLYMORPH:
-        todo(); // @polymorph
+        // I don't know why but this branch never triggers. Perhaps it is indeed unreachable, although that would need
+        // more usage to conclude.
+        unreachable();
 
     default:
         unreachable();
@@ -745,24 +747,52 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
         break;
 
     case CONST_VALUE_FN:
-        todo();
+        sb_push_fn_name(sb, v.as.fn, v.as.fn->module);
         break;
 
-    case CONST_VALUE_VAR:
-        todo();
-        break;
+    case CONST_VALUE_VAR: {
+        Node_Atom *definition = v.as.var;
+        assert(definition->definition_spec); // This is a variable
+        sb_push(sb, '&');
+        sb_push_fn_name(sb, definition->definition_spec->static_var_fn, definition->module);
+        sb_sprintf(sb, "." SV_Fmt, SV_Arg(definition->node.token.sv));
+    } break;
 
     case CONST_VALUE_TYPE:
         sb_push_type(sb, type_without_meta(v.as.type));
         break;
 
-    case CONST_VALUE_TRAIT:
-        todo();
-        break;
+    case CONST_VALUE_TRAIT: {
+        Node_Trait *trait = v.as.trait.impl->trait->definition;
+        sb_push_type(sb, type_without_meta(trait->node.type));
+        if (!trait->defined_as) {
+            sb_push(sb, ' ');
+        }
 
-    case CONST_VALUE_UNION:
-        todo();
-        break;
+        sb_push(sb, '(');
+        if (v.as.trait.data) {
+            sb_push_const_value(sb, *v.as.trait.type, *v.as.trait.data);
+        } else {
+            sb_push_cstr(sb, "null");
+        }
+        sb_push(sb, ')');
+    } break;
+
+    case CONST_VALUE_UNION: {
+        Node_Union *unionn = v.as.unionn.spec->definition;
+        sb_push_type(sb, type_without_meta(unionn->node.type));
+        if (!unionn->defined_as) {
+            sb_push(sb, ' ');
+        }
+
+        sb_push(sb, '(');
+        if (v.as.unionn.real) {
+            sb_push_const_value(sb, v.as.unionn.spec->variants[v.as.unionn.index].type, *v.as.unionn.real);
+        } else {
+            sb_push_cstr(sb, "null");
+        }
+        sb_push(sb, ')');
+    } break;
 
     case CONST_VALUE_STRUCT: {
         Const_Value_Struct structure = v.as.structt;
@@ -776,9 +806,17 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
         sb_push(sb, '}');
     } break;
 
-    case CONST_VALUE_ARRAY:
-        todo();
-        break;
+    case CONST_VALUE_ARRAY: {
+        Const_Value_Array array = v.as.array;
+        sb_push(sb, '{');
+        for (size_t i = 0; i < array.count; i++) {
+            if (i) {
+                sb_push_cstr(sb, ", ");
+            }
+            sb_push_const_value(sb, *array.element_type, array.data[i]);
+        }
+        sb_push(sb, '}');
+    } break;
 
     case CONST_VALUE_STRING:
         sb_push(sb, '"');
@@ -789,8 +827,7 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
         break;
 
     case CONST_VALUE_MODULE:
-        todo();
-        break;
+        unreachable();
 
     case CONST_VALUE_POLYMORPH: {
         Node_Polymorph *polymorph = v.as.polymorph.polymorph;
@@ -899,6 +936,66 @@ void polymorphs_push(Polymorphs *ps, Node_Polymorph *p) {
 
     ps->tail = p;
     ps->count++;
+}
+
+void sb_push_fn_name(SB *sb, Node_Fn *fn, Module *module) {
+    if (!fn) {
+        sb_push_sv(sb, module->name);
+        return;
+    }
+
+    if (fn->wrapper) {
+        assert(fn->defined_as && !fn->outer_fn && fn->wrapper_for_trait);
+
+        Node_Trait *definition = fn->wrapper_for_trait->definition;
+        sb_push_fn_name(sb, definition->defined_in, definition->module);
+        sb_push(sb, '.');
+        sb_push_type(sb, (Type) {.kind = TYPE_TRAIT, .spec.trait = fn->wrapper_for_trait});
+        sb_push(sb, '(');
+        sb_push_fn_name(sb, fn->wrapper, fn->module);
+        sb_push(sb, ')');
+        return;
+    }
+
+    sb_push_fn_name(sb, fn->outer_fn, module);
+    if (fn->is_method) {
+        assert(fn->defined_as);
+        assert(!fn->outer_fn);
+
+        assert(fn->node.type.kind == TYPE_FN);
+        const Type_Fn *fn_spec = fn->node.type.spec.fn;
+
+        assert(fn_spec->args_count);
+        sb_sprintf(sb, ".");
+
+        Type receiver = fn_spec->args[0].type;
+        receiver.ref = 0;
+        sb_push_type(sb, receiver);
+    }
+
+    if (fn->defined_as) {
+        sb_sprintf(sb, "." SV_Fmt, SV_Arg(fn->defined_as->node.token.sv));
+    } else {
+        if (!fn->defined_as_anon_iota) {
+            static size_t iota = 0;
+            fn->defined_as_anon_iota = ++iota;
+        }
+        sb_sprintf(sb, ".anon.%zu", fn->defined_as_anon_iota);
+    }
+
+    if (fn->monomorphs.count) {
+        sb_push(sb, '(');
+        ll_foreach(it, &fn->monomorphs) {
+            assert(it->is_monomorphized);
+            sb_sprintf(sb, "$" SV_Fmt " = ", SV_Arg(it->name->node.token.sv));
+            sb_push_const_value(sb, it->node.type, it->monomorphization_value);
+
+            if (it->next) {
+                sb_push_cstr(sb, ", ");
+            }
+        }
+        sb_push(sb, ')');
+    }
 }
 
 #define Indent_Fmt    "%*s"
