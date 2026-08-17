@@ -52,60 +52,63 @@ static void show_current_monomorphization(Compiler *c) {
         return;
     }
 
-    // TODO: Show more than just the top of the stack
-    const Monomorphization m = c->monomorphization_stack.data[c->monomorphization_stack.count - 1];
-    if (m.into->kind == NODE_FN) {
-        for (Context_Fn *context = c->context.fn; context; context = context->outer) {
-            if (context->fn == (Node_Fn *) m.into) {
-                error_node(EK_NOTE, m.site, "While inside this monomorphization");
+    for (size_t i = 0; i < c->monomorphization_stack.count; i++) {
+        const Monomorphization m = c->monomorphization_stack.data[c->monomorphization_stack.count - i - 1];
+        if (m.into->kind == NODE_FN) {
+            for (Context_Fn *context = c->context.fn; context; context = context->outer) {
+                if (context->fn == (Node_Fn *) m.into) {
+                    error_node(EK_NOTE, m.site, "While inside this monomorphization");
 
-                ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
-                fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
-                ll_foreach(it, &context->fn->monomorphs) {
-                    assert(it->is_monomorphized);
-                    fprintf(stderr, "        " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-                    const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+                    ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
+                    fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
+                    ll_foreach(it, &context->fn->monomorphs) {
+                        assert(it->is_monomorphized);
+                        fprintf(stderr, "        " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+                        const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+                        fprintf(stderr, "\n");
+                    }
                     fprintf(stderr, "\n");
+                    ansi_reset(stderr);
+
+                    Node_Fn *from = get_function_literal(m.from);
+                    assert(from); // It's polymorphic
+
+                    Node *from_body_save = from->body;
+                    from->body = NULL;
+                    error_node(
+                        EK_NOTE,
+                        (Node *) from,
+                        "Here is the %s that was monomorphized",
+                        from->is_method ? "method" : "function");
+                    from->body = from_body_save;
                 }
-                fprintf(stderr, "\n");
-                ansi_reset(stderr);
-
-                Node_Fn *from = get_function_literal(m.from);
-                assert(from); // It's polymorphic
-
-                Node *from_body_save = from->body;
-                from->body = NULL;
-                error_node(
-                    EK_NOTE,
-                    (Node *) from,
-                    "Here is the %s that was monomorphized",
-                    from->is_method ? "method" : "function");
-                from->body = from_body_save;
             }
-        }
-    } else if (m.into->kind == NODE_STRUCT) {
-        error_node(EK_NOTE, m.site, "While inside this monomorphization");
+        } else if (m.into->kind == NODE_STRUCT) {
+            error_node(EK_NOTE, m.site, "While inside this monomorphization");
 
-        ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
-        fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
+            ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
+            fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
 
-        Node_Struct *structt = (Node_Struct *) m.into;
-        Polymorphs  *ps = structt->monomorphs.count ? &structt->monomorphs : &structt->polymorphs;
-        ll_foreach(it, ps) {
-            assert(it->is_monomorphized);
-            fprintf(stderr, "        " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            Node_Struct *structt = (Node_Struct *) m.into;
+            Polymorphs  *ps = structt->monomorphs.count ? &structt->monomorphs : &structt->polymorphs;
+            ll_foreach(it, ps) {
+                assert(it->is_monomorphized);
+                fprintf(stderr, "        " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+                fprintf(stderr, "\n");
+            }
+
             fprintf(stderr, "\n");
+            ansi_reset(stderr);
+
+            assert(type_meta_kind_eq(m.from->type, TYPE_STRUCT));
+            error_node(
+                EK_NOTE,
+                (Node *) m.from->type.spec.structt->definition,
+                "Here is the structure that was monomorphized");
+        } else {
+            unreachable();
         }
-
-        fprintf(stderr, "\n");
-        ansi_reset(stderr);
-
-        assert(type_meta_kind_eq(m.from->type, TYPE_STRUCT));
-        error_node(
-            EK_NOTE, (Node *) m.from->type.spec.structt->definition, "Here is the structure that was monomorphized");
-    } else {
-        unreachable();
     }
 }
 
