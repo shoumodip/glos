@@ -1,0 +1,7 @@
+Box :: struct($T: Type) {
+    x: T
+}
+
+main :: () {
+    Box([1]Type {}[0])
+}

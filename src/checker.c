@@ -728,8 +728,11 @@ static Type type_assert_scalar(Compiler *c, const Node *n) {
     exit(c, 1);
 }
 
-static bool type_assert_type_noexit(Compiler *c, const Node *n) {
-    check_that_type_is_known(c, n);
+static bool type_assert_type_noexit(const Node *n) {
+    if (!check_that_type_is_known_noexit(n)) {
+        return false;
+    }
+
     if (n->type.is_meta) {
         return true;
     }
@@ -738,8 +741,21 @@ static bool type_assert_type_noexit(Compiler *c, const Node *n) {
     return false;
 }
 
+static bool type_assert_type_or_Type_noexit(Compiler *c, const Node *n) {
+    if (!check_that_type_is_known_noexit(n)) {
+        return false;
+    }
+
+    if (n->type.is_meta || type_eq(n->type, c->type_info_pointer_type)) {
+        return true;
+    }
+
+    error_node(EK_ERROR, n, "Expected a type, got %s", type_to_cstr(n->type));
+    return false;
+}
+
 static Type type_assert_type(Compiler *c, const Node *n) {
-    if (type_assert_type_noexit(c, n)) {
+    if (type_assert_type_noexit(n)) {
         return n->type;
     }
     exit(c, 1);
@@ -2639,7 +2655,21 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             definition = context_find_define(&c->context, n->token.sv);
             if (definition) {
                 if (definition->polymorph) {
-                    // Pass
+                    if (!definition->polymorph->is_monomorphized) {
+                        if (definition->definition_spec &&                              //
+                            definition->definition_spec->fn_context && c->context.fn && //
+                            definition->definition_spec->fn_context != c->context.fn)   //
+                        {
+                            // The polymorph is being accessed before it was monomorphized. That means the
+                            // access occurs in the signature itself
+                            error_node(
+                                EK_ERROR,
+                                n,
+                                "Cannot use polymorphic parameters of outer function before they are monomorphized");
+                            error_node(EK_NOTE, (Node *) definition, "Here is the polymorphic parameter being used");
+                            exit(c, 1);
+                        }
+                    }
                 } else if (definition->definition_spec->fn_context && c->context.fn) {
                     if (definition->definition_spec->fn_context != c->context.fn &&
                         !definition->definition_spec->is_const) //
@@ -4540,16 +4570,22 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                 bool         add_to_final_args = true;
                 if (argument && argument->polymorph) {
                     if (argument->polymorph->is_type) {
-                        if (!type_assert_type_noexit(c, it)) {
+                        if (!type_assert_type_or_Type_noexit(c, it)) {
                             error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
                             show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                             exit(c, 1);
                         }
 
                         Const_Value value = eval_const_expr(c, it, false);
-                        assert(value.kind == CONST_VALUE_TYPE);
-                        value.as.type.is_meta = false;
-
+                        if (value.kind == CONST_VALUE_TYPE) {
+                            value.as.type.is_meta = false;
+                        } else {
+                            assert(value.kind == CONST_VALUE_INT && int128_is_zero(value.as.integer));
+                            error_node(
+                                EK_ERROR, it, "This expression is not a constant type (It is a null RTTI pointer)");
+                            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+                            exit(c, 1);
+                        }
                         add_monomorph_parameter(c, argument->polymorph, it->type, value, NULL);
                     } else {
                         if (!type_assert_noexit(c, it, argument->type)) {
@@ -6464,7 +6500,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                                     done = true;
                                 }
                             } else {
-                                if (!type_assert_type_noexit(c, it)) {
+                                if (!type_assert_type_or_Type_noexit(c, it)) {
                                     error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                                     exit(c, 1);
                                 }
@@ -6489,8 +6525,17 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                         }
 
                         if (!done) {
-                            add_monomorph_parameter(
-                                c, from_polymorph, it->type, eval_const_expr(c, it, false), to_polymorph);
+                            const Const_Value value = eval_const_expr(c, it, false);
+                            if (from_polymorph->is_type && value.kind != CONST_VALUE_TYPE &&
+                                value.kind != CONST_VALUE_POLYMORPH) //
+                            {
+                                assert(value.kind == CONST_VALUE_INT && int128_is_zero(value.as.integer));
+                                error_node(
+                                    EK_ERROR, it, "This expression is not a constant type (It is a null RTTI pointer)");
+                                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
+                                exit(c, 1);
+                            }
+                            add_monomorph_parameter(c, from_polymorph, it->type, value, to_polymorph);
                         }
                     }
 
@@ -7435,3 +7480,6 @@ void check_nodes(Compiler *c) {
 //       -> Perhaps after compile time polymorphism is implemented?
 //
 // TODO: Replace all uint64_t with u64
+//
+// TODO: The eval_const_expr() for polymorph monomorphization does not inform the user that it is monomorphizing in the
+// diagnostics which might cause confusion.

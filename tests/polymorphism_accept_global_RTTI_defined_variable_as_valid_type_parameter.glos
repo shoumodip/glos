@@ -1,0 +1,14 @@
+Box :: struct($T: Type) {
+    x: T
+}
+
+foo :: ($T: Type) {
+    println(T)
+}
+
+Int := i64
+
+main :: () {
+    foo(Int)
+    println(Box(Int) {69})
+}

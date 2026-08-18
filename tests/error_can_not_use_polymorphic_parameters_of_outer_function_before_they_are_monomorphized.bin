@@ -1,0 +1,13 @@
+EXIT 1
+STDOUT 0
+
+STDERR 438
+tests/error_can_not_use_polymorphic_parameters_of_outer_function_before_they_are_monomorphized.glos:1:30: ERROR: Cannot use polymorphic parameters of outer function before they are monomorphized
+
+    foo :: ($T: Type, $F := () { T }) {}
+
+tests/error_can_not_use_polymorphic_parameters_of_outer_function_before_they_are_monomorphized.glos:1:10: NOTE: Here is the polymorphic parameter being used
+
+    foo :: ($T: Type, $F := () { T }) {}
+
+
