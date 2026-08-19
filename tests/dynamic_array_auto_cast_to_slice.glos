@@ -1,0 +1,9 @@
+main :: () {
+    xs: [..]i64
+    xs.push(69)
+    xs.push(420)
+
+    ys: []i64
+    ys = xs
+    println(xs)
+}

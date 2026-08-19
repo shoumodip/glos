@@ -32,7 +32,7 @@ void link_flags_add_libname(Link_Flags *ls, SV name) {
 #endif // PLATFORM_X86_64_WINDOWS
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static LLVMTypeRef compile_type(Compiler *c, Type *type) {
     if (!type) {
         return NULL;
@@ -154,6 +154,10 @@ static LLVMTypeRef compile_type(Compiler *c, Type *type) {
         type->llvm = LLVMArrayType(type->spec.array.element->llvm, type->spec.array.count);
         break;
 
+    case TYPE_DYNAMIC_ARRAY:
+        type->llvm = c->llvm_dynamic_array_type;
+        break;
+
     case TYPE_SLICE:
     case TYPE_STRING:
         type->llvm = c->llvm_slice_type;
@@ -270,7 +274,7 @@ typedef struct {
     size_t      direct_types_count;
 } ABI_Info;
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static bool type_is_compound(Type type) {
     if (type.ref) {
         return false;
@@ -281,6 +285,7 @@ static bool type_is_compound(Type type) {
     case TYPE_UNION:
     case TYPE_STRUCT:
     case TYPE_ARRAY:
+    case TYPE_DYNAMIC_ARRAY:
     case TYPE_SLICE:
     case TYPE_STRING:
     case TYPE_GROUP:
@@ -295,7 +300,7 @@ static bool type_is_compound(Type type) {
 }
 
 #ifdef PLATFORM_X86_64_LINUX
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, LLVMTypeRef out[2]) {
     assert(type_is_compound(type));
     switch (type.kind) {
@@ -370,7 +375,7 @@ static ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         return info;
     }
 
-    static_assert(COUNT_TYPES == 26, "");
+    static_assert(COUNT_TYPES == 27, "");
     switch (type->kind) {
     case TYPE_UNIT:
         info.direct_types[info.direct_types_count++] = LLVMVoidTypeInContext(c->llvm_context);
@@ -644,7 +649,7 @@ get_debug_for_builtin_compound_type(Compiler *c, SV name, Builtin_Compound_Type_
     return typedef_metadata;
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     assert(!type->is_meta);
     if (type->ref) {
@@ -1060,6 +1065,28 @@ static LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         return metadata;
     } break;
 
+    case TYPE_DYNAMIC_ARRAY: {
+        const void *checkpoint = arena_alloc(&temp_arena, 0);
+
+        SV name = sv_from_cstr(type_to_cstr_raw(*type));
+
+        Builtin_Compound_Type_Field fields[3] = {0};
+        fields[0].name = sv_from_cstr("data");
+        fields[0].type = *type->spec.dynamic_array.element;
+        fields[0].type.ref++;
+        fields[0].type.llvm = NULL;
+
+        fields[1].name = sv_from_cstr("count");
+        fields[1].type = (Type) {.kind = TYPE_I64};
+
+        fields[2].name = sv_from_cstr("capacity");
+        fields[2].type = (Type) {.kind = TYPE_I64};
+
+        LLVMMetadataRef metadata = get_debug_for_builtin_compound_type(c, name, fields, len(fields));
+        arena_reset(&temp_arena, checkpoint);
+        return metadata;
+    }
+
     case TYPE_SLICE: {
         const void *checkpoint = arena_alloc(&temp_arena, 0);
 
@@ -1232,7 +1259,7 @@ static void compile_trait_impl(Compiler *c, Type_Trait_Impl *impl) {
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 11, "");
+static_assert(COUNT_CONST_VALUES == 12, "");
 static LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type type) {
     switch (value.kind) {
     case CONST_VALUE_INT:
@@ -1353,6 +1380,9 @@ static LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type typ
         }
         return memory;
     }
+
+    case CONST_VALUE_DYNAMIC_ARRAY:
+        return LLVMConstNull(c->llvm_dynamic_array_type);
 
     case CONST_VALUE_STRING:
         return compile_string_into_const_value(c, value.as.string);
@@ -1733,6 +1763,10 @@ static LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
                     it->definition_spec->llvm = LLVMGetParam(c->llvm_fn, arg_iota++);
                     compile_local_var_debug(c, it, get_debug_for_type(c, &it->node.type));
 
+                    if (!it->node.type.llvm) {
+                        compile_type(c, &it->node.type);
+                    }
+
 #ifdef PLATFORM_X86_64_LINUX
                     LLVMAttributeRef byval =
                         LLVMCreateTypeAttribute(c->llvm_context, c->llvm_attribute_byval, it->node.type.llvm);
@@ -1860,12 +1894,13 @@ static LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, b
         }
 
         if (const_value) {
-            static_assert(COUNT_CONST_VALUES == 11, "");
+            static_assert(COUNT_CONST_VALUES == 12, "");
             switch (const_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
             case CONST_VALUE_STRUCT:
             case CONST_VALUE_ARRAY:
+            case CONST_VALUE_DYNAMIC_ARRAY:
             case CONST_VALUE_STRING:
                 if (!definition->definition_spec->llvm) {
                     definition->definition_spec->llvm =
@@ -2005,7 +2040,7 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
 
     SV name = {0};
     {
-        static_assert(COUNT_TYPES == 26, "");
+        static_assert(COUNT_TYPES == 27, "");
 
         Node_Atom *defined_as = NULL;
         if (type->distinct) {
@@ -2070,7 +2105,7 @@ static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip
 
 static LLVMValueRef compile_type_info_finalize(Compiler *c, Type_Info_Compiler *tic);
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
     if (tic->done) {
         return;
@@ -2236,6 +2271,11 @@ static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
             tic->tiv_fields[tic->tiv_fields_iota++] =
                 LLVMConstStructInContext(c->llvm_context, array_fields, array_fields_iota, false);
         } break;
+
+        case TYPE_DYNAMIC_ARRAY:
+            tic->tiv_fields[tic->tiv_fields_iota++] = create_const_struct_from_single_value_if_not_already(
+                c, compile_type_info(c, tic->type->spec.dynamic_array.element));
+            break;
 
         case TYPE_SLICE:
             tic->tiv_fields[tic->tiv_fields_iota++] = create_const_struct_from_single_value_if_not_already(
@@ -2592,12 +2632,13 @@ compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_Fn *f
 
             value = LLVMBuildLoad2(c->llvm_builder, arg->type.llvm, memory, "");
         } else {
-            static_assert(COUNT_CONST_VALUES == 11, "");
+            static_assert(COUNT_CONST_VALUES == 12, "");
             switch (arg->default_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
             case CONST_VALUE_STRUCT:
             case CONST_VALUE_ARRAY:
+            case CONST_VALUE_DYNAMIC_ARRAY:
             case CONST_VALUE_STRING:
                 if (!arg->default_value_llvm) {
                     arg->default_value_llvm =
@@ -3615,11 +3656,16 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         if (index->lhs->type.ref) {
             element_type = n->type.spec.slice.element;
         } else {
-            static_assert(COUNT_TYPES == 26, "");
+            static_assert(COUNT_TYPES == 27, "");
             switch (index->lhs->type.kind) {
             case TYPE_ARRAY:
                 label = "array";
                 element_type = index->lhs->type.spec.array.element;
+                break;
+
+            case TYPE_DYNAMIC_ARRAY:
+                label = "dynamic array";
+                element_type = index->lhs->type.spec.dynamic_array.element;
                 break;
 
             case TYPE_SLICE:
@@ -3667,7 +3713,10 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 if (!b) {
                     b = count;
                 }
-            } else if (index->lhs->type.kind == TYPE_SLICE || index->lhs->type.kind == TYPE_STRING) {
+            } else if (
+                index->lhs->type.kind == TYPE_DYNAMIC_ARRAY ||                               //
+                index->lhs->type.kind == TYPE_SLICE || index->lhs->type.kind == TYPE_STRING) //
+            {
                 ptr = LLVMBuildLoad2(c->llvm_builder, LLVMPointerTypeInContext(c->llvm_context, 0), lhs, "");
                 count = LLVMBuildLoad2(
                     c->llvm_builder,
@@ -3766,7 +3815,10 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             LLVMValueRef count = NULL;
             if (index->lhs->type.kind == TYPE_ARRAY) {
                 count = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), index->lhs->type.spec.array.count, true);
-            } else if (index->lhs->type.kind == TYPE_SLICE || index->lhs->type.kind == TYPE_STRING) {
+            } else if (
+                index->lhs->type.kind == TYPE_DYNAMIC_ARRAY ||                               //
+                index->lhs->type.kind == TYPE_SLICE || index->lhs->type.kind == TYPE_STRING) //
+            {
                 count = LLVMBuildStructGEP2(c->llvm_builder, index->lhs->type.llvm, lhs, 1, "");
                 count = LLVMBuildLoad2(c->llvm_builder, LLVMInt64TypeInContext(c->llvm_context), count, "");
             } else {
@@ -3803,7 +3855,10 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
         LLVMValueRef ptr = NULL;
         if (index->lhs->type.kind == TYPE_ARRAY) {
             ptr = lhs;
-        } else if (index->lhs->type.kind == TYPE_SLICE || index->lhs->type.kind == TYPE_STRING) {
+        } else if (
+            index->lhs->type.kind == TYPE_DYNAMIC_ARRAY ||                               //
+            index->lhs->type.kind == TYPE_SLICE || index->lhs->type.kind == TYPE_STRING) //
+        {
             ptr = LLVMBuildLoad2(c->llvm_builder, LLVMPointerTypeInContext(c->llvm_context, 0), lhs, "");
         } else {
             unreachable();
@@ -3826,7 +3881,7 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 }
 
 static LLVMValueRef compile_auto_cast(Compiler *c, Node *n, LLVMValueRef result, Auto_Cast *auto_cast, bool ref) {
-    static_assert(COUNT_AUTO_CASTS == 4, "");
+    static_assert(COUNT_AUTO_CASTS == 5, "");
     switch (auto_cast->kind) {
     case AUTO_CAST_TO_TRAIT: {
         result = compile_cast_to_trait(c, &auto_cast->from, auto_cast->trait_impl, result, ref);
@@ -3851,6 +3906,21 @@ static LLVMValueRef compile_auto_cast(Compiler *c, Node *n, LLVMValueRef result,
             c->llvm_builder,
             LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), auto_cast->from.spec.array.count, true),
             LLVMBuildStructGEP2(c->llvm_builder, c->llvm_slice_type, slice, 1, ""));
+
+        n->type = auto_cast->to;
+        compile_type(c, &n->type);
+
+        if (ref) {
+            return slice;
+        }
+        return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, slice, "");
+    }
+
+    case AUTO_CAST_DYNAMIC_ARRAY_TO_SLICE: {
+        assert(auto_cast->from.kind == TYPE_DYNAMIC_ARRAY);
+        LLVMValueRef slice = compile_alloca(c, c->llvm_slice_type);
+        LLVMBuildStore(
+            c->llvm_builder, LLVMBuildLoad2(c->llvm_builder, c->llvm_slice_type, undo_load(result), ""), slice);
 
         n->type = auto_cast->to;
         compile_type(c, &n->type);
@@ -4473,6 +4543,14 @@ static void compiler_init_llvm_target_data(Compiler *c) {
 
     // Initialize the common types
     {
+        LLVMTypeRef dynamic_array_fields[] = {
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMInt64TypeInContext(c->llvm_context),
+            LLVMInt64TypeInContext(c->llvm_context),
+        };
+        c->llvm_dynamic_array_type =
+            LLVMStructTypeInContext(c->llvm_context, dynamic_array_fields, len(dynamic_array_fields), false);
+
         LLVMTypeRef slice_fields[] = {
             LLVMPointerTypeInContext(c->llvm_context, 0),
             LLVMInt64TypeInContext(c->llvm_context),

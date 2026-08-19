@@ -1,0 +1,13 @@
+main :: () {
+    xs: [..]i64
+    defer xs.free()
+
+    xs.push(69)
+    xs.push(420)
+    xs.push(1337)
+
+    for i := 0; i < xs.count; i += 1 {
+        println(xs[i])
+    }
+    println(xs)
+}

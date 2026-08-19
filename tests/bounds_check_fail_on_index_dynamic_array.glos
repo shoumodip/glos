@@ -1,0 +1,9 @@
+main :: () {
+    xs: [..]i64
+    for i := 0; i < 5; i = i + 1 {
+        xs.push(i * 2)
+    }
+
+    println(xs[2])
+    println(xs[5])
+}

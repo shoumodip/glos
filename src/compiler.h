@@ -120,8 +120,15 @@ typedef struct {
 
     HT(Type, LLVMValueRef) type_info_cache;
 
+    // Dynamic_Array :: struct {
+    //     data:     rawptr
+    //     count:    i64
+    //     capacity: i64
+    // }
+    LLVMTypeRef llvm_dynamic_array_type;
+
     // Slice :: struct {
-    //     data: rawptr
+    //     data:  rawptr
     //     count: i64
     // }
     LLVMTypeRef llvm_slice_type;
@@ -132,8 +139,6 @@ typedef struct {
     //     impl: &[N]Trait_Method
     // }
     LLVMTypeRef llvm_trait_type;
-
-    // TODO: Cache the debug for these types as well
 } Compiler;
 
 size_t compile_sizeof(Compiler *c, Type *type);

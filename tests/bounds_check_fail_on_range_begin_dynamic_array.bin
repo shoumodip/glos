@@ -1,0 +1,7 @@
+EXIT 134
+STDOUT 10
+{2, 4, 6}
+
+STDERR 123
+tests/bounds_check_fail_on_range_begin_dynamic_array.glos:8:15: Range (6..7) is out of bounds in dynamic array of length 5
+

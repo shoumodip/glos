@@ -1034,7 +1034,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         token = peek_token(p);
         if (token.kind != TOKEN_RBRACKET) {
-            indexable->count = parse_expr(p, POWER_SET, false, true, NULL);
+            if (read_token(p, TOKEN_RANGE)) {
+                indexable->is_dynamic = true;
+            } else {
+                indexable->count = parse_expr(p, POWER_SET, false, true, NULL);
+            }
         }
         expect_token(p, TOKEN_RBRACKET);
         indexable->element = parse_expr(p, POWER_REF, false, false, NULL);
@@ -1838,7 +1842,7 @@ Parse_Result parse_directory(Parser *p, const char *path) {
             if (sv_has_suffix(sv_from_cstr(it), sv_from_cstr("builtin/contract.glos"))) {
                 found = true;
                 for (size_t j = i; j > start; j--) {
-                    p->paths.data[j] = p->paths.data[j - i];
+                    p->paths.data[j] = p->paths.data[j - 1];
                 }
                 p->paths.data[start] = it;
                 break;

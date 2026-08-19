@@ -90,6 +90,8 @@ typedef enum {
     TYPE_STRUCT,
 
     TYPE_ARRAY,
+    TYPE_DYNAMIC_ARRAY,
+
     TYPE_SLICE,
     TYPE_STRING,
 
@@ -192,6 +194,10 @@ typedef struct {
 
 typedef struct {
     Type *element;
+} Type_Dynamic_Array;
+
+typedef struct {
+    Type *element;
 } Type_Slice;
 
 typedef struct {
@@ -225,7 +231,9 @@ struct Type {
         Type_Union  *unionn;
         Type_Struct *structt;
 
-        Type_Array array;
+        Type_Array         array;
+        Type_Dynamic_Array dynamic_array;
+
         Type_Slice slice;
 
         Type_Polymorph polymorph;
@@ -325,6 +333,8 @@ typedef enum {
     CONST_VALUE_STRUCT,
 
     CONST_VALUE_ARRAY,
+    CONST_VALUE_DYNAMIC_ARRAY,
+
     CONST_VALUE_STRING,
 
     CONST_VALUE_MODULE,
@@ -375,6 +385,7 @@ struct Const_Value {
         Const_Value_Struct structt;
 
         Const_Value_Array array;
+        Type             *dynamic_array;
         SV                string;
 
         Module               *module;
@@ -382,7 +393,7 @@ struct Const_Value {
     } as;
 };
 
-static_assert(COUNT_CONST_VALUES == 11, "");
+static_assert(COUNT_CONST_VALUES == 12, "");
 #define const_value_int(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = (v)})
 #define const_value_i64(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_i64(v)})
 #define const_value_u64(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_u64(v)})
@@ -395,7 +406,9 @@ static_assert(COUNT_CONST_VALUES == 11, "");
 #define const_value_union(v)  ((Const_Value) {.kind = CONST_VALUE_UNION, .as.unionn = (v)})
 #define const_value_struct(v) ((Const_Value) {.kind = CONST_VALUE_STRUCT, .as.structt = (v)})
 
-#define const_value_array(v)  ((Const_Value) {.kind = CONST_VALUE_ARRAY, .as.array = (v)})
+#define const_value_array(v)         ((Const_Value) {.kind = CONST_VALUE_ARRAY, .as.array = (v)})
+#define const_value_dynamic_array(v) ((Const_Value) {.kind = CONST_VALUE_DYNAMIC_ARRAY, .as.dynamic_array = (v)})
+
 #define const_value_string(v) ((Const_Value) {.kind = CONST_VALUE_STRING, .as.string = (v)})
 
 #define const_value_module(v)    ((Const_Value) {.kind = CONST_VALUE_MODULE, .as.module = (v)})
@@ -451,6 +464,7 @@ typedef enum {
     AUTO_CAST_TO_TRAIT,
     AUTO_CAST_TO_UNION,
     AUTO_CAST_ARRAY_TO_SLICE,
+    AUTO_CAST_DYNAMIC_ARRAY_TO_SLICE,
     COUNT_AUTO_CASTS
 } Auto_Cast_Kind;
 
@@ -911,6 +925,7 @@ typedef struct {
     Node  node;
     Node *element;
     Node *count;
+    bool  is_dynamic;
 } Node_Indexable;
 
 struct Node_Define {
