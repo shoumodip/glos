@@ -35,6 +35,7 @@ Type_Info :: struct {
         Type_Info_Union
         Type_Info_Structure
         Type_Info_Array
+        Type_Info_Dynamic_Array
         Type_Info_Slice
         Type_Info_String
     }
@@ -82,6 +83,10 @@ Type_Info_Structure :: struct {
 Type_Info_Array :: struct {
     underlying: Type
     count: i64
+}
+
+Type_Info_Dynamic_Array :: struct {
+    underlying: Type
 }
 
 Type_Info_Slice :: struct {

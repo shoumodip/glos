@@ -236,7 +236,7 @@ static void check_that_type_is_known(Compiler *c, const Node *n) {
     }
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label) {
     const Type_Kind type_kind = type_kind_eq(n->type, TYPE_ENUM) ? n->type.spec.enumm.underlying : n->type.kind;
 
@@ -559,6 +559,15 @@ static bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) 
         return true;
     }
 
+    if (type_kind_eq(actual, TYPE_DYNAMIC_ARRAY) &&                                //
+        type_kind_eq(expected, TYPE_SLICE) &&                                      //
+        !actual.ref && !expected.ref &&                                            //
+        type_eq(*actual.spec.dynamic_array.element, *expected.spec.slice.element)) //
+    {
+        set_auto_cast(c, n, group_index, AUTO_CAST_DYNAMIC_ARRAY_TO_SLICE, actual, expected);
+        return true;
+    }
+
     if (type_kind_eq(expected, TYPE_TRAIT) && !expected.ref &&          //
         !type_is_unknown(actual) && !type_kind_eq(actual, TYPE_MODULE)) //
     {
@@ -761,7 +770,7 @@ static Type type_assert_type(Compiler *c, const Node *n) {
 }
 
 static bool get_builtin_type_kind(SV name, Type_Kind *kind) {
-    static_assert(COUNT_TYPES == 26, "");
+    static_assert(COUNT_TYPES == 27, "");
     static const char *names[COUNT_TYPES] = {
         [TYPE_BOOL] = "bool",
         [TYPE_CHAR] = "char",
@@ -1047,7 +1056,7 @@ static Node_Fn *get_main(Compiler *c) {
     return c->main_fn;
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static Const_Value default_const_value(Compiler *c, Type type) {
     if (type.ref) {
         return const_value_u64(0);
@@ -1099,6 +1108,9 @@ static Const_Value default_const_value(Compiler *c, Type type) {
         }
         return const_value_array(array);
     }
+
+    case TYPE_DYNAMIC_ARRAY:
+        return const_value_dynamic_array(type.spec.dynamic_array.element);
 
     case TYPE_SLICE: {
         Const_Value_Array array = {0};
@@ -1527,7 +1539,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             lhs = const_value_of_var(c, lhs.as.var);
         }
 
-        static_assert(COUNT_CONST_VALUES == 11, "");
+        static_assert(COUNT_CONST_VALUES == 12, "");
         switch (lhs.kind) {
         case CONST_VALUE_TRAIT: {
             if (member->rhs) {
@@ -1600,6 +1612,16 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 unreachable();
             }
 
+        case CONST_VALUE_DYNAMIC_ARRAY:
+            if (member->field_index == 0) {
+                error_node(EK_ERROR, n, "Cannot access pointers in constant expressions");
+                exit(c, 1);
+            } else if (member->field_index == 1 || member->field_index == 2) {
+                return const_value_u64(0); // Dynamic arrays in constant expressions can only be empty ones
+            } else {
+                unreachable();
+            }
+
         case CONST_VALUE_STRING:
             if (member->field_index == 0) {
                 error_node(EK_ERROR, n, "Cannot access pointers in constant expressions");
@@ -1663,7 +1685,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             }
 
             const Const_Value result = eval_const_expr_impl(c, it, false);
-            sb_push_const_value_raw(&default_sb, it->type, result); // TODO: raw mode
+            sb_push_const_value_raw(&default_sb, it->type, result);
 
             if (it->auto_casts) {
                 it->type = it_type_save;
@@ -1771,7 +1793,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 exit(c, 1);
             }
 
-            static_assert(COUNT_CONST_VALUES == 11, "");
+            static_assert(COUNT_CONST_VALUES == 12, "");
             switch (lhs.kind) {
             case CONST_VALUE_ARRAY: {
                 Const_Value_Array array = lhs.as.array;
@@ -1811,6 +1833,37 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
                 array.count = end - begin;
                 array.is_slice = true;
                 return const_value_array(array);
+            }
+
+            case CONST_VALUE_DYNAMIC_ARRAY: {
+                i64 begin = 0;
+                if (index->a) {
+                    begin = i64_from_int128(
+                        c, index->a, eval_const_expr(c, index->a, false).as.integer, true, "beginning of range");
+                }
+
+                i64 end = 0;
+                if (index->b) {
+                    end = i64_from_int128(
+                        c, index->a, eval_const_expr(c, index->b, false).as.integer, true, "end of range");
+                }
+
+                if (begin > end) {
+                    index->lhs = NULL;
+                    error_node(
+                        EK_ERROR, n, "Range (%zd..%zd) is invalid: Beginning of range is more than end", begin, end);
+                    exit(c, 1);
+                }
+
+                // Constant dynamic arrays can only be empty
+                if (begin < 0 || end < 0 || (size_t) begin > 0 || (size_t) end > 0) {
+                    index->lhs = NULL;
+                    error_node(
+                        EK_ERROR, n, "Range (%zd..%zd) is out of bounds in dynamic array of length 0", begin, end);
+                    exit(c, 1);
+                }
+
+                return lhs;
             }
 
             case CONST_VALUE_STRING: {
@@ -1853,7 +1906,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         } else {
             const i64 at = i64_from_int128(c, index->a, eval_const_expr(c, index->a, false).as.integer, true, "index");
 
-            static_assert(COUNT_CONST_VALUES == 11, "");
+            static_assert(COUNT_CONST_VALUES == 12, "");
             switch (lhs.kind) {
             case CONST_VALUE_ARRAY: {
                 if (at < 0 || (size_t) at >= lhs.as.array.count) {
@@ -1868,6 +1921,10 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
                 return lhs.as.array.data[at];
             }
+
+            case CONST_VALUE_DYNAMIC_ARRAY:
+                error_node(EK_ERROR, index->a, "Index %zd is out of bounds in dynamic array of length 0", at);
+                exit(c, 1);
 
             case CONST_VALUE_STRING: {
                 if (at < 0 || (size_t) at >= lhs.as.string.count) {
@@ -1920,7 +1977,7 @@ static Const_Value eval_const_expr(Compiler *c, Node *n, bool ref) {
     if (n->auto_casts) {
         n->type = n_type_save;
 
-        static_assert(COUNT_AUTO_CASTS == 4, "");
+        static_assert(COUNT_AUTO_CASTS == 5, "");
         switch (n->auto_casts[0].kind) {
         case AUTO_CAST_TO_TRAIT:
             result = const_value_to_trait(n, &n->auto_casts[0].from, n->auto_casts[0].trait_impl, result);
@@ -1934,6 +1991,14 @@ static Const_Value eval_const_expr(Compiler *c, Node *n, bool ref) {
             assert(result.kind == CONST_VALUE_ARRAY);
             result.as.array.is_slice = true;
             break;
+
+        case AUTO_CAST_DYNAMIC_ARRAY_TO_SLICE: {
+            assert(result.kind == CONST_VALUE_DYNAMIC_ARRAY);
+            Const_Value_Array array = {0};
+            array.element_type = result.as.dynamic_array;
+            array.is_slice = true;
+            result = const_value_array(array);
+        } break;
 
         default:
             unreachable();
@@ -2127,7 +2192,7 @@ static void push_context_replace(Compiler *c, Context_Replace *replace, Node_Ato
     if (replace->to->definition_spec->is_const) {
         Const_Value *value = &replace->to->definition_spec->const_value;
 
-        static_assert(COUNT_CONST_VALUES == 11, "");
+        static_assert(COUNT_CONST_VALUES == 12, "");
         switch (value->kind) {
         case CONST_VALUE_TRAIT: {
             const Const_Value_Trait trait = value->as.trait;
@@ -2921,22 +2986,24 @@ static bool get_method_spec(
         return true;
     }
 
-    static const Type string_type = {.kind = TYPE_STRING};
-    if (type_eq(receiver_type, string_type)) {
-        if (spec) {
-            spec->uid = (uintptr_t) &string_type;
-        }
-
-        if (defining_in_module) {
-            if (is_named) {
-                *is_named = true;
+    static const uint8_t builtin_type_kinds[COUNT_TYPES];
+    for (Type_Kind kind = 0; kind < COUNT_TYPES; kind++) {
+        if (type_kind_eq(receiver_type, kind)) {
+            if (spec) {
+                spec->uid = (uintptr_t) &builtin_type_kinds[kind];
             }
 
-            return defining_in_module == c->builtin_module;
-        }
+            if (defining_in_module) {
+                if (is_named) {
+                    *is_named = true;
+                }
 
-        check_that_methods_can_be_accessed(c, receiver_node, c->builtin_module);
-        return true;
+                return defining_in_module == c->builtin_module;
+            }
+
+            check_that_methods_can_be_accessed(c, receiver_node, c->builtin_module);
+            return true;
+        }
     }
 
     return false;
@@ -3441,7 +3508,7 @@ static void add_monomorph_parameter(
 
 // The return type just indicates whether the inference was done against a known type.
 // It DOES NOT INDICATE TYPE VALIDITY. That is the responsibility of the pre-monomorphization analysis.
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const Type *expected) {
     if (actual->ref < expected->ref) {
         return true;
@@ -3558,6 +3625,16 @@ static bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual,
                 if (!infer_monomorph_parameters(c, n, as.element, es.element)) {
                     return false;
                 }
+            }
+        }
+        break;
+
+    case TYPE_DYNAMIC_ARRAY:
+        if (type_kind_eq(*actual, expected->kind) && actual->ref == expected->ref) {
+            Type *ae = actual->spec.dynamic_array.element;
+            Type *ee = expected->spec.dynamic_array.element;
+            if (!infer_monomorph_parameters(c, n, ae, ee)) {
+                return false;
             }
         }
         break;
@@ -5835,6 +5912,21 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     } else {
                         error_undefined(c, &n->token, "field", false);
                     }
+                } else if (type_kind_eq(member->lhs->type, TYPE_DYNAMIC_ARRAY)) {
+                    check_whether_member_access_is_valid(c, member);
+                    if (sv_match(n->token.sv, "data")) {
+                        n->type = *member->lhs->type.spec.slice.element;
+                        n->type.ref++;
+                        member->field_index = 0;
+                    } else if (sv_match(n->token.sv, "count")) {
+                        n->type = (Type) {.kind = TYPE_I64};
+                        member->field_index = 1;
+                    } else if (sv_match(n->token.sv, "capacity")) {
+                        n->type = (Type) {.kind = TYPE_I64};
+                        member->field_index = 2;
+                    } else {
+                        error_undefined(c, &n->token, "field", false);
+                    }
                 } else if (type_kind_eq(member->lhs->type, TYPE_SLICE)) {
                     check_whether_member_access_is_valid(c, member);
                     if (sv_match(n->token.sv, "data")) {
@@ -6760,8 +6852,10 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                     .spec.slice.element = arena_clone(&default_arena, &element_type, sizeof(element_type)),
                 };
             } else if (
-                type_kind_eq(index->lhs->type, TYPE_ARRAY) || type_kind_eq(index->lhs->type, TYPE_SLICE) ||
-                type_kind_eq(index->lhs->type, TYPE_STRING)) //
+                type_kind_eq(index->lhs->type, TYPE_ARRAY) ||         //
+                type_kind_eq(index->lhs->type, TYPE_DYNAMIC_ARRAY) || //
+                type_kind_eq(index->lhs->type, TYPE_SLICE) ||         //
+                type_kind_eq(index->lhs->type, TYPE_STRING))          //
             {
                 // The beginning can be inferred to be the beginning of the slice
                 if (index->a) {
@@ -6776,7 +6870,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 }
 
                 n->type = index->lhs->type;
-                if (type_kind_eq(n->type, TYPE_ARRAY)) {
+                if (type_kind_eq(n->type, TYPE_ARRAY) || type_kind_eq(n->type, TYPE_DYNAMIC_ARRAY)) {
                     n->type.kind = TYPE_SLICE;
                 }
             } else {
@@ -6820,6 +6914,10 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 check_expr(c, index->a, REF_NONE);
                 type_assert_numeric(c, index->a, false);
                 n->type = *index->lhs->type.spec.array.element;
+            } else if (type_kind_eq(index->lhs->type, TYPE_DYNAMIC_ARRAY) && !index->lhs->type.ref) {
+                check_expr(c, index->a, REF_NONE);
+                type_assert_numeric(c, index->a, false);
+                n->type = *index->lhs->type.spec.dynamic_array.element;
             } else if (type_kind_eq(index->lhs->type, TYPE_SLICE) && !index->lhs->type.ref) {
                 check_expr(c, index->a, REF_NONE);
                 type_assert_numeric(c, index->a, false);
@@ -6887,6 +6985,8 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
                 }
             }
             check_expr(c, indexable->element, REF_NONE);
+        } else if (indexable->is_dynamic) {
+            check_expr(c, indexable->element, REF_SLICE);
         } else {
             // The type `[]T` gets compiled to:
             //
@@ -6915,6 +7015,12 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             }
 
             n->type = (Type) {.kind = TYPE_ARRAY, .is_meta = true, .spec.array = spec};
+        } else if (indexable->is_dynamic) {
+            n->type = (Type) {
+                .kind = TYPE_DYNAMIC_ARRAY,
+                .is_meta = true,
+                .spec.dynamic_array.element = element_type,
+            };
         } else {
             n->type = (Type) {
                 .kind = TYPE_SLICE,
@@ -7330,9 +7436,9 @@ void check_nodes(Compiler *c) {
 
         assert(type_info_variant->kind == TYPE_UNION);
         c->type_info_variants_union = type_info_variant->spec.unionn;
-        assert(c->type_info_variants_union->variants_count == 12);
+        assert(c->type_info_variants_union->variants_count == 13);
 
-        static_assert(COUNT_TYPES == 26, "");
+        static_assert(COUNT_TYPES == 27, "");
         c->type_info_variants[TYPE_BOOL] = CONTRACT_TYPE_INFO_BOOLEAN;
         c->type_info_variants[TYPE_CHAR] = CONTRACT_TYPE_INFO_CHARACTER;
 
@@ -7356,6 +7462,8 @@ void check_nodes(Compiler *c) {
         c->type_info_variants[TYPE_STRUCT] = CONTRACT_TYPE_INFO_STRUCTURE;
 
         c->type_info_variants[TYPE_ARRAY] = CONTRACT_TYPE_INFO_ARRAY;
+        c->type_info_variants[TYPE_DYNAMIC_ARRAY] = CONTRACT_TYPE_INFO_DYNAMIC_ARRAY;
+
         c->type_info_variants[TYPE_SLICE] = CONTRACT_TYPE_INFO_SLICE;
         c->type_info_variants[TYPE_STRING] = CONTRACT_TYPE_INFO_STRING;
     }

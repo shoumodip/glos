@@ -62,7 +62,7 @@ static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
     sb_push(sb, ')');
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 void sb_push_type(SB *sb, Type type) {
     assert(!type.is_meta);
     if (type.distinct) {
@@ -261,6 +261,11 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_type(sb, *array.element);
     } break;
 
+    case TYPE_DYNAMIC_ARRAY:
+        sb_push_cstr(sb, "[..]");
+        sb_push_type(sb, *type.spec.dynamic_array.element);
+        break;
+
     case TYPE_SLICE:
         sb_push_cstr(sb, "[]");
         sb_push_type(sb, *type.spec.slice.element);
@@ -397,7 +402,7 @@ static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
     return true;
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 bool type_eq(Type a, Type b) {
     if (a.is_meta) {
         return b.is_meta;
@@ -451,6 +456,9 @@ bool type_eq(Type a, Type b) {
     case TYPE_ARRAY:
         return a.spec.array.count == b.spec.array.count && type_eq(*a.spec.array.element, *b.spec.array.element);
 
+    case TYPE_DYNAMIC_ARRAY:
+        return type_eq(*a.spec.dynamic_array.element, *b.spec.dynamic_array.element);
+
     case TYPE_SLICE:
         return type_eq(*a.spec.slice.element, *b.spec.slice.element);
 
@@ -491,7 +499,7 @@ bool type_is_numeric(Type type) {
            type_kind_eq(type, TYPE_UNKNOWN_COMPOUND);
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 bool type_is_integer(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -539,7 +547,7 @@ bool type_is_scalar(Type type) {
     return false;
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 bool type_is_signed(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -566,7 +574,7 @@ bool type_is_signed(Type type) {
     }
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 bool type_is_untyped(Type type) {
     if (type.is_meta || type.ref) {
         return false;
@@ -575,7 +583,7 @@ bool type_is_untyped(Type type) {
     return type.kind == TYPE_INT;
 }
 
-static_assert(COUNT_TYPES == 26, "");
+static_assert(COUNT_TYPES == 27, "");
 bool type_is_unknown(Type type) {
     if (type.is_meta || type.ref) {
         return false;
@@ -584,7 +592,7 @@ bool type_is_unknown(Type type) {
     return type.kind == TYPE_UNKNOWN_ENUM || type.kind == TYPE_UNKNOWN_COMPOUND;
 }
 
-static_assert(COUNT_CONST_VALUES == 11, "");
+static_assert(COUNT_CONST_VALUES == 12, "");
 bool const_value_eq(Const_Value a, Const_Value b) {
     if (a.kind != b.kind) {
         return false;
@@ -669,6 +677,9 @@ bool const_value_eq(Const_Value a, Const_Value b) {
 
         return true;
 
+    case CONST_VALUE_DYNAMIC_ARRAY:
+        return type_eq(*a.as.dynamic_array, *b.as.dynamic_array);
+
     case CONST_VALUE_STRING:
         return sv_eq(a.as.string, b.as.string);
 
@@ -733,6 +744,7 @@ static void sb_push_quoted_char(SB *sb, char ch, char quote) {
     }
 }
 
+static_assert(COUNT_CONST_VALUES == 12, "");
 static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw) {
     switch (v.kind) {
     case CONST_VALUE_INT:
@@ -805,6 +817,10 @@ static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw)
         sb_push(sb, '}');
     } break;
 
+    case CONST_VALUE_DYNAMIC_ARRAY:
+        sb_push_cstr(sb, "{}");
+        break;
+
     case CONST_VALUE_STRING:
         if (raw) {
             sb_push_sv(sb, v.as.string);
@@ -838,7 +854,6 @@ static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw)
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 11, "");
 void sb_push_const_value(SB *sb, Type type, Const_Value v) {
     sb_push_const_value_impl(sb, type, v, false);
 }

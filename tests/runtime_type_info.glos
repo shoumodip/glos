@@ -73,7 +73,12 @@ main :: () {
         write_type([69][420]u8)
     }
 
-    // Arrays
+    // Dynamic Arrays
+    {
+        write_type([..]string)
+    }
+
+    // Slices
     {
         write_type([]string)
     }
@@ -234,6 +239,10 @@ write_type :: (ti: Type) {
             write_string("[")
             write_i64(variant.count)
             write_string("]")
+            write_type(variant.underlying)
+
+        case Type_Info_Dynamic_Array
+            write_string("[..]")
             write_type(variant.underlying)
 
         case Type_Info_Slice

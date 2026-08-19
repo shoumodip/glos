@@ -141,6 +141,9 @@ wprint :: (w: Writer, vs: ...Any) {
         case Type_Info_Array
             wprint(w, "[\{v.count}]\{v.underlying}")
 
+        case Type_Info_Dynamic_Array
+            wprint(w, "[..]\{v.underlying}")
+
         case Type_Info_Slice
             wprint(w, "[]\{v.underlying}")
 
@@ -301,6 +304,23 @@ wprint :: (w: Writer, vs: ...Any) {
                 item: Any
                 item.type = v.underlying
                 item.data = a.data + rawptr(i * v.underlying.size)
+                write(w, item, true)
+            }
+            w.write([]char("}"))
+
+        case Type_Info_Dynamic_Array
+            count := *&i64(a.data + rawptr(8))
+            data  := *&rawptr(a.data)
+
+            w.write([]char("{"))
+            for i := 0; i < count; i += 1 {
+                if i != 0 {
+                    w.write([]char(", "))
+                }
+
+                item: Any
+                item.type = v.underlying
+                item.data = data + rawptr(i * v.underlying.size)
                 write(w, item, true)
             }
             w.write([]char("}"))
