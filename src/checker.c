@@ -9,7 +9,6 @@
 #include "parser.h"
 #include "token.h"
 #include <assert.h>
-#include <iso646.h>
 #include <stdint.h>
 
 #define MONOMORPHIZATION_LOG 0
@@ -1304,7 +1303,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             return const_value_string(n->token.as.string);
 
         case TOKEN_ISTRING:
-            unreachable();
+            return const_value_string(n->token.as.string);
 
         case TOKEN_DIRECTIVE_MAIN:
             return const_value_fn(get_main(c));
@@ -1647,8 +1646,34 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         assert(n->type.is_meta);
         return const_value_type(n->type);
 
-    case NODE_INTERPOLATION:
-        unreachable();
+    case NODE_INTERPOLATION: {
+        Node_Interpolation *interpolation = (Node_Interpolation *) n;
+        interpolation->is_constant = true;
+
+        const size_t start = default_sb.count;
+        ll_foreach(it, &interpolation->children) {
+            assert(type_eq(it->type, c->any_type));
+
+            Type it_type_save;
+            if (it->auto_casts) {
+                assert(it->auto_casts_count == 1);
+                assert(it->auto_casts[0].kind == AUTO_CAST_TO_TRAIT);
+                it_type_save = it->type;
+                it->type = it->auto_casts->from;
+            }
+
+            const Const_Value result = eval_const_expr_impl(c, it, false);
+            sb_push_const_value_raw(&default_sb, it->type, result); // TODO: raw mode
+
+            if (it->auto_casts) {
+                it->type = it_type_save;
+            }
+        }
+
+        const Const_Value string = const_value_string(arena_sb_to_sv(&default_arena, &default_sb, start));
+        assert(type_kind_eq(n->type, TYPE_UNION));
+        return const_value_to_union(n->type, 1 + interpolation->is_constant, string);
+    }
 
     case NODE_FN: {
         Node_Fn *fn = (Node_Fn *) n;
@@ -4152,28 +4177,6 @@ end:
     return n;
 }
 
-// TODO: Allow string interpolation anywhere
-static void ensure_interpolation_is_valid(Compiler *c, Node_Interpolation *interpolation, bool noexit) {
-    if (!interpolation->is_valid) {
-        error_node(EK_ERROR, (Node *) interpolation, "Cannot use interpolated strings here");
-        afprintf(
-            stderr,
-            ANSI_COLOR_YELLOW | ANSI_BOLD,
-            "    Interpolated strings are compiled to a temporary '[]Any' value, and can only be used like this:\n"
-            "\n"
-            "        bar :: (vs: []Any) {}\n"
-            "        foo :: (vs: ...Any) {}\n"
-            "\n"
-            "        foo(\"Nice: \\{34 + 35}\")\n"
-            "        bar(\"Nice: \\{200 + 220}\")\n"
-            "\n");
-
-        if (!noexit) {
-            exit(c, 1);
-        }
-    }
-}
-
 static void show_error_for_uninferred_polymorphic_parameter_in_call(
     Compiler *c, Nodes args, const Type_Fn *fn_spec, Node_Polymorph *polymorph) //
 {
@@ -4377,11 +4380,6 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
             Node_Unary *unary = (Node_Unary *) it;
             it = unary->value;
             check_expr(c, it, REF_NONE);
-        } else if (it->kind == NODE_INTERPOLATION) {
-            Node_Interpolation *interpolation = (Node_Interpolation *) it;
-            interpolation->is_valid = true;
-            check_expr(c, it, REF_NONE);
-            interpolation->is_valid = false;
         } else {
             check_expr(c, it, REF_NONE);
         }
@@ -4439,13 +4437,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                         exit(c, 1);
                     }
 
-                    if (it->kind == NODE_INTERPOLATION) {
-                        Node_Interpolation *interpolation = (Node_Interpolation *) it;
-                        interpolation->do_not_allocate = true;
-                        cc->typed_variadics_count += interpolation->children_count;
-                    } else {
-                        cc->typed_variadics_count++;
-                    }
+                    cc->typed_variadics_count++;
                 } else {
                     variadic_source = arg;
 
@@ -4455,13 +4447,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                         cc->is_typed_variadics_direct = true;
                     } else {
                         variadic_source_kind = VS_ARGS;
-                        if (it->kind == NODE_INTERPOLATION) {
-                            Node_Interpolation *interpolation = (Node_Interpolation *) it;
-                            interpolation->do_not_allocate = true;
-                            cc->typed_variadics_count += interpolation->children_count;
-                        } else {
-                            cc->typed_variadics_count++;
-                        }
+                        cc->typed_variadics_count++;
                     }
                 }
                 continue;
@@ -4728,15 +4714,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                     if (expected) {
                         bool ok = true;
                         if (parts == 1) {
-                            if (it->kind == NODE_INTERPOLATION &&               //
-                                fn_spec->variadics_kind == VARIADICS_TYPED &&   //
-                                it_index == fn_spec->variadics_index &&         //
-                                type_eq(fn_spec->args[it_index].type, it->type) //
-                            ) {
-                                // Pass
-                            } else {
-                                ok = type_assert_noexit(c, it, *expected);
-                            }
+                            ok = type_assert_noexit(c, it, *expected);
                         } else {
                             ok = type_assert_grouped_noexit(c, it, *expected, i, NULL);
                         }
@@ -5951,15 +5929,20 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
-        ensure_interpolation_is_valid(c, interpolation, false);
-
         ll_foreach(it, &interpolation->children) {
             check_expr(c, it, REF_NONE);
+            if (type_kind_eq(it->type, TYPE_GROUP)) {
+                error_node(
+                    EK_ERROR,
+                    it,
+                    "Cannot have grouped expressions inside an interpolated string. The type of this is %s",
+                    type_to_cstr(it->type));
+                exit(c, 1);
+            }
             type_assert(c, it, c->any_type);
-            interpolation->children_count += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
+            interpolation->children_count++;
         }
-
-        n->type = c->interpolated_string_type;
+        n->type = c->interpolation_type;
     } break;
 
     case NODE_FN:
@@ -7311,15 +7294,18 @@ void check_nodes(Compiler *c) {
         define_orderless_nodes_of_module(c, m, NULL);
     }
 
+    // Any
     {
         const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Any"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
         c->any_type = type_without_meta(value.as.type);
+    }
 
-        c->interpolated_string_type = (Type) {
-            .kind = TYPE_SLICE,
-            .spec.slice.element = arena_clone(&default_arena, &c->any_type, sizeof(c->any_type)),
-        };
+    // Interpolation
+    {
+        const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Interpolation"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+        c->interpolation_type = type_without_meta(value.as.type);
     }
 
     // Type info

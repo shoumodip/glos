@@ -335,6 +335,7 @@ void *arena_clone(Arena *a, const void *data, size_t size);
 char *arena_sprintf(Arena *a, const char *fmt, ...) Printf_Like(2);
 char *arena_sv_to_cstr(Arena *a, SV sv);
 char *arena_sb_to_cstr(Arena *a, SB *sb, size_t start);
+SV    arena_sb_to_sv(Arena *a, SB *sb, size_t start);
 
 extern Arena temp_arena;
 extern Arena default_arena;

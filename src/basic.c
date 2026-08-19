@@ -591,6 +591,13 @@ char *arena_sb_to_cstr(Arena *a, SB *sb, size_t start) {
     return p;
 }
 
+SV arena_sb_to_sv(Arena *a, SB *sb, size_t start) {
+    SV sv = {.data = sb->data + start, .count = sb->count - start};
+    sv.data = arena_clone(a, sv.data, sv.count);
+    sb->count = start;
+    return sv;
+}
+
 Arena temp_arena = {.capacity = 16 * 1024 * 1024};
 Arena default_arena;
 

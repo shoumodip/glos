@@ -3305,15 +3305,9 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
-        if (interpolation->do_not_allocate) {
-            ll_foreach(it, &interpolation->children) {
-                da_push(&c->group_values, compile_expr(c, it, false));
-            }
-            return NULL;
-        }
+        assert(!interpolation->is_constant);
 
-        assert(c->interpolated_string_type.kind == TYPE_SLICE);
-        LLVMTypeRef  element_type = compile_type(c, c->interpolated_string_type.spec.slice.element);
+        LLVMTypeRef  element_type = compile_type(c, &c->any_type);
         LLVMValueRef memory = compile_alloca(c, LLVMArrayType(element_type, interpolation->children_count));
 
         size_t iota = 0;
@@ -3324,17 +3318,16 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             LLVMBuildStore(c->llvm_builder, value, ptr);
         }
 
-        LLVMValueRef slice = compile_alloca(c, n->type.llvm);
+        LLVMValueRef slice = compile_alloca(c, c->llvm_slice_type);
         LLVMBuildStore(c->llvm_builder, memory, slice);
         LLVMBuildStore(
             c->llvm_builder,
             LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), interpolation->children_count, true),
-            LLVMBuildStructGEP2(c->llvm_builder, n->type.llvm, slice, 1, ""));
+            LLVMBuildStructGEP2(c->llvm_builder, c->llvm_slice_type, slice, 1, ""));
 
-        if (ref) {
-            return slice;
-        }
-        return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, slice, "");
+        LLVMValueRef value = LLVMBuildLoad2(c->llvm_builder, c->llvm_slice_type, slice, "");
+        assert(type_kind_eq(n->type, TYPE_UNION));
+        return compile_cast_to_union(c, n->type.llvm, 1 + interpolation->is_constant, value, ref);
     }
 
     case NODE_FN:
@@ -3519,19 +3512,11 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 }
                 args_iota++;
             } else {
-                Type  *types = NULL;
-                size_t count = c->group_values.count - group_values_count_save;
-                if (arg->type.kind == TYPE_GROUP) {
-                    Type_Group *group = &arg->type.spec.group;
-                    types = group->data;
-                    assert(count == group->count);
-                } else {
-                    assert(arg->kind == NODE_INTERPOLATION);
-                }
-
-                for (size_t i = 0; i < count; i++) {
+                assert(arg->type.kind == TYPE_GROUP);
+                Type_Group *group = &arg->type.spec.group;
+                for (size_t i = 0; i < group->count; i++) {
                     Typed_LLVM_Value tv = {0};
-                    tv.type = types ? &types[i] : &c->any_type;
+                    tv.type = &group->data[i];
                     tv.value = c->group_values.data[group_values_count_save + i];
                     if (variadics_memory && args_iota >= fn_spec->variadics_index) {
                         LLVMValueRef indices[] = {
