@@ -14,6 +14,11 @@ write :: (this: File, bytes: []char) {
 // Printing functions
 wprint :: (w: Writer, vs: ...Any) {
     write_type :: (w: Writer, t: Type) {
+        if t == null {
+            w.write([]char("null"))
+            return
+        }
+
         if t.name.count != 0 {
             w.write([]char(t.name))
             return
@@ -147,10 +152,6 @@ wprint :: (w: Writer, vs: ...Any) {
         }
     }
 
-    write_source_code_location :: (w: Writer, l: Source_Code_Location) {
-        wprint(w, "\{l.path}:\{l.row}:\{l.col}:")
-    }
-
     // TODO: Make the character and string printers respect special characters if nested
     write :: (w: Writer, a: Any, nested: bool) {
         if a.type == Type {
@@ -158,8 +159,22 @@ wprint :: (w: Writer, vs: ...Any) {
             return
         }
 
+        if a.type == Interpolation {
+            underlying := a.type.variant.(Type_Info_Slice).underlying
+            count := *&i64(a.data + rawptr(8))
+            data  := *&rawptr(a.data)
+            for i := 0; i < count; i += 1 {
+                item: Any
+                item.type = underlying
+                item.data = data + rawptr(i * underlying.size)
+                write(w, item, nested)
+            }
+            return
+        }
+
         if a.type == Source_Code_Location {
-            write_source_code_location(w, *&Source_Code_Location(a.data))
+            l := *&Source_Code_Location(a.data)
+            wprint(w, "\{l.path}:\{l.row}:\{l.col}:")
             return
         }
 
@@ -332,6 +347,8 @@ wprint :: (w: Writer, vs: ...Any) {
         } else {
             write(w, v, false)
         }
+
+        // TODO: Print space in between arguments
     }
 }
 

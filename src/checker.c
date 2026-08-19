@@ -9,7 +9,6 @@
 #include "parser.h"
 #include "token.h"
 #include <assert.h>
-#include <iso646.h>
 #include <stdint.h>
 
 #define MONOMORPHIZATION_LOG 0
@@ -4439,13 +4438,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                         exit(c, 1);
                     }
 
-                    if (it->kind == NODE_INTERPOLATION) {
-                        Node_Interpolation *interpolation = (Node_Interpolation *) it;
-                        interpolation->do_not_allocate = true;
-                        cc->typed_variadics_count += interpolation->children_count;
-                    } else {
-                        cc->typed_variadics_count++;
-                    }
+                    cc->typed_variadics_count++;
                 } else {
                     variadic_source = arg;
 
@@ -4455,13 +4448,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                         cc->is_typed_variadics_direct = true;
                     } else {
                         variadic_source_kind = VS_ARGS;
-                        if (it->kind == NODE_INTERPOLATION) {
-                            Node_Interpolation *interpolation = (Node_Interpolation *) it;
-                            interpolation->do_not_allocate = true;
-                            cc->typed_variadics_count += interpolation->children_count;
-                        } else {
-                            cc->typed_variadics_count++;
-                        }
+                        cc->typed_variadics_count++;
                     }
                 }
                 continue;
@@ -4728,15 +4715,7 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
                     if (expected) {
                         bool ok = true;
                         if (parts == 1) {
-                            if (it->kind == NODE_INTERPOLATION &&               //
-                                fn_spec->variadics_kind == VARIADICS_TYPED &&   //
-                                it_index == fn_spec->variadics_index &&         //
-                                type_eq(fn_spec->args[it_index].type, it->type) //
-                            ) {
-                                // Pass
-                            } else {
-                                ok = type_assert_noexit(c, it, *expected);
-                            }
+                            ok = type_assert_noexit(c, it, *expected);
                         } else {
                             ok = type_assert_grouped_noexit(c, it, *expected, i, NULL);
                         }
@@ -5959,7 +5938,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             interpolation->children_count += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
         }
 
-        n->type = c->interpolated_string_type;
+        n->type = c->interpolation_type;
     } break;
 
     case NODE_FN:
@@ -7311,15 +7290,18 @@ void check_nodes(Compiler *c) {
         define_orderless_nodes_of_module(c, m, NULL);
     }
 
+    // Any
     {
         const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Any"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
         c->any_type = type_without_meta(value.as.type);
+    }
 
-        c->interpolated_string_type = (Type) {
-            .kind = TYPE_SLICE,
-            .spec.slice.element = arena_clone(&default_arena, &c->any_type, sizeof(c->any_type)),
-        };
+    // Interpolation
+    {
+        const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Interpolation"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+        c->interpolation_type = type_without_meta(value.as.type);
     }
 
     // Type info

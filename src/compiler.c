@@ -3305,15 +3305,9 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
-        if (interpolation->do_not_allocate) {
-            ll_foreach(it, &interpolation->children) {
-                da_push(&c->group_values, compile_expr(c, it, false));
-            }
-            return NULL;
-        }
 
-        assert(c->interpolated_string_type.kind == TYPE_SLICE);
-        LLVMTypeRef  element_type = compile_type(c, c->interpolated_string_type.spec.slice.element);
+        assert(c->interpolation_type.kind == TYPE_SLICE);
+        LLVMTypeRef  element_type = compile_type(c, c->interpolation_type.spec.slice.element);
         LLVMValueRef memory = compile_alloca(c, LLVMArrayType(element_type, interpolation->children_count));
 
         size_t iota = 0;
@@ -3519,19 +3513,11 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
                 }
                 args_iota++;
             } else {
-                Type  *types = NULL;
-                size_t count = c->group_values.count - group_values_count_save;
-                if (arg->type.kind == TYPE_GROUP) {
-                    Type_Group *group = &arg->type.spec.group;
-                    types = group->data;
-                    assert(count == group->count);
-                } else {
-                    assert(arg->kind == NODE_INTERPOLATION);
-                }
-
-                for (size_t i = 0; i < count; i++) {
+                assert(arg->type.kind == TYPE_GROUP);
+                Type_Group *group = &arg->type.spec.group;
+                for (size_t i = 0; i < group->count; i++) {
                     Typed_LLVM_Value tv = {0};
-                    tv.type = types ? &types[i] : &c->any_type;
+                    tv.type = &group->data[i];
                     tv.value = c->group_values.data[group_values_count_save + i];
                     if (variadics_memory && args_iota >= fn_spec->variadics_index) {
                         LLVMValueRef indices[] = {

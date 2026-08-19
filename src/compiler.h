@@ -45,8 +45,7 @@ typedef struct {
     Type main_fn_type;
     DA(Type_Struct_Field) struct_fields;
 
-    // TODO: This should be an array
-    Type interpolated_string_type;
+    Type interpolation_type;
 
     HT(Method_Spec, Node_Fn *) methods_table;
     DA(Node_Fn *) methods_list;
