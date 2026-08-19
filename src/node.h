@@ -404,6 +404,7 @@ static_assert(COUNT_CONST_VALUES == 11, "");
 bool const_value_eq(Const_Value a, Const_Value b);
 
 void sb_push_const_value(SB *sb, Type type, Const_Value v);
+void sb_push_const_value_raw(SB *sb, Type type, Const_Value v);
 void const_value_debug(FILE *f, Type type, Const_Value v);
 
 typedef enum {
@@ -688,7 +689,7 @@ typedef struct {
     Node   node;
     Nodes  children;
     size_t children_count;
-    bool   is_valid;
+    bool   is_constant;
 } Node_Interpolation;
 
 struct Node_Fn {

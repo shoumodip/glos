@@ -733,14 +733,17 @@ static void sb_push_quoted_char(SB *sb, char ch, char quote) {
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 11, "");
-void sb_push_const_value(SB *sb, Type type, Const_Value v) {
+static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw) {
     switch (v.kind) {
     case CONST_VALUE_INT:
         if (type_kind_eq(type, TYPE_CHAR)) {
-            sb_push(sb, '\'');
-            sb_push_quoted_char(sb, v.as.integer.low, '\'');
-            sb_push(sb, '\'');
+            if (raw) {
+                sb_push(sb, (char) v.as.integer.low);
+            } else {
+                sb_push(sb, '\'');
+                sb_push_quoted_char(sb, (char) v.as.integer.low, '\'');
+                sb_push(sb, '\'');
+            }
         } else {
             sb_push_cstr(sb, int128_to_cstr(v.as.integer));
         }
@@ -762,37 +765,21 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
         sb_push_type(sb, type_without_meta(v.as.type));
         break;
 
-    case CONST_VALUE_TRAIT: {
-        Node_Trait *trait = v.as.trait.impl->trait->definition;
-        sb_push_type(sb, type_without_meta(trait->node.type));
-        if (!trait->defined_as) {
-            sb_push(sb, ' ');
-        }
-
-        sb_push(sb, '(');
+    case CONST_VALUE_TRAIT:
         if (v.as.trait.data) {
-            sb_push_const_value(sb, *v.as.trait.type, *v.as.trait.data);
+            sb_push_const_value_impl(sb, *v.as.trait.type, *v.as.trait.data, raw);
         } else {
             sb_push_cstr(sb, "null");
         }
-        sb_push(sb, ')');
-    } break;
+        break;
 
-    case CONST_VALUE_UNION: {
-        Node_Union *unionn = v.as.unionn.spec->definition;
-        sb_push_type(sb, type_without_meta(unionn->node.type));
-        if (!unionn->defined_as) {
-            sb_push(sb, ' ');
-        }
-
-        sb_push(sb, '(');
+    case CONST_VALUE_UNION:
         if (v.as.unionn.real) {
-            sb_push_const_value(sb, v.as.unionn.spec->variants[v.as.unionn.index].type, *v.as.unionn.real);
+            sb_push_const_value_impl(sb, v.as.unionn.spec->variants[v.as.unionn.index].type, *v.as.unionn.real, raw);
         } else {
             sb_push_cstr(sb, "null");
         }
-        sb_push(sb, ')');
-    } break;
+        break;
 
     case CONST_VALUE_STRUCT: {
         Const_Value_Struct structure = v.as.structt;
@@ -801,7 +788,7 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
             if (i) {
                 sb_push_cstr(sb, ", ");
             }
-            sb_push_const_value(sb, structure.spec->fields[i].type, structure.fields[i]);
+            sb_push_const_value_impl(sb, structure.spec->fields[i].type, structure.fields[i], false);
         }
         sb_push(sb, '}');
     } break;
@@ -813,17 +800,21 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
             if (i) {
                 sb_push_cstr(sb, ", ");
             }
-            sb_push_const_value(sb, *array.element_type, array.data[i]);
+            sb_push_const_value_impl(sb, *array.element_type, array.data[i], false);
         }
         sb_push(sb, '}');
     } break;
 
     case CONST_VALUE_STRING:
-        sb_push(sb, '"');
-        for (size_t i = 0; i < v.as.string.count; i++) {
-            sb_push_quoted_char(sb, v.as.string.data[i], '"');
+        if (raw) {
+            sb_push_sv(sb, v.as.string);
+        } else {
+            sb_push(sb, '"');
+            for (size_t i = 0; i < v.as.string.count; i++) {
+                sb_push_quoted_char(sb, v.as.string.data[i], '"');
+            }
+            sb_push(sb, '"');
         }
-        sb_push(sb, '"');
         break;
 
     case CONST_VALUE_MODULE:
@@ -832,7 +823,7 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
     case CONST_VALUE_POLYMORPH: {
         Node_Polymorph *polymorph = v.as.polymorph.polymorph;
         if (polymorph->is_monomorphized) {
-            sb_push_const_value(sb, polymorph->monomorphization_type, polymorph->monomorphization_value);
+            sb_push_const_value_impl(sb, polymorph->monomorphization_type, polymorph->monomorphization_value, false);
         } else {
             if (v.as.polymorph.is_definition) {
                 sb_push(sb, '$');
@@ -845,6 +836,15 @@ void sb_push_const_value(SB *sb, Type type, Const_Value v) {
     default:
         unreachable();
     }
+}
+
+static_assert(COUNT_CONST_VALUES == 11, "");
+void sb_push_const_value(SB *sb, Type type, Const_Value v) {
+    sb_push_const_value_impl(sb, type, v, false);
+}
+
+void sb_push_const_value_raw(SB *sb, Type type, Const_Value v) {
+    sb_push_const_value_impl(sb, type, v, true);
 }
 
 void const_value_debug(FILE *f, Type type, Const_Value v) {

@@ -3305,9 +3305,9 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
+        assert(!interpolation->is_constant);
 
-        assert(c->interpolation_type.kind == TYPE_SLICE);
-        LLVMTypeRef  element_type = compile_type(c, c->interpolation_type.spec.slice.element);
+        LLVMTypeRef  element_type = compile_type(c, &c->any_type);
         LLVMValueRef memory = compile_alloca(c, LLVMArrayType(element_type, interpolation->children_count));
 
         size_t iota = 0;
@@ -3318,17 +3318,16 @@ static LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
             LLVMBuildStore(c->llvm_builder, value, ptr);
         }
 
-        LLVMValueRef slice = compile_alloca(c, n->type.llvm);
+        LLVMValueRef slice = compile_alloca(c, c->llvm_slice_type);
         LLVMBuildStore(c->llvm_builder, memory, slice);
         LLVMBuildStore(
             c->llvm_builder,
             LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), interpolation->children_count, true),
-            LLVMBuildStructGEP2(c->llvm_builder, n->type.llvm, slice, 1, ""));
+            LLVMBuildStructGEP2(c->llvm_builder, c->llvm_slice_type, slice, 1, ""));
 
-        if (ref) {
-            return slice;
-        }
-        return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, slice, "");
+        LLVMValueRef value = LLVMBuildLoad2(c->llvm_builder, c->llvm_slice_type, slice, "");
+        assert(type_kind_eq(n->type, TYPE_UNION));
+        return compile_cast_to_union(c, n->type.llvm, 1 + interpolation->is_constant, value, ref);
     }
 
     case NODE_FN:

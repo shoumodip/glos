@@ -160,14 +160,18 @@ wprint :: (w: Writer, vs: ...Any) {
         }
 
         if a.type == Interpolation {
-            underlying := a.type.variant.(Type_Info_Slice).underlying
-            count := *&i64(a.data + rawptr(8))
-            data  := *&rawptr(a.data)
-            for i := 0; i < count; i += 1 {
-                item: Any
-                item.type = underlying
-                item.data = data + rawptr(i * underlying.size)
-                write(w, item, nested)
+            a := *&Interpolation(a.data)
+            if a == {
+            case []Any
+                for i := 0; i < a.count; i += 1 {
+                    write(w, a[i], nested)
+                }
+
+            case string
+                write(w, a, nested)
+
+            case
+                unreachable()
             }
             return
         }

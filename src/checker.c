@@ -1303,7 +1303,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
             return const_value_string(n->token.as.string);
 
         case TOKEN_ISTRING:
-            unreachable();
+            return const_value_string(n->token.as.string);
 
         case TOKEN_DIRECTIVE_MAIN:
             return const_value_fn(get_main(c));
@@ -1646,8 +1646,34 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         assert(n->type.is_meta);
         return const_value_type(n->type);
 
-    case NODE_INTERPOLATION:
-        unreachable();
+    case NODE_INTERPOLATION: {
+        Node_Interpolation *interpolation = (Node_Interpolation *) n;
+        interpolation->is_constant = true;
+
+        const size_t start = default_sb.count;
+        ll_foreach(it, &interpolation->children) {
+            assert(type_eq(it->type, c->any_type));
+
+            Type it_type_save;
+            if (it->auto_casts) {
+                assert(it->auto_casts_count == 1);
+                assert(it->auto_casts[0].kind == AUTO_CAST_TO_TRAIT);
+                it_type_save = it->type;
+                it->type = it->auto_casts->from;
+            }
+
+            const Const_Value result = eval_const_expr_impl(c, it, false);
+            sb_push_const_value_raw(&default_sb, it->type, result); // TODO: raw mode
+
+            if (it->auto_casts) {
+                it->type = it_type_save;
+            }
+        }
+
+        const Const_Value string = const_value_string(arena_sb_to_sv(&default_arena, &default_sb, start));
+        assert(type_kind_eq(n->type, TYPE_UNION));
+        return const_value_to_union(n->type, 1 + interpolation->is_constant, string);
+    }
 
     case NODE_FN: {
         Node_Fn *fn = (Node_Fn *) n;
@@ -4151,28 +4177,6 @@ end:
     return n;
 }
 
-// TODO: Allow string interpolation anywhere
-static void ensure_interpolation_is_valid(Compiler *c, Node_Interpolation *interpolation, bool noexit) {
-    if (!interpolation->is_valid) {
-        error_node(EK_ERROR, (Node *) interpolation, "Cannot use interpolated strings here");
-        afprintf(
-            stderr,
-            ANSI_COLOR_YELLOW | ANSI_BOLD,
-            "    Interpolated strings are compiled to a temporary '[]Any' value, and can only be used like this:\n"
-            "\n"
-            "        bar :: (vs: []Any) {}\n"
-            "        foo :: (vs: ...Any) {}\n"
-            "\n"
-            "        foo(\"Nice: \\{34 + 35}\")\n"
-            "        bar(\"Nice: \\{200 + 220}\")\n"
-            "\n");
-
-        if (!noexit) {
-            exit(c, 1);
-        }
-    }
-}
-
 static void show_error_for_uninferred_polymorphic_parameter_in_call(
     Compiler *c, Nodes args, const Type_Fn *fn_spec, Node_Polymorph *polymorph) //
 {
@@ -4376,11 +4380,6 @@ static void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_argum
             Node_Unary *unary = (Node_Unary *) it;
             it = unary->value;
             check_expr(c, it, REF_NONE);
-        } else if (it->kind == NODE_INTERPOLATION) {
-            Node_Interpolation *interpolation = (Node_Interpolation *) it;
-            interpolation->is_valid = true;
-            check_expr(c, it, REF_NONE);
-            interpolation->is_valid = false;
         } else {
             check_expr(c, it, REF_NONE);
         }
@@ -5930,14 +5929,19 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
-        ensure_interpolation_is_valid(c, interpolation, false);
-
         ll_foreach(it, &interpolation->children) {
             check_expr(c, it, REF_NONE);
+            if (type_kind_eq(it->type, TYPE_GROUP)) {
+                error_node(
+                    EK_ERROR,
+                    it,
+                    "Cannot have grouped expressions inside an interpolated string. The type of this is %s",
+                    type_to_cstr(it->type));
+                exit(c, 1);
+            }
             type_assert(c, it, c->any_type);
-            interpolation->children_count += type_kind_eq(it->type, TYPE_GROUP) ? it->type.spec.group.count : 1;
+            interpolation->children_count++;
         }
-
         n->type = c->interpolation_type;
     } break;
 

@@ -114,4 +114,7 @@ Equivalence :: enum {
 #assert(i64(Ordering.EQ) == i64(Equivalence.EQ))
 
 // Interpolation
-Interpolation :: distinct []Any
+Interpolation :: union {
+    []Any
+    string
+}

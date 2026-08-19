@@ -1,0 +1,6 @@
+main :: () {
+    println(MESSAGE)
+}
+
+WHOM :: "me"
+MESSAGE :: "Urmom is doing \{34 + 35} with \{WHOM}"
