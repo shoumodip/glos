@@ -26,4 +26,8 @@ Token lexer_get_string(Lexer *l, Pos pos, Pos start);
 
 Token lexer_iter(Lexer *l);
 
+#ifdef PROFILING
+extern size_t total_lines_processed;
+#endif // PROFILING
+
 #endif // LEXER_H

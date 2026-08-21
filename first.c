@@ -319,6 +319,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
             cmd_push(cmd, "link", "/nologo");
         }
 
+        cmd_push(cmd, "/stack:8388608");
         cmd_push(cmd, "/debug");
         cmd_push(cmd, "/out:glos.exe");
 #else

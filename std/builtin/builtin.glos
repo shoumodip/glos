@@ -6,8 +6,8 @@ panic :: (message: ...Any, location := #caller_location) {
         eprintln(...message)
     }
 
-    C.fflush(C.stdout)
-    C.fflush(C.stderr)
+    C.fflush(os.stdout)
+    C.fflush(os.stderr)
     C.abort()
 }
 
@@ -20,8 +20,8 @@ assert :: (cond: bool, message: ...Any, location := #caller_location) {
             eprintln(...message)
         }
 
-        C.fflush(C.stdout)
-        C.fflush(C.stderr)
+        C.fflush(os.stdout)
+        C.fflush(os.stderr)
         C.abort()
     }
 }
@@ -34,8 +34,8 @@ todo :: (message: ...Any, location := #caller_location) {
         eprintln(...message)
     }
 
-    C.fflush(C.stdout)
-    C.fflush(C.stderr)
+    C.fflush(os.stdout)
+    C.fflush(os.stderr)
     C.abort()
 }
 
@@ -47,8 +47,8 @@ unreachable :: (message: ...Any, location := #caller_location) {
         eprintln(...message)
     }
 
-    C.fflush(C.stdout)
-    C.fflush(C.stderr)
+    C.fflush(os.stdout)
+    C.fflush(os.stderr)
     C.abort()
 }
 
@@ -76,4 +76,12 @@ compare :: (this: string, that: string) -> Ordering {
     }
 
     return .EQ
+}
+
+New :: ($T: Type, n := 1) -> &T {
+    return &T(C.calloc(n, sizeof(T)))
+}
+
+New_Array :: ($T: Type, n: i64) -> []T {
+    return (&T(C.calloc(n, sizeof(T))))[..n]
 }

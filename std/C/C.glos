@@ -1,38 +1,62 @@
-FILE :: distinct rawptr
-
+// TODO: Proper signed/unsigned
 extern {
+    puts :: (s: &char) -> i32
     printf :: (fmt: &char, ...) -> i32
-    fprintf :: (f: FILE, fmt: &char, ...) -> i32
+    fprintf :: (f: os.File, fmt: &char, ...) -> i32
     snprintf :: (out: &char, size: i64, fmt: &char, ...) -> i32
-    fwrite :: (ptr: rawptr, size: i64, count: i64, f: FILE)
-    fflush :: (f: FILE)
+    fwrite :: (ptr: rawptr, size: i64, count: i64, f: os.File)
+    fflush :: (f: os.File)
     abort :: ()
-    exit :: (code: i32)
     memcmp :: (a: rawptr, b: rawptr, n: i64) -> i32
     free :: (ptr: rawptr)
     malloc :: (size: i64) -> rawptr
+    calloc :: (count: i64, size: i64) -> rawptr
     realloc :: (ptr: rawptr, size: i64) -> rawptr
     memcpy :: (dst: rawptr, src: rawptr, count: i64) -> rawptr
-    memset :: (dst: rawptr, ch: i32, count: i64) -> rawptr
+    memmove :: (dst: rawptr, src: rawptr, count: i64) -> rawptr
+    memset :: (dst: rawptr, ch: i32, count: u64) -> rawptr
+    memchr :: (s: rawptr, ch: i32, count: u64) -> rawptr
+    strlen :: (s: &char) -> i64
+    atexit :: (function: ()) -> i32
+    getenv :: (name: &char) -> &char
+    fopen :: (path: &char, mode: &char) -> os.File
+    fclose :: (f: os.File) -> i32
+    fseek :: (f: os.File, offset: i64, whence: i32) -> i32
+    ftell :: (f: os.File) -> i64
+    ferror :: (f: os.File) -> i32
+    fread :: (ptr: rawptr, size: u64, count: u64, f: os.File) -> u64
+    strtoll :: (s: &char, end: &&char, base: i32) -> i64
 }
 
-#if PLATFORM == {
-case .LINUX
-    extern {
-        stdin: FILE
-        stdout: FILE
-        stderr: FILE
-    }
+SEEK_SET :: 0
+SEEK_CUR :: 1
+SEEK_END :: 2
 
-case .MACOS
-    extern {
-        #link "__stdinp"  stdin: FILE
-        #link "__stdoutp" stdout: FILE
-        #link "__stderrp" stderr: FILE
-    }
+#if PLATFORM == .WINDOWS {
+    MEM_COMMIT  :: 0x00001000
+    MEM_RESERVE :: 0x00002000
+    MEM_RELEASE :: 0x00008000
 
-case .WINDOWS
-    stdin: FILE
-    stdout: FILE
-    stderr: FILE
+    PAGE_READWRITE :: 0x04
+
+    extern {
+        VirtualAlloc :: (lpAddress: rawptr, dwSize: u64, flAllocationType: u32, flProtect: u32) -> rawptr
+        VirtualFree :: (lpAddress: rawptr, dwSize: u64, dwFreeType: u32) -> i32
+    }
+} else {
+    MAP_FAILED :: rawptr(-1)
+
+    PROT_READ  :: 0x1
+    PROT_WRITE :: 0x2
+
+    MAP_PRIVATE   :: 0x02
+    MAP_ANONYMOUS :: 0x20
+
+    extern {
+        mmap :: (addr: rawptr, length: u64, prot: i32, flags: i32, fd: i32, offset: i64) -> rawptr
+        munmap :: (addr: rawptr, length: u64) -> i32
+    }
 }
+
+// TODO: The glos standard library is a bit of a mess right now
+os :: #import "os"

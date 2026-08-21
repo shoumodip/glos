@@ -1,0 +1,159 @@
+TASKS_PATH :: ".tasks"
+
+App :: struct {
+    tasks: [..]string
+}
+
+init :: (this: &App) {
+    contents, _ := os.read_entire_file(TASKS_PATH)
+    contents := string(contents)
+    for contents.count != 0 {
+        lhs, rhs, _ := strings.split(contents, '\n')
+        if lhs != "" {
+            this.tasks.push(lhs)
+        }
+        contents = rhs
+    }
+}
+
+free :: (this: &App) {
+    this.tasks.free()
+}
+
+save :: (this: &App) {
+    f, ok := os.open_file(TASKS_PATH, true)
+    if !ok {
+        eprintln("Error: Could not save tasks to '\{TASKS_PATH}'")
+        os.exit(1)
+    }
+    defer f.close()
+
+    for i := 0; i < this.tasks.count; i += 1 {
+        wprintln(f, this.tasks[i])
+    }
+}
+
+list :: (this: App, query := "") {
+    for i := 0; i < this.tasks.count; i += 1 {
+        it := this.tasks[i]
+        if query != "" {
+            _, found := strings.find(it, query)
+            if !found {
+                continue
+            }
+        }
+        println("\{i}: \{it}")
+    }
+}
+
+main :: () {
+    app: App
+    defer app.free()
+
+    if os.args.count <= 1 {
+        app.init()
+        app.list()
+        return
+    }
+
+    cmd := os.args[1]
+    if cmd == {
+    case "help"
+        usage(os.stdout)
+
+    case "add"
+        if os.args.count <= 2  {
+            eprintln("Error: Task title not provided")
+            eprintln("Usage: tasks add <title>")
+            os.exit(1)
+        }
+        title := os.args[2]
+
+        app.init()
+        app.tasks.push(title)
+        app.save()
+        println("Added: \{title}")
+
+    case "done"
+        if os.args.count <= 2 {
+            eprintln("Error: Task index not provided")
+            eprintln("Usage: tasks done <index>")
+            os.exit(1)
+        }
+
+        index, ok := strings.to_integer(os.args[2])
+        if !ok {
+            eprintln("Error: Invalid index '\{os.args[2]}'")
+            os.exit(1)
+        }
+
+        app.init()
+        if index < 0 || index >= app.tasks.count {
+            eprintln("Error: Invalid index \{index} (Total is \{app.tasks.count})")
+            os.exit(1)
+        }
+
+        title := app.tasks.remove(index)
+        app.save()
+        println("Removed: \{title}")
+
+    case "edit"
+        if os.args.count <= 2 {
+            eprintln("Error: Task index not provided")
+            eprintln("Usage: tasks edit <index> <title>")
+            os.exit(1)
+        }
+
+        index, ok := strings.to_integer(os.args[2])
+        if !ok {
+            eprintln("Error: Invalid index '\{os.args[2]}'")
+            os.exit(1)
+        }
+
+        app.init()
+        if index < 0 || index >= app.tasks.count {
+            eprintln("Error: Invalid index \{index} (Total is \{app.tasks.count})")
+            os.exit(1)
+        }
+
+        if os.args.count <= 3 {
+            eprintln("Error: Task title not provided")
+            eprintln("Usage: tasks edit <index> <title>")
+            os.exit(1)
+        }
+        title := os.args[3]
+
+        app.tasks[index] = title
+        app.save()
+        println("Edit \{index}: \{title}")
+
+    case "list"
+        query := ""
+        if os.args.count > 2  {
+            query = os.args[2]
+        }
+
+        app.init()
+        app.list(query)
+
+    case
+        eprintln("Error: Invalid command '\{cmd}'")
+        usage(os.stderr)
+        os.exit(1)
+    }
+
+    usage :: (w: Writer) {
+        wprintln(w, "Usage: tasks <command> [args...]")
+        wprintln(w, "Commands:")
+        wprintln(w, "    help                    Show this message and exit")
+        wprintln(w, "    add  <title>            Add a task")
+        wprintln(w, "    done <index>            Mark task as done")
+        wprintln(w, "    edit <index> <title>    Edit a task")
+        wprintln(w, "    list [query]            List tasks, with optional query")
+    }
+}
+
+// C       :: #import "C"
+os      :: #import "os"
+// arena   :: #import "arena"
+strings :: #import "strings"

@@ -6,14 +6,15 @@ greet :: (w: Writer) {
     w.write([]char("Hello, world!\n"))
 }
 
-File :: distinct C.FILE
+File :: distinct os.File
 
 main :: () {
-    greet(File(C.stdout))
+    greet(File(os.stdout))
 }
 
 write :: (this: File, bytes: []char) {
-    C.fwrite(rawptr(bytes.data), sizeof(char), bytes.count, C.FILE(this))
+    C.fwrite(rawptr(bytes.data), sizeof(char), bytes.count, os.File(this))
 }
 
-C :: #import "C"
+C  :: #import "C"
+os :: #import "os"

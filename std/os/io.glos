@@ -1,0 +1,89 @@
+File :: distinct rawptr
+
+write :: (this: File, bytes: []char) {
+    C.fwrite(rawptr(bytes.data), sizeof(char), bytes.count, this);
+}
+
+close :: (this: &File) {
+    C.fclose(*this)
+    *this = null
+}
+
+#if PLATFORM == {
+case .LINUX
+    extern {
+        stdin:  File
+        stdout: File
+        stderr: File
+    }
+
+case .MACOS
+    extern {
+        #link "__stdinp"  stdin:  File
+        #link "__stdoutp" stdout: File
+        #link "__stderrp" stderr: File
+    }
+
+case .WINDOWS
+    stdin:  File
+    stdout: File
+    stderr: File
+}
+
+// TODO: Only binary is supported
+open_file :: (path: string, read: bool) -> (File, bool) {
+    path := strings.to_cstring(path, &arena.temporary)
+    defer arena.temporary.reset(rawptr(path))
+
+    f: File
+    if read {
+        f = C.fopen(path, "r")
+    } else {
+        f = C.fopen(path, "w")
+    }
+    return f, f != null
+}
+
+// TODO: Only binary is supported
+read_entire_file :: (path: string, a := &arena.default) -> ([]char, bool) {
+    path := strings.to_cstring(path, &arena.temporary)
+    f    := C.fopen(path, "rb")
+    arena.temporary.reset(rawptr(path))
+
+    if f == null {
+        return {}, false
+    }
+    defer C.fclose(f)
+
+    if C.fseek(f, 0, C.SEEK_END) == -1 {
+        return {}, false
+    }
+
+    offset := C.ftell(f)
+    if offset == -1 {
+        return {}, false
+    }
+
+    if C.fseek(f, 0, C.SEEK_SET) == -1 {
+        return {}, false
+    }
+
+    data := a.alloc(offset + 1)
+    if data == null {
+        return {}, false
+    }
+
+    count := C.fread(data, 1, u64(offset), f)
+    if C.ferror(f) != 0 {
+        a.reset(data)
+        return {}, false
+    }
+    a.reset(data + rawptr(count + 1))
+
+    return (&char(data))[..count], true
+}
+
+#private...
+C       :: #import "C"
+arena   :: #import "arena"
+strings :: #import "strings"

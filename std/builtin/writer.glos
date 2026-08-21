@@ -3,14 +3,6 @@ Writer :: trait {
     write: (bytes: []char)
 }
 
-// Implementation of C FILE*
-// TODO: These should in another module. Perhaps `io` or `os`
-File :: distinct C.FILE
-
-write :: (this: File, bytes: []char) {
-    C.fwrite(rawptr(bytes.data), sizeof(char), bytes.count, C.FILE(this));
-}
-
 // Printing functions
 wprint :: (w: Writer, vs: ...Any) {
     for i := 0; i < vs.count; i += 1 {
@@ -31,17 +23,17 @@ wprintln :: (w: Writer, vs: ...Any) {
 }
 
 print :: (vs: ...Any) {
-    wprint(File(C.stdout), ...vs)
+    wprint(os.stdout, ...vs)
 }
 
 println :: (vs: ...Any) {
-    wprintln(File(C.stdout), ...vs)
+    wprintln(os.stdout, ...vs)
 }
 
 eprint :: (vs: ...Any) {
-    wprint(File(C.stderr), ...vs)
+    wprint(os.stderr, ...vs)
 }
 
 eprintln :: (vs: ...Any) {
-    wprintln(File(C.stderr), ...vs)
+    wprintln(os.stderr, ...vs)
 }

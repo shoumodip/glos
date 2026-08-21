@@ -17,3 +17,17 @@ free :: (this: &[..]$T) {
     C.free(rawptr(this.data))
     C.memset(rawptr(this), 0, sizeof(*this))
 }
+
+remove :: (this: &[..]$T, index: i64, location := #caller_location) -> T {
+    if index >= this.count {
+        panic("Index \{index} is out of bounds in dynamic array of length \{this.count}", location = location)
+    }
+
+    value := (*this)[index]
+    if index + 1 < this.count {
+        C.memmove(rawptr(&(*this)[index]), rawptr(&(*this)[index + 1]), (this.count - index - 1) * sizeof(T))
+    }
+
+    this.count -= 1
+    return value
+}

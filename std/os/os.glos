@@ -1,0 +1,5 @@
+args: []string
+
+extern {
+    exit :: (code: i32)
+}

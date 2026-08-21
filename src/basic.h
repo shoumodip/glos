@@ -424,6 +424,7 @@ bool procs_push(Procs *ps, Proc p);
 bool procs_flush(Procs *ps);
 
 // Profiling
+// #define PROFILING
 #ifdef PROFILING
 #include <time.h>
 extern clock_t global_profiler;

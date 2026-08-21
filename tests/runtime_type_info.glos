@@ -258,15 +258,15 @@ write_type :: (ti: Type) {
     }
 
     write_string :: (s: string) {
-        C.fprintf(C.stdout, "%.*s".data, i32(s.count), s.data)
+        C.printf("%.*s".data, i32(s.count), s.data)
     }
 
     write_indent :: (n: i64) {
-        C.fprintf(C.stdout, "%*s".data, i32(n * 4), "".data)
+        C.printf("%*s".data, i32(n * 4), "".data)
     }
 
     write_i64 :: (n: i64) {
-        C.fprintf(C.stdout, "%ld".data, n)
+        C.printf("%ld".data, n)
     }
 
     C :: #import "C"

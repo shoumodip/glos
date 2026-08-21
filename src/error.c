@@ -122,6 +122,7 @@ static void range_apply_node(Range *r, const Node *n) {
     case NODE_FN: {
         Node_Fn *fn = (Node_Fn *) n;
         range_apply_token(r, &fn->args_end_token);
+        range_apply_token(r, &fn->returns_end_token);
         range_apply_node(r, fn->returns.tail);
         range_apply_node(r, fn->body);
     } break;

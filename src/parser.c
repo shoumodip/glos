@@ -974,6 +974,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             }
             p->state.pb = pb_save;
 
+            fn->returns_end_token = fn->args_end_token;
             if (read_token(p, TOKEN_ARROW)) {
                 if (read_token(p, TOKEN_LPAREN)) {
                     while (!read_token(p, TOKEN_RPAREN)) {
@@ -983,6 +984,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                             break;
                         }
                     }
+
+                    assert(p->state.ahead.kind == TOKEN_RPAREN);
+                    fn->returns_end_token = p->state.ahead;
                 } else {
                     nodes_push(&fn->returns, parse_expr(p, POWER_PRE, false, false, NULL));
                     fn->returns_count++;
@@ -1230,7 +1234,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_INLINE: {
-        node = parse_expr(p, POWER_DOT, false, false, NULL);
+        node = parse_expr(p, POWER_DOT, false, compounds_allowed, NULL);
         if (node->kind != NODE_FN) {
             error_node(EK_ERROR, node, "Expected function literal after %s", token_kind_to_cstr(token.kind));
             exit(1);

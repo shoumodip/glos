@@ -2,6 +2,7 @@
 #include "checker.h"
 #include "compiler.h"
 #include "error.h"
+#include "lexer.h"
 #include "parser.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -376,6 +377,11 @@ int main(int argc, char **argv) {
     }
 
     compiler_build(&compiler, output_path);
+
+#ifdef PROFILING
+    fprintf(stderr, "Compiled %zu line(s) of code\n", total_lines_processed);
+#endif // PROFILING
+
     if (run) {
         const char *child_name = output_path;
 

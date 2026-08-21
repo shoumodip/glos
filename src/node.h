@@ -718,6 +718,7 @@ struct Node_Fn {
 
     Nodes  returns;
     size_t returns_count;
+    Token  returns_end_token;
 
     Polymorphs polymorphs;
     Polymorphs monomorphs;

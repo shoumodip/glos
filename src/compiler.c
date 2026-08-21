@@ -1263,9 +1263,16 @@ static_assert(COUNT_CONST_VALUES == 12, "");
 static LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type type) {
     switch (value.kind) {
     case CONST_VALUE_INT:
-        if (type_is_pointer(type)) {
+        if (type.ref) {
             assert(int128_is_zero(value.as.integer));
             return LLVMConstNull(type.llvm);
+        }
+
+        if (type.kind == TYPE_RAWPTR) {
+            return LLVMConstIntToPtr(
+                LLVMConstInt(
+                    LLVMInt64TypeInContext(c->llvm_context), i64_from_int128(value.as.integer), type_is_signed(type)),
+                type.llvm);
         }
         return LLVMConstInt(type.llvm, i64_from_int128(value.as.integer), type_is_signed(type));
 
@@ -1532,6 +1539,7 @@ static void compile_defers(Compiler *c, size_t from, bool rollback) {
 
 typedef struct {
     size_t defers_start;
+    size_t loop_defers_start;
 
     LLVMValueRef llvm_fn;
     LLVMValueRef llvm_fn_last_alloca;
@@ -1545,6 +1553,8 @@ typedef struct {
 static void compile_fn_backup_save(Compiler *c, Compile_Fn_Backup *b) {
     b->defers_start = c->defers_start;
     c->defers_start = c->defers.count;
+    b->loop_defers_start = c->loop_defers_start;
+    c->loop_defers_start = c->defers.count;
 
     b->llvm_fn = c->llvm_fn;
     b->llvm_fn_last_alloca = c->llvm_fn_last_alloca;
@@ -1558,6 +1568,7 @@ static void compile_fn_backup_save(Compiler *c, Compile_Fn_Backup *b) {
 static void compile_fn_backup_restore(Compiler *c, const Compile_Fn_Backup *b) {
     c->defers.count = c->defers_start;
     c->defers_start = b->defers_start;
+    c->loop_defers_start = b->loop_defers_start;
 
     c->llvm_fn = b->llvm_fn;
     c->llvm_fn_last_alloca = b->llvm_fn_last_alloca;
@@ -4620,9 +4631,11 @@ void compiler_build(Compiler *c, const char *output_path) {
     compile_type(c, &c->type_info_type);
 
     perf_begin();
-    const Const_Value main = get_const_definition_value(c, c->builtin_module, sv_from_cstr("main"), NULL);
-    assert(main.kind == CONST_VALUE_FN);
-    compile_fn(c, main.as.fn);
+    {
+        const Const_Value entry = get_const_definition_value(c, c->builtin_module, sv_from_cstr("runtime_entry"), NULL);
+        assert(entry.kind == CONST_VALUE_FN);
+        compile_fn(c, entry.as.fn);
+    }
     perf_end("LLVM code generation");
 
     perf_begin();

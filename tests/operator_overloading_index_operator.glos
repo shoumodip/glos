@@ -23,12 +23,12 @@ index :: (this: &Table, key: string, assign: bool, location := #caller_location)
 
     if !assign {
         eprintln("\{location} Key '\{key}' does not exist")
-        C.exit(1)
+        os.exit(1)
     }
 
     if this.count >= this.items.count {
         eprintln("\{location} Table is out of memory")
-        C.exit(1)
+        os.exit(1)
     }
 
     it := &this.items[this.count]
@@ -37,5 +37,5 @@ index :: (this: &Table, key: string, assign: bool, location := #caller_location)
     it.key = key
     return &it.value
 
-    C :: #import "C"
+    os :: #import "os"
 }

@@ -1,26 +1,46 @@
 #private...
 
 panic_handler :: (fmt: &char, v1: i64, v2: i64, v3: i64) {
-    C.fprintf(C.stderr, fmt, v1, v2, v3)
-    C.fflush(C.stdout)
-    C.fflush(C.stderr)
+    C.fprintf(os.stderr, fmt, v1, v2, v3)
+    C.fflush(os.stdout)
+    C.fflush(os.stderr)
     C.abort()
 }
 
 #link "main"
-main :: () -> i32 {
-    #if PLATFORM == .WINDOWS {
-        extern {
-            __acrt_iob_func :: (fd: i32) -> C.FILE
-        }
-
-        C.stdin  = __acrt_iob_func(0)
-        C.stdout = __acrt_iob_func(1)
-        C.stderr = __acrt_iob_func(2)
-    }
-
+runtime_entry :: (argc: i32, argv: &&char) -> i32 {
+    runtime_init(argc, argv)
     #main()
     return 0
 }
 
-C :: #import "C"
+runtime_init :: inline (argc: i32, argv: &&char) {
+    #if PLATFORM == .WINDOWS {
+        extern {
+            __acrt_iob_func :: (fd: i32) -> os.File
+        }
+
+        os.stdin  = __acrt_iob_func(0)
+        os.stdout = __acrt_iob_func(1)
+        os.stderr = __acrt_iob_func(2)
+    }
+
+    args := argv[..argc]
+    os.args = New_Array(string, args.count)
+    for i := 0; i < args.count; i += 1 {
+        os.args[i] = strings.from_cstring(args[i])
+    }
+
+    C.atexit(runtime_deinit)
+}
+
+runtime_deinit :: () {
+    arena.default.free()
+    arena.temporary.free()
+    C.free(rawptr(os.args.data))
+}
+
+C       :: #import "C"
+os      :: #import "os"
+arena   :: #import "arena"
+strings :: #import "strings"

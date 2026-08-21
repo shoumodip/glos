@@ -28,6 +28,10 @@ static bool isident(char ch) {
 
 static void next_char(Lexer *l) {
     if (*l->sv.data == '\n') {
+#ifdef PROFILING
+        total_lines_processed++;
+#endif // PROFILING
+
         if (l->sv.count > 1) {
             l->pos.row++;
             l->pos.col = 0;
@@ -235,9 +239,20 @@ Token lexer_iter(Lexer *l) {
     }
 
     if (isdigit(*l->sv.data)) {
+        int base = 10;
         token.kind = TOKEN_INT;
-        while (l->sv.count > 0 && isdigit(*l->sv.data)) {
+        if (*l->sv.data == '0' && peek_char(l, 1) == 'x') {
+            base = 16;
             next_char(l);
+            next_char(l);
+            while (l->sv.count > 0 && (isxdigit(*l->sv.data) || *l->sv.data == '_')) {
+                next_char(l);
+            }
+        } else {
+            next_char(l);
+            while (l->sv.count > 0 && (isdigit(*l->sv.data) || *l->sv.data == '_')) {
+                next_char(l);
+            }
         }
         token.sv.count -= l->sv.count;
 
@@ -245,11 +260,16 @@ Token lexer_iter(Lexer *l) {
             error_invalid(l->pos, l->sv, "digit");
         }
 
-        char *buffer = arena_sv_to_cstr(&temp_arena, token.sv);
-        memcpy(buffer, token.sv.data, token.sv.count);
+        char *buffer = arena_alloc(&temp_arena, token.sv.count + 1);
+        for (size_t i = 0, j = 0; i < token.sv.count; i++) {
+            const char it = token.sv.data[i];
+            if (it != '_') {
+                buffer[j++] = it;
+            }
+        }
 
         errno = 0;
-        token.as.integer = strtoul(buffer, NULL, 10);
+        token.as.integer = strtoul(buffer, NULL, base);
         arena_reset(&temp_arena, buffer);
 
         if (!errno) {
@@ -524,3 +544,7 @@ Token lexer_iter(Lexer *l) {
     token.sv.count -= l->sv.count;
     return token;
 }
+
+#ifdef PROFILING
+size_t total_lines_processed;
+#endif // PROFILING

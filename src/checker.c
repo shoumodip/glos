@@ -1237,6 +1237,14 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
 
     if (ref && !n->type.is_meta) {
         if (n->kind != NODE_ATOM || n->token.kind != TOKEN_IDENT) {
+            if (n->kind == NODE_MEMBER) {
+                Node_Member *member = (Node_Member *) n;
+                if (member->module_access_definition) {
+                    Node_Atom *var = member->module_access_definition;
+                    assert(!var->definition_spec->is_const); // The analyzer should have already checked this
+                    return const_value_var(var);
+                }
+            }
             error_node(EK_ERROR, n, "Can only take reference to variables in a constant expression");
             exit(c, 1);
         }
@@ -1751,7 +1759,7 @@ static Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
         }
 
         const Const_Value value = eval_const_expr(c, call->args.head, false);
-        if (value.kind == CONST_VALUE_VAR || type_is_pointer(n->type)) {
+        if (value.kind == CONST_VALUE_VAR || (!n->type.is_meta && n->type.ref)) {
             error_node(EK_ERROR, n, "This expression is not constant at compile time");
             exit(c, 1);
         }
@@ -2280,9 +2288,16 @@ static void define_orderless_node(Compiler *c, Node *n, const size_t block_start
 
                 define_orderless_nodes_of_module(c, import->module, &n->token);
                 ht_foreach(it, &import->module->globals) {
+                    if ((*it.value)->definition_spec->is_private) {
+                        continue;
+                    }
+
                     Node_Atom *previous = context_find_define_skipping(&c->context, *it.key, import->module);
                     if (!previous) {
                         previous = module_globals_find_ex(c, n->module, *it.key, import->module);
+                        if (previous && previous->definition_spec->is_private && previous->module != n->module) {
+                            continue;
+                        }
                     }
 
                     if (previous) {
@@ -2719,7 +2734,6 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
     Node_Member *member = NULL;
 
     Module *module = NULL;
-    bool    importing = false;
     if (n->kind == NODE_ATOM) {
         atom = (Node_Atom *) n;
         module = atom->module;
@@ -2727,7 +2741,6 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
         member = (Node_Member *) n;
         assert(member->lhs->type.kind == TYPE_MODULE);
         module = member->lhs->type.spec.module;
-        importing = true;
     } else {
         unreachable();
     }
@@ -2804,12 +2817,11 @@ static void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
         if (!definition && atom) {
             if (module != c->builtin_module) {
                 module = c->builtin_module;
-                importing = true;
                 definition = module_globals_find(c, module, n->token.sv);
             }
         }
 
-        if (definition && definition->definition_spec->is_private && importing) {
+        if (definition && definition->definition_spec->is_private && definition->module != n->module) {
             definition = NULL;
         }
     }
@@ -5580,7 +5592,7 @@ end:
 // The argument 'expected_type' is a hint in order to infer the types of implicit expressions. Checking against it is
 // NOT the responsibility of this function.
 static_assert(COUNT_NODES == 29, "");
-static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
+static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     if (!n) {
         return;
     }
@@ -7058,14 +7070,7 @@ static void check_expr_impl(Compiler *c, Node *n, Ref_Kind ref) {
             break;
         }
     }
-}
 
-static void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
-    if (!n) {
-        return;
-    }
-
-    check_expr_impl(c, n, ref);
     if (node_is_runtime_polymorphic_expression(n) && !n->is_called) {
         if (ref == REF_ADDR || ref == REF_ADDR_MEMBER) {
             return;
