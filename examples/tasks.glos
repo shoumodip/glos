@@ -21,7 +21,7 @@ free :: (this: &App) {
 }
 
 save :: (this: &App) {
-    f, ok := os.open_file(TASKS_PATH, true)
+    f, ok := os.open(TASKS_PATH, false)
     if !ok {
         eprintln("Error: Could not save tasks to '\{TASKS_PATH}'")
         os.exit(1)
@@ -153,7 +153,5 @@ main :: () {
     }
 }
 
-// C       :: #import "C"
 os      :: #import "os"
-// arena   :: #import "arena"
 strings :: #import "strings"
