@@ -166,21 +166,7 @@ defer:
     return result;
 }
 
-#ifdef PROFILING
-#include <time.h>
-
-#define perf_begin()    (timer = clock())
-#define perf_end(label) (printf("%s: %g\n", label, (double) (clock() - timer) / CLOCKS_PER_SEC))
-#else
-#define perf_begin()
-#define perf_end(label)
-#endif // PROFILING
-
 int main(int argc, char **argv) {
-#ifdef PROFILING
-    clock_t timer = 0;
-#endif // PROFILING
-
     basic_init();
     const char *program = shift(&argc, &argv, NULL, NULL);
 
@@ -389,10 +375,7 @@ int main(int argc, char **argv) {
         link_flags_add_libpath(&link_flags, path);
     }
 
-    perf_begin();
     compiler_build(&compiler, output_path);
-    perf_end("compilation");
-
     if (run) {
         const char *child_name = output_path;
 

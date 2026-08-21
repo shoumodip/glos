@@ -1853,20 +1853,18 @@ static LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
     return fn->llvm;
 }
 
-static LLVMValueRef get_builtin_func(Compiler *c, SV name, LLVMTypeRef *type) {
+static Typed_LLVM_Value get_builtin_func(Compiler *c, SV name) {
     const Const_Value value = get_const_definition_value(c, c->builtin_module, name, NULL);
     assert(value.kind == CONST_VALUE_FN);
 
-    LLVMValueRef fn = compile_fn(c, value.as.fn);
-    if (type) {
-        *type = value.as.fn->node.type.llvm;
-    }
-    return fn;
+    Typed_LLVM_Value result = {0};
+    result.value = compile_fn(c, value.as.fn);
+    result.type = &value.as.fn->node.type;
+    return result;
 }
 
 static void compile_panic(Compiler *c, const char *fmt, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3) {
-    LLVMTypeRef  fn_type = NULL;
-    LLVMValueRef fn_value = get_builtin_func(c, sv_from_cstr("panic_handler"), &fn_type);
+    Typed_LLVM_Value fn = get_builtin_func(c, sv_from_cstr("panic_handler"));
 
     LLVMValueRef zero = LLVMConstNull(LLVMInt64TypeInContext(c->llvm_context));
     LLVMValueRef args[] = {
@@ -1876,7 +1874,7 @@ static void compile_panic(Compiler *c, const char *fmt, LLVMValueRef v1, LLVMVal
         v3 ? v3 : zero,
     };
 
-    LLVMBuildCall2(c->llvm_builder, fn_type, fn_value, args, len(args), "");
+    LLVMBuildCall2(c->llvm_builder, fn.type->llvm, fn.value, args, len(args), "");
     LLVMBuildUnreachable(c->llvm_builder);
 }
 
@@ -4621,10 +4619,13 @@ void compiler_build(Compiler *c, const char *output_path) {
 
     compile_type(c, &c->type_info_type);
 
+    perf_begin();
     const Const_Value main = get_const_definition_value(c, c->builtin_module, sv_from_cstr("main"), NULL);
     assert(main.kind == CONST_VALUE_FN);
     compile_fn(c, main.as.fn);
+    perf_end("LLVM code generation");
 
+    perf_begin();
     LLVMPassBuilderOptionsRef pass_builder_options = LLVMCreatePassBuilderOptions();
     LLVMRunPasses(c->llvm_module, "always-inline", c->llvm_target_machine, pass_builder_options);
     LLVMDisposePassBuilderOptions(pass_builder_options);
@@ -4655,6 +4656,11 @@ void compiler_build(Compiler *c, const char *output_path) {
         LLVMDisposeBuilder(c->llvm_builder);
         LLVMDisposeModule(c->llvm_module);
         LLVMContextDispose(c->llvm_context);
+    }
+    perf_end("LLVM -> object file");
+
+    perf_begin();
+    {
 
 #ifdef PLATFORM_X86_64_WINDOWS
         if (is_lld_available_in_path()) {
@@ -4689,6 +4695,7 @@ void compiler_build(Compiler *c, const char *output_path) {
             exit(1);
         }
     }
+    perf_end("Linking object files");
 
     ht_free(&c->llvm_debug_files);
     ht_free(&c->type_info_cache);

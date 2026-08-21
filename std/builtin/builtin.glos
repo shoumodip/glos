@@ -1,3 +1,16 @@
+panic :: (message: ...Any, location := #caller_location) {
+    if message.count == 0 {
+        eprintln("\{location}")
+    } else {
+        eprint("\{location} ")
+        eprintln(...message)
+    }
+
+    C.fflush(C.stdout)
+    C.fflush(C.stderr)
+    C.abort()
+}
+
 assert :: (cond: bool, message: ...Any, location := #caller_location) {
     if !cond {
         if message.count == 0 {

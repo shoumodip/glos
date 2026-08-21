@@ -423,4 +423,16 @@ typedef struct {
 bool procs_push(Procs *ps, Proc p);
 bool procs_flush(Procs *ps);
 
+// Profiling
+#ifdef PROFILING
+#include <time.h>
+extern clock_t global_profiler;
+
+#define perf_begin()    (global_profiler = clock())
+#define perf_end(label) (printf("%s: %g\n", label, (double) (clock() - global_profiler) / CLOCKS_PER_SEC))
+#else
+#define perf_begin()
+#define perf_end(label)
+#endif // PROFILING
+
 #endif // BASIC_H

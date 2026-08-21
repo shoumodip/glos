@@ -1300,3 +1300,8 @@ bool procs_flush(Procs *ps) {
     ps->count = 0;
     return ok;
 }
+
+// Profiling
+#ifdef PROFILING
+clock_t global_profiler;
+#endif // PROFILING
