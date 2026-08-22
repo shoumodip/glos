@@ -200,8 +200,7 @@ Const_Value eval_const_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
         }
 
         if (!atom->definition->definition_spec->is_const) {
-            if (atom->definition->definition_spec->is_local) {
-                // TODO: Static variables
+            if (atom->definition->definition_spec->is_local && !atom->definition->definition_spec->static_var_fn) {
                 error_node(EK_ERROR, n, "Cannot use local variables in a constant expression");
                 error_node(EK_NOTE, (Node *) atom->definition, "Here is the variable being used");
                 exit(c, 1);
