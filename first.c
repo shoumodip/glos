@@ -218,12 +218,16 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         "src/int128.h",
         "src/basic.h",
         "src/token.h",
+        "src/node.h",
+
         "src/error.h",
         "src/lexer.h",
-        "src/node.h",
         "src/parser.h",
+
         "src/context.h",
         "src/checker.h",
+        "src/checker/checker.h",
+
         "src/dwarf.h",
         "src/contract.h",
         "src/compiler.h",
@@ -233,13 +237,27 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         "src/int128.c",
         "src/basic.c",
         "src/token.c",
+        "src/node.c",
+
         "src/error.c",
         "src/lexer.c",
-        "src/node.c",
         "src/parser.c",
+
         "src/context.c",
+        "src/checker/utils.c",
+        "src/checker/type_assertions.c",
+        "src/checker/const_expr.c",
+        "src/checker/definitions.c",
+        "src/checker/control_flow.c",
+        "src/checker/calls.c",
+        "src/checker/methods.c",
+        "src/checker/monomorphizer.c",
+        "src/checker/expr.c",
+        "src/checker/stmt.c",
         "src/checker.c",
+
         "src/compiler.c",
+
         "src/main.c",
     };
 
