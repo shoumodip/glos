@@ -231,6 +231,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         "src/dwarf.h",
         "src/contract.h",
         "src/compiler.h",
+        "src/compiler/compiler.h",
     };
 
     static const char *sources[] = {
@@ -256,6 +257,13 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         "src/checker/stmt.c",
         "src/checker.c",
 
+        "src/compiler/utils.c",
+        "src/compiler/type.c",
+        "src/compiler/rtti.c",
+        "src/compiler/abi.c",
+        "src/compiler/const_value.c",
+        "src/compiler/expr.c",
+        "src/compiler/stmt.c",
         "src/compiler.c",
 
         "src/main.c",
