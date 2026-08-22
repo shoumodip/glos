@@ -40,7 +40,17 @@ typedef struct {
     size_t       params_count;
 } Monomorph_Spec;
 
+typedef enum {
+    O0,
+    O1,
+    O2,
+    O3,
+} Optimization_Level;
+
 typedef struct {
+    // Provided by the driver
+    Optimization_Level optimization_level;
+
     // These are used only by the analyzer
     Type main_fn_type;
     DA(Type_Struct_Field) struct_fields;

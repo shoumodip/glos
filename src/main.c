@@ -2,7 +2,6 @@
 #include "checker.h"
 #include "compiler.h"
 #include "error.h"
-#include "lexer.h"
 #include "parser.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +23,7 @@ static void usage(FILE *f, const char *program) {
         {"h", "             Show this message"},
         {"r", "             Run the program"},
         {"o", "OUTPUT       Set the output path"},
+        {"O", "LEVEL        Set the optimization level [0: None, 1: Less (Default), 2: Medium, 3: Aggressive]"},
         {"L", "PATH         Add a library path"},
         {"l", "NAME         Add a library"},
         {"-", "             End of compiler options. All following arguments are passed to the program if ran"},
@@ -179,6 +179,8 @@ int main(int argc, char **argv) {
     const char *input_path = NULL;
     const char *output_path = NULL;
     Link_Flags  link_flags = {0};
+
+    Compiler compiler = {.optimization_level = O1};
     while (argc) {
         const char *arg = shift(&argc, &argv, program, "Input path");
         if (*arg == '-') {
@@ -191,6 +193,25 @@ int main(int argc, char **argv) {
                 output_path = shift(&argc, &argv, program, "Output path");
             } else if (!strcmp(arg, "--")) {
                 break;
+            } else if (arg[1] == 'O') {
+                const char *level = &arg[2];
+                if (*level == '\0') {
+                    level = shift(&argc, &argv, program, "Optimization Level");
+                }
+
+                if (!strcmp(level, "0")) {
+                    compiler.optimization_level = O0;
+                } else if (!strcmp(level, "1")) {
+                    compiler.optimization_level = O1;
+                } else if (!strcmp(level, "2")) {
+                    compiler.optimization_level = O2;
+                } else if (!strcmp(level, "3")) {
+                    compiler.optimization_level = O3;
+                } else {
+                    error_standalone(EK_ERROR, "Invalid optimization level '%s'\n", level);
+                    usage(stderr, program);
+                    exit(1);
+                }
             } else if (arg[1] == 'L') {
                 const char *libpath = &arg[2];
                 if (*libpath == '\0') {
@@ -262,13 +283,11 @@ int main(int argc, char **argv) {
          .std = sv_from_cstr(get_std_dir_path(&default_arena)),
     };
 
-    Compiler compiler = {
-        .parser = &parser,
-        .modules = &modules,
+    compiler.parser = &parser;
+    compiler.modules = &modules;
 
-        .cmd = &cmd,
-        .link_flags = &link_flags,
-    };
+    compiler.cmd = &cmd;
+    compiler.link_flags = &link_flags;
 
     compiler.main_module = module_get(&parser, input_path);
     compiler.main_module->name = sv_from_cstr("main");

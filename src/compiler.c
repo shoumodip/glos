@@ -4579,8 +4579,31 @@ static void compiler_init_llvm_target_data(Compiler *c) {
         exit(1);
     }
 
-    c->llvm_target_machine = LLVMCreateTargetMachine(
-        target, triple, "generic", "", LLVMCodeGenLevelDefault, LLVMRelocPIC, LLVMCodeModelDefault);
+    LLVMCodeGenOptLevel opt_level;
+    switch (c->optimization_level) {
+    case O0:
+        opt_level = LLVMCodeGenLevelNone;
+        break;
+
+    case O1:
+        opt_level = LLVMCodeGenLevelLess;
+        break;
+
+    case O2:
+        opt_level = LLVMCodeGenLevelDefault;
+        break;
+
+    case O3:
+        opt_level = LLVMCodeGenLevelAggressive;
+        break;
+
+    default:
+        unreachable();
+        break;
+    }
+
+    c->llvm_target_machine =
+        LLVMCreateTargetMachine(target, triple, "generic", "", opt_level, LLVMRelocPIC, LLVMCodeModelDefault);
     c->llvm_target_data = LLVMCreateTargetDataLayout(c->llvm_target_machine);
 
     // Initialize the common types
