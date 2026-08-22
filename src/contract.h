@@ -23,4 +23,15 @@ enum {
     CONTRACT_TYPE_INFO_STRING,
 };
 
+typedef enum {
+    CONTRACT_PANIC_INDEX_OUT_OF_BOUNDS,       // (index: i64, count: i64)
+    CONTRACT_PANIC_RANGE_OUT_OF_BOUNDS,       // (begin: i64, end: i64, count: i64)
+    CONTRACT_PANIC_RANGE_BEGIN_MORE_THAN_END, // (begin: i64, end: i64)
+    CONTRACT_PANIC_NULL_TRAIT_METHOD_ACCESS,  // ()
+    CONTRACT_PANIC_TRAIT_TYPE_MISMATCH,       // (actual: Type, expected: Type)
+    CONTRACT_PANIC_UNION_TYPE_MISMATCH,       // (actual: i64, expected: i64, type: Type)
+    CONTRACT_PANIC_INVALID_ENUM_VALUE,        // (value: i64, signed: i64)
+    CONTRACT_PANIC_INVALID_UNION_TAG,         // (value: i64)
+} Contract_Panic;
+
 #endif // CONTRACT_H

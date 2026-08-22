@@ -39,16 +39,16 @@ static void error_begin(Error_Kind kind) {
 }
 
 typedef struct {
-    const Token *begin;
-    const Token *end;
+    Token begin;
+    Token end;
 } Range;
 
-static void range_apply_token(Range *r, const Token *t) {
-    if (t->sv.data < r->begin->sv.data) {
+static void range_apply_token(Range *r, Token t) {
+    if (t.sv.data < r->begin.sv.data) {
         r->begin = t;
     }
 
-    if (t->sv.data + t->sv.count > r->end->sv.data + r->end->sv.count) {
+    if (t.sv.data + t.sv.count > r->end.sv.data + r->end.sv.count) {
         r->end = t;
     }
 }
@@ -59,7 +59,7 @@ static void range_apply_node(Range *r, const Node *n) {
         return;
     }
 
-    range_apply_token(r, &n->token);
+    range_apply_token(r, n->token);
     switch (n->kind) {
     case NODE_ATOM:
         // Pass
@@ -75,7 +75,7 @@ static void range_apply_node(Range *r, const Node *n) {
         Node_Unary *unary = (Node_Unary *) n;
         range_apply_node(r, unary->value);
         if (n->token.kind == TOKEN_SIZEOF || n->token.kind == TOKEN_TYPEOF) {
-            range_apply_token(r, &unary->end);
+            range_apply_token(r, unary->end);
         }
     } break;
 
@@ -89,18 +89,18 @@ static void range_apply_node(Range *r, const Node *n) {
         Node_Member *member = (Node_Member *) n;
         range_apply_node(r, member->lhs);
         if (member->rhs) {
-            range_apply_token(r, &member->rhs_end);
+            range_apply_token(r, member->rhs_end);
         }
     } break;
 
     case NODE_ASSERT: {
         Node_Assert *assertt = (Node_Assert *) n;
-        range_apply_token(r, &assertt->end);
+        range_apply_token(r, assertt->end);
     } break;
 
     case NODE_IMPORT: {
         Node_Import *import = (Node_Import *) n;
-        range_apply_token(r, &import->path);
+        range_apply_token(r, import->path);
     } break;
 
     case NODE_POLYMORPH: {
@@ -121,48 +121,48 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_FN: {
         Node_Fn *fn = (Node_Fn *) n;
-        range_apply_token(r, &fn->args_end_token);
-        range_apply_token(r, &fn->returns_end_token);
+        range_apply_token(r, fn->args_end_token);
+        range_apply_token(r, fn->returns_end_token);
         range_apply_node(r, fn->returns.tail);
         range_apply_node(r, fn->body);
     } break;
 
     case NODE_ENUM: {
         Node_Enum *enumm = (Node_Enum *) n;
-        range_apply_token(r, &enumm->end);
+        range_apply_token(r, enumm->end);
     } break;
 
     case NODE_TRAIT: {
         Node_Trait *trait = (Node_Trait *) n;
-        range_apply_token(r, &trait->end);
+        range_apply_token(r, trait->end);
     } break;
 
     case NODE_UNION: {
         Node_Union *unionn = (Node_Union *) n;
-        range_apply_token(r, &unionn->end);
+        range_apply_token(r, unionn->end);
     } break;
 
     case NODE_STRUCT: {
         Node_Struct *structt = (Node_Struct *) n;
-        range_apply_token(r, &structt->end);
+        range_apply_token(r, structt->end);
     } break;
 
     case NODE_COMPOUND: {
         Node_Compound *compound = (Node_Compound *) n;
         range_apply_node(r, compound->lhs);
-        range_apply_token(r, &compound->end);
+        range_apply_token(r, compound->end);
     } break;
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
         range_apply_node(r, call->fn_source);
-        range_apply_token(r, &call->end);
+        range_apply_token(r, call->end);
     } break;
 
     case NODE_INDEX: {
         Node_Index *index = (Node_Index *) n;
         range_apply_node(r, index->lhs);
-        range_apply_token(r, &index->end);
+        range_apply_token(r, index->end);
     } break;
 
     case NODE_INDEXABLE: {
@@ -180,7 +180,7 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_BLOCK: {
         Node_Block *block = (Node_Block *) n;
-        range_apply_token(r, &block->end);
+        range_apply_token(r, block->end);
     } break;
 
     case NODE_IF: {
@@ -201,7 +201,7 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_SWITCH: {
         Node_Switch *sw = (Node_Switch *) n;
-        range_apply_token(r, &sw->end);
+        range_apply_token(r, sw->end);
     } break;
 
     case NODE_JUMP:
@@ -220,7 +220,7 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_EXTERN: {
         Node_Extern *externn = (Node_Extern *) n;
-        range_apply_token(r, &externn->end);
+        range_apply_token(r, externn->end);
     } break;
 
     default:
@@ -240,26 +240,22 @@ static const char *get_end_from_parts(SV sv, Pos pos) {
 }
 
 Pos get_leftmost_point_of_node(const Node *n) {
-    Range r = {.begin = &n->token, .end = &n->token};
+    Range r = {.begin = n->token, .end = n->token};
     range_apply_node(&r, n);
-    return r.begin->pos;
+    return r.begin.pos;
 }
 
 void error_node_begin(Error_Kind kind, const Node *n) {
-    Range r = {.begin = &n->token, .end = &n->token};
+    Range r = {.begin = n->token, .end = n->token};
     range_apply_node(&r, n);
 
-    view_error_begin = r.begin->sv.data;
-    view_error_end = r.end->sv.data + r.end->sv.count;
+    view_error_begin = r.begin.sv.data;
+    view_error_end = r.end.sv.data + r.end.sv.count;
 
-    view_sv.data = r.begin->pos.line.data;
-    view_sv.count = get_end_from_parts(r.end->sv, r.end->pos) - view_sv.data;
-    view_pos = r.begin->pos;
+    view_sv.data = r.begin.pos.line.data;
+    view_sv.count = get_end_from_parts(r.end.sv, r.end.pos) - view_sv.data;
+    view_pos = r.begin.pos;
     error_begin(kind);
-}
-
-void error_token_begin(Error_Kind kind, Token token) {
-    error_parts_begin(kind, token.sv, token.pos);
 }
 
 void error_parts_begin(Error_Kind kind, SV sv, Pos pos) {
@@ -286,6 +282,21 @@ void error_range_begin(Error_Kind kind, Pos begin, Pos end) {
     view_sv.count = (end.line.data + end.line.count) - (begin.line.data);
     view_pos = begin;
 
+    error_begin(kind);
+}
+
+void error_token_begin(Error_Kind kind, Token token) {
+    error_parts_begin(kind, token.sv, token.pos);
+}
+
+void error_token_range_begin(Error_Kind kind, Token begin, Token end) {
+    Range r = {.begin = begin, .end = end};
+    view_error_begin = r.begin.sv.data;
+    view_error_end = r.end.sv.data + r.end.sv.count;
+
+    view_sv.data = r.begin.pos.line.data;
+    view_sv.count = get_end_from_parts(r.end.sv, r.end.pos) - view_sv.data;
+    view_pos = r.begin.pos;
     error_begin(kind);
 }
 
@@ -376,15 +387,6 @@ void error_node(Error_Kind kind, const Node *n, const char *fmt, ...) {
     error_finalize();
 }
 
-void error_token(Error_Kind kind, Token token, const char *fmt, ...) {
-    error_parts_begin(kind, token.sv, token.pos);
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    error_finalize();
-}
-
 void error_parts(Error_Kind kind, SV sv, Pos pos, const char *fmt, ...) {
     error_parts_begin(kind, sv, pos);
     va_list args;
@@ -396,6 +398,24 @@ void error_parts(Error_Kind kind, SV sv, Pos pos, const char *fmt, ...) {
 
 void error_range(Error_Kind kind, Pos begin, Pos end, const char *fmt, ...) {
     error_range_begin(kind, begin, end);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    error_finalize();
+}
+
+void error_token(Error_Kind kind, Token token, const char *fmt, ...) {
+    error_token_begin(kind, token);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    error_finalize();
+}
+
+void error_token_range(Error_Kind kind, Token begin, Token end, const char *fmt, ...) {
+    error_token_range_begin(kind, begin, end);
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);

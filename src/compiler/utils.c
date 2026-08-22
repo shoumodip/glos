@@ -154,15 +154,30 @@ Typed_LLVM_Value get_builtin_func(Compiler *c, SV name) {
     return result;
 }
 
-void compile_panic(Compiler *c, const char *fmt, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3) {
-    Typed_LLVM_Value fn = get_builtin_func(c, sv_from_cstr("panic_handler"));
+void compile_panic_v2(Compiler *c, Pos pos, Contract_Panic panic, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3) {
+    Typed_LLVM_Value fn = get_builtin_func(c, sv_from_cstr("runtime_panic"));
 
-    LLVMValueRef zero = LLVMConstNull(LLVMInt64TypeInContext(c->llvm_context));
+    LLVMTypeRef  i64 = LLVMInt64TypeInContext(c->llvm_context);
+    LLVMValueRef zero = LLVMConstNull(i64);
+
+    LLVMValueRef location = compile_alloca(c, c->source_code_location_type.llvm);
+    LLVMBuildStore(c->llvm_builder, compile_string_into_const_value(c, sv_from_cstr(pos.path)), location);
+    LLVMBuildStore(
+        c->llvm_builder,
+        LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), pos.row + 1, true),
+        LLVMBuildStructGEP2(c->llvm_builder, c->source_code_location_type.llvm, location, 1, ""));
+
+    LLVMBuildStore(
+        c->llvm_builder,
+        LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), pos.col + 1, true),
+        LLVMBuildStructGEP2(c->llvm_builder, c->source_code_location_type.llvm, location, 2, ""));
+
     LLVMValueRef args[] = {
-        LLVMBuildGlobalString(c->llvm_builder, fmt, ""),
+        LLVMConstInt(i64, panic, true),
         v1 ? v1 : zero,
         v2 ? v2 : zero,
         v3 ? v3 : zero,
+        location,
     };
 
     LLVMBuildCall2(c->llvm_builder, fn.type->llvm, fn.value, args, len(args), "");

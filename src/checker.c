@@ -95,6 +95,16 @@ void check_nodes(Compiler *c) {
         c->interpolation_type = type_without_meta(value.as.type);
     }
 
+    // Panic
+    {
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Panic"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+
+        const Type panic = type_without_meta(value.as.type);
+        assert(panic.kind == TYPE_ENUM);
+        assert(panic.spec.enumm.definition->values_count == 8);
+    }
+
     // Type info
     {
         value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type_Info"), NULL);

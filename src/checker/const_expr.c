@@ -455,10 +455,11 @@ Const_Value eval_const_expr_member(Compiler *c, Node_Member *member) {
     case CONST_VALUE_TRAIT: {
         if (member->rhs) {
             if (!lhs.as.trait.type || !type_eq(n->type, *lhs.as.trait.type)) {
-                error_node(
+                error_token_range(
                     EK_ERROR,
-                    n,
-                    "Type mismatch: Accessing %s, but real type is %s",
+                    member->dot,
+                    member->rhs_end,
+                    "Type Mismatch: Accessing %s, but real type is %s",
                     type_to_cstr(n->type),
                     lhs.as.trait.type ? type_to_cstr(*lhs.as.trait.type) : "null");
                 exit(c, 1);
@@ -493,10 +494,11 @@ Const_Value eval_const_expr_member(Compiler *c, Node_Member *member) {
         if (member->rhs) {
             if (member->union_index != lhs.as.unionn.index) {
                 const Type_Union *spec = lhs.as.unionn.spec;
-                error_node(
+                error_token_range(
                     EK_ERROR,
-                    n,
-                    "Type mismatch: Accessing %s, but real type is %s",
+                    member->dot,
+                    member->rhs_end,
+                    "Type Mismatch: Accessing %s, but real type is %s",
                     member->union_index ? type_to_cstr(spec->variants[member->union_index - 1].type) : "null",
                     lhs.as.unionn.index ? type_to_cstr(spec->variants[lhs.as.unionn.index - 1].type) : "null");
                 exit(c, 1);
