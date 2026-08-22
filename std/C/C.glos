@@ -50,7 +50,12 @@ SEEK_END :: 2
     PROT_WRITE :: 0x2
 
     MAP_PRIVATE   :: 0x02
-    MAP_ANONYMOUS :: 0x20
+
+    #if PLATFORM == .MACOS {
+        MAP_ANONYMOUS :: 0x1000
+    } else {
+        MAP_ANONYMOUS :: 0x20
+    }
 
     extern {
         mmap :: (addr: rawptr, length: u64, prot: i32, flags: i32, fd: i32, offset: i64) -> rawptr
