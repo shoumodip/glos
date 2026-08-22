@@ -494,19 +494,23 @@ void compile_stmt_switch(Compiler *c, Node_Switch *sw) {
     if (sw->fallback) {
         compile_stmt(c, ((Node_Case *) sw->fallback)->body);
     } else if (sw->enumeration) {
-        set_debug_pos(c, n->token.pos);
-        compile_panic_v2(
-            c,
-            n->token.pos,
-            CONTRACT_PANIC_INVALID_ENUM_VALUE,
-            expr,
-            LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), type_is_signed(sw->expr->type), true),
-            NULL);
-        jump_to_end = false;
+        if (c->optimization_level != O3) {
+            set_debug_pos(c, n->token.pos);
+            compile_panic_v2(
+                c,
+                n->token.pos,
+                CONTRACT_PANIC_INVALID_ENUM_VALUE,
+                expr,
+                LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), type_is_signed(sw->expr->type), true),
+                NULL);
+            jump_to_end = false;
+        }
     } else if (sw->unionn) {
-        set_debug_pos(c, n->token.pos);
-        compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_INVALID_UNION_TAG, expr, NULL, NULL);
-        jump_to_end = false;
+        if (c->optimization_level != O3) {
+            set_debug_pos(c, n->token.pos);
+            compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_INVALID_UNION_TAG, expr, NULL, NULL);
+            jump_to_end = false;
+        }
     }
 
     LLVMSetCurrentDebugLocation2(c->llvm_builder, NULL);

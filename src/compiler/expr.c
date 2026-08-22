@@ -1043,7 +1043,7 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
             LLVMBuildLoad2(c->llvm_builder, ptr_type, LLVMBuildStructGEP2(c->llvm_builder, lhs_type, lhs, 2, ""), "");
 
         // Impl check
-        {
+        if (c->optimization_level != O3) {
             LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
             LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
@@ -1089,7 +1089,7 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
 
     if (member->rhs) {
         // Check if tag matches
-        {
+        if (c->optimization_level != O3) {
             LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
             LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
@@ -1575,7 +1575,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
         }
 
         // Check if bounds are ascending
-        {
+        if (c->optimization_level != O3) {
             LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
             LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
@@ -1592,7 +1592,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
         if (count) {
             // Bounds check
-            {
+            if (c->optimization_level != O3) {
                 LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
                 LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
@@ -1637,7 +1637,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
     set_debug_pos(c, n->token.pos);
 
     // Bounds check
-    {
+    if (c->optimization_level != O3) {
         LLVMValueRef count = NULL;
         if (index->lhs->type.kind == TYPE_ARRAY) {
             count = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), index->lhs->type.spec.array.count, true);
