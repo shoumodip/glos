@@ -273,6 +273,7 @@ bool ht_iter_impl(
 
 // Characters
 bool is_space(char ch);
+void print_char_safe(FILE *f, char ch);
 
 // String View
 typedef struct {

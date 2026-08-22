@@ -304,7 +304,6 @@ void error_standalone_begin(Error_Kind kind) {
     error_begin(kind);
 }
 
-// TODO: Check for non-printable characters
 void error_finalize(void) {
     assert(active);
     active = false;
@@ -356,17 +355,30 @@ void error_finalize(void) {
 
         if (view_error_begin >= line.data && view_error_begin <= line.data + line.count) {
             const SV before = sv_drop_mut(&line, view_error_begin - line.data);
-            afprintf(stderr, ANSI_COLOR_CYAN, SV_Fmt, SV_Arg(before));
+            ansi_set(stderr, ANSI_COLOR_CYAN);
+            for (size_t i = 0; i < before.count; i++) {
+                print_char_safe(stderr, before.data[i]);
+            }
+            ansi_reset(stderr);
             error = true;
         }
 
         if (view_error_end >= line.data && view_error_end <= line.data + line.count) {
             const SV before = sv_drop_mut(&line, view_error_end - line.data);
-            afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, SV_Fmt, SV_Arg(before));
+            ansi_set(stderr, ANSI_COLOR_RED | ANSI_BOLD);
+            for (size_t i = 0; i < before.count; i++) {
+                print_char_safe(stderr, before.data[i]);
+            }
+            ansi_reset(stderr);
             error = false;
         }
 
-        afprintf(stderr, error ? (ANSI_COLOR_RED | ANSI_BOLD) : ANSI_COLOR_CYAN, SV_Fmt "\n", SV_Arg(line));
+        ansi_set(stderr, error ? (ANSI_COLOR_RED | ANSI_BOLD) : ANSI_COLOR_CYAN);
+        for (size_t i = 0; i < line.count; i++) {
+            print_char_safe(stderr, line.data[i]);
+        }
+        print_char_safe(stderr, '\n');
+        ansi_reset(stderr);
     }
 
     if (has) {
