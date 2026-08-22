@@ -3,7 +3,7 @@ f :: () -> ([2]i64, bool) {
 }
 
 g :: (a: []i64, b: bool) {
-    println(a, ' ', b)
+    println(a, b)
 }
 
 main :: () {

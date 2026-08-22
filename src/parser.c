@@ -757,6 +757,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             expect_token(p, TOKEN_RBRACE); // This also ensures that there is nothing left in the buffer
 
             token = lexer_get_string(&p->state.lexer, p->state.lexer.pos, node->token.pos);
+            if (token.kind == TOKEN_STRING && !token.as.string.count) {
+                break;
+            }
             nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
         }
     } break;

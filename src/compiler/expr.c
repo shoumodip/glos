@@ -1167,6 +1167,23 @@ LLVMValueRef compile_expr_interpolation(Compiler *c, Node_Interpolation *interpo
     Node *n = (Node *) interpolation;
     assert(!interpolation->is_constant);
 
+    if (interpolation->do_not_allocate) {
+        LLVMValueRef marker = LLVMConstInt(
+            compile_type(c, &c->interpolation_marker_type),
+            interpolation->children_count - 1, // Do not count the marker
+            type_is_signed(c->interpolation_marker_type));
+
+        LLVMValueRef memory = compile_alloca(c, compile_type(c, &c->any_type));
+        LLVMBuildStore(c->llvm_builder, compile_type_info(c, &c->interpolation_marker_type), memory);
+        LLVMBuildStore(c->llvm_builder, marker, LLVMBuildStructGEP2(c->llvm_builder, c->any_type.llvm, memory, 1, ""));
+
+        da_push(&c->group_values, LLVMBuildLoad2(c->llvm_builder, c->any_type.llvm, memory, ""));
+        ll_foreach(it, &interpolation->children) {
+            da_push(&c->group_values, compile_expr(c, it, false));
+        }
+        return NULL;
+    }
+
     LLVMTypeRef  element_type = compile_type(c, &c->any_type);
     LLVMValueRef memory = compile_alloca(c, LLVMArrayType(element_type, interpolation->children_count));
 
@@ -1367,11 +1384,21 @@ LLVMValueRef compile_expr_call(Compiler *c, Node_Call *call, bool ref) {
             }
             args_iota++;
         } else {
-            assert(arg->type.kind == TYPE_GROUP);
-            Type_Group *group = &arg->type.spec.group;
-            for (size_t i = 0; i < group->count; i++) {
+            Type  *types = NULL;
+            size_t count = c->group_values.count - group_values_count_save;
+            if (arg->type.kind == TYPE_GROUP) {
+                Type_Group *group = &arg->type.spec.group;
+                types = group->data;
+                assert(count == group->count);
+            } else {
+                assert(arg->kind == NODE_INTERPOLATION);
+                Node_Interpolation *interpolation = (Node_Interpolation *) arg;
+                assert(count == interpolation->children_count);
+            }
+
+            for (size_t i = 0; i < count; i++) {
                 Typed_LLVM_Value tv = {0};
-                tv.type = &group->data[i];
+                tv.type = types ? &types[i] : &c->any_type;
                 tv.value = c->group_values.data[group_values_count_save + i];
                 if (variadics_memory && args_iota >= fn_spec->variadics_index) {
                     LLVMValueRef indices[] = {
