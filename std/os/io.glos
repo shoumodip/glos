@@ -79,8 +79,3 @@ read_entire_file :: (path: string, a := &arena.default) -> ([]char, bool) {
 
     return (&char(data))[..count], true
 }
-
-#private...
-C       :: #import "C"
-arena   :: #import "arena"
-strings :: #import "strings"

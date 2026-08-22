@@ -3,3 +3,7 @@ args: []string
 extern {
     exit :: (code: i32)
 }
+
+C       :: #import "C"
+arena   :: #import "arena"
+strings :: #import "strings"

@@ -51,6 +51,5 @@ split :: (s: string, by: char) -> (string, string, bool) {
     return lhs, rhs, true
 }
 
-#private...
 C     :: #import "C"
 arena :: #import "arena"

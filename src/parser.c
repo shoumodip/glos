@@ -359,6 +359,9 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
         }
 
         definition_lhs_atom_setup(p, define, (Node_Atom *) define->name, define->expr, is_static, is_assigned, 0);
+        if (define->is_const && !p->state.fn_current && define->expr->kind == NODE_IMPORT) {
+            ((Node_Atom *) define->name)->definition_spec->is_private = true;
+        }
     } else {
         Node_Group *lhs = (Node_Group *) define->name;
         lhs_count = lhs->count;
@@ -392,6 +395,10 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
             ll_foreach2(lhs_iota, rhs_iota, &lhs->nodes, &rhs->nodes) {
                 assert(lhs_iota->kind == NODE_ATOM);
                 definition_lhs_atom_setup(p, define, (Node_Atom *) lhs_iota, rhs_iota, is_static, is_assigned, iota++);
+
+                if (define->is_const && !p->state.fn_current && rhs_iota->kind == NODE_IMPORT) {
+                    ((Node_Atom *) lhs_iota)->definition_spec->is_private = true;
+                }
             }
         } else {
             size_t iota = 0;
