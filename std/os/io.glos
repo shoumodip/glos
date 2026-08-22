@@ -1,7 +1,7 @@
 File :: distinct rawptr
 
 write :: (this: File, bytes: []char) {
-    C.fwrite(rawptr(bytes.data), sizeof(char), bytes.count, this);
+    C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), this);
 }
 
 close :: (this: &File) {

@@ -58,7 +58,7 @@ compare :: (this: string, that: string) -> Ordering {
         n = that.count
     }
 
-    diff := C.memcmp(rawptr(this.data), rawptr(that.data), n)
+    diff := C.memcmp(rawptr(this.data), rawptr(that.data), u64(n))
     if diff < 0 {
         return .LT
     }
