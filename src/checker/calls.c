@@ -278,7 +278,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                     if (it->kind == NODE_INTERPOLATION) {
                         Node_Interpolation *interpolation = (Node_Interpolation *) it;
                         interpolation->do_not_allocate = true;
-                        interpolation->children_count++; // The marker
+                        if (interpolation->children_count > 1) {
+                            interpolation->children_count++; // The marker
+                        }
                         cc->typed_variadics_count += interpolation->children_count;
                     } else {
                         cc->typed_variadics_count++;
@@ -295,7 +297,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                         if (it->kind == NODE_INTERPOLATION) {
                             Node_Interpolation *interpolation = (Node_Interpolation *) it;
                             interpolation->do_not_allocate = true;
-                            interpolation->children_count++; // The marker
+                            if (interpolation->children_count > 1) {
+                                interpolation->children_count++; // The marker
+                            }
                             cc->typed_variadics_count += interpolation->children_count;
                         } else {
                             cc->typed_variadics_count++;

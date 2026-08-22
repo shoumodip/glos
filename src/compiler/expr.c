@@ -1168,16 +1168,20 @@ LLVMValueRef compile_expr_interpolation(Compiler *c, Node_Interpolation *interpo
     assert(!interpolation->is_constant);
 
     if (interpolation->do_not_allocate) {
-        LLVMValueRef marker = LLVMConstInt(
-            compile_type(c, &c->interpolation_marker_type),
-            interpolation->children_count - 1, // Do not count the marker
-            type_is_signed(c->interpolation_marker_type));
+        if (interpolation->children_count > 1) {
+            LLVMValueRef marker = LLVMConstInt(
+                compile_type(c, &c->interpolation_marker_type),
+                interpolation->children_count - 1, // Do not count the marker
+                type_is_signed(c->interpolation_marker_type));
 
-        LLVMValueRef memory = compile_alloca(c, compile_type(c, &c->any_type));
-        LLVMBuildStore(c->llvm_builder, compile_type_info(c, &c->interpolation_marker_type), memory);
-        LLVMBuildStore(c->llvm_builder, marker, LLVMBuildStructGEP2(c->llvm_builder, c->any_type.llvm, memory, 1, ""));
+            LLVMValueRef memory = compile_alloca(c, compile_type(c, &c->any_type));
+            LLVMBuildStore(c->llvm_builder, compile_type_info(c, &c->interpolation_marker_type), memory);
+            LLVMBuildStore(
+                c->llvm_builder, marker, LLVMBuildStructGEP2(c->llvm_builder, c->any_type.llvm, memory, 1, ""));
 
-        da_push(&c->group_values, LLVMBuildLoad2(c->llvm_builder, c->any_type.llvm, memory, ""));
+            da_push(&c->group_values, LLVMBuildLoad2(c->llvm_builder, c->any_type.llvm, memory, ""));
+        }
+
         ll_foreach(it, &interpolation->children) {
             da_push(&c->group_values, compile_expr(c, it, false));
         }
