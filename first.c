@@ -12,6 +12,9 @@
 #define EXE_FILE_EXTENSION ""
 #endif // PLATFORM_X86_64_WINDOWS
 
+// 64MB
+#define COMPILER_STACK_SIZE (64 * 1024 * 1024)
+
 #if defined(PLATFORM_X86_64_LINUX) && !(defined(__GLIBC__) || defined(__UCLIBC__))
 #define MUSL
 #endif
@@ -306,23 +309,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         cmd_push(cmd, "./llvm/bin/llvm-config", "--ldflags", "--libs", "--system-libs", "--link-static");
         sv = run_cmd_and_read_stdout(cmd);
 
-#ifdef PLATFORM_ARM64_MACOS
-        arena_reset_noalign(&default_arena, sv.data + sv.count);
-        cmd_push(cmd, "pkg-config", "--libs-only-L", "zlib", "libzstd");
-        sv.count += run_cmd_and_read_stdout(cmd).count;
-#endif // PLATFORM_ARM64_MACOS
-
-#ifdef PLATFORM_X86_64_WINDOWS
-        if (is_lld_available_in_path()) {
-            cmd_push(cmd, "lld-link");
-        } else {
-            cmd_push(cmd, "link", "/nologo");
-        }
-
-        cmd_push(cmd, "/stack:8388608");
-        cmd_push(cmd, "/debug");
-        cmd_push(cmd, "/out:glos.exe");
-#else
+#ifdef PLATFORM_X86_64_LINUX
         cmd_push(cmd, "g++");
         if (is_lld_available_in_path()) {
             cmd_push(cmd, "-fuse-ld=lld");
@@ -332,8 +319,31 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         cmd_push(cmd, "-static");
 #endif // MUSL
 
+        cmd_push(cmd, arena_sprintf(&temp_arena, "-Wl,-z,stack-size=%u", COMPILER_STACK_SIZE));
         cmd_push(cmd, "-o", "glos" EXE_FILE_EXTENSION);
+#endif // PLATFORM_X86_64_LINUX
+
+#ifdef PLATFORM_X86_64_WINDOWS
+        if (is_lld_available_in_path()) {
+            cmd_push(cmd, "lld-link");
+        } else {
+            cmd_push(cmd, "link", "/nologo");
+        }
+
+        cmd_push(cmd, arena_sprintf(&temp_arena, "/stack:%u", COMPILER_STACK_SIZE));
+        cmd_push(cmd, "/debug");
+        cmd_push(cmd, "/out:glos.exe");
 #endif // PLATFORM_X86_64_WINDOWS
+
+#ifdef PLATFORM_ARM64_MACOS
+        arena_reset_noalign(&default_arena, sv.data + sv.count);
+        cmd_push(cmd, "pkg-config", "--libs-only-L", "zlib", "libzstd");
+        sv.count += run_cmd_and_read_stdout(cmd).count;
+
+        cmd_push(cmd, "g++");
+        cmd_push(cmd, arena_sprintf(&temp_arena, "-Wl,-stack_size,0x%x", COMPILER_STACK_SIZE));
+        cmd_push(cmd, "-o", "glos" EXE_FILE_EXTENSION);
+#endif // PLATFORM_ARM64_MACOS
 
         for (size_t i = 0; i < len(sources); i++) {
             cmd_push(cmd, temp_replace_suffix(sources[i], ".c", OBJ_FILE_EXTENSION));
