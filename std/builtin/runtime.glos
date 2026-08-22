@@ -3,13 +3,13 @@
 runtime_panic :: (p: Panic, a: i64, b: i64, c: i64, location: &Source_Code_Location) {
     if p == {
     case .INDEX_OUT_OF_BOUNDS
-        panic("Bounds Check Fail: Index \{a} is invalid since length is \{b}", location = *location)
+        panic("Bounds Check Failed: Index \{a} is invalid since length is \{b}", location = *location)
 
     case .RANGE_OUT_OF_BOUNDS
-        panic("Bounds Check Fail: Range (\{a}..\{b}) is invalid since length is \{c}", location = *location)
+        panic("Bounds Check Failed: Range (\{a}..\{b}) is invalid since length is \{c}", location = *location)
 
     case .RANGE_BEGIN_MORE_THAN_END
-        panic("Bounds Check Fail: Range (\{a}..\{b}) is invalid since beginning is more than end", location = *location)
+        panic("Bounds Check Failed: Range (\{a}..\{b}) is invalid since beginning is more than end", location = *location)
 
     case .NULL_TRAIT_METHOD_ACCESS
         panic("Cannot access method of null trait", location = *location)

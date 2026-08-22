@@ -4,6 +4,6 @@ STDOUT 6
 4
 6
 
-STDERR 112
-tests/bounds_check_fail_on_range_begin.glos:23:18: Bounds Check Fail: Range (6..7) is invalid since length is 5
+STDERR 114
+tests/bounds_check_fail_on_range_begin.glos:23:18: Bounds Check Failed: Range (6..7) is invalid since length is 5
 
