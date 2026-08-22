@@ -15,7 +15,7 @@ extern {
     memmove :: (dst: rawptr, src: rawptr, count: u64) -> rawptr
     memset :: (dst: rawptr, ch: i32, count: u64) -> rawptr
     memchr :: (s: rawptr, ch: i32, count: u64) -> rawptr
-    strlen :: (s: &char) -> i64
+    strlen :: (s: &char) -> u64
     atexit :: (function: ()) -> i32
     getenv :: (name: &char) -> &char
     fopen :: (path: &char, mode: &char) -> os.File

@@ -511,7 +511,7 @@ bool try_auto_cast_literal(Node *n, Type expected) {
 
     // untyped string -> &char
     if (n->kind == NODE_ATOM && n->token.kind == TOKEN_STRING &&
-        type_eq(expected, (Type) {.kind = TYPE_CHAR, .ref = 1})) //
+        type_eq_without_distinct(expected, (Type) {.kind = TYPE_CHAR, .ref = 1})) //
     {
         n->type = expected;
         return true;
