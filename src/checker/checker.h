@@ -66,7 +66,7 @@ Type type_assert(Compiler *c, Node *n, Type expected);
 bool type_assert_grouped_noexit(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement);
 Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement);
 Type type_assert_node(Compiler *c, Node *a, Node *b);
-Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed);
+Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed, bool floats_allowed);
 Type type_assert_scalar(Compiler *c, const Node *n);
 bool type_assert_type_noexit(const Node *n);
 Type type_assert_type(Compiler *c, const Node *n);

@@ -156,6 +156,8 @@ void compiler_build(Compiler *c, const char *output_path) {
     perf_end("LLVM code generation");
 
     perf_begin();
+
+    // TODO: Do not do this for '-O0'
     LLVMPassBuilderOptionsRef pass_builder_options = LLVMCreatePassBuilderOptions();
     LLVMRunPasses(c->llvm_module, "always-inline", c->llvm_target_machine, pass_builder_options);
     LLVMDisposePassBuilderOptions(pass_builder_options);
@@ -211,6 +213,11 @@ void compiler_build(Compiler *c, const char *output_path) {
 
         cmd_push(c->cmd, object_path);
         cmd_push_many(c->cmd, c->link_flags->data, c->link_flags->count);
+
+#ifndef PLATFORM_X86_64_WINDOWS
+        // Link against math just in case
+        cmd_push(c->cmd, "-lm");
+#endif // PLATFORM_X86_64_WINDOWS
 
         const char *proc_name = c->cmd->data[0];
         Proc        proc = cmd_run_async(c->cmd, (Cmd_Stdio) {0});
