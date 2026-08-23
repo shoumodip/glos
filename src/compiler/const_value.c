@@ -35,7 +35,7 @@ LLVMValueRef create_const_struct_from_single_value_if_not_already(Compiler *c, L
     return LLVMConstStructInContext(c->llvm_context, &value, 1, false);
 }
 
-static_assert(COUNT_CONST_VALUES == 12, "");
+static_assert(COUNT_CONST_VALUES == 13, "");
 LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type type) {
     switch (value.kind) {
     case CONST_VALUE_INT:
@@ -51,6 +51,9 @@ LLVMValueRef compile_const_value(Compiler *c, Const_Value value, Type type) {
                 type.llvm);
         }
         return LLVMConstInt(type.llvm, i64_from_int128(value.as.integer), type_is_signed(type));
+
+    case CONST_VALUE_FLOAT:
+        return LLVMConstReal(type.llvm, value.as.real);
 
     case CONST_VALUE_FN:
         return compile_fn(c, value.as.fn);

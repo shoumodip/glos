@@ -1,0 +1,58 @@
+main :: () {
+    A0 :: 69.4201337
+
+    // Arithmetics
+    A1 :: 34.5 + 34.5
+    A2 :: 500.1 - 80.1
+    A3 :: 11.5 * 6.0
+    A4 :: 630.0 / 1.5
+    A5 :: 17.25 * 2.0 - -34.5
+    A6 :: 0.2 * (1000.0 + 1100.0)
+
+    // Comparisons
+    A7 :: 2.0 > 1.0
+    A8 :: 1.0 > 1.0
+    A9 :: 0.0 > 1.0
+
+    A10 :: 2.0 >= 1.0
+    A11 :: 1.0 >= 1.0
+    A12 :: 0.0 >= 1.0
+
+    A13 :: 1.0 < 2.0
+    A14 :: 1.0 < 1.0
+    A15 :: 1.0 < 0.0
+
+    A16 :: 1.0 <= 2.0
+    A17 :: 1.0 <= 1.0
+    A18 :: 1.0 <= 0.0
+
+    A19 :: 1.0 == 1.0
+    A20 :: 1.0 == 2.0
+
+    A21 :: 1.0 != 2.0
+    A22 :: 1.0 != 1.0
+
+    println(A0)
+    println(A1)
+    println(A2)
+    println(A3)
+    println(A4)
+    println(A5)
+    println(A6)
+    println(A7)
+    println(A8)
+    println(A9)
+    println(A10)
+    println(A11)
+    println(A12)
+    println(A13)
+    println(A14)
+    println(A15)
+    println(A16)
+    println(A17)
+    println(A18)
+    println(A19)
+    println(A20)
+    println(A21)
+    println(A22)
+}

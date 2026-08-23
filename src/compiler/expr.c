@@ -149,7 +149,7 @@ LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, bool ref
         }
 
         if (const_value) {
-            static_assert(COUNT_CONST_VALUES == 12, "");
+            static_assert(COUNT_CONST_VALUES == 13, "");
             switch (const_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
@@ -503,7 +503,7 @@ void compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_
 
             value = LLVMBuildLoad2(c->llvm_builder, arg->type.llvm, memory, "");
         } else {
-            static_assert(COUNT_CONST_VALUES == 12, "");
+            static_assert(COUNT_CONST_VALUES == 13, "");
             switch (arg->default_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:

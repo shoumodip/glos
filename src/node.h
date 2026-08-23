@@ -329,6 +329,8 @@ bool type_is_unknown(Type type);
 
 typedef enum {
     CONST_VALUE_INT,
+    CONST_VALUE_FLOAT,
+
     CONST_VALUE_FN,
     CONST_VALUE_VAR,
     CONST_VALUE_TYPE,
@@ -380,7 +382,9 @@ typedef struct {
 struct Const_Value {
     Const_Value_Kind kind;
     union {
-        Int128     integer;
+        Int128 integer;
+        double real;
+
         Type       type;
         Node_Fn   *fn;
         Node_Atom *var;
@@ -398,10 +402,11 @@ struct Const_Value {
     } as;
 };
 
-static_assert(COUNT_CONST_VALUES == 12, "");
-#define const_value_int(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = (v)})
-#define const_value_i64(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_i64(v)})
-#define const_value_u64(v) ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_u64(v)})
+static_assert(COUNT_CONST_VALUES == 13, "");
+#define const_value_int(v)   ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = (v)})
+#define const_value_i64(v)   ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_i64(v)})
+#define const_value_u64(v)   ((Const_Value) {.kind = CONST_VALUE_INT, .as.integer = int128_from_u64(v)})
+#define const_value_float(v) ((Const_Value) {.kind = CONST_VALUE_FLOAT, .as.real = (v)})
 
 #define const_value_fn(v)   ((Const_Value) {.kind = CONST_VALUE_FN, .as.fn = (v)})
 #define const_value_var(v)  ((Const_Value) {.kind = CONST_VALUE_VAR, .as.var = (v)})

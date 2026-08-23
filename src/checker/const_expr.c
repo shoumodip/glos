@@ -1,5 +1,6 @@
 #include "../error.h"
 #include "checker.h"
+#include <math.h>
 
 static_assert(COUNT_TYPES == 30, "");
 Const_Value default_const_value(Compiler *c, Type type) {
@@ -30,7 +31,7 @@ Const_Value default_const_value(Compiler *c, Type type) {
     case TYPE_F32:
     case TYPE_F64:
     case TYPE_FLOAT:
-        todo(); // @float
+        return const_value_float(0.0);
 
     case TYPE_TRAIT:
         return const_value_trait((Const_Value_Trait) {0});
@@ -176,7 +177,7 @@ Const_Value eval_const_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
         return const_value_u64(0);
 
     case TOKEN_FLOAT:
-        todo(); // @float
+        return const_value_float(n->token.as.real);
 
     case TOKEN_IDENT:
         if (atom->definition && atom->definition->polymorph) {
@@ -266,7 +267,8 @@ Const_Value eval_const_expr_unary(Compiler *c, Node_Unary *unary) {
         if (type_is_integer(n->type) || type_is_pointer(n->type)) {
             return const_value_int(int128_neg(value.as.integer));
         } else {
-            todo(); // @float
+            value.as.real = -value.as.real;
+            return value;
         }
 
     case TOKEN_MUL:
@@ -318,6 +320,38 @@ Const_Value eval_const_expr_unary(Compiler *c, Node_Unary *unary) {
     }
 }
 
+static double fadd(double a, double b) {
+    return a + b;
+}
+
+static double fsub(double a, double b) {
+    return a - b;
+}
+
+static double fmul(double a, double b) {
+    return a * b;
+}
+
+static double fdiv(double a, double b) {
+    return a / b;
+}
+
+static bool fgt(double a, double b) {
+    return a > b;
+}
+
+static bool fge(double a, double b) {
+    return a >= b;
+}
+
+static bool flt(double a, double b) {
+    return a < b;
+}
+
+static bool fle(double a, double b) {
+    return a <= b;
+}
+
 Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
     Node *n = (Node *) binary;
 
@@ -363,55 +397,69 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
 
     // Arithmetic operations
     {
-        // @float
-        typedef Int128 (*Int_Op)(Int128 lhs, Int128 rhs, bool is_signed);
+        typedef struct {
+            Int128 (*i)(Int128 lhs, Int128 rhs, bool is_signed);
+            double (*f)(double lhs, double rhs);
+        } Op;
 
         static_assert(COUNT_TOKENS == 79, "");
-        static const Int_Op ops[COUNT_TOKENS] = {
-            [TOKEN_ADD] = int128_add,
-            [TOKEN_SUB] = int128_sub,
-            [TOKEN_MUL] = int128_mul,
-            [TOKEN_DIV] = int128_div,
-            [TOKEN_MOD] = int128_mod,
+        static const Op ops[COUNT_TOKENS] = {
+            [TOKEN_ADD] = {.i = int128_add, .f = fadd},
+            [TOKEN_SUB] = {.i = int128_sub, .f = fsub},
+            [TOKEN_MUL] = {.i = int128_mul, .f = fmul},
+            [TOKEN_DIV] = {.i = int128_div, .f = fdiv},
+            [TOKEN_MOD] = {.i = int128_mod, .f = fmod},
 
-            [TOKEN_SHL] = int128_shl,
-            [TOKEN_SHR] = int128_shr,
-            [TOKEN_BOR] = int128_or,
-            [TOKEN_BAND] = int128_and,
+            [TOKEN_SHL] = {.i = int128_shl},
+            [TOKEN_SHR] = {.i = int128_shr},
+            [TOKEN_BOR] = {.i = int128_or},
+            [TOKEN_BAND] = {.i = int128_and},
         };
 
-        const Int_Op op = ops[n->token.kind];
-        if (op) {
+        const Op op = ops[n->token.kind];
+        if (type_is_float(binary->lhs->type) && op.f) {
             lhs = eval_const_expr(c, binary->lhs, false);
             rhs = eval_const_expr(c, binary->rhs, false);
+            return const_value_float(op.f(lhs.as.real, rhs.as.real));
+        }
 
+        if (op.i) {
+            lhs = eval_const_expr(c, binary->lhs, false);
+            rhs = eval_const_expr(c, binary->rhs, false);
             if ((n->token.kind == TOKEN_DIV || n->token.kind == TOKEN_MOD) && int128_is_zero(rhs.as.integer)) {
                 error_node(EK_ERROR, binary->rhs, "Cannot divide by zero");
                 exit(c, 1);
             }
-
-            return const_value_int(op(lhs.as.integer, rhs.as.integer, type_is_signed(n->type)));
+            return const_value_int(op.i(lhs.as.integer, rhs.as.integer, type_is_signed(n->type)));
         }
     }
 
     // Arithmetic comparisons
     {
-        // @float
-        typedef bool (*Int_Op)(Int128 lhs, Int128 rhs, bool is_signed);
+        typedef struct {
+            bool (*i)(Int128 lhs, Int128 rhs, bool is_signed);
+            bool (*f)(double lhs, double rhs);
+        } Op;
 
         static_assert(COUNT_TOKENS == 79, "");
-        static const Int_Op ops[COUNT_TOKENS] = {
-            [TOKEN_GT] = int128_gt,
-            [TOKEN_GE] = int128_ge,
-            [TOKEN_LT] = int128_lt,
-            [TOKEN_LE] = int128_le,
+        static const Op ops[COUNT_TOKENS] = {
+            [TOKEN_GT] = {.i = int128_gt, .f = fgt},
+            [TOKEN_GE] = {.i = int128_ge, .f = fge},
+            [TOKEN_LT] = {.i = int128_lt, .f = flt},
+            [TOKEN_LE] = {.i = int128_le, .f = fle},
         };
 
-        const Int_Op op = ops[n->token.kind];
-        if (op) {
+        const Op op = ops[n->token.kind];
+        if (type_is_float(binary->lhs->type) && op.f) {
             lhs = eval_const_expr(c, binary->lhs, false);
             rhs = eval_const_expr(c, binary->rhs, false);
-            return const_value_u64(op(lhs.as.integer, rhs.as.integer, type_is_signed(n->type)));
+            return const_value_u64(op.f(lhs.as.real, rhs.as.real));
+        }
+
+        if (op.i) {
+            lhs = eval_const_expr(c, binary->lhs, false);
+            rhs = eval_const_expr(c, binary->rhs, false);
+            return const_value_u64(op.i(lhs.as.integer, rhs.as.integer, type_is_signed(n->type)));
         }
     }
 
@@ -464,7 +512,7 @@ Const_Value eval_const_expr_member(Compiler *c, Node_Member *member) {
         lhs = const_value_of_var(c, lhs.as.var);
     }
 
-    static_assert(COUNT_CONST_VALUES == 12, "");
+    static_assert(COUNT_CONST_VALUES == 13, "");
     switch (lhs.kind) {
     case CONST_VALUE_TRAIT: {
         if (member->rhs) {
@@ -690,7 +738,7 @@ Const_Value eval_const_expr_index(Compiler *c, Node_Index *index) {
             exit(c, 1);
         }
 
-        static_assert(COUNT_CONST_VALUES == 12, "");
+        static_assert(COUNT_CONST_VALUES == 13, "");
         switch (lhs.kind) {
         case CONST_VALUE_ARRAY: {
             Const_Value_Array array = lhs.as.array;
@@ -794,7 +842,7 @@ Const_Value eval_const_expr_index(Compiler *c, Node_Index *index) {
     } else {
         const i64 at = i64_from_int128(c, index->a, eval_const_expr(c, index->a, false).as.integer, true, "index");
 
-        static_assert(COUNT_CONST_VALUES == 12, "");
+        static_assert(COUNT_CONST_VALUES == 13, "");
         switch (lhs.kind) {
         case CONST_VALUE_ARRAY: {
             if (at < 0 || (size_t) at >= lhs.as.array.count) {
