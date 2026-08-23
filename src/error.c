@@ -324,14 +324,20 @@ void error_finalize(void) {
 
             if (lines != 5 || !copy.count) {
                 SV indent = sv_drop_while_mut(&line, is_space);
-                if (!lines || sv_has_prefix(indent_min, indent)) {
+                if (lines) {
+                    for (size_t i = 0; i < indent_min.count; i++) {
+                        if (i >= indent.count || indent.data[i] != indent_min.data[i]) {
+                            indent_min.count = i;
+                            break;
+                        }
+                    }
+                } else {
                     indent_min = indent;
                 }
             }
         }
 
         trim = indent_min.count;
-        trim -= trim % 4;
     }
 
     for (size_t lines = 0; view_sv.count; lines++) {
