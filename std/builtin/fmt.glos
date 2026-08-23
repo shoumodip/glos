@@ -227,7 +227,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         buffer: [32]char
         count: i32
         if a.type.size == {
-        case 4; todo() // @float
+        case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%.7g".data, *&f32(a.data))
         case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%.14g".data, *&f64(a.data))
         case;   unreachable()
         }

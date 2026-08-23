@@ -220,6 +220,10 @@ void check_stmt_return(Compiler *c, Node_Return *returnn);
 void check_stmt(Compiler *c, Node *n);
 
 // Exit Wrapper ////////////////////////////////////////////////////////////////////////////////////
+#ifdef DONT_DEFINE_EXIT_WRAPPER
+#undef DONT_DEFINE_EXIT_WRAPPER
+#else
 #define exit(c, code) (show_current_monomorphization(c), exit(code))
+#endif // DONT_DEFINE_EXIT_WRAPPER
 
 #endif // CHECKER_INTERNAL_H

@@ -52,10 +52,12 @@ LLVMMetadataRef get_scope_of_definition(Compiler *c, Node *node, Node_Fn *define
 void            set_debug_pos(Compiler *c, Pos pos);
 
 LLVMValueRef compile_alloca(Compiler *c, LLVMTypeRef type);
-LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to_type, bool is_signed);
+LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to, bool is_from_signed, bool is_to_signed);
 
 Typed_LLVM_Value get_builtin_func(Compiler *c, SV name);
 void compile_panic_v2(Compiler *c, Pos pos, Contract_Panic panic, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3);
+
+void compiler_init_llvm_target_data(Compiler *c);
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 LLVMTypeRef     compile_type(Compiler *c, Type *type);

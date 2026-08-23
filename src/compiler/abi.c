@@ -1,3 +1,6 @@
+#define DONT_DEFINE_EXIT_WRAPPER
+#include "../checker/checker.h"
+
 #include "compiler.h"
 
 #ifdef PLATFORM_X86_64_LINUX
@@ -287,7 +290,11 @@ void compile_call_arg(Compiler *c, Call_Compiler *call, size_t arg_index, Typed_
                 const size_t size = compile_sizeof(c, arg->type);
                 if (size < 4) {
                     // Promote values smaller than i32 into i32
-                    expr = compile_cast(c, expr, LLVMInt32TypeInContext(c->llvm_context), type_is_signed(*arg->type));
+                    const bool is_signed = type_is_signed(*arg->type);
+                    expr = compile_cast(c, expr, LLVMInt32TypeInContext(c->llvm_context), is_signed, is_signed);
+                } else if (type_eq_without_distinct(*arg->type, (Type) {.kind = TYPE_F32})) {
+                    // Promote f32 into f64
+                    expr = LLVMBuildFPExt(c->llvm_builder, expr, LLVMDoubleTypeInContext(c->llvm_context), "");
                 }
             }
         }

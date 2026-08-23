@@ -1309,7 +1309,7 @@ LLVMValueRef compile_expr_call(Compiler *c, Node_Call *call, bool ref) {
         switch (call->type_cast) {
         case TYPE_CAST_NORMAL:
             set_debug_pos(c, n->token.pos);
-            return compile_cast(c, from_value, n->type.llvm, type_is_signed(from->type));
+            return compile_cast(c, from_value, n->type.llvm, type_is_signed(from->type), type_is_signed(n->type));
 
         case TYPE_CAST_TO_BOOL:
             set_debug_pos(c, n->token.pos);
@@ -1565,14 +1565,14 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
     compile_type(c, element_type);
     if (index->is_ranged) {
         if (a) {
-            a = compile_cast(c, a, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->a->type));
+            a = compile_cast(c, a, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->a->type), true);
         } else {
             a = LLVMConstNull(LLVMInt64TypeInContext(c->llvm_context));
         }
 
         LLVMValueRef b = compile_expr(c, index->b, false);
         if (b) {
-            b = compile_cast(c, b, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->b->type));
+            b = compile_cast(c, b, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->b->type), true);
         }
 
         set_debug_pos(c, n->token.pos);
