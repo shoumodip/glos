@@ -35,27 +35,25 @@ main :: () {
     // Floats
     {
         x := 1.2
-        printf("%g\n", x)
+        println(x)
 
         x += 1.2
-        printf("%g\n", x)
+        println(x)
 
         x -= 1.2
-        printf("%g\n", x)
+        println(x)
 
         x *= 3.3
-        printf("%g\n", x)
+        println(x)
 
         x /= 0.3
-        printf("%g\n", x)
+        println(x)
 
         x %= 5.2
-        printf("%g\n", x)
+        println(x)
 
         y := 6.8
         x, y += 0.2, 0.1
-        printf("%g %g\n", x, y)
-
-        #import "C"
+        println(x, y)
     }
 }

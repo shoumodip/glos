@@ -14,6 +14,9 @@ main :: () {
         write_type(u32)
         write_type(u64)
 
+        write_type(f32)
+        write_type(f64)
+
         write_type(rawptr)
         write_type(string)
     }
@@ -127,6 +130,10 @@ write_type :: (ti: Type) {
             } else {
                 write_string("u")
             }
+            write_i64(ti.size * 8)
+
+        case Type_Info_Float
+            write_string("f")
             write_i64(ti.size * 8)
 
         case Type_Info_Pointer

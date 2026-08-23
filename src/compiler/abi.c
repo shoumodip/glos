@@ -104,7 +104,18 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         }
 #endif // PLATFORM_ARM64_MACOS
 
-        info.direct_types[info.direct_types_count++] = LLVMIntTypeInContext(c->llvm_context, size * 8);
+        if (type_is_float(*type)) {
+            // TODO: This is insufficient, but just to get the ball rolling
+            if (size == 4) {
+                info.direct_types[info.direct_types_count++] = LLVMFloatTypeInContext(c->llvm_context);
+            } else if (size == 8) {
+                info.direct_types[info.direct_types_count++] = LLVMDoubleTypeInContext(c->llvm_context);
+            } else {
+                unreachable();
+            }
+        } else {
+            info.direct_types[info.direct_types_count++] = LLVMIntTypeInContext(c->llvm_context, size * 8);
+        }
         return info;
     }
 

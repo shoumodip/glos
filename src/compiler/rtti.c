@@ -151,7 +151,8 @@ static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
         case TYPE_F32:
         case TYPE_F64:
         case TYPE_FLOAT:
-            todo(); // @float
+            // Pass
+            break;
 
         case TYPE_FN:
             compile_type_info_fn(c, tic, false);

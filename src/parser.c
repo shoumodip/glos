@@ -211,6 +211,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
             case_->body = node_alloc(p->module_current, NODE_BLOCK, token);
             Node_Block *block = (Node_Block *) case_->body;
             while (true) {
+                consume_tokens(p, TOKEN_EOL);
                 ahead = peek_token(p);
                 if (ahead.kind == TOKEN_CASE || ahead.kind == TOKEN_RBRACE) {
                     break;

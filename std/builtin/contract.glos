@@ -28,6 +28,7 @@ Type_Info :: struct {
         Type_Info_Boolean
         Type_Info_Character
         Type_Info_Integer
+        Type_Info_Float
         Type_Info_Pointer
         Type_Info_Function
         Type_Info_Enumeration
@@ -47,6 +48,8 @@ Type_Info_Character :: struct {}
 Type_Info_Integer :: struct {
     signed: bool
 }
+
+Type_Info_Float :: struct {}
 
 Type_Info_Pointer :: struct {
     underlying: Type

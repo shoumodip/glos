@@ -1,13 +1,13 @@
 main :: () {
-    printf("%.15g\n", 69.4201337)
+    println(69.4201337)
 
     // Arithmetics
-    printf("%.15g\n", 34.5 + 34.5)
-    printf("%.15g\n", 500.1 - 80.1)
-    printf("%.15g\n", 11.5 * 6.0)
-    printf("%.15g\n", 630.0 / 1.5)
-    printf("%.15g\n", 17.25 * 2.0 - -34.5)
-    printf("%.15g\n", 0.2 * (1000.0 + 1100.0))
+    println(34.5 + 34.5)
+    println(500.1 - 80.1)
+    println(11.5 * 6.0)
+    println(630.0 / 1.5)
+    println(17.25 * 2.0 - -34.5)
+    println(0.2 * (1000.0 + 1100.0))
 
     // Comparisons
     println(2.0 > 1.0)
@@ -32,5 +32,3 @@ main :: () {
     println(1.0 != 2.0)
     println(1.0 != 1.0)
 }
-
-#import "C"
