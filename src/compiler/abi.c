@@ -217,7 +217,6 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         if (LLVMGetTypeKind(info.direct_types[0]) == LLVMIntegerTypeKind && type_is_compound(*type) && is_arg) {
             // Bytes(0 < N <= 8) And (QWORD is an integer) And (Type is Compound) And (Used in Argument) => i64
             info.direct_types[0] = LLVMInt64TypeInContext(c->llvm_context);
-            fprintf(stderr, "%s => %s\n", type_to_cstr(*type), LLVMPrintTypeToString(info.direct_types[0]));
             return info;
         }
     }
