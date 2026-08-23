@@ -1,0 +1,10 @@
+main :: () {
+    #static x := 69
+
+    () {
+        println(x)
+    }()
+
+    Y :: x * 6 + 6
+    println(Y)
+}

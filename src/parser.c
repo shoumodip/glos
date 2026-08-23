@@ -359,6 +359,9 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
         }
 
         definition_lhs_atom_setup(p, define, (Node_Atom *) define->name, define->expr, is_static, is_assigned, 0);
+        if (define->is_const && !p->state.fn_current && define->expr->kind == NODE_IMPORT) {
+            ((Node_Atom *) define->name)->definition_spec->is_private = true;
+        }
     } else {
         Node_Group *lhs = (Node_Group *) define->name;
         lhs_count = lhs->count;
@@ -392,6 +395,10 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
             ll_foreach2(lhs_iota, rhs_iota, &lhs->nodes, &rhs->nodes) {
                 assert(lhs_iota->kind == NODE_ATOM);
                 definition_lhs_atom_setup(p, define, (Node_Atom *) lhs_iota, rhs_iota, is_static, is_assigned, iota++);
+
+                if (define->is_const && !p->state.fn_current && rhs_iota->kind == NODE_IMPORT) {
+                    ((Node_Atom *) lhs_iota)->definition_spec->is_private = true;
+                }
             }
         } else {
             size_t iota = 0;
@@ -590,10 +597,10 @@ static Node *parse_define(
     if (token.kind != TOKEN_SET && token.kind != TOKEN_COLON) {
         const bool in_extern_save = p->state.in_extern;
         p->state.in_extern = false;
-
         if (define->name_polymorph) {
             p->state.pb = NULL;
         }
+
         define->type = parse_expr(p, POWER_PRE, false, true, NULL);
 
         p->state.pb = pb_save;
@@ -630,7 +637,13 @@ static Node *parse_define(
 
         p->state.peeked = false;
         p->state.pb = NULL;
+        if (in_extern_save) {
+            p->state.allow_methods_without_body = true;
+        }
+
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
+
+        p->state.allow_methods_without_body = false;
         p->state.pb = pb_save;
         define->is_const = true;
 
@@ -711,6 +724,9 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
 
 static_assert(COUNT_TOKENS == 78, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
+    const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
+    p->state.allow_methods_without_body = false;
+
     Node *node = NULL;
     Token token = next_token(p);
     if (token.kind == TOKEN_LAND) {
@@ -750,14 +766,18 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_ISTRING: {
         node = node_alloc(p->module_current, NODE_INTERPOLATION, token);
         Node_Interpolation *interp = (Node_Interpolation *) node;
-        nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
+        if (token.as.string.count) {
+            nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
+        }
 
         while (token.kind == TOKEN_ISTRING) {
             nodes_push(&interp->children, parse_expr(p, POWER_SET, false, true, NULL));
             expect_token(p, TOKEN_RBRACE); // This also ensures that there is nothing left in the buffer
 
             token = lexer_get_string(&p->state.lexer, p->state.lexer.pos, node->token.pos);
-            nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
+            if (token.as.string.count) {
+                nodes_push(&interp->children, node_alloc(p->module_current, NODE_ATOM, token));
+            }
         }
     } break;
 
@@ -846,7 +866,10 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             node = parse_expr(p, POWER_SET, false, true, NULL);
             node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false, false);
         } else {
+            p->state.allow_methods_without_body = allow_methods_without_body; // '(EXPR)' == 'EXPR' semantically
             node = parse_expr(p, POWER_SET, false, true, NULL);
+            p->state.allow_methods_without_body = false;
+
             if (peek_token(p).kind == TOKEN_COLON) {
                 fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
                 fn->outer_fn = p->state.fn_current;
@@ -997,7 +1020,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             if (token.kind == TOKEN_LBRACE && !token.newline && compounds_allowed) {
                 fn->body = parse_block(p, next_token(p));
             } else {
-                if (fn->is_method && !p->state.in_extern) {
+                if (fn->is_method && !allow_methods_without_body) {
                     Node_Define *define = (Node_Define *) fn->args.head;
                     assert(define && define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
                     error_node(EK_ERROR, (Node *) fn, "A method must have a body");

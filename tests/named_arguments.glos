@@ -3,8 +3,8 @@ main :: () {
     {
         foo :: (a: i64, b: i64) {
             println("foo:")
-            println("  a = ", a)
-            println("  b = ", b)
+            println("  a =", a)
+            println("  b =", b)
         }
 
         foo(b = 420, a = 69)
@@ -14,8 +14,8 @@ main :: () {
     {
         bar :: (ns: ...i64, a := 0) {
             println("bar:")
-            println("  a = ", a)
-            println("  ns = ", ns)
+            println("  a =", a)
+            println("  ns =", ns)
         }
 
         bar(69, 420)

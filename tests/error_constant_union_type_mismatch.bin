@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 138
-tests/error_constant_union_type_mismatch.glos:7:6: ERROR: Type mismatch: Accessing 'string', but real type is 'i64'
+tests/error_constant_union_type_mismatch.glos:7:7: ERROR: Type Mismatch: Accessing 'string', but real type is 'i64'
 
     b :: a.(string)
 

@@ -81,32 +81,39 @@ void check_nodes(Compiler *c) {
     }
 
     // Any
+    Const_Value value;
     {
-        const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Any"), NULL);
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Any"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
         c->any_type = type_without_meta(value.as.type);
     }
 
     // Interpolation
     {
-        const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Interpolation"), NULL);
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Interpolation"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
         c->interpolation_type = type_without_meta(value.as.type);
     }
 
+    // Panic
+    {
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Panic"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+
+        const Type panic = type_without_meta(value.as.type);
+        assert(panic.kind == TYPE_ENUM);
+        assert(panic.spec.enumm.definition->values_count == 8);
+    }
+
     // Type info
     {
-        {
-            const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type_Info"), NULL);
-            assert(value.kind == CONST_VALUE_TYPE);
-            c->type_info_type = type_without_meta(value.as.type);
-        }
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type_Info"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+        c->type_info_type = type_without_meta(value.as.type);
 
-        {
-            const Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type"), NULL);
-            assert(value.kind == CONST_VALUE_TYPE);
-            c->type_info_pointer_type = type_without_meta(value.as.type);
-        }
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+        c->type_info_pointer_type = type_without_meta(value.as.type);
 
         assert(c->type_info_pointer_type.kind == TYPE_STRUCT);
         const Type_Struct *type_info_structure = c->type_info_pointer_type.spec.structt;
@@ -150,7 +157,7 @@ void check_nodes(Compiler *c) {
 
     // Comparisons
     {
-        Const_Value value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Ordering"), NULL);
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Ordering"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
         c->ordering_type = type_without_meta(value.as.type);
 
@@ -161,8 +168,7 @@ void check_nodes(Compiler *c) {
 
     // Source code location
     {
-        const Const_Value value =
-            get_const_definition_value(c, c->builtin_module, sv_from_cstr("Source_Code_Location"), NULL);
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Source_Code_Location"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
 
         c->source_code_location_type = type_without_meta(value.as.type);
@@ -244,6 +250,13 @@ void check_nodes(Compiler *c) {
         for (Node *it = m->nodes.head; it; it = it->next) {
             check_stmt(c, it);
         }
+    }
+
+    // Interpolation Marker
+    {
+        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Interpolation_Marker"), NULL);
+        assert(value.kind == CONST_VALUE_TYPE);
+        c->interpolation_marker_type = type_without_meta(value.as.type);
     }
 
     get_main(c);

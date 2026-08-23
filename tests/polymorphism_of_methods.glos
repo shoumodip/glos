@@ -3,7 +3,7 @@ Foo :: struct {
 }
 
 bar :: (this: Foo, that: $T) {
-    println(this, ' ', that)
+    println(this, that)
 }
 
 main :: () {

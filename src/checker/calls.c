@@ -275,7 +275,16 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                         exit(c, 1);
                     }
 
-                    cc->typed_variadics_count++;
+                    if (it->kind == NODE_INTERPOLATION) {
+                        Node_Interpolation *interpolation = (Node_Interpolation *) it;
+                        interpolation->do_not_allocate = true;
+                        if (interpolation->children_count > 1) {
+                            interpolation->children_count++; // The marker
+                        }
+                        cc->typed_variadics_count += interpolation->children_count;
+                    } else {
+                        cc->typed_variadics_count++;
+                    }
                 } else {
                     variadic_source = arg;
 
@@ -285,7 +294,16 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                         cc->is_typed_variadics_direct = true;
                     } else {
                         variadic_source_kind = VS_ARGS;
-                        cc->typed_variadics_count++;
+                        if (it->kind == NODE_INTERPOLATION) {
+                            Node_Interpolation *interpolation = (Node_Interpolation *) it;
+                            interpolation->do_not_allocate = true;
+                            if (interpolation->children_count > 1) {
+                                interpolation->children_count++; // The marker
+                            }
+                            cc->typed_variadics_count += interpolation->children_count;
+                        } else {
+                            cc->typed_variadics_count++;
+                        }
                     }
                 }
                 continue;
@@ -552,7 +570,19 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                     if (expected) {
                         bool ok = true;
                         if (parts == 1) {
-                            ok = type_assert_noexit(c, it, *expected);
+                            bool pass = false;
+                            if (it->kind == NODE_INTERPOLATION &&             //
+                                fn_spec->variadics_kind == VARIADICS_TYPED && //
+                                it_index == fn_spec->variadics_index)         //
+                            {
+                                Type *type = &fn_spec->args[it_index].type;
+                                assert(!type->ref && type_kind_eq(*type, TYPE_SLICE));
+                                pass = type_eq(*type->spec.slice.element, c->any_type);
+                            }
+
+                            if (!pass) {
+                                ok = type_assert_noexit(c, it, *expected);
+                            }
                         } else {
                             ok = type_assert_grouped_noexit(c, it, *expected, i, NULL);
                         }

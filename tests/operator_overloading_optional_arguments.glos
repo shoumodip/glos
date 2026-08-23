@@ -3,13 +3,13 @@ Int :: struct {
 }
 
 add :: (this: Int, that: Int, location := #caller_location) -> Int {
-    print(location, " ")
+    print("\{location} ")
     this.v += that.v
     return this
 }
 
 neg :: (this: Int, location := #caller_location) -> Int {
-    print(location, " ")
+    print("\{location} ")
     this.v = -this.v
     return this
 }

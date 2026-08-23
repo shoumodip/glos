@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 131
+tests/error_invalid_non_printable_character_outside_string.glos:1:6: ERROR: Invalid character '^N' (The byte is 0xE)
+
+    x := ^N
+
+

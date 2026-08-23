@@ -2,6 +2,7 @@
 #define COMPILER_INTERNAL_H
 
 #include "../compiler.h"
+#include "../contract.h"
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
 #include <llvm-c/DebugInfo.h>
@@ -54,7 +55,7 @@ LLVMValueRef compile_alloca(Compiler *c, LLVMTypeRef type);
 LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to_type, bool is_signed);
 
 Typed_LLVM_Value get_builtin_func(Compiler *c, SV name);
-void             compile_panic(Compiler *c, const char *fmt, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3);
+void compile_panic_v2(Compiler *c, Pos pos, Contract_Panic panic, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3);
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 LLVMTypeRef     compile_type(Compiler *c, Type *type);

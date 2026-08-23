@@ -1,22 +1,21 @@
-// TODO: Proper signed/unsigned
 extern {
     puts :: (s: &char) -> i32
     printf :: (fmt: &char, ...) -> i32
     fprintf :: (f: os.File, fmt: &char, ...) -> i32
-    snprintf :: (out: &char, size: i64, fmt: &char, ...) -> i32
-    fwrite :: (ptr: rawptr, size: i64, count: i64, f: os.File)
+    snprintf :: (out: &char, size: u64, fmt: &char, ...) -> i32
+    fwrite :: (ptr: rawptr, size: u64, count: u64, f: os.File)
     fflush :: (f: os.File)
     abort :: ()
-    memcmp :: (a: rawptr, b: rawptr, n: i64) -> i32
+    memcmp :: (a: rawptr, b: rawptr, n: u64) -> i32
     free :: (ptr: rawptr)
-    malloc :: (size: i64) -> rawptr
-    calloc :: (count: i64, size: i64) -> rawptr
-    realloc :: (ptr: rawptr, size: i64) -> rawptr
-    memcpy :: (dst: rawptr, src: rawptr, count: i64) -> rawptr
-    memmove :: (dst: rawptr, src: rawptr, count: i64) -> rawptr
+    malloc :: (size: u64) -> rawptr
+    calloc :: (count: u64, size: u64) -> rawptr
+    realloc :: (ptr: rawptr, size: u64) -> rawptr
+    memcpy :: (dst: rawptr, src: rawptr, count: u64) -> rawptr
+    memmove :: (dst: rawptr, src: rawptr, count: u64) -> rawptr
     memset :: (dst: rawptr, ch: i32, count: u64) -> rawptr
     memchr :: (s: rawptr, ch: i32, count: u64) -> rawptr
-    strlen :: (s: &char) -> i64
+    strlen :: (s: &char) -> u64
     atexit :: (function: ()) -> i32
     getenv :: (name: &char) -> &char
     fopen :: (path: &char, mode: &char) -> os.File
@@ -50,7 +49,12 @@ SEEK_END :: 2
     PROT_WRITE :: 0x2
 
     MAP_PRIVATE   :: 0x02
-    MAP_ANONYMOUS :: 0x20
+
+    #if PLATFORM == .MACOS {
+        MAP_ANONYMOUS :: 0x1000
+    } else {
+        MAP_ANONYMOUS :: 0x20
+    }
 
     extern {
         mmap :: (addr: rawptr, length: u64, prot: i32, flags: i32, fd: i32, offset: i64) -> rawptr

@@ -70,5 +70,4 @@ reset :: (this: &Arena, ptr: rawptr, align := true, location := #caller_location
 default: Arena
 temporary := Arena { capacity = 16 * 1024 * 1024 }
 
-#private...
 C :: #import "C"

@@ -340,6 +340,20 @@ bool is_space(char ch) {
     return isspace(ch);
 }
 
+void print_char_safe(FILE *f, char ch) {
+    const uint8_t c = ch;
+    if ((c >= 32 && c < 127) || (is_space(c) && c != 0xB)) {
+        fputc(c, f);
+    } else if (c < 32) {
+        fputc('^', f);
+        fputc(c + '@', f);
+    } else if (c == 127) {
+        fputs("^?", f);
+    } else {
+        fprintf(f, "<%02x>", c);
+    }
+}
+
 // String View
 SV sv_from_cstr(const char *cstr) {
     return (SV) {.data = cstr, .count = strlen(cstr)};

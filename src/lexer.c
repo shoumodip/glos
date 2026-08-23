@@ -113,11 +113,15 @@ static void skip_whitespace(Lexer *l) {
 }
 
 static void error_invalid(Pos pos, SV sv, const char *label) {
-    if (isprint(*sv.data)) {
-        error_parts(EK_ERROR, sv_drop(sv, 1), pos, "Invalid %s '%c'", label, *sv.data);
-    } else {
-        error_parts(EK_ERROR, sv_drop(sv, 1), pos, "Invalid %s '%u'", label, (uint8_t) *sv.data);
+    error_parts_begin(EK_ERROR, sv_drop(sv, 1), pos);
+    fprintf(stderr, "Invalid %s '", label);
+    print_char_safe(stderr, *sv.data);
+    fprintf(stderr, "'");
+
+    if (!isprint(*sv.data)) {
+        fprintf(stderr, " (The byte is 0x%X)", (uint8_t) *sv.data);
     }
+    error_finalize();
     exit(1);
 }
 

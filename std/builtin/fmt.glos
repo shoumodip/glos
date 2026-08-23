@@ -202,18 +202,18 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         count: i32
         if v.signed {
             if a.type.size == {
-            case 1; count = C.snprintf(buffer.data, buffer.count, "%d".data, *&i8(a.data))
-            case 2; count = C.snprintf(buffer.data, buffer.count, "%d".data, *&i16(a.data))
-            case 4; count = C.snprintf(buffer.data, buffer.count, "%d".data, *&i32(a.data))
-            case 8; count = C.snprintf(buffer.data, buffer.count, "%zd".data, *&i64(a.data))
+            case 1; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i8(a.data))
+            case 2; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i16(a.data))
+            case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i32(a.data))
+            case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%zd".data, *&i64(a.data))
             case; unreachable()
             }
         } else {
             if a.type.size == {
-            case 1; count = C.snprintf(buffer.data, buffer.count, "%u".data, *&u8(a.data))
-            case 2; count = C.snprintf(buffer.data, buffer.count, "%u".data, *&u16(a.data))
-            case 4; count = C.snprintf(buffer.data, buffer.count, "%u".data, *&u32(a.data))
-            case 8; count = C.snprintf(buffer.data, buffer.count, "%zu".data, *&u64(a.data))
+            case 1; count = C.snprintf(buffer.data, u64(buffer.count), "%u".data, *&u8(a.data))
+            case 2; count = C.snprintf(buffer.data, u64(buffer.count), "%u".data, *&u16(a.data))
+            case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%u".data, *&u32(a.data))
+            case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%zu".data, *&u64(a.data))
             case; unreachable()
             }
         }
@@ -225,7 +225,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
             w.write([]char("null"))
         } else {
             buffer: [32]char
-            count := C.snprintf(buffer.data, buffer.count, "0x%zx".data, ptr)
+            count := C.snprintf(buffer.data, u64(buffer.count), "0x%zx".data, ptr)
             w.write(buffer[..count])
         }
 

@@ -628,9 +628,8 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                     }
                 } else if (definition->definition_spec->fn_context && c->context.fn) {
                     if (definition->definition_spec->fn_context != c->context.fn &&
-                        !definition->definition_spec->is_const) //
+                        !definition->definition_spec->is_const && !definition->definition_spec->static_var_fn) //
                     {
-                        // TODO: Static variables
                         error_node(EK_ERROR, n, "Cannot use variable from stack frame of outer function");
                         error_node(EK_NOTE, (Node *) definition, "Here is the variable being used");
                         exit(c, 1);

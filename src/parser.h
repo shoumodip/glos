@@ -24,6 +24,7 @@ typedef struct {
     bool in_defer;
     bool in_extern;
     bool in_compile_time_condition;
+    bool allow_methods_without_body;
 
     bool after_private;
 

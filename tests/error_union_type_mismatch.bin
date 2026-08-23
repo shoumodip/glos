@@ -1,6 +1,6 @@
 EXIT 134
 STDOUT 0
 
-STDERR 56
-tests/error_union_type_mismatch.glos:8:5: Type mismatch
+STDERR 100
+tests/error_union_type_mismatch.glos:8:6: Type Mismatch: Accessing 'string', but real type is 'i64'
 

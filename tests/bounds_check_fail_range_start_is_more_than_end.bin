@@ -1,6 +1,6 @@
 EXIT 134
 STDOUT 0
 
-STDERR 125
-tests/bounds_check_fail_range_start_is_more_than_end.glos:2:11: Range (1..0) is invalid: Beginning of range is more than end
+STDERR 142
+tests/bounds_check_fail_range_start_is_more_than_end.glos:2:11: Bounds Check Failed: Range (1..0) is invalid since beginning is more than end
 

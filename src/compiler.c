@@ -145,6 +145,7 @@ void compiler_build(Compiler *c, const char *output_path) {
         0);
 
     compile_type(c, &c->type_info_type);
+    compile_type(c, &c->source_code_location_type);
 
     perf_begin();
     {

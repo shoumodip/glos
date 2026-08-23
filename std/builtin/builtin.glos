@@ -58,7 +58,7 @@ compare :: (this: string, that: string) -> Ordering {
         n = that.count
     }
 
-    diff := C.memcmp(rawptr(this.data), rawptr(that.data), n)
+    diff := C.memcmp(rawptr(this.data), rawptr(that.data), u64(n))
     if diff < 0 {
         return .LT
     }
@@ -78,10 +78,10 @@ compare :: (this: string, that: string) -> Ordering {
     return .EQ
 }
 
-New :: ($T: Type, n := 1) -> &T {
-    return &T(C.calloc(n, sizeof(T)))
+New :: ($T: Type, n := 1, a := &arena.default) -> &T {
+    return &T(a.alloc(n * sizeof(T)))
 }
 
-New_Array :: ($T: Type, n: i64) -> []T {
-    return (&T(C.calloc(n, sizeof(T))))[..n]
+New_Array :: ($T: Type, n: i64, a := &arena.default) -> []T {
+    return (&T(a.alloc(n * sizeof(T))))[..n]
 }

@@ -4,6 +4,6 @@ STDOUT 6
 4
 6
 
-STDERR 106
-tests/bounds_check_fail_on_range_end_array.glos:14:18: Range (1..6) is out of bounds in array of length 5
+STDERR 118
+tests/bounds_check_fail_on_range_end_array.glos:14:18: Bounds Check Failed: Range (1..6) is invalid since length is 5
 

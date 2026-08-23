@@ -4,6 +4,6 @@ STDOUT 6
 4
 6
 
-STDERR 102
-tests/bounds_check_fail_on_range_begin.glos:23:18: Range (6..7) is out of bounds in slice of length 5
+STDERR 114
+tests/bounds_check_fail_on_range_begin.glos:23:18: Bounds Check Failed: Range (6..7) is invalid since length is 5
 

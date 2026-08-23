@@ -1,0 +1,10 @@
+Cstring :: distinct &char
+
+extern {
+    puts :: (this: Cstring)
+}
+
+main :: () {
+    message: Cstring = "Hello, world!"
+    message.puts()
+}

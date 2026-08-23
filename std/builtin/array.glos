@@ -5,7 +5,7 @@ push :: (this: &[..]$T, v: T) {
             this.capacity = 128
         }
 
-        this.data = &T(C.realloc(rawptr(this.data), this.capacity * sizeof(T)))
+        this.data = &T(C.realloc(rawptr(this.data), u64(this.capacity) * sizeof(T)))
         assert(this.data != null)
     }
 
@@ -20,12 +20,12 @@ free :: (this: &[..]$T) {
 
 remove :: (this: &[..]$T, index: i64, location := #caller_location) -> T {
     if index >= this.count {
-        panic("Index \{index} is out of bounds in dynamic array of length \{this.count}", location = location)
+        panic("Bounds Check Failed: Index \{index} is invalid since length is \{this.count}", location = location)
     }
 
     value := (*this)[index]
     if index + 1 < this.count {
-        C.memmove(rawptr(&(*this)[index]), rawptr(&(*this)[index + 1]), (this.count - index - 1) * sizeof(T))
+        C.memmove(rawptr(&(*this)[index]), rawptr(&(*this)[index + 1]), u64(this.count - index - 1) * sizeof(T))
     }
 
     this.count -= 1

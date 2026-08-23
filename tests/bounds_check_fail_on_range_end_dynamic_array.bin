@@ -2,6 +2,6 @@ EXIT 134
 STDOUT 10
 {2, 4, 6}
 
-STDERR 121
-tests/bounds_check_fail_on_range_end_dynamic_array.glos:8:15: Range (1..6) is out of bounds in dynamic array of length 5
+STDERR 125
+tests/bounds_check_fail_on_range_end_dynamic_array.glos:8:15: Bounds Check Failed: Range (1..6) is invalid since length is 5
 

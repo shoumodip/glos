@@ -1,5 +1,5 @@
 to_cstring :: (s: string, a := &arena.default) -> &char {
-    return &char(C.memcpy(a.alloc(s.count + 1), rawptr(s.data), s.count))
+    return &char(C.memcpy(a.alloc(s.count + 1), rawptr(s.data), u64(s.count)))
 }
 
 from_cstring :: (s: &char) -> string {
@@ -17,7 +17,7 @@ to_integer :: (s: string, base := 10) -> (i64, bool) {
 }
 
 has_prefix :: (a: string, b: string) -> bool {
-    return a.count >= b.count && C.memcmp(rawptr(a.data), rawptr(b.data), b.count) == 0
+    return a.count >= b.count && C.memcmp(rawptr(a.data), rawptr(b.data), u64(b.count)) == 0
 }
 
 find :: (s: string, predicate: string) -> (i64, bool) {
@@ -51,6 +51,5 @@ split :: (s: string, by: char) -> (string, string, bool) {
     return lhs, rhs, true
 }
 
-#private...
 C     :: #import "C"
 arena :: #import "arena"

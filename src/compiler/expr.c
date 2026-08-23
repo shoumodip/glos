@@ -1043,7 +1043,7 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
             LLVMBuildLoad2(c->llvm_builder, ptr_type, LLVMBuildStructGEP2(c->llvm_builder, lhs_type, lhs, 2, ""), "");
 
         // Impl check
-        {
+        if (c->optimization_level != O3) {
             LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
             LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
@@ -1052,14 +1052,8 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
 
             // Failure
             LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-            {
-                const Pos   pos = get_leftmost_point_of_node(n);
-                const char *message =
-                    arena_sprintf(&temp_arena, Pos_Fmt " Cannot access method of null trait\n", Pos_Arg(pos));
-
-                compile_panic(c, message, NULL, NULL, NULL);
-                arena_reset(&temp_arena, message);
-            }
+            compile_panic_v2(
+                c, get_leftmost_point_of_node(n), CONTRACT_PANIC_NULL_TRAIT_METHOD_ACCESS, NULL, NULL, NULL);
 
             // Success
             LLVMPositionBuilderAtEnd(c->llvm_builder, success);
@@ -1095,37 +1089,46 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
 
     if (member->rhs) {
         // Check if tag matches
-        {
+        if (c->optimization_level != O3) {
             LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
             LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
+            LLVMTypeRef i64 = LLVMInt64TypeInContext(c->llvm_context);
             if (member->lhs->type.kind == TYPE_TRAIT) {
                 LLVMTypeRef  ptr_type = LLVMPointerTypeInContext(c->llvm_context, 0);
-                LLVMValueRef tag = compile_load_if_not_null(c, lhs, ptr_type);
+                LLVMValueRef actual = compile_load_if_not_null(c, lhs, ptr_type);
+                LLVMValueRef expected = compile_type_info(c, &n->type);
 
-                LLVMValueRef check = LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, tag, compile_type_info(c, &n->type), "");
+                LLVMValueRef check = LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, actual, expected, "");
                 LLVMBuildCondBr(c->llvm_builder, check, success, failure);
+
+                // Failure
+                LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
+                compile_panic_v2(
+                    c,
+                    member->dot.pos,
+                    CONTRACT_PANIC_TRAIT_TYPE_MISMATCH,
+                    LLVMBuildPtrToInt(c->llvm_builder, actual, i64, ""),
+                    LLVMBuildPtrToInt(c->llvm_builder, expected, i64, ""),
+                    NULL);
             } else if (member->union_index) {
-                LLVMTypeRef  i64_type = LLVMInt64TypeInContext(c->llvm_context);
-                LLVMValueRef tag = LLVMBuildLoad2(c->llvm_builder, i64_type, lhs, "");
+                LLVMValueRef actual = LLVMBuildLoad2(c->llvm_builder, i64, lhs, "");
+                LLVMValueRef expected = LLVMConstInt(i64, member->union_index, true);
 
-                LLVMValueRef check = LLVMBuildICmp(
-                    c->llvm_builder, LLVMIntEQ, tag, LLVMConstInt(i64_type, member->union_index, true), "");
+                LLVMValueRef check = LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, actual, expected, "");
                 LLVMBuildCondBr(c->llvm_builder, check, success, failure);
+
+                // Failure
+                LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
+                compile_panic_v2(
+                    c,
+                    member->dot.pos,
+                    CONTRACT_PANIC_UNION_TYPE_MISMATCH,
+                    actual,
+                    expected,
+                    LLVMBuildPtrToInt(c->llvm_builder, compile_type_info(c, &member->lhs->type), i64, ""));
             } else {
                 unreachable();
-            }
-
-            // Failure
-            LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-            {
-                const Pos pos = get_leftmost_point_of_node(n);
-
-                // TODO: Now that we have RTTI, this can be a better error message, like the one in constant
-                // expressions
-                const char *message = arena_sprintf(&temp_arena, Pos_Fmt " Type mismatch\n", Pos_Arg(pos));
-                compile_panic(c, message, NULL, NULL, NULL);
-                arena_reset(&temp_arena, message);
             }
 
             // Success
@@ -1166,6 +1169,27 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
 LLVMValueRef compile_expr_interpolation(Compiler *c, Node_Interpolation *interpolation, bool ref) {
     Node *n = (Node *) interpolation;
     assert(!interpolation->is_constant);
+
+    if (interpolation->do_not_allocate) {
+        if (interpolation->children_count > 1) {
+            LLVMValueRef marker = LLVMConstInt(
+                compile_type(c, &c->interpolation_marker_type),
+                interpolation->children_count - 1, // Do not count the marker
+                type_is_signed(c->interpolation_marker_type));
+
+            LLVMValueRef memory = compile_alloca(c, compile_type(c, &c->any_type));
+            LLVMBuildStore(c->llvm_builder, compile_type_info(c, &c->interpolation_marker_type), memory);
+            LLVMBuildStore(
+                c->llvm_builder, marker, LLVMBuildStructGEP2(c->llvm_builder, c->any_type.llvm, memory, 1, ""));
+
+            da_push(&c->group_values, LLVMBuildLoad2(c->llvm_builder, c->any_type.llvm, memory, ""));
+        }
+
+        ll_foreach(it, &interpolation->children) {
+            da_push(&c->group_values, compile_expr(c, it, false));
+        }
+        return NULL;
+    }
 
     LLVMTypeRef  element_type = compile_type(c, &c->any_type);
     LLVMValueRef memory = compile_alloca(c, LLVMArrayType(element_type, interpolation->children_count));
@@ -1367,11 +1391,21 @@ LLVMValueRef compile_expr_call(Compiler *c, Node_Call *call, bool ref) {
             }
             args_iota++;
         } else {
-            assert(arg->type.kind == TYPE_GROUP);
-            Type_Group *group = &arg->type.spec.group;
-            for (size_t i = 0; i < group->count; i++) {
+            Type  *types = NULL;
+            size_t count = c->group_values.count - group_values_count_save;
+            if (arg->type.kind == TYPE_GROUP) {
+                Type_Group *group = &arg->type.spec.group;
+                types = group->data;
+                assert(count == group->count);
+            } else {
+                assert(arg->kind == NODE_INTERPOLATION);
+                Node_Interpolation *interpolation = (Node_Interpolation *) arg;
+                assert(count == interpolation->children_count);
+            }
+
+            for (size_t i = 0; i < count; i++) {
                 Typed_LLVM_Value tv = {0};
-                tv.type = &group->data[i];
+                tv.type = types ? &types[i] : &c->any_type;
                 tv.value = c->group_values.data[group_values_count_save + i];
                 if (variadics_memory && args_iota >= fn_spec->variadics_index) {
                     LLVMValueRef indices[] = {
@@ -1466,29 +1500,24 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
     Type  element_type_buffer = {0};
     Type *element_type = &element_type_buffer;
 
-    const char *label = "";
     if (index->lhs->type.ref) {
         element_type = n->type.spec.slice.element;
     } else {
         static_assert(COUNT_TYPES == 27, "");
         switch (index->lhs->type.kind) {
         case TYPE_ARRAY:
-            label = "array";
             element_type = index->lhs->type.spec.array.element;
             break;
 
         case TYPE_DYNAMIC_ARRAY:
-            label = "dynamic array";
             element_type = index->lhs->type.spec.dynamic_array.element;
             break;
 
         case TYPE_SLICE:
-            label = "slice";
             element_type = index->lhs->type.spec.slice.element;
             break;
 
         case TYPE_STRING:
-            label = "string";
             element_type_buffer.kind = TYPE_CHAR;
             break;
 
@@ -1546,7 +1575,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
         }
 
         // Check if bounds are ascending
-        {
+        if (c->optimization_level != O3) {
             LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
             LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
@@ -1555,15 +1584,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
             // Failure
             LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-            {
-                const char *message = arena_sprintf(
-                    &temp_arena,
-                    Pos_Fmt " Range (%%zd..%%zd) is invalid: Beginning of range is more than end\n",
-                    Pos_Arg(n->token.pos));
-
-                compile_panic(c, message, a, b, NULL);
-                arena_reset(&temp_arena, message);
-            }
+            compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_RANGE_BEGIN_MORE_THAN_END, a, b, NULL);
 
             // Success
             LLVMPositionBuilderAtEnd(c->llvm_builder, success);
@@ -1571,7 +1592,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
         if (count) {
             // Bounds check
-            {
+            if (c->optimization_level != O3) {
                 LLVMBasicBlockRef failure = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
                 LLVMBasicBlockRef success = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
@@ -1590,16 +1611,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
                 // Failure
                 LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-                {
-                    const char *message = arena_sprintf(
-                        &temp_arena,
-                        Pos_Fmt " Range (%%zd..%%zd) is out of bounds in %s of length %%zd\n",
-                        Pos_Arg(n->token.pos),
-                        label);
-
-                    compile_panic(c, message, a, b, count);
-                    arena_reset(&temp_arena, message);
-                }
+                compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_RANGE_OUT_OF_BOUNDS, a, b, count);
 
                 // Success
                 LLVMPositionBuilderAtEnd(c->llvm_builder, success);
@@ -1625,7 +1637,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
     set_debug_pos(c, n->token.pos);
 
     // Bounds check
-    {
+    if (c->optimization_level != O3) {
         LLVMValueRef count = NULL;
         if (index->lhs->type.kind == TYPE_ARRAY) {
             count = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), index->lhs->type.spec.array.count, true);
@@ -1650,16 +1662,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
         // Failure
         LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-        {
-            const char *message = arena_sprintf(
-                &temp_arena,
-                Pos_Fmt " Index %%zd is out of bounds in %s of length %%zd\n",
-                Pos_Arg(n->token.pos),
-                label);
-
-            compile_panic(c, message, a, count, NULL);
-            arena_reset(&temp_arena, message);
-        }
+        compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_INDEX_OUT_OF_BOUNDS, a, count, NULL);
 
         // Success
         LLVMPositionBuilderAtEnd(c->llvm_builder, success);

@@ -2,6 +2,6 @@ EXIT 134
 STDOUT 2
 4
 
-STDERR 91
-tests/bounds_check_fail_on_index.glos:17:15: Index 5 is out of bounds in slice of length 5
+STDERR 103
+tests/bounds_check_fail_on_index.glos:17:15: Bounds Check Failed: Index 5 is invalid since length is 5
 

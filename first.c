@@ -34,6 +34,16 @@ static void error(const char *fmt, ...) {
     fprintf(stderr, "\n");
 }
 
+static void note(const char *fmt, ...) {
+    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "NOTE:");
+    fprintf(stderr, " ");
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+}
+
 static void error_at(const char *path, size_t row, size_t col, const char *fmt, ...) {
     afprintf(stderr, ANSI_BOLD | ANSI_UNDERLINE, "%s:%zu:%zu:", path, row, col);
     fprintf(stderr, " ");
@@ -56,6 +66,7 @@ static void usage(FILE *f, const char *program) {
 
     afprintf(f, ANSI_COLOR_CYAN | ANSI_BOLD, "Flags:\n");
 
+    // clang-format off
     static const struct {
         const char *flag;
         const char *desc;
@@ -63,8 +74,10 @@ static void usage(FILE *f, const char *program) {
         {"h", "             Show this message"},
         {"t", "             Run tests"},
         {"T", "             Run tests in non-interactive mode"},
+        {"O", "LEVEL        Run tests with this optimization level [0: None, 1: Less (Default), 2: Medium, 3: Aggressive]"},
         {"j", "NPROCS       Set the maximum number of parallel processes. Default is 5"},
     };
+    // clang-format on
 
     for (size_t i = 0; i < len(flags); i++) {
         afprintf(f, ANSI_COLOR_MAGENTA, "    -%s", flags[i].flag);
@@ -586,13 +599,18 @@ typedef struct {
 
 typedef DA(Test) Tests;
 
-static void test_prepare_cmd(Test test, Cmd *cmd) {
+static void test_prepare_cmd(Test test, Cmd *cmd, const char *optimization_level) {
     cmd_push(cmd, "./glos" EXE_FILE_EXTENSION);
     cmd_push(cmd, "-r");
     cmd_push(cmd, test.name);
+    if (optimization_level) {
+        cmd_push(cmd, optimization_level);
+    }
 }
 
-static void tests_flush(Tests *tests, Cmd *cmd, bool interactive, Arena *arena, const void *arena_save) {
+static void tests_flush(
+    Tests *tests, Cmd *cmd, bool interactive, const char *optimization_level, Arena *arena, const void *arena_save) //
+{
     size_t i = 0;
     while (i < tests->count) {
         Test *it = &tests->data[i];
@@ -661,8 +679,8 @@ static void tests_flush(Tests *tests, Cmd *cmd, bool interactive, Arena *arena, 
                             cmd_wait(it->proc);
                         };
 
-                        fprintf(stderr, "Replaying '%s'\n", it->name);
-                        test_prepare_cmd(*it, cmd);
+                        fprintf(stderr, "Replaying %s\n", it->name);
+                        test_prepare_cmd(*it, cmd, optimization_level);
                         it->proc = cmd_run_async(cmd, (Cmd_Stdio) {.out = &it->pout, .err = &it->perr});
                     }
                     continue;
@@ -764,7 +782,7 @@ static void build_test_library(Cmd *cmd, const char *library_path, const char *s
     arena_reset(&temp_arena, object_path);
 }
 
-static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
+static void run_tests(Cmd *cmd, size_t nprocs, bool interactive, const char *optimization_level) {
     Tests       tests = {0};
     const char *temp_save = arena_alloc(&temp_arena, 0);
 
@@ -791,7 +809,7 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
 
         Test test = {0};
         test.name = arena_sv_to_cstr(&temp_arena, line);
-        test_prepare_cmd(test, cmd);
+        test_prepare_cmd(test, cmd, optimization_level);
 
         const char *record_path = temp_replace_suffix(test.name, ".glos", ".bin");
 
@@ -824,10 +842,7 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
             fprintf(stderr, "Recording");
         }
 
-        for (size_t i = 2; i < cmd->count; i++) {
-            fprintf(stderr, " %s", cmd->data[i]);
-        }
-        fprintf(stderr, "\n");
+        fprintf(stderr, " %s\n", cmd->data[2]);
 
         test.record_exists = record_exists;
         test.record_path = record_path;
@@ -837,11 +852,11 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive) {
         da_push(&tests, test);
 
         if (tests.count >= nprocs) {
-            tests_flush(&tests, cmd, interactive, &default_arena, arena_save);
+            tests_flush(&tests, cmd, interactive, optimization_level, &default_arena, arena_save);
         }
     }
 
-    tests_flush(&tests, cmd, interactive, &default_arena, arena_save);
+    tests_flush(&tests, cmd, interactive, optimization_level, &default_arena, arena_save);
 
     da_free(&tests);
     arena_reset(&temp_arena, temp_save);
@@ -851,9 +866,10 @@ int main(int argc, char **argv) {
     basic_init();
     const char *program = shift(&argc, &argv, NULL, NULL);
 
-    bool   tests = false;
-    bool   interactive = true;
-    size_t nprocs = 5;
+    bool        tests = false;
+    bool        interactive = true;
+    size_t      nprocs = 5;
+    const char *optimization_level = NULL;
     while (argc) {
         const char *arg = shift(&argc, &argv, program, "Input path");
         if (!strcmp(arg, "-h")) {
@@ -874,6 +890,19 @@ int main(int argc, char **argv) {
 
             tests = true;
             interactive = false;
+        } else if (arg[0] == '-' && arg[1] == 'O') {
+            const char *level = &arg[2];
+            if (*level == '\0') {
+                level = shift(&argc, &argv, program, "Optimization Level");
+            }
+
+            if (strcmp(level, "0") && strcmp(level, "1") && strcmp(level, "2") && strcmp(level, "3")) {
+                error("Invalid optimization level '%s'\n", level);
+                usage(stderr, program);
+                exit(1);
+            }
+
+            optimization_level = arg;
         } else if (arg[0] == '-' && arg[1] == 'j') {
             if (arg[2]) {
                 arg += 2;
@@ -892,11 +921,18 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (optimization_level && !tests) {
+        error("The optimization level for running the tests is provided, but the test runner is not used");
+        note("When using '-O', you have to provide either '-t' or 'T' to run tests\n");
+        usage(stderr, program);
+        exit(1);
+    }
+
     Cmd cmd = {0};
     build_glos(&cmd, nprocs);
 
     if (tests) {
-        run_tests(&cmd, nprocs, interactive);
+        run_tests(&cmd, nprocs, interactive, optimization_level);
     }
 
     da_free(&cmd);

@@ -1,6 +1,6 @@
 EXIT 134
 STDOUT 0
 
-STDERR 138
-tests/bounds_check_fail_range_start_is_more_than_end_dynamic_array.glos:3:7: Range (1..0) is invalid: Beginning of range is more than end
+STDERR 155
+tests/bounds_check_fail_range_start_is_more_than_end_dynamic_array.glos:3:7: Bounds Check Failed: Range (1..0) is invalid since beginning is more than end
 

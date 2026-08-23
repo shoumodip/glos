@@ -1,10 +1,49 @@
 #private...
 
-panic_handler :: (fmt: &char, v1: i64, v2: i64, v3: i64) {
-    C.fprintf(os.stderr, fmt, v1, v2, v3)
-    C.fflush(os.stdout)
-    C.fflush(os.stderr)
-    C.abort()
+runtime_panic :: (p: Panic, a: i64, b: i64, c: i64, location: &Source_Code_Location) {
+    if p == {
+    case .INDEX_OUT_OF_BOUNDS
+        panic("Bounds Check Failed: Index \{a} is invalid since length is \{b}", location = *location)
+
+    case .RANGE_OUT_OF_BOUNDS
+        panic("Bounds Check Failed: Range (\{a}..\{b}) is invalid since length is \{c}", location = *location)
+
+    case .RANGE_BEGIN_MORE_THAN_END
+        panic("Bounds Check Failed: Range (\{a}..\{b}) is invalid since beginning is more than end", location = *location)
+
+    case .NULL_TRAIT_METHOD_ACCESS
+        panic("Cannot access method of null trait", location = *location)
+
+    case .TRAIT_TYPE_MISMATCH
+        actual   := Type(a)
+        expected := Type(b)
+        if actual == null {
+            panic("Type Mismatch: Accessing '\{expected}', but real type is null", location = *location)
+        } else {
+            panic("Type Mismatch: Accessing '\{expected}', but real type is '\{actual}'", location = *location)
+        }
+
+    case .UNION_TYPE_MISMATCH
+        vs       := Type(c).variant.(Type_Info_Union).variants
+        expected := vs[b - 1]
+        if a < 0 || a > vs.count {
+            panic("Type Mismatch: Accessing '\{expected}', but real type is invalid (Tag is \{a})", location = *location)
+        } else if a == 0 {
+            panic("Type Mismatch: Accessing '\{expected}', but real type is null", location = *location)
+        } else {
+            panic("Type Mismatch: Accessing '\{expected}', but real type is '\{vs[a - 1]}'", location = *location)
+        }
+
+    case .INVALID_ENUM_VALUE
+        if bool(b) {
+            panic("Unreachable: Invalid enum value: \{a}", location = *location)
+        } else {
+            panic("Unreachable: Invalid enum value: \{u64(a)}", location = *location)
+        }
+
+    case .INVALID_UNION_TAG
+        panic("Unreachable: Invalid union tag: \{a}", location = *location)
+    }
 }
 
 #link "main"
@@ -37,7 +76,6 @@ runtime_init :: inline (argc: i32, argv: &&char) {
 runtime_deinit :: () {
     arena.default.free()
     arena.temporary.free()
-    C.free(rawptr(os.args.data))
 }
 
 C       :: #import "C"

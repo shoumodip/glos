@@ -2,6 +2,6 @@ EXIT 134
 STDOUT 2
 4
 
-STDERR 96
-tests/bounds_check_fail_on_index_array.glos:8:15: Index 5 is out of bounds in array of length 5
+STDERR 108
+tests/bounds_check_fail_on_index_array.glos:8:15: Bounds Check Failed: Index 5 is invalid since length is 5
 

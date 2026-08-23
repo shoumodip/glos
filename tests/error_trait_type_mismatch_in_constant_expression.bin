@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 141
-tests/error_trait_type_mismatch_in_constant_expression.glos:4:10: ERROR: Type mismatch: Accessing 'B', but real type is 'A'
+tests/error_trait_type_mismatch_in_constant_expression.glos:4:11: ERROR: Type Mismatch: Accessing 'B', but real type is 'A'
 
     c :: a.(B)
 

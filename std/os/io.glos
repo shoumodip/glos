@@ -1,7 +1,7 @@
 File :: distinct rawptr
 
 write :: (this: File, bytes: []char) {
-    C.fwrite(rawptr(bytes.data), sizeof(char), bytes.count, this);
+    C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), this);
 }
 
 close :: (this: &File) {
@@ -79,8 +79,3 @@ read_entire_file :: (path: string, a := &arena.default) -> ([]char, bool) {
 
     return (&char(data))[..count], true
 }
-
-#private...
-C       :: #import "C"
-arena   :: #import "arena"
-strings :: #import "strings"

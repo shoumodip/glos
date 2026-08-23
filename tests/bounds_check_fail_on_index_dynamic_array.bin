@@ -2,6 +2,6 @@ EXIT 134
 STDOUT 2
 4
 
-STDERR 112
-tests/bounds_check_fail_on_index_dynamic_array.glos:8:15: Index 5 is out of bounds in dynamic array of length 5
+STDERR 116
+tests/bounds_check_fail_on_index_dynamic_array.glos:8:15: Bounds Check Failed: Index 5 is invalid since length is 5
 

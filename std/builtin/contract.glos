@@ -116,10 +116,20 @@ Equivalence :: enum {
     NE = 1
 }
 
-#assert(i64(Ordering.EQ) == i64(Equivalence.EQ))
-
 // Interpolation
 Interpolation :: union {
     []Any
     string
+}
+
+// Panic
+Panic :: enum {
+    INDEX_OUT_OF_BOUNDS       // (index: i64, count: i64)
+    RANGE_OUT_OF_BOUNDS       // (begin: i64, end: i64, count: i64)
+    RANGE_BEGIN_MORE_THAN_END // (begin: i64, end: i64)
+    NULL_TRAIT_METHOD_ACCESS  // ()
+    TRAIT_TYPE_MISMATCH       // (actual: Type, expected: Type)
+    UNION_TYPE_MISMATCH       // (actual: i64, expected: i64, type: Type)
+    INVALID_ENUM_VALUE        // (value: i64, signed: i64)
+    INVALID_UNION_TAG         // (value: i64)
 }

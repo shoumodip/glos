@@ -1,7 +1,7 @@
 where :: (message := "", location := #caller_location) {
-    print(location, " HERE")
+    print(location, "HERE")
     if message != "" {
-        print(": ", message)
+        print(":", message)
     }
     println()
 }
