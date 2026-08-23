@@ -1,85 +1,199 @@
 #define DONT_DEFINE_EXIT_WRAPPER
 #include "../checker/checker.h"
-
 #include "compiler.h"
 
+static void put_scalar_type_into_qword(Compiler *c, ABI_Info *info, LLVMTypeRef type, size_t offset) {
+    const size_t index = offset / 8;
+    assert(index < len(info->direct_types));
+
+    LLVMTypeRef *dst = &info->direct_types[index];
+    if (!*dst) {
+        info->direct_types_count++;
+    }
+
+    switch (LLVMGetTypeKind(type)) {
+    case LLVMIntegerTypeKind:
+        if (*dst) {
+            const size_t minimum =
+                LLVMABISizeOfType(c->llvm_target_data, *dst) + LLVMABISizeOfType(c->llvm_target_data, type);
+
+            size_t size = 1;
+            while (size < minimum) {
+                size *= 2;
+            }
+
+            *dst = LLVMIntTypeInContext(c->llvm_context, size * 8);
+        } else {
+            *dst = type;
+        }
+        break;
+
+    case LLVMFloatTypeKind:
+        if (*dst) {
+            if (LLVMGetTypeKind(*dst) == LLVMFloatTypeKind) {
 #ifdef PLATFORM_X86_64_LINUX
-static_assert(COUNT_TYPES == 30, ""); // TODO: @float
-static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, LLVMTypeRef out[2]) {
-    assert(type_is_compound(type));
-    switch (type.kind) {
-    case TYPE_STRUCT: {
-        const Type_Struct *spec = type.spec.structt;
-        for (size_t i = 0; i < spec->fields_count; i++) {
-            const Type_Struct_Field *it = &spec->fields[i];
-            const size_t             it_offset = offset + it->offset;
-            if (type_is_compound(it->type)) {
-                x86_64_linux_split_into_two(c, it->type, it_offset, out);
-            } else {
-                const size_t index = it_offset / 8;
-                assert(index < 2);
-                if (out[index]) {
-                    out[index] = LLVMInt64TypeInContext(c->llvm_context);
-                } else {
-                    out[index] = LLVMIntTypeInContext(
-                        c->llvm_context, LLVMABISizeOfType(c->llvm_target_data, it->type.llvm) * 8);
-                }
-            }
-        }
-    } break;
+                *dst = LLVMVectorType(*dst, 2);
+#endif // PLATFORM_X86_64_LINUX
 
-    case TYPE_UNION:
-    case TYPE_ARRAY:
-        out[0] = LLVMInt64TypeInContext(c->llvm_context);
-        out[1] = LLVMIntTypeInContext(c->llvm_context, compile_sizeof(c, &type) * 8 - 64);
+#ifdef PLATFORM_ARM64_MACOS
+                *dst = LLVMArrayType(*dst, 2);
+#endif // PLATFORM_ARM64_MACOS
+            } else {
+                *dst = LLVMInt64TypeInContext(c->llvm_context);
+            }
+        } else {
+            *dst = type;
+        }
         break;
 
-    case TYPE_SLICE:
-    case TYPE_STRING:
-        out[0] = LLVMInt64TypeInContext(c->llvm_context);
-        out[1] = LLVMInt64TypeInContext(c->llvm_context);
+    case LLVMDoubleTypeKind:
+        assert(!*dst);
+        *dst = type;
         break;
 
-    case TYPE_GROUP: {
-        const Type_Group *spec = &type.spec.group;
-        for (size_t i = 0; i < spec->count; i++) {
-            const Type   it_type = spec->data[i];
-            const size_t it_offset = offset + spec->offsets[i];
-            if (type_is_compound(it_type)) {
-                x86_64_linux_split_into_two(c, it_type, it_offset, out);
-            } else {
-                const size_t index = it_offset / 8;
-                assert(index < 2);
-                if (out[index]) {
-                    out[index] = LLVMInt64TypeInContext(c->llvm_context);
-                } else {
-                    out[index] =
-                        LLVMIntTypeInContext(c->llvm_context, LLVMABISizeOfType(c->llvm_target_data, it_type.llvm) * 8);
-                }
-            }
-        }
-    } break;
-
-    case TYPE_POLYMORPH:
-        unreachable();
+    case LLVMPointerTypeKind:
+        assert(!*dst);
+        *dst = type;
+        break;
 
     default:
         unreachable();
+        break;
     }
 }
-#endif // PLATFORM_X86_64_LINUX
 
-// TODO: @float
+static_assert(COUNT_TYPES == 30, "");
+static void split_type_into_qwords(Compiler *c, ABI_Info *info, const Type *type, size_t offset, size_t size) {
+    if (type->ref) {
+        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        return;
+    }
+
+    switch (type->kind) {
+    case TYPE_BOOL:
+    case TYPE_CHAR:
+    case TYPE_I8:
+    case TYPE_I16:
+    case TYPE_I32:
+    case TYPE_I64:
+    case TYPE_U8:
+    case TYPE_U16:
+    case TYPE_U32:
+    case TYPE_U64:
+
+    case TYPE_INT:
+    case TYPE_ENUM:
+        put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
+        break;
+
+    case TYPE_F32:
+        put_scalar_type_into_qword(c, info, LLVMFloatTypeInContext(c->llvm_context), offset);
+        break;
+
+    case TYPE_F64:
+    case TYPE_FLOAT:
+        put_scalar_type_into_qword(c, info, LLVMDoubleTypeInContext(c->llvm_context), offset);
+        break;
+
+    case TYPE_FN:
+    case TYPE_RAWPTR:
+        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        break;
+
+    case TYPE_UNION:
+        if (size > 8) {
+            put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset);
+            put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, (size - 8) * 8), offset + 8);
+        } else {
+            put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
+        }
+        break;
+
+    case TYPE_STRUCT: {
+        const Type_Struct *spec = type->spec.structt;
+        for (size_t i = 0; i < spec->fields_count; i++) {
+            const Type_Struct_Field *it = &spec->fields[i];
+            split_type_into_qwords(c, info, &it->type, offset + it->offset, it->size);
+        }
+    } break;
+
+    case TYPE_ARRAY: {
+        const Type_Array *spec = &type->spec.array;
+        if (spec->count > 4) {
+            if (size > 8) {
+                put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset);
+                put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, (size - 8) * 8), offset + 8);
+            } else {
+                put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
+            }
+        } else {
+            const size_t element_size = LLVMABISizeOfType(c->llvm_target_data, spec->element->llvm);
+            for (size_t i = 0; i < spec->count; i++) {
+                split_type_into_qwords(c, info, spec->element, offset + i * element_size, element_size);
+            }
+        }
+    } break;
+
+    case TYPE_SLICE:
+    case TYPE_STRING:
+        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 0);
+        put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset + 8);
+        break;
+
+    case TYPE_GROUP: {
+        const Type_Group *spec = &type->spec.group;
+        for (size_t i = 0; i < spec->count; i++) {
+            const Type *it = &spec->data[i];
+            split_type_into_qwords(
+                c, info, it, offset + spec->offsets[i], LLVMABISizeOfType(c->llvm_target_data, it->llvm));
+        }
+    } break;
+
+    default:
+        unreachable();
+        break;
+    }
+}
+
+#ifdef PLATFORM_ARM64_MACOS
+static inline bool llvm_type_is_2xfloat(LLVMTypeRef type) {
+    if (LLVMGetTypeKind(type) != LLVMArrayTypeKind) {
+        return false;
+    }
+
+    return LLVMGetTypeKind(LLVMGetElementType(type)) == LLVMFloatTypeKind && LLVMGetArrayLength(type) == 2;
+}
+#endif // PLATFORM_ARM64_MACOS
+
 ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
-    ABI_Info info = {0};
     size_t   size = compile_sizeof(c, type);
+    ABI_Info info = {.type = type->llvm};
 
-    info.type = type->llvm;
+#ifdef PLATFORM_X86_64_WINDOWS
+    if (size > 8) {
+        return info;
+    }
+
+    if (type_is_compound(*type)) {
+        if (size == 1 || size == 2 || size == 4 || size == 8) {
+            info.direct_types[info.direct_types_count++] = LLVMIntTypeInContext(c->llvm_context, size * 8);
+        }
+
+        // Any other sized type <8 bytes will be passed indirectly
+        return info;
+    }
+#else
+    if (size > 16) {
+        return info;
+    }
+#endif // PLATFORM_X86_64_WINDOWS
+
     if (type->ref) {
         info.direct_types[info.direct_types_count++] = LLVMPointerTypeInContext(c->llvm_context, 0);
         return info;
     }
 
+    // Special cases
     static_assert(COUNT_TYPES == 30, "");
     switch (type->kind) {
     case TYPE_UNIT:
@@ -90,57 +204,59 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         info.direct_types[info.direct_types_count++] = LLVMInt1TypeInContext(c->llvm_context);
         return info;
 
-    case TYPE_RAWPTR:
-    case TYPE_FN:
-        info.direct_types[info.direct_types_count++] = LLVMPointerTypeInContext(c->llvm_context, 0);
-        return info;
-
     default:
         // Pass
         break;
     }
 
-    if (size <= 8) {
-#ifdef PLATFORM_ARM64_MACOS
-        if (is_arg && type_is_compound(*type)) {
-            size = 8;
-        }
-#endif // PLATFORM_ARM64_MACOS
-
-        if (type_is_float(*type)) {
-            // TODO: This is insufficient, but just to get the ball rolling
-            if (size == 4) {
-                info.direct_types[info.direct_types_count++] = LLVMFloatTypeInContext(c->llvm_context);
-            } else if (size == 8) {
-                info.direct_types[info.direct_types_count++] = LLVMDoubleTypeInContext(c->llvm_context);
-            } else {
-                unreachable();
-            }
-        } else {
-            info.direct_types[info.direct_types_count++] = LLVMIntTypeInContext(c->llvm_context, size * 8);
-        }
-        return info;
-    }
-
-#ifdef PLATFORM_X86_64_LINUX
-    if (size <= 16) {
-        x86_64_linux_split_into_two(c, *type, 0, info.direct_types);
-        assert(info.direct_types[0]);
-        assert(info.direct_types[1]);
-        info.direct_types_count = 2;
-        return info;
-    }
-#endif // PLATFORM_X86_64_LINUX
+    split_type_into_qwords(c, &info, type, 0, size);
+    assert(info.direct_types_count);
 
 #ifdef PLATFORM_ARM64_MACOS
-    if (size <= 16) {
-        info.direct_types[info.direct_types_count++] = LLVMArrayType(LLVMInt64TypeInContext(c->llvm_context), 2);
-        return info;
+    if (info.direct_types_count == 1) {
+        if (LLVMGetTypeKind(info.direct_types[0]) == LLVMIntegerTypeKind && type_is_compound(*type) && is_arg) {
+            // Bytes(0 < N <= 8) And (QWORD is an integer) And (Type is Compound) And (Used in Argument) => i64
+            info.direct_types[0] = LLVMInt64TypeInContext(c->llvm_context);
+            fprintf(stderr, "%s => %s\n", type_to_cstr(*type), LLVMPrintTypeToString(info.direct_types[0]));
+            return info;
+        }
+    }
+
+    if (info.direct_types_count == 2) {
+        const LLVMTypeRef  t0 = info.direct_types[0];
+        const LLVMTypeRef  t1 = info.direct_types[1];
+        const LLVMTypeKind k0 = LLVMGetTypeKind(t0);
+        const LLVMTypeKind k1 = LLVMGetTypeKind(t1);
+
+        // (double, double) => [2 x double]
+        if (k0 == LLVMDoubleTypeKind && k1 == LLVMDoubleTypeKind) {
+            info.direct_types[0] = LLVMArrayType(LLVMDoubleTypeInContext(c->llvm_context), 2);
+            info.direct_types_count = 1;
+            return info;
+        }
+
+        // ([2 x float], float) => [3 x float]
+        if (llvm_type_is_2xfloat(t0) && k1 == LLVMFloatTypeKind) {
+            info.direct_types[0] = LLVMArrayType(LLVMFloatTypeInContext(c->llvm_context), 3);
+            info.direct_types_count = 1;
+            return info;
+        }
+
+        // ([2 x float], [2 x float]) => [4 x float]
+        if (llvm_type_is_2xfloat(t0) && llvm_type_is_2xfloat(t1)) {
+            info.direct_types[0] = LLVMArrayType(LLVMFloatTypeInContext(c->llvm_context), 4);
+            info.direct_types_count = 1;
+            return info;
+        }
+
+        // In any other case => [2 x i64]
+        info.direct_types[0] = LLVMArrayType(LLVMInt64TypeInContext(c->llvm_context), 2);
+        info.direct_types_count = 1;
     }
 #endif // PLATFORM_ARM64_MACOS
 
     return info;
-    unused(is_arg); // Suppress the unused warnings
+    unused(is_arg); // The argument 'is_arg' is only relevant for macOS
 }
 
 void abi_set_return_type(Compiler *c, ABI *abi, Type *type) {

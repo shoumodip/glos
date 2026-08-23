@@ -112,7 +112,7 @@ LLVMTypeRef compile_type(Compiler *c, Type *type) {
             LLVMTypeRef *fields = arena_alloc(&temp_arena, spec->fields_count * sizeof(*fields));
             for (size_t i = 0; i < spec->fields_count; i++) {
                 Type_Struct_Field *it = &spec->fields[i];
-                compile_type(c, &it->type);
+                it->size = compile_sizeof(c, &it->type);
                 fields[i] = it->type.llvm;
             }
 
@@ -819,3 +819,5 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         break;
     }
 }
+
+// TODO: Anonymous types defined in function signatures are broken

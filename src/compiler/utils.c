@@ -166,10 +166,6 @@ LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to_type, b
 
     // Float -> FLoat
     if (llvm_type_kind_is_float(from_kind) && llvm_type_kind_is_float(to_kind)) {
-        if (!c->llvm_target_data) {
-            compiler_init_llvm_target_data(c);
-        }
-
         const size_t from_size = LLVMABISizeOfType(c->llvm_target_data, from_type);
         const size_t to_size = LLVMABISizeOfType(c->llvm_target_data, to_type);
         if (from_size > to_size) {

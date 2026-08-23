@@ -297,9 +297,11 @@ struct Type_Union_Variant {
 };
 
 struct Type_Struct_Field {
-    Pos    pos;
-    SV     name;
-    Type   type;
+    Pos  pos;
+    SV   name;
+    Type type;
+
+    size_t size;
     size_t offset;
 
     Node *spread;
