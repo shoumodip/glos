@@ -1,7 +1,7 @@
 #include "compiler.h"
 
 #ifdef PLATFORM_X86_64_LINUX
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, ""); // TODO: @float
 static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, LLVMTypeRef out[2]) {
     assert(type_is_compound(type));
     switch (type.kind) {
@@ -66,6 +66,7 @@ static void x86_64_linux_split_into_two(Compiler *c, Type type, size_t offset, L
 }
 #endif // PLATFORM_X86_64_LINUX
 
+// TODO: @float
 ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
     ABI_Info info = {0};
     size_t   size = compile_sizeof(c, type);
@@ -76,7 +77,7 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         return info;
     }
 
-    static_assert(COUNT_TYPES == 27, "");
+    static_assert(COUNT_TYPES == 30, "");
     switch (type->kind) {
     case TYPE_UNIT:
         info.direct_types[info.direct_types_count++] = LLVMVoidTypeInContext(c->llvm_context);

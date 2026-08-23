@@ -1,7 +1,7 @@
 #include "../dwarf.h"
 #include "compiler.h"
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 LLVMTypeRef compile_type(Compiler *c, Type *type) {
     if (!type) {
         return NULL;
@@ -50,6 +50,15 @@ LLVMTypeRef compile_type(Compiler *c, Type *type) {
     case TYPE_U64:
     case TYPE_INT:
         type->llvm = LLVMInt64TypeInContext(c->llvm_context);
+        break;
+
+    case TYPE_F32:
+        type->llvm = LLVMFloatTypeInContext(c->llvm_context);
+        break;
+
+    case TYPE_F64:
+    case TYPE_FLOAT:
+        type->llvm = LLVMDoubleTypeInContext(c->llvm_context);
         break;
 
     case TYPE_RAWPTR:
@@ -252,7 +261,7 @@ get_debug_for_builtin_compound_type(Compiler *c, SV name, Builtin_Compound_Type_
     return typedef_metadata;
 }
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     assert(!type->is_meta);
     if (type->ref) {
@@ -297,6 +306,13 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
 
     case TYPE_U64:
         return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "u64", strlen("u64"), 64, DW_ATE_unsigned, 0);
+
+    case TYPE_F32:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "f32", strlen("f32"), 32, DW_ATE_float, 0);
+
+    case TYPE_F64:
+    case TYPE_FLOAT:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "f64", strlen("f64"), 64, DW_ATE_float, 0);
 
     case TYPE_RAWPTR:
         return LLVMDIBuilderCreatePointerType(

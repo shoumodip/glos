@@ -80,7 +80,11 @@ typedef enum {
     TYPE_U32,
     TYPE_U64,
 
+    TYPE_F32,
+    TYPE_F64,
+
     TYPE_INT,
+    TYPE_FLOAT,
     TYPE_RAWPTR,
 
     TYPE_FN,
@@ -316,6 +320,7 @@ bool type_kind_eq(Type type, Type_Kind kind);
 bool type_meta_kind_eq(Type type, Type_Kind kind);
 bool type_is_numeric(Type type);
 bool type_is_integer(Type type);
+bool type_is_float(Type type);
 bool type_is_pointer(Type type);
 bool type_is_scalar(Type type);
 bool type_is_signed(Type type);

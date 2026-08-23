@@ -1,7 +1,7 @@
 #include "../error.h"
 #include "checker.h"
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 Const_Value default_const_value(Compiler *c, Type type) {
     if (type.ref) {
         return const_value_u64(0);
@@ -26,6 +26,11 @@ Const_Value default_const_value(Compiler *c, Type type) {
     case TYPE_FN:
     case TYPE_ENUM:
         return const_value_u64(0);
+
+    case TYPE_F32:
+    case TYPE_F64:
+    case TYPE_FLOAT:
+        todo(); // @float
 
     case TYPE_TRAIT:
         return const_value_trait((Const_Value_Trait) {0});
@@ -160,7 +165,7 @@ Const_Value const_value_of_var(Compiler *c, Node_Atom *var) {
 Const_Value eval_const_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     Node *n = (Node *) atom;
 
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
@@ -169,6 +174,9 @@ Const_Value eval_const_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
 
     case TOKEN_NULL:
         return const_value_u64(0);
+
+    case TOKEN_FLOAT:
+        todo(); // @float
 
     case TOKEN_IDENT:
         if (atom->definition && atom->definition->polymorph) {
@@ -251,11 +259,15 @@ Const_Value eval_const_expr_unary(Compiler *c, Node_Unary *unary) {
 
     Const_Value value = {0};
 
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         value = eval_const_expr(c, unary->value, false);
-        return const_value_int(int128_neg(value.as.integer));
+        if (type_is_integer(n->type) || type_is_pointer(n->type)) {
+            return const_value_int(int128_neg(value.as.integer));
+        } else {
+            todo(); // @float
+        }
 
     case TOKEN_MUL:
         value = eval_const_expr(c, unary->value, false);
@@ -351,9 +363,10 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
 
     // Arithmetic operations
     {
+        // @float
         typedef Int128 (*Int_Op)(Int128 lhs, Int128 rhs, bool is_signed);
 
-        static_assert(COUNT_TOKENS == 78, "");
+        static_assert(COUNT_TOKENS == 79, "");
         static const Int_Op ops[COUNT_TOKENS] = {
             [TOKEN_ADD] = int128_add,
             [TOKEN_SUB] = int128_sub,
@@ -383,9 +396,10 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
 
     // Arithmetic comparisons
     {
+        // @float
         typedef bool (*Int_Op)(Int128 lhs, Int128 rhs, bool is_signed);
 
-        static_assert(COUNT_TOKENS == 78, "");
+        static_assert(COUNT_TOKENS == 79, "");
         static const Int_Op ops[COUNT_TOKENS] = {
             [TOKEN_GT] = int128_gt,
             [TOKEN_GE] = int128_ge,
@@ -401,7 +415,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
         }
     }
 
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_LOR:
         lhs = eval_const_expr(c, binary->lhs, false);

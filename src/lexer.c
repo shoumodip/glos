@@ -228,7 +228,7 @@ Token lexer_get_string(Lexer *l, Pos pos, Pos start) {
     return token;
 }
 
-static_assert(COUNT_TOKENS == 78, "");
+static_assert(COUNT_TOKENS == 79, "");
 Token lexer_iter(Lexer *l) {
     skip_whitespace(l);
 
@@ -257,6 +257,15 @@ Token lexer_iter(Lexer *l) {
             while (l->sv.count > 0 && (isdigit(*l->sv.data) || *l->sv.data == '_')) {
                 next_char(l);
             }
+
+            if (peek_char(l, 0) == '.' && isdigit(peek_char(l, 1))) {
+                next_char(l);
+                next_char(l);
+                token.kind = TOKEN_FLOAT;
+                while (l->sv.count > 0 && (isdigit(*l->sv.data) || *l->sv.data == '_')) {
+                    next_char(l);
+                }
+            }
         }
         token.sv.count -= l->sv.count;
 
@@ -273,7 +282,11 @@ Token lexer_iter(Lexer *l) {
         }
 
         errno = 0;
-        token.as.integer = strtoul(buffer, NULL, base);
+        if (token.kind == TOKEN_INT) {
+            token.as.integer = strtoul(buffer, NULL, base);
+        } else {
+            token.as.real = strtod(buffer, NULL);
+        }
         arena_reset(&temp_arena, buffer);
 
         if (!errno) {

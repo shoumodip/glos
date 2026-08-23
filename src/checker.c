@@ -125,7 +125,7 @@ void check_nodes(Compiler *c) {
         c->type_info_variants_union = type_info_variant->spec.unionn;
         assert(c->type_info_variants_union->variants_count == 13);
 
-        static_assert(COUNT_TYPES == 27, "");
+        static_assert(COUNT_TYPES == 30, ""); // TODO: @float
         c->type_info_variants[TYPE_BOOL] = CONTRACT_TYPE_INFO_BOOLEAN;
         c->type_info_variants[TYPE_CHAR] = CONTRACT_TYPE_INFO_CHARACTER;
 

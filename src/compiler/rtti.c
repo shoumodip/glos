@@ -49,8 +49,7 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
 
     SV name = {0};
     {
-        static_assert(COUNT_TYPES == 27, "");
-
+        static_assert(COUNT_TYPES == 30, "");
         Node_Atom *defined_as = NULL;
         if (type->distinct) {
             defined_as = type->distinct;
@@ -114,7 +113,7 @@ static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip
 
 static LLVMValueRef compile_type_info_finalize(Compiler *c, Type_Info_Compiler *tic);
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
     if (tic->done) {
         return;
@@ -148,6 +147,11 @@ static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
             tic->tiv_fields[tic->tiv_fields_iota++] = create_const_struct_from_single_value_if_not_already(
                 c, LLVMConstInt(LLVMInt1TypeInContext(c->llvm_context), type_is_signed(*tic->type), true));
             break;
+
+        case TYPE_F32:
+        case TYPE_F64:
+        case TYPE_FLOAT:
+            todo(); // @float
 
         case TYPE_FN:
             compile_type_info_fn(c, tic, false);

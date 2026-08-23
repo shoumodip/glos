@@ -116,7 +116,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_INT:
         n->type = (Type) {.kind = TYPE_INT};
@@ -132,6 +132,10 @@ void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_va
 
     case TOKEN_NULL:
         n->type = (Type) {.kind = TYPE_RAWPTR};
+        break;
+
+    case TOKEN_FLOAT:
+        n->type = (Type) {.kind = TYPE_FLOAT};
         break;
 
     case TOKEN_IDENT:
@@ -200,7 +204,7 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     Node *n = (Node *) unary;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
@@ -273,7 +277,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
 
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     Node *n = (Node *) binary;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_ADD:
     case TOKEN_SUB:

@@ -722,7 +722,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 78, "");
+static_assert(COUNT_TOKENS == 79, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -738,6 +738,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_BOOL:
     case TOKEN_CHAR:
     case TOKEN_NULL:
+    case TOKEN_FLOAT:
     case TOKEN_IDENT:
     case TOKEN_STRING:
     case TOKEN_DIRECTIVE_MAIN:

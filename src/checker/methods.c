@@ -1,7 +1,7 @@
 #include "../error.h"
 #include "checker.h"
 
-static_assert(COUNT_TOKENS == 78, "");
+static_assert(COUNT_TOKENS == 79, "");
 const char *operator_method_name_from_token_kind(Token_Kind kind) {
     switch (kind) {
     case TOKEN_ADD:
