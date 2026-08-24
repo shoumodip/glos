@@ -283,7 +283,11 @@ Token lexer_iter(Lexer *l) {
 
         errno = 0;
         if (token.kind == TOKEN_INT) {
+#ifdef PLATFORM_X86_64_WINDOWS
+            token.as.integer = strtoull(buffer, NULL, base);
+#else
             token.as.integer = strtoul(buffer, NULL, base);
+#endif // PLATFORM_X86_64_WINDOWS
         } else {
             token.as.real = strtod(buffer, NULL);
         }
