@@ -1,0 +1,9 @@
+EXIT 0
+STDOUT 0
+
+STDERR 131
+tests/warn_unneeded_distinct_keyword.glos:1:8: Warn: Application of '#distinct' is not needed here
+
+    Foo :: distinct struct {}
+
+

@@ -325,16 +325,30 @@ static void definition_lhs_atom_setup(
 
     if (it->definition_spec->is_const) {
         assert(it_expr);
-        if (it_expr->kind == NODE_FN) {
+        switch (it_expr->kind) {
+        case NODE_FN:
             ((Node_Fn *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_ENUM) {
+            break;
+
+        case NODE_ENUM:
             ((Node_Enum *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_TRAIT) {
+            break;
+
+        case NODE_TRAIT:
             ((Node_Trait *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_UNION) {
+            break;
+
+        case NODE_UNION:
             ((Node_Union *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_STRUCT) {
+            break;
+
+        case NODE_STRUCT:
             ((Node_Struct *) it_expr)->defined_as = it;
+            break;
+
+        default:
+            // Pass
+            break;
         }
     }
 }
@@ -805,28 +819,23 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_DISTINCT: {
-        node = node_alloc(p->module_current, NODE_DISTINCT, token);
-        Node_Distinct *distinct = (Node_Distinct *) node;
-        distinct->value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
-
+        Node *value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
         static_assert(COUNT_NODES == 29, "");
-        switch (distinct->value->kind) {
+        switch (value->kind) {
         case NODE_ENUM:
         case NODE_TRAIT:
         case NODE_UNION:
         case NODE_STRUCT:
-            error_token(
-                EK_ERROR,
-                token,
-                "Redundant application of %s to %s",
-                token_kind_to_cstr(token.kind),
-                token_kind_to_cstr(distinct->value->token.kind));
-            exit(1);
-            // TODO: This should be a warning instead to reduce friction during prototyping
+        case NODE_DISTINCT:
+            node = value;
+            warnings_add(WARN_REDUNDANT_DISTINCT, token);
             break;
 
-        default:
-            break;
+        default: {
+            node = node_alloc(p->module_current, NODE_DISTINCT, token);
+            Node_Distinct *distinct = (Node_Distinct *) node;
+            distinct->value = value;
+        } break;
         }
     } break;
 
@@ -1542,9 +1551,7 @@ static Node *parse_stmt(Parser *p) {
         }
 
         if (!p->state.fn_current) {
-            // TODO: Perhaps this should just be warning for reduced friction while prototyping
-            error_token(EK_ERROR, token, "Variables defined in global scope already have static storage");
-            exit(1);
+            warnings_add(WARN_REDUNDANT_STATIC, token);
         }
 
         node = parse_expr(p, POWER_NIL, true, true, NULL);

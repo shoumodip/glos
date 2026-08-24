@@ -5,6 +5,7 @@
 
 typedef enum {
     EK_NOTE,
+    EK_WARN,
     EK_ERROR,
     EK_BLANK,
 } Error_Kind;
@@ -25,5 +26,14 @@ void error_range(Error_Kind kind, Pos begin, Pos end, const char *fmt, ...) Prin
 void error_token(Error_Kind kind, Token token, const char *fmt, ...) Printf_Like(3);
 void error_token_range(Error_Kind kind, Token begin, Token end, const char *fmt, ...) Printf_Like(4);
 void error_standalone(Error_Kind kind, const char *fmt, ...) Printf_Like(2);
+
+typedef enum {
+    WARN_REDUNDANT_STATIC,
+    WARN_REDUNDANT_DISTINCT,
+    COUNT_WARNING_KINDS
+} Warning_Kind;
+
+void warnings_add(Warning_Kind kind, Token token);
+void warnings_flush(void);
 
 #endif // ERROR_H

@@ -26,6 +26,10 @@ static void error_begin(Error_Kind kind) {
         afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "Error:");
         break;
 
+    case EK_WARN:
+        afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Warn:");
+        break;
+
     case EK_NOTE:
         afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Note:");
         break;
@@ -449,9 +453,41 @@ void error_standalone(Error_Kind kind, const char *fmt, ...) {
     error_finalize();
 }
 
-/* NOTES:
- *
- * - For function without body, highlight the signature only
- * - For A[B] without A, highlight the B only
- *
- */
+typedef struct {
+    Warning_Kind kind;
+    Token        token;
+} Warning;
+
+static DA(Warning) warnings;
+
+void warnings_add(Warning_Kind kind, Token token) {
+    da_push(&warnings, ((Warning) {.kind = kind, .token = token}));
+}
+
+static_assert(COUNT_WARNING_KINDS == 2, "");
+void warnings_flush(void) {
+    for (size_t i = 0; i < warnings.count; i++) {
+        const Warning *it = &warnings.data[i];
+        error_token_begin(EK_WARN, it->token);
+
+        switch (it->kind) {
+        case WARN_REDUNDANT_STATIC:
+            fprintf(
+                stderr,
+                "Application of '#static' is not needed here, as variables defined in global scope already have static storage");
+            break;
+
+        case WARN_REDUNDANT_DISTINCT:
+            fprintf(stderr, "Application of '#distinct' is not needed here");
+            break;
+
+        default:
+            unreachable();
+            break;
+        }
+
+        error_finalize();
+    }
+
+    da_free(&warnings);
+}
