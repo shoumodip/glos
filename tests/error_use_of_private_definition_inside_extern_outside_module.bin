@@ -1,8 +1,12 @@
 EXIT 1
 STDOUT 0
 
-STDERR 139
+STDERR 278
 tests/error_use_of_private_definition_inside_extern_outside_module.glos:5:7: ERROR: Undefined identifier 'puts'
+
+    p.puts("Urmom".data)
+
+tests/error_use_of_private_definition_inside_extern_outside_module.glos:5:5: NOTE: Searched in module 'private'
 
     p.puts("Urmom".data)
 

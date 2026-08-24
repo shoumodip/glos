@@ -754,6 +754,15 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             }
         }
     } else {
-        error_undefined(c, &n->token, "identifier", false);
+        error_undefined(c, &n->token, "identifier", true);
+        if (member) {
+            const size_t start = default_sb.count;
+            for (size_t i = 0; i < module->name.count; i++) {
+                sb_push_quoted_char(&default_sb, module->name.data[i], '\'');
+            }
+            error_node(
+                EK_NOTE, member->lhs, "Searched in module '%s'", arena_sb_to_cstr(&temp_arena, &default_sb, start));
+        }
+        exit(c, 1);
     }
 }

@@ -1,8 +1,12 @@
 EXIT 1
 STDOUT 0
 
-STDERR 145
+STDERR 289
 tests/error_use_of_definition_inside_private_extern_outside_module.glos:4:7: ERROR: Undefined identifier 'fputc'
+
+    p.fputc(i32('E'), stdout)
+
+tests/error_use_of_definition_inside_private_extern_outside_module.glos:4:5: NOTE: Searched in module 'private'
 
     p.fputc(i32('E'), stdout)
 

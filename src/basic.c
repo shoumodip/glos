@@ -335,25 +335,6 @@ bool ht_iter_impl(
     return false;
 }
 
-// Characters
-bool is_space(char ch) {
-    return isspace(ch);
-}
-
-void print_char_safe(FILE *f, char ch) {
-    const uint8_t c = ch;
-    if ((c >= 32 && c < 127) || (is_space(c) && c != 0xB)) {
-        fputc(c, f);
-    } else if (c < 32) {
-        fputc('^', f);
-        fputc(c + '@', f);
-    } else if (c == 127) {
-        fputs("^?", f);
-    } else {
-        fprintf(f, "<%02x>", c);
-    }
-}
-
 // String View
 SV sv_from_cstr(const char *cstr) {
     return (SV) {.data = cstr, .count = strlen(cstr)};
@@ -516,6 +497,73 @@ void sb_push_cstr(SB *sb, const char *cstr) {
 }
 
 SB default_sb;
+
+// Characters
+bool is_space(char ch) {
+    return isspace(ch);
+}
+
+void print_char_safe(FILE *f, char ch) {
+    const uint8_t c = ch;
+    if ((c >= 32 && c < 127) || (is_space(c) && c != 0xB)) {
+        fputc(c, f);
+    } else if (c < 32) {
+        fputc('^', f);
+        fputc(c + '@', f);
+    } else if (c == 127) {
+        fputs("^?", f);
+    } else {
+        fprintf(f, "<%02x>", c);
+    }
+}
+
+void sb_push_quoted_char(SB *sb, char ch, char quote) {
+    switch (ch) {
+    case 033:
+        sb_push_cstr(sb, "\\e");
+        break;
+
+    case '\n':
+        sb_push_cstr(sb, "\\n");
+        break;
+
+    case '\r':
+        sb_push_cstr(sb, "\\r");
+        break;
+
+    case '\t':
+        sb_push_cstr(sb, "\\t");
+        break;
+
+    case '\0':
+        sb_push_cstr(sb, "\\0");
+        break;
+
+    case '\\':
+        sb_push_cstr(sb, "\\\\");
+        break;
+
+    case '\'':
+        if (quote == '\'') {
+            sb_push_cstr(sb, "\\'");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    case '"':
+        if (quote == '"') {
+            sb_push_cstr(sb, "\\\"");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    default:
+        sb_push(sb, ch);
+        break;
+    }
+}
 
 // Arena Allocator
 void arena_free(Arena *a) {

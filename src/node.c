@@ -723,54 +723,6 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     }
 }
 
-static void sb_push_quoted_char(SB *sb, char ch, char quote) {
-    switch (ch) {
-    case 033:
-        sb_push_cstr(sb, "\\e");
-        break;
-
-    case '\n':
-        sb_push_cstr(sb, "\\n");
-        break;
-
-    case '\r':
-        sb_push_cstr(sb, "\\r");
-        break;
-
-    case '\t':
-        sb_push_cstr(sb, "\\t");
-        break;
-
-    case '\0':
-        sb_push_cstr(sb, "\\0");
-        break;
-
-    case '\\':
-        sb_push_cstr(sb, "\\\\");
-        break;
-
-    case '\'':
-        if (quote == '\'') {
-            sb_push_cstr(sb, "\\'");
-        } else {
-            sb_push(sb, ch);
-        }
-        break;
-
-    case '"':
-        if (quote == '"') {
-            sb_push_cstr(sb, "\\\"");
-        } else {
-            sb_push(sb, ch);
-        }
-        break;
-
-    default:
-        sb_push(sb, ch);
-        break;
-    }
-}
-
 static_assert(COUNT_CONST_VALUES == 13, "");
 static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw) {
     switch (v.kind) {
