@@ -705,10 +705,6 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
     memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
 
     const size_t ref = n->type.ref;
-    while (n->kind == NODE_UNARY && n->token.kind == TOKEN_BAND) {
-        // TODO: Unary `*`
-        n = ((Node_Unary *) n)->value;
-    }
 
 #ifdef MONOMORPHIZATION_LOG
     afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "Monomorphize {\n\n");
