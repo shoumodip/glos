@@ -148,6 +148,33 @@ write_type :: (w: Writer, t: Type) {
     }
 }
 
+write_quoted_char :: (w: Writer, ch: char, quote: char) {
+    if ch == {
+    case '\e'; w.write([]char("\\e"))
+    case '\n'; w.write([]char("\\n"))
+    case '\r'; w.write([]char("\\r"))
+    case '\t'; w.write([]char("\\t"))
+    case '\0'; w.write([]char("\\0"))
+    case '\\'; w.write([]char("\\\\"))
+
+    case '\''
+        if quote == '\'' {
+            w.write([]char("\\'"))
+        } else {
+            w.write((&ch)[..1])
+        }
+
+    case '\"'
+        if quote == '\"' {
+            w.write([]char("\\\""))
+        } else {
+            w.write((&ch)[..1])
+        }
+
+    case; w.write((&ch)[..1])
+    }
+}
+
 write_value :: (w: Writer, a: Any, nested: bool) {
     if a.type == Type {
         write_type(w, *&Type(a.data))
@@ -177,7 +204,6 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         return
     }
 
-    // TODO: Make the character and string printers respect special characters if nested
     v := a.type.variant
     if v == {
     case Type_Info_Boolean
@@ -191,13 +217,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         ch := *&char(a.data)
         if nested {
             w.write([]char("'"))
-            if ch == '\'' {
-                w.write([]char("\\'"))
-            } else if ch == '\0' {
-                w.write([]char("\\0"))
-            } else {
-                w.write((&ch)[..1])
-            }
+            write_quoted_char(w, ch, '\'')
             w.write([]char("'"))
         } else {
             w.write((&ch)[..1])
@@ -352,12 +372,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         if nested {
             w.write([]char("\""))
             for i := 0; i < s.count; i += 1 {
-                ch := s[i]
-                if ch == '"' {
-                    w.write([]char("\\\""))
-                } else {
-                    w.write((&ch)[..1])
-                }
+                write_quoted_char(w, s[i], '"')
             }
             w.write([]char("\""))
         } else {
