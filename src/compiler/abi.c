@@ -2,13 +2,18 @@
 #include "../checker/checker.h"
 #include "compiler.h"
 
-static void put_scalar_type_into_qword(Compiler *c, ABI_Info *info, LLVMTypeRef type, size_t offset) {
-    const size_t index = offset / 8;
-    assert(index < len(info->direct_types));
+typedef struct {
+    LLVMTypeRef types[4];
+    size_t      count;
+} QWords;
 
-    LLVMTypeRef *dst = &info->direct_types[index];
+static void put_scalar_type_into_qword(Compiler *c, QWords *info, LLVMTypeRef type, size_t offset) {
+    const size_t index = offset / 8;
+    assert(index < len(info->types));
+
+    LLVMTypeRef *dst = &info->types[index];
     if (!*dst) {
-        info->direct_types_count++;
+        info->count++;
     }
 
     switch (LLVMGetTypeKind(type)) {
@@ -63,7 +68,7 @@ static void put_scalar_type_into_qword(Compiler *c, ABI_Info *info, LLVMTypeRef 
 }
 
 static_assert(COUNT_TYPES == 30, "");
-static void split_type_into_qwords(Compiler *c, ABI_Info *info, const Type *type, size_t offset, size_t size) {
+static void split_type_into_qwords(Compiler *c, QWords *info, const Type *type, size_t offset, size_t size) {
     if (type->ref) {
         put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
         return;
@@ -100,6 +105,12 @@ static void split_type_into_qwords(Compiler *c, ABI_Info *info, const Type *type
         put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
         break;
 
+    case TYPE_TRAIT:
+        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 8);
+        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 16);
+        break;
+
     case TYPE_UNION:
         if (size > 8) {
             put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset);
@@ -133,6 +144,12 @@ static void split_type_into_qwords(Compiler *c, ABI_Info *info, const Type *type
             }
         }
     } break;
+
+    case TYPE_DYNAMIC_ARRAY:
+        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset + 8);
+        put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset + 16);
+        break;
 
     case TYPE_SLICE:
     case TYPE_STRING:
@@ -169,6 +186,12 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
     size_t   size = compile_sizeof(c, type);
     ABI_Info info = {.type = type->llvm};
 
+#ifdef PLATFORM_X86_64_LINUX
+    if (size > 16) {
+        return info;
+    }
+#endif // PLATFORM_X86_64_LINUX
+
 #ifdef PLATFORM_X86_64_WINDOWS
     if (size > 8) {
         return info;
@@ -182,11 +205,13 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         // Any other sized type <8 bytes will be passed indirectly
         return info;
     }
-#else
-    if (size > 16) {
+#endif // PLATFORM_X86_64_WINDOWS
+
+#ifdef PLATFORM_ARM64_MACOS
+    if (size > 32) {
         return info;
     }
-#endif // PLATFORM_X86_64_WINDOWS
+#endif // PLATFORM_ARM64_MACOS
 
     if (type->ref) {
         info.direct_types[info.direct_types_count++] = LLVMPointerTypeInContext(c->llvm_context, 0);
@@ -209,50 +234,106 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
         break;
     }
 
-    split_type_into_qwords(c, &info, type, 0, size);
-    assert(info.direct_types_count);
+    QWords words = {0};
+    split_type_into_qwords(c, &words, type, 0, size);
+    assert(words.count);
 
 #ifdef PLATFORM_ARM64_MACOS
-    if (info.direct_types_count == 1) {
-        if (LLVMGetTypeKind(info.direct_types[0]) == LLVMIntegerTypeKind && type_is_compound(*type) && is_arg) {
-            // Bytes(0 < N <= 8) And (QWORD is an integer) And (Type is Compound) And (Used in Argument) => i64
-            info.direct_types[0] = LLVMInt64TypeInContext(c->llvm_context);
-            return info;
+    if (size >= 16) {
+        bool is_hda = true;
+        for (size_t i = 0; i < words.count; i++) {
+            if (LLVMGetTypeKind(words.types[i]) != LLVMDoubleTypeKind) {
+                is_hda = false;
+                break;
+            }
+        }
+
+        if (is_hda) {
+            if (is_arg) {
+                words.types[0] = LLVMArrayType(LLVMDoubleTypeInContext(c->llvm_context), words.count);
+            } else {
+                // Original for return types
+                words.types[0] = type->llvm;
+            }
+            words.count = 1;
+            goto end;
         }
     }
 
-    if (info.direct_types_count == 2) {
-        const LLVMTypeRef  t0 = info.direct_types[0];
-        const LLVMTypeRef  t1 = info.direct_types[1];
+    if (words.count == 1 && type_is_compound(*type)) {
+        const LLVMTypeRef  t0 = words.types[0];
         const LLVMTypeKind k0 = LLVMGetTypeKind(t0);
-        const LLVMTypeKind k1 = LLVMGetTypeKind(t1);
 
-        // (double, double) => [2 x double]
-        if (k0 == LLVMDoubleTypeKind && k1 == LLVMDoubleTypeKind) {
-            info.direct_types[0] = LLVMArrayType(LLVMDoubleTypeInContext(c->llvm_context), 2);
-            info.direct_types_count = 1;
-            return info;
+        if (k0 == LLVMIntegerTypeKind && is_arg) {
+            // Bytes(0 < N <= 8) And (QWORD is an integer) And (Type is Compound) And (Used in Argument) => i64
+            words.types[0] = LLVMInt64TypeInContext(c->llvm_context);
+            goto end;
         }
+
+        // (float)  => [1 x float]
+        // (double) => [1 x double]
+        if (k0 == LLVMFloatTypeKind || k0 == LLVMDoubleTypeKind) {
+            if (is_arg) {
+                words.types[0] = LLVMArrayType(t0, 1);
+            } else {
+                // Original for return types
+                words.types[0] = type->llvm;
+            }
+            goto end;
+        }
+
+        if (llvm_type_is_2xfloat(t0)) {
+            if (!is_arg) {
+                // Original for return types
+                words.types[0] = type->llvm;
+            }
+            goto end;
+        }
+    }
+
+    if (words.count == 2) {
+        const LLVMTypeRef  t0 = words.types[0];
+        const LLVMTypeRef  t1 = words.types[1];
+        const LLVMTypeKind k1 = LLVMGetTypeKind(t1);
 
         // ([2 x float], float) => [3 x float]
         if (llvm_type_is_2xfloat(t0) && k1 == LLVMFloatTypeKind) {
-            info.direct_types[0] = LLVMArrayType(LLVMFloatTypeInContext(c->llvm_context), 3);
-            info.direct_types_count = 1;
-            return info;
+            if (is_arg) {
+                words.types[0] = LLVMArrayType(LLVMFloatTypeInContext(c->llvm_context), 3);
+            } else {
+                // Original for return types
+                words.types[0] = type->llvm;
+            }
+            words.count = 1;
+            goto end;
         }
 
         // ([2 x float], [2 x float]) => [4 x float]
         if (llvm_type_is_2xfloat(t0) && llvm_type_is_2xfloat(t1)) {
-            info.direct_types[0] = LLVMArrayType(LLVMFloatTypeInContext(c->llvm_context), 4);
-            info.direct_types_count = 1;
-            return info;
+            if (is_arg) {
+                words.types[0] = LLVMArrayType(LLVMFloatTypeInContext(c->llvm_context), 4);
+            } else {
+                // Original for return types
+                words.types[0] = type->llvm;
+            }
+            words.count = 1;
+            goto end;
         }
 
         // In any other case => [2 x i64]
-        info.direct_types[0] = LLVMArrayType(LLVMInt64TypeInContext(c->llvm_context), 2);
-        info.direct_types_count = 1;
+        words.types[0] = LLVMArrayType(LLVMInt64TypeInContext(c->llvm_context), 2);
+        words.count = 1;
     }
+
+end:
+
 #endif // PLATFORM_ARM64_MACOS
+
+    if (words.count > 0 && words.count <= 2) {
+        info.direct_types[0] = words.types[0];
+        info.direct_types[1] = words.types[1];
+        info.direct_types_count = words.count;
+    }
 
     return info;
     unused(is_arg); // The argument 'is_arg' is only relevant for macOS
