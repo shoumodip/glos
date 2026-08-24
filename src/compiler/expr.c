@@ -149,7 +149,7 @@ LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, bool ref
         }
 
         if (const_value) {
-            static_assert(COUNT_CONST_VALUES == 12, "");
+            static_assert(COUNT_CONST_VALUES == 13, "");
             switch (const_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
@@ -503,7 +503,7 @@ void compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_
 
             value = LLVMBuildLoad2(c->llvm_builder, arg->type.llvm, memory, "");
         } else {
-            static_assert(COUNT_CONST_VALUES == 12, "");
+            static_assert(COUNT_CONST_VALUES == 13, "");
             switch (arg->default_value->kind) {
             case CONST_VALUE_TRAIT:
             case CONST_VALUE_UNION:
@@ -543,7 +543,7 @@ void compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_
 
 LLVMValueRef compile_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
@@ -552,6 +552,9 @@ LLVMValueRef compile_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
 
     case TOKEN_NULL:
         return LLVMConstNull(n->type.llvm);
+
+    case TOKEN_FLOAT:
+        return LLVMConstReal(n->type.llvm, n->token.as.real);
 
     case TOKEN_IDENT:
         return compile_ident(c, n, (Node_Atom *) atom->definition, ref);
@@ -596,7 +599,7 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
     Node *n = (Node *) unary;
 
     LLVMValueRef value = NULL;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         value = compile_expr(c, unary->value, false);
@@ -625,7 +628,13 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
             return result;
         }
 
-        return LLVMBuildNeg(c->llvm_builder, value, "");
+        if (type_is_integer(n->type) || type_is_pointer(n->type)) {
+            return LLVMBuildNeg(c->llvm_builder, value, "");
+        } else if (type_is_float(n->type)) {
+            return LLVMBuildFNeg(c->llvm_builder, value, "");
+        }
+
+        unreachable();
 
     case TOKEN_MUL:
         value = compile_expr(c, unary->value, false);
@@ -720,15 +729,16 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
         typedef struct {
             LLVMValueRef (*i)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
             LLVMValueRef (*u)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
+            LLVMValueRef (*f)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
         } Op;
 
-        static_assert(COUNT_TOKENS == 78, "");
+        static_assert(COUNT_TOKENS == 79, "");
         static const Op ops[COUNT_TOKENS] = {
-            [TOKEN_ADD] = {.i = LLVMBuildAdd},
-            [TOKEN_SUB] = {.i = LLVMBuildSub},
-            [TOKEN_MUL] = {.i = LLVMBuildMul},
-            [TOKEN_DIV] = {.i = LLVMBuildSDiv, .u = LLVMBuildUDiv},
-            [TOKEN_MOD] = {.i = LLVMBuildSRem, .u = LLVMBuildURem},
+            [TOKEN_ADD] = {.i = LLVMBuildAdd, .f = LLVMBuildFAdd},
+            [TOKEN_SUB] = {.i = LLVMBuildSub, .f = LLVMBuildFSub},
+            [TOKEN_MUL] = {.i = LLVMBuildMul, .f = LLVMBuildFMul},
+            [TOKEN_DIV] = {.i = LLVMBuildSDiv, .u = LLVMBuildUDiv, .f = LLVMBuildFDiv},
+            [TOKEN_MOD] = {.i = LLVMBuildSRem, .u = LLVMBuildURem, .f = LLVMBuildFRem},
 
             [TOKEN_SHL] = {.i = LLVMBuildShl},
             [TOKEN_SHR] = {.i = LLVMBuildAShr, .u = LLVMBuildLShr},
@@ -737,6 +747,12 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
         };
 
         const Op op = ops[n->token.kind];
+        if (type_is_float(binary->lhs->type) && op.f) {
+            LLVMValueRef lhs = compile_expr(c, binary->lhs, false);
+            LLVMValueRef rhs = compile_expr(c, binary->rhs, false);
+            return op.f(c->llvm_builder, lhs, rhs, "");
+        }
+
         if (op.i) {
             LLVMValueRef lhs = compile_expr(c, binary->lhs, false);
             LLVMValueRef rhs = compile_expr(c, binary->rhs, false);
@@ -768,21 +784,28 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
     // Comparison
     {
         typedef struct {
-            LLVMIntPredicate i;
-            LLVMIntPredicate u;
+            LLVMIntPredicate  i;
+            LLVMIntPredicate  u;
+            LLVMRealPredicate f;
         } Op;
 
-        static_assert(COUNT_TOKENS == 78, "");
+        static_assert(COUNT_TOKENS == 79, "");
         static const Op ops[COUNT_TOKENS] = {
-            [TOKEN_GT] = {.i = LLVMIntSGT, .u = LLVMIntUGT},
-            [TOKEN_GE] = {.i = LLVMIntSGE, .u = LLVMIntUGE},
-            [TOKEN_LT] = {.i = LLVMIntSLT, .u = LLVMIntULT},
-            [TOKEN_LE] = {.i = LLVMIntSLE, .u = LLVMIntULE},
-            [TOKEN_EQ] = {.i = LLVMIntEQ},
-            [TOKEN_NE] = {.i = LLVMIntNE},
+            [TOKEN_GT] = {.i = LLVMIntSGT, .u = LLVMIntUGT, .f = LLVMRealOGT},
+            [TOKEN_GE] = {.i = LLVMIntSGE, .u = LLVMIntUGE, .f = LLVMRealOGE},
+            [TOKEN_LT] = {.i = LLVMIntSLT, .u = LLVMIntULT, .f = LLVMRealOLT},
+            [TOKEN_LE] = {.i = LLVMIntSLE, .u = LLVMIntULE, .f = LLVMRealOLE},
+            [TOKEN_EQ] = {.i = LLVMIntEQ, .f = LLVMRealOEQ},
+            [TOKEN_NE] = {.i = LLVMIntNE, .f = LLVMRealONE},
         };
 
         const Op op = ops[n->token.kind];
+        if (type_is_float(binary->lhs->type) && op.f) {
+            LLVMValueRef lhs = compile_expr(c, binary->lhs, false);
+            LLVMValueRef rhs = compile_expr(c, binary->rhs, false);
+            return LLVMBuildFCmp(c->llvm_builder, op.f, lhs, rhs, "");
+        }
+
         if (op.i) {
             LLVMValueRef lhs = compile_expr(c, binary->lhs, false);
             LLVMValueRef rhs = compile_expr(c, binary->rhs, false);
@@ -804,15 +827,16 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
         typedef struct {
             LLVMValueRef (*i)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
             LLVMValueRef (*u)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
+            LLVMValueRef (*f)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
         } Op;
 
-        static_assert(COUNT_TOKENS == 78, "");
+        static_assert(COUNT_TOKENS == 79, "");
         static const Op ops[COUNT_TOKENS] = {
-            [TOKEN_ADD_SET] = {.i = LLVMBuildAdd},
-            [TOKEN_SUB_SET] = {.i = LLVMBuildSub},
-            [TOKEN_MUL_SET] = {.i = LLVMBuildMul},
-            [TOKEN_DIV_SET] = {.i = LLVMBuildSDiv, .u = LLVMBuildUDiv},
-            [TOKEN_MOD_SET] = {.i = LLVMBuildSRem, .u = LLVMBuildURem},
+            [TOKEN_ADD_SET] = {.i = LLVMBuildAdd, .f = LLVMBuildFAdd},
+            [TOKEN_SUB_SET] = {.i = LLVMBuildSub, .f = LLVMBuildFSub},
+            [TOKEN_MUL_SET] = {.i = LLVMBuildMul, .f = LLVMBuildFMul},
+            [TOKEN_DIV_SET] = {.i = LLVMBuildSDiv, .u = LLVMBuildUDiv, .f = LLVMBuildFDiv},
+            [TOKEN_MOD_SET] = {.i = LLVMBuildSRem, .u = LLVMBuildURem, .f = LLVMBuildFRem},
 
             [TOKEN_SHL_SET] = {.i = LLVMBuildShl},
             [TOKEN_SHR_SET] = {.i = LLVMBuildAShr, .u = LLVMBuildLShr},
@@ -875,6 +899,8 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             if (group_count) {
                 assert(c->group_values.count == group_values_count_save + group_count * 3);
                 for (size_t i = 0; i < group_count; i++) {
+                    const Type *it = &binary->lhs->type.spec.group.data[i];
+
                     LLVMValueRef ptr = c->group_values.data[group_values_ptr_start + i];
                     LLVMValueRef lhs = c->group_values.data[group_values_lhs_start + i];
                     LLVMValueRef rhs = c->group_values.data[group_values_rhs_start + i];
@@ -882,13 +908,16 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
                     LLVMValueRef result = NULL;
                     if (binary->overloads[i]) {
                         result = compile_binary_with_overloaded_operator(c, binary, i, lhs, rhs);
-                    } else if (op.u && !type_is_signed(binary->lhs->type)) {
+                    } else if (type_is_float(*it)) {
+                        assert(op.f);
+                        result = op.f(c->llvm_builder, lhs, rhs, "");
+                    } else if (op.u && !type_is_signed(*it)) {
                         result = op.u(c->llvm_builder, lhs, rhs, "");
                     } else {
                         result = op.i(c->llvm_builder, lhs, rhs, "");
                     }
 
-                    if (type_is_pointer(binary->lhs->type.spec.group.data[i])) {
+                    if (type_is_pointer(*it)) {
                         result = LLVMBuildIntToPtr(c->llvm_builder, result, llvm_type_ptr, "");
                     }
                     LLVMBuildStore(c->llvm_builder, result, ptr);
@@ -897,6 +926,9 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
                 LLVMValueRef result = NULL;
                 if (binary->overload) {
                     result = compile_binary_with_overloaded_operator(c, binary, 0, lhs, rhs);
+                } else if (type_is_float(binary->lhs->type)) {
+                    assert(op.f);
+                    result = op.f(c->llvm_builder, lhs, rhs, "");
                 } else if (op.u && !type_is_signed(binary->lhs->type)) {
                     result = op.u(c->llvm_builder, lhs, rhs, "");
                 } else {
@@ -914,7 +946,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
         }
     }
 
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_SET: {
         const size_t group_values_count_save = c->group_values.count;
@@ -1277,7 +1309,7 @@ LLVMValueRef compile_expr_call(Compiler *c, Node_Call *call, bool ref) {
         switch (call->type_cast) {
         case TYPE_CAST_NORMAL:
             set_debug_pos(c, n->token.pos);
-            return compile_cast(c, from_value, n->type.llvm, type_is_signed(from->type));
+            return compile_cast(c, from_value, n->type.llvm, type_is_signed(from->type), type_is_signed(n->type));
 
         case TYPE_CAST_TO_BOOL:
             set_debug_pos(c, n->token.pos);
@@ -1503,7 +1535,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
     if (index->lhs->type.ref) {
         element_type = n->type.spec.slice.element;
     } else {
-        static_assert(COUNT_TYPES == 27, "");
+        static_assert(COUNT_TYPES == 30, "");
         switch (index->lhs->type.kind) {
         case TYPE_ARRAY:
             element_type = index->lhs->type.spec.array.element;
@@ -1533,14 +1565,14 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
     compile_type(c, element_type);
     if (index->is_ranged) {
         if (a) {
-            a = compile_cast(c, a, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->a->type));
+            a = compile_cast(c, a, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->a->type), true);
         } else {
             a = LLVMConstNull(LLVMInt64TypeInContext(c->llvm_context));
         }
 
         LLVMValueRef b = compile_expr(c, index->b, false);
         if (b) {
-            b = compile_cast(c, b, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->b->type));
+            b = compile_cast(c, b, LLVMInt64TypeInContext(c->llvm_context), type_is_signed(index->b->type), true);
         }
 
         set_debug_pos(c, n->token.pos);

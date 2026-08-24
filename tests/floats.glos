@@ -1,0 +1,34 @@
+main :: () {
+    println(69.4201337)
+
+    // Arithmetics
+    println(34.5 + 34.5)
+    println(500.1 - 80.1)
+    println(11.5 * 6.0)
+    println(630.0 / 1.5)
+    println(17.25 * 2.0 - -34.5)
+    println(0.2 * (1000.0 + 1100.0))
+
+    // Comparisons
+    println(2.0 > 1.0)
+    println(1.0 > 1.0)
+    println(0.0 > 1.0)
+
+    println(2.0 >= 1.0)
+    println(1.0 >= 1.0)
+    println(0.0 >= 1.0)
+
+    println(1.0 < 2.0)
+    println(1.0 < 1.0)
+    println(1.0 < 0.0)
+
+    println(1.0 <= 2.0)
+    println(1.0 <= 1.0)
+    println(1.0 <= 0.0)
+
+    println(1.0 == 1.0)
+    println(1.0 == 2.0)
+
+    println(1.0 != 2.0)
+    println(1.0 != 1.0)
+}

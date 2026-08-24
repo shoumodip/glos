@@ -211,6 +211,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
             case_->body = node_alloc(p->module_current, NODE_BLOCK, token);
             Node_Block *block = (Node_Block *) case_->body;
             while (true) {
+                consume_tokens(p, TOKEN_EOL);
                 ahead = peek_token(p);
                 if (ahead.kind == TOKEN_CASE || ahead.kind == TOKEN_RBRACE) {
                     break;
@@ -722,7 +723,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 78, "");
+static_assert(COUNT_TOKENS == 79, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -738,6 +739,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_BOOL:
     case TOKEN_CHAR:
     case TOKEN_NULL:
+    case TOKEN_FLOAT:
     case TOKEN_IDENT:
     case TOKEN_STRING:
     case TOKEN_DIRECTIVE_MAIN:

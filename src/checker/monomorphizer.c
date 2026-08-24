@@ -132,7 +132,7 @@ void add_monomorph_parameter_default_value(
 
 // The return type just indicates whether the inference was done against a known type.
 // It DOES NOT INDICATE TYPE VALIDITY. That is the responsibility of the pre-monomorphization analysis.
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const Type *expected) {
     if (actual->ref < expected->ref) {
         return true;

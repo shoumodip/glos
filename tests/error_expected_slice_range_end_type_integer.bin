@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 121
-tests/error_expected_slice_range_end_type_integer.glos:3:11: ERROR: Expected numeric value, got 'bool'
+tests/error_expected_slice_range_end_type_integer.glos:3:11: ERROR: Expected integer value, got 'bool'
 
     xs[0..true]
 

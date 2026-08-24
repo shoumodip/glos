@@ -28,6 +28,7 @@ typedef enum {
     TOKEN_BOOL,
     TOKEN_CHAR,
     TOKEN_NULL,
+    TOKEN_FLOAT,
     TOKEN_IDENT,
     TOKEN_STRING,
     TOKEN_ISTRING,
@@ -120,8 +121,9 @@ typedef struct {
     bool newline;
 
     union {
-        u64 integer;
-        SV  string;
+        u64    integer;
+        double real;
+        SV     string;
     } as;
 } Token;
 

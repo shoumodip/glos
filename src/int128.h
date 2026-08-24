@@ -44,5 +44,6 @@ bool int128_is_zero(Int128 n);
 bool int128_is_negative(Int128 n);
 
 const char *int128_to_cstr(Int128 n);
+double      int128_to_double(Int128 n);
 
 #endif // INT128_H

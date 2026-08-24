@@ -356,6 +356,14 @@ const char *int128_to_cstr(Int128 n) {
     return arena_sv_to_cstr(&temp_arena, (SV) {.data = buffer + head, .count = len(buffer) - head});
 }
 
+#define TWO_TO_64 (4294967296.0 * 4294967296.0)
+
+double int128_to_double(Int128 n) {
+    double low_d = (double) n.low;
+    double high_d = (double) (int64_t) n.high;
+    return (high_d * TWO_TO_64) + low_d;
+}
+
 // This file was vibecoded. Since this is a very common file across multiple codebases, and is just a case of copy
 // pasting the implementation, therefore the risk of AI hallucinating is quite low. Nevertheless I tested this against
 // the '__int128' type of GCC/Clang, and it seems to work.

@@ -38,8 +38,14 @@ void error_redefinition_global(
 void error_number_of_return_values_mismatch(Compiler *c, Token token, size_t expected, size_t actual);
 void maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(Node *n, Type expected);
 
-void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label);
-void check_int_limit(Compiler *c, Node *n, Int128 value);
+typedef struct {
+    Int128 min;
+    Int128 max;
+} Int_Limit;
+
+Int_Limit get_int_limit(Type type);
+void      check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label);
+void      check_int_limit(Compiler *c, Node *n, Int128 value);
 
 bool     get_builtin_type_kind(SV name, Type_Kind *kind);
 i64      get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t);
@@ -66,7 +72,7 @@ Type type_assert(Compiler *c, Node *n, Type expected);
 bool type_assert_grouped_noexit(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement);
 Type type_assert_grouped(Compiler *c, Node *n, Type expected, i64 group_index, Token *requirement);
 Type type_assert_node(Compiler *c, Node *a, Node *b);
-Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed);
+Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed, bool floats_allowed);
 Type type_assert_scalar(Compiler *c, const Node *n);
 bool type_assert_type_noexit(const Node *n);
 Type type_assert_type(Compiler *c, const Node *n);
@@ -220,6 +226,10 @@ void check_stmt_return(Compiler *c, Node_Return *returnn);
 void check_stmt(Compiler *c, Node *n);
 
 // Exit Wrapper ////////////////////////////////////////////////////////////////////////////////////
+#ifdef DONT_DEFINE_EXIT_WRAPPER
+#undef DONT_DEFINE_EXIT_WRAPPER
+#else
 #define exit(c, code) (show_current_monomorphization(c), exit(code))
+#endif // DONT_DEFINE_EXIT_WRAPPER
 
 #endif // CHECKER_INTERNAL_H

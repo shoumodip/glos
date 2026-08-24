@@ -1,5 +1,5 @@
 EXIT 0
-STDOUT 599
+STDOUT 607
 bool
 char
 i8
@@ -10,6 +10,8 @@ u8
 u16
 u32
 u64
+f32
+f64
 rawptr
 string
 ()

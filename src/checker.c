@@ -123,9 +123,9 @@ void check_nodes(Compiler *c) {
 
         assert(type_info_variant->kind == TYPE_UNION);
         c->type_info_variants_union = type_info_variant->spec.unionn;
-        assert(c->type_info_variants_union->variants_count == 13);
+        assert(c->type_info_variants_union->variants_count == 14);
 
-        static_assert(COUNT_TYPES == 27, "");
+        static_assert(COUNT_TYPES == 30, "");
         c->type_info_variants[TYPE_BOOL] = CONTRACT_TYPE_INFO_BOOLEAN;
         c->type_info_variants[TYPE_CHAR] = CONTRACT_TYPE_INFO_CHARACTER;
 
@@ -133,13 +133,17 @@ void check_nodes(Compiler *c) {
         c->type_info_variants[TYPE_I16] = CONTRACT_TYPE_INFO_INTEGER;
         c->type_info_variants[TYPE_I32] = CONTRACT_TYPE_INFO_INTEGER;
         c->type_info_variants[TYPE_I64] = CONTRACT_TYPE_INFO_INTEGER;
-        c->type_info_variants[TYPE_INT] = CONTRACT_TYPE_INFO_INTEGER;
 
         c->type_info_variants[TYPE_U8] = CONTRACT_TYPE_INFO_INTEGER;
         c->type_info_variants[TYPE_U16] = CONTRACT_TYPE_INFO_INTEGER;
         c->type_info_variants[TYPE_U32] = CONTRACT_TYPE_INFO_INTEGER;
         c->type_info_variants[TYPE_U64] = CONTRACT_TYPE_INFO_INTEGER;
 
+        c->type_info_variants[TYPE_F32] = CONTRACT_TYPE_INFO_FLOAT;
+        c->type_info_variants[TYPE_F64] = CONTRACT_TYPE_INFO_FLOAT;
+
+        c->type_info_variants[TYPE_INT] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_FLOAT] = CONTRACT_TYPE_INFO_FLOAT;
         c->type_info_variants[TYPE_RAWPTR] = CONTRACT_TYPE_INFO_POINTER;
 
         c->type_info_variants[TYPE_FN] = CONTRACT_TYPE_INFO_FUNCTION;

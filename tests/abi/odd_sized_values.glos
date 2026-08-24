@@ -1,0 +1,25 @@
+main :: () {
+    s3_foo(S3 {{'H', 'i', '!'}})
+    s3_foo(s3_ret("420"))
+
+    s11_foo(S11 {{'L', 'i', 'g', 'm', 'a', 'b', 'a', 'l', 'l', 'z', '!'}})
+    s11_foo(s11_ret("Messi GOAT."))
+}
+
+S3 :: struct {
+    xs: [3]char
+}
+
+S11 :: struct {
+    xs: [11]char
+}
+
+extern {
+    #library "abi"
+
+    s3_foo :: (s: S3)
+    s3_ret :: (xs: &char) -> S3
+
+    s11_foo :: (s: S11)
+    s11_ret :: (xs: &char) -> S11
+}

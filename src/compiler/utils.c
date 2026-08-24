@@ -1,7 +1,8 @@
 #include "../checker.h"
+#include "../error.h"
 #include "compiler.h"
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 bool type_is_compound(Type type) {
     if (type.ref) {
         return false;
@@ -104,7 +105,11 @@ LLVMValueRef compile_alloca(Compiler *c, LLVMTypeRef type) {
     return alloca;
 }
 
-LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to_type, bool is_signed) {
+static inline bool llvm_type_kind_is_float(LLVMTypeKind kind) {
+    return kind == LLVMFloatTypeKind || kind == LLVMDoubleTypeKind;
+}
+
+LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to_type, bool is_from_signed, bool is_to_signed) {
     LLVMTypeRef from_type = LLVMTypeOf(from);
     if (from_type == to_type) {
         return from;
@@ -131,13 +136,46 @@ LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to_type, b
             return LLVMBuildTrunc(c->llvm_builder, from, to_type, "");
         } else if (from_width < to_width) {
             // Smaller -> Bigger
-            if (is_signed) {
+            if (is_from_signed) {
                 return LLVMBuildSExt(c->llvm_builder, from, to_type, "");
             }
             return LLVMBuildZExt(c->llvm_builder, from, to_type, "");
         } else {
             // Bigger -> Smaller
             return LLVMBuildBitCast(c->llvm_builder, from, to_type, "");
+        }
+    }
+
+    // Float -> Integer
+    if (llvm_type_kind_is_float(from_kind) && to_kind == LLVMIntegerTypeKind) {
+        if (is_to_signed) {
+            return LLVMBuildFPToSI(c->llvm_builder, from, to_type, "");
+        } else {
+            return LLVMBuildFPToUI(c->llvm_builder, from, to_type, "");
+        }
+    }
+
+    // Integer -> Float
+    if (from_kind == LLVMIntegerTypeKind && llvm_type_kind_is_float(to_kind)) {
+        if (is_from_signed) {
+            return LLVMBuildSIToFP(c->llvm_builder, from, to_type, "");
+        } else {
+            return LLVMBuildUIToFP(c->llvm_builder, from, to_type, "");
+        }
+    }
+
+    // Float -> FLoat
+    if (llvm_type_kind_is_float(from_kind) && llvm_type_kind_is_float(to_kind)) {
+        const size_t from_size = LLVMABISizeOfType(c->llvm_target_data, from_type);
+        const size_t to_size = LLVMABISizeOfType(c->llvm_target_data, to_type);
+        if (from_size > to_size) {
+            // Bigger -> Smaller
+            return LLVMBuildFPTrunc(c->llvm_builder, from, to_type, "");
+        } else if (from_size < to_size) {
+            // Smaller -> Bigger
+            return LLVMBuildFPExt(c->llvm_builder, from, to_type, "");
+        } else {
+            unreachable();
         }
     }
 
@@ -182,4 +220,79 @@ void compile_panic_v2(Compiler *c, Pos pos, Contract_Panic panic, LLVMValueRef v
 
     LLVMBuildCall2(c->llvm_builder, fn.type->llvm, fn.value, args, len(args), "");
     LLVMBuildUnreachable(c->llvm_builder);
+}
+
+void compiler_init_llvm_target_data(Compiler *c) {
+    if (LLVMInitializeNativeTarget() != 0) {
+        error_standalone(EK_ERROR, "Failed to initialize native target");
+        exit(1);
+    }
+    LLVMInitializeNativeAsmPrinter();
+
+    c->llvm_context = LLVMContextCreate();
+    c->llvm_module = LLVMModuleCreateWithNameInContext("", c->llvm_context);
+
+    char *triple = LLVMGetDefaultTargetTriple();
+    LLVMSetTarget(c->llvm_module, triple);
+
+    char *error = NULL;
+
+    LLVMTargetRef target = NULL;
+    if (LLVMGetTargetFromTriple(triple, &target, &error)) {
+        error_standalone(EK_ERROR, "%s", error);
+        exit(1);
+    }
+
+    LLVMCodeGenOptLevel opt_level;
+    switch (c->optimization_level) {
+    case O0:
+        opt_level = LLVMCodeGenLevelNone;
+        break;
+
+    case O1:
+        opt_level = LLVMCodeGenLevelLess;
+        break;
+
+    case O2:
+        opt_level = LLVMCodeGenLevelDefault;
+        break;
+
+    case O3:
+        opt_level = LLVMCodeGenLevelAggressive;
+        break;
+
+    default:
+        unreachable();
+        break;
+    }
+
+    c->llvm_target_machine =
+        LLVMCreateTargetMachine(target, triple, "generic", "", opt_level, LLVMRelocPIC, LLVMCodeModelDefault);
+    c->llvm_target_data = LLVMCreateTargetDataLayout(c->llvm_target_machine);
+
+    // Initialize the common types
+    {
+        LLVMTypeRef dynamic_array_fields[] = {
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMInt64TypeInContext(c->llvm_context),
+            LLVMInt64TypeInContext(c->llvm_context),
+        };
+        c->llvm_dynamic_array_type =
+            LLVMStructTypeInContext(c->llvm_context, dynamic_array_fields, len(dynamic_array_fields), false);
+
+        LLVMTypeRef slice_fields[] = {
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMInt64TypeInContext(c->llvm_context),
+        };
+        c->llvm_slice_type = LLVMStructTypeInContext(c->llvm_context, slice_fields, len(slice_fields), false);
+
+        LLVMTypeRef trait_fields[] = {
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+        };
+        c->llvm_trait_type = LLVMStructTypeInContext(c->llvm_context, trait_fields, len(trait_fields), false);
+    }
+
+    free(triple);
 }

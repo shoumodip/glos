@@ -65,7 +65,7 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
             exit(c, 1);
         }
 
-        type_assert_numeric(c, n, false);
+        type_assert_numeric(c, n, false, false);
         break;
 
     default:
@@ -116,7 +116,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_INT:
         n->type = (Type) {.kind = TYPE_INT};
@@ -132,6 +132,10 @@ void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_va
 
     case TOKEN_NULL:
         n->type = (Type) {.kind = TYPE_RAWPTR};
+        break;
+
+    case TOKEN_FLOAT:
+        n->type = (Type) {.kind = TYPE_FLOAT};
         break;
 
     case TOKEN_IDENT:
@@ -200,7 +204,7 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     Node *n = (Node *) unary;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
@@ -243,7 +247,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
 
     case TOKEN_BNOT:
         check_expr(c, unary->value, REF_NONE);
-        n->type = type_assert_numeric(c, unary->value, false);
+        n->type = type_assert_numeric(c, unary->value, false, false);
         break;
 
     case TOKEN_LNOT:
@@ -273,7 +277,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
 
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     Node *n = (Node *) binary;
-    static_assert(COUNT_TOKENS == 78, "");
+    static_assert(COUNT_TOKENS == 79, "");
     switch (n->token.kind) {
     case TOKEN_ADD:
     case TOKEN_SUB:
@@ -328,7 +332,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
             exit(c, 1);
         }
 
-        n->type = type_assert_numeric(c, binary->lhs, false);
+        n->type = type_assert_numeric(c, binary->lhs, false, false);
         break;
 
         // The following can never be ran as a result of autocast, therefore not considering 'check_children'
@@ -1440,7 +1444,7 @@ void check_expr_compound(Compiler *c, Node_Compound *compound) {
                 }
             } else if (n->type.kind == TYPE_ARRAY || n->type.kind == TYPE_SLICE) {
                 check_expr(c, it_binary->lhs, REF_NONE);
-                type_assert_numeric(c, it_binary->lhs, false);
+                type_assert_numeric(c, it_binary->lhs, false, false);
 
                 const Const_Value value = eval_const_expr(c, it_binary->lhs, false);
                 assert(value.kind == CONST_VALUE_INT);
@@ -1827,16 +1831,18 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                         ok = type_eq(*from_type, (Type) {.kind = TYPE_RAWPTR});
                     } else if (!type_is_pointer(*from_type) && type_is_pointer(*to_type)) {
                         // i64/u64 -> ptr
-                        if (!type_kind_eq(*from_type, TYPE_I64) && !type_kind_eq(*from_type, TYPE_U64) &&
-                            !type_kind_eq(*from_type, TYPE_INT)) {
-                            ok = false;
-                        }
+                        ok = type_kind_eq(*from_type, TYPE_I64) || type_kind_eq(*from_type, TYPE_U64) ||
+                             type_kind_eq(*from_type, TYPE_INT);
                     } else if (type_is_pointer(*from_type) && !type_is_pointer(*to_type)) {
                         // ptr -> i64/u64
-                        if (!type_kind_eq(*to_type, TYPE_I64) && !type_kind_eq(*to_type, TYPE_U64) &&
-                            !type_kind_eq(*to_type, TYPE_INT)) {
-                            ok = false;
-                        }
+                        ok = type_kind_eq(*to_type, TYPE_I64) || type_kind_eq(*to_type, TYPE_U64) ||
+                             type_kind_eq(*to_type, TYPE_INT);
+                    } else if (!type_is_float(*from_type) && type_is_float(*to_type)) {
+                        // integer -> float
+                        ok = type_is_integer(*from_type);
+                    } else if (type_is_float(*from_type) && !type_is_float(*to_type)) {
+                        // float -> integer
+                        ok = type_is_integer(*to_type);
                     } else if (
                         type_kind_eq(*from_type, TYPE_INT) &&
                         (type_is_integer(*to_type) || type_kind_eq(*to_type, TYPE_ENUM))) //
@@ -1942,7 +1948,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
             // The beginning can be inferred to be 0
             if (index->a) {
                 check_expr(c, index->a, REF_NONE);
-                type_assert_numeric(c, index->a, false);
+                type_assert_numeric(c, index->a, false, false);
             }
 
             // The ending CANNOT be inferred
@@ -1952,7 +1958,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
             }
 
             check_expr(c, index->b, REF_NONE);
-            type_assert_numeric(c, index->b, false);
+            type_assert_numeric(c, index->b, false, false);
 
             Type element_type = index->lhs->type;
             element_type.ref--;
@@ -1969,13 +1975,13 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
             // The beginning can be inferred to be the beginning of the slice
             if (index->a) {
                 check_expr(c, index->a, REF_NONE);
-                type_assert_numeric(c, index->a, false);
+                type_assert_numeric(c, index->a, false, false);
             }
 
             // The ending can be inferred to be the ending of the slice
             if (index->b) {
                 check_expr(c, index->b, REF_NONE);
-                type_assert_numeric(c, index->b, false);
+                type_assert_numeric(c, index->b, false, false);
             }
 
             n->type = index->lhs->type;
@@ -2021,19 +2027,19 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
         n->is_memory = index->lhs->is_memory;
         if (type_kind_eq(index->lhs->type, TYPE_ARRAY) && !index->lhs->type.ref) {
             check_expr(c, index->a, REF_NONE);
-            type_assert_numeric(c, index->a, false);
+            type_assert_numeric(c, index->a, false, false);
             n->type = *index->lhs->type.spec.array.element;
         } else if (type_kind_eq(index->lhs->type, TYPE_DYNAMIC_ARRAY) && !index->lhs->type.ref) {
             check_expr(c, index->a, REF_NONE);
-            type_assert_numeric(c, index->a, false);
+            type_assert_numeric(c, index->a, false, false);
             n->type = *index->lhs->type.spec.dynamic_array.element;
         } else if (type_kind_eq(index->lhs->type, TYPE_SLICE) && !index->lhs->type.ref) {
             check_expr(c, index->a, REF_NONE);
-            type_assert_numeric(c, index->a, false);
+            type_assert_numeric(c, index->a, false, false);
             n->type = *index->lhs->type.spec.slice.element;
         } else if (type_kind_eq(index->lhs->type, TYPE_STRING) && !index->lhs->type.ref) {
             check_expr(c, index->a, REF_NONE);
-            type_assert_numeric(c, index->a, false);
+            type_assert_numeric(c, index->a, false, false);
             n->type = (Type) {.kind = TYPE_CHAR};
         } else {
             if (index->lhs->type.ref) {
@@ -2079,7 +2085,7 @@ void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, 
                 has_count = false;
             }
         } else {
-            type_assert_numeric(c, indexable->count, false);
+            type_assert_numeric(c, indexable->count, false, false);
             count_value = eval_const_expr(c, indexable->count, false);
         }
 

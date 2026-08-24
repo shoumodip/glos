@@ -119,20 +119,35 @@ Type type_assert_node(Compiler *c, Node *a, Node *b) {
     exit(c, 1);
 }
 
-Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed) {
+Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed, bool floats_allowed) {
+    if (type_is_pointer(n->type)) {
+        if (pointers_allowed) {
+            return n->type;
+        }
+
+        goto fail;
+    }
+
+    if (type_is_float(n->type)) {
+        if (floats_allowed) {
+            return n->type;
+        }
+
+        goto fail;
+    }
+
     if (type_is_numeric(n->type)) {
         return n->type;
     }
 
-    if (pointers_allowed && type_is_pointer(n->type)) {
-        return n->type;
-    }
-
+fail:
     check_that_type_is_known(c, n);
 
-    const char *label = "arithmetic";
-    if (!pointers_allowed) {
-        label = "numeric";
+    const char *label = NULL;
+    if (floats_allowed) {
+        label = pointers_allowed ? "numeric or pointer" : "numeric";
+    } else {
+        label = pointers_allowed ? "integer or pointer" : "integer";
     }
 
     error_node(EK_ERROR, n, "Expected %s value, got %s", label, type_to_cstr(n->type));

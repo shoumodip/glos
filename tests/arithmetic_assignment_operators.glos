@@ -1,31 +1,59 @@
 main :: () {
-    acc := 42
-    println(acc)
+    // Integers
+    {
+        acc := 42
+        println(acc)
 
-    acc += 10
-    println(acc)
+        acc += 10
+        println(acc)
 
-    acc -= 5
-    println(acc)
+        acc -= 5
+        println(acc)
 
-    acc *= 2
-    println(acc)
+        acc *= 2
+        println(acc)
 
-    acc /= 3
-    println(acc)
+        acc /= 3
+        println(acc)
 
-    acc <<= 1
-    println(acc)
+        acc <<= 1
+        println(acc)
 
-    acc >>= 2
-    println(acc)
+        acc >>= 2
+        println(acc)
 
-    acc |= 8
-    println(acc)
+        acc |= 8
+        println(acc)
 
-    acc &= 15
-    println(acc)
+        acc &= 15
+        println(acc)
 
-    acc %= 4
-    println(acc)
+        acc %= 4
+        println(acc)
+    }
+
+    // Floats
+    {
+        x := 1.2
+        println(x)
+
+        x += 1.2
+        println(x)
+
+        x -= 1.2
+        println(x)
+
+        x *= 3.3
+        println(x)
+
+        x /= 0.3
+        println(x)
+
+        x %= 5.2
+        println(x)
+
+        y := 6.8
+        x, y += 0.2, 0.1
+        println(x, y)
+    }
 }

@@ -158,35 +158,31 @@ void maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_
     }
 }
 
-static_assert(COUNT_TYPES == 27, "");
-void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label) {
-    const Type_Kind type_kind = type_kind_eq(n->type, TYPE_ENUM) ? n->type.spec.enumm.underlying : n->type.kind;
-
-    typedef struct {
-        Int128 min;
-        Int128 max;
-    } Limit;
-
-    Limit limit = {0};
-    if (type_is_signed(n->type)) {
-        const Limit limits[COUNT_TYPES] = {
+static_assert(COUNT_TYPES == 30, "");
+Int_Limit get_int_limit(Type type) {
+    const Type_Kind type_kind = type_kind_eq(type, TYPE_ENUM) ? type.spec.enumm.underlying : type.kind;
+    if (type_is_signed(type)) {
+        const Int_Limit limits[COUNT_TYPES] = {
             [TYPE_I8] = {.min = INT128_FROM_I64(INT8_MIN), .max = INT128_FROM_I64(INT8_MAX)},
             [TYPE_I16] = {.min = INT128_FROM_I64(INT16_MIN), .max = INT128_FROM_I64(INT16_MAX)},
             [TYPE_I32] = {.min = INT128_FROM_I64(INT32_MIN), .max = INT128_FROM_I64(INT32_MAX)},
             [TYPE_I64] = {.min = INT128_FROM_I64(INT64_MIN), .max = INT128_FROM_I64(INT64_MAX)},
             [TYPE_INT] = {.min = INT128_FROM_I64(INT64_MIN), .max = INT128_FROM_I64(INT64_MAX)},
         };
-        limit = limits[type_kind];
+        return limits[type_kind];
     } else {
-        const Limit limits[COUNT_TYPES] = {
+        const Int_Limit limits[COUNT_TYPES] = {
             [TYPE_U8] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT8_MAX)},
             [TYPE_U16] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT16_MAX)},
             [TYPE_U32] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT32_MAX)},
             [TYPE_U64] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT64_MAX)},
         };
-        limit = limits[type_kind];
+        return limits[type_kind];
     }
+}
 
+void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label) {
+    Int_Limit limit = get_int_limit(n->type);
     if (min_zero) {
         limit.min = INT128_FROM_U64(0);
     }
@@ -209,7 +205,7 @@ void check_int_limit(Compiler *c, Node *n, Int128 value) {
 }
 
 bool get_builtin_type_kind(SV name, Type_Kind *kind) {
-    static_assert(COUNT_TYPES == 27, "");
+    static_assert(COUNT_TYPES == 30, "");
     static const char *names[COUNT_TYPES] = {
         [TYPE_BOOL] = "bool",
         [TYPE_CHAR] = "char",
@@ -223,6 +219,9 @@ bool get_builtin_type_kind(SV name, Type_Kind *kind) {
         [TYPE_U16] = "u16",
         [TYPE_U32] = "u32",
         [TYPE_U64] = "u64",
+
+        [TYPE_F32] = "f32",
+        [TYPE_F64] = "f64",
 
         [TYPE_RAWPTR] = "rawptr",
         [TYPE_STRING] = "string",
@@ -369,9 +368,13 @@ static_assert(COUNT_NODES == 29, "");
 void cast_untyped(Compiler *c, Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM: {
-        static_assert(COUNT_TOKENS == 78, "");
+        static_assert(COUNT_TOKENS == 79, "");
         switch (n->token.kind) {
         case TOKEN_INT:
+            n->type = expected;
+            break;
+
+        case TOKEN_FLOAT:
             n->type = expected;
             break;
 
@@ -449,6 +452,10 @@ void finalize_untyped_type(Compiler *c, Node *n) {
         assert(value.kind == CONST_VALUE_INT);
         check_int_limit(c, n, value.as.integer);
     }
+
+    if (type_kind_eq(n->type, TYPE_FLOAT)) {
+        n->type.kind = TYPE_F64;
+    }
 }
 
 bool try_auto_cast_untyped(Compiler *c, Node *n, Type expected) {
@@ -463,6 +470,13 @@ bool try_auto_cast_untyped(Compiler *c, Node *n, Type expected) {
             assert(value.kind == CONST_VALUE_INT);
 
             check_int_limit(c, n, value.as.integer);
+        }
+        return true;
+    }
+
+    if (type_kind_eq(n->type, TYPE_FLOAT) && type_is_float(expected)) {
+        if (!type_kind_eq(expected, TYPE_FLOAT)) {
+            cast_untyped(c, n, expected);
         }
         return true;
     }

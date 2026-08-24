@@ -62,7 +62,7 @@ static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
     sb_push(sb, ')');
 }
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 void sb_push_type(SB *sb, Type type) {
     assert(!type.is_meta);
     if (type.distinct) {
@@ -125,8 +125,20 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_cstr(sb, "u64");
         break;
 
+    case TYPE_F32:
+        sb_push_cstr(sb, "f32");
+        break;
+
+    case TYPE_F64:
+        sb_push_cstr(sb, "f64");
+        break;
+
     case TYPE_INT:
         sb_push_cstr(sb, "i64");
+        break;
+
+    case TYPE_FLOAT:
+        sb_push_cstr(sb, "f64");
         break;
 
     case TYPE_RAWPTR:
@@ -402,7 +414,7 @@ static bool type_struct_eq(Type_Struct *a, Type_Struct *b) {
     return true;
 }
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 bool type_eq(Type a, Type b) {
     if (a.is_meta) {
         return b.is_meta;
@@ -495,11 +507,11 @@ bool type_meta_kind_eq(Type type, Type_Kind kind) {
 }
 
 bool type_is_numeric(Type type) {
-    return type_is_integer(type) || type_kind_eq(type, TYPE_ENUM) || type_kind_eq(type, TYPE_UNKNOWN_ENUM) ||
-           type_kind_eq(type, TYPE_UNKNOWN_COMPOUND);
+    return type_is_integer(type) || type_is_float(type) || type_kind_eq(type, TYPE_ENUM) ||
+           type_kind_eq(type, TYPE_UNKNOWN_ENUM) || type_kind_eq(type, TYPE_UNKNOWN_COMPOUND);
 }
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 bool type_is_integer(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -522,6 +534,14 @@ bool type_is_integer(Type type) {
     default:
         return false;
     }
+}
+
+static_assert(COUNT_TYPES == 30, "");
+bool type_is_float(Type type) {
+    if (type.ref || type.is_meta) {
+        return false;
+    }
+    return type.kind == TYPE_F32 || type.kind == TYPE_F64 || type.kind == TYPE_FLOAT;
 }
 
 bool type_is_pointer(Type type) {
@@ -547,7 +567,7 @@ bool type_is_scalar(Type type) {
     return false;
 }
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 bool type_is_signed(Type type) {
     if (type.ref || type.is_meta) {
         return false;
@@ -565,6 +585,10 @@ bool type_is_signed(Type type) {
     case TYPE_I64:
     case TYPE_INT:
 
+    case TYPE_F32:
+    case TYPE_F64:
+    case TYPE_FLOAT:
+
     case TYPE_UNKNOWN_ENUM:
     case TYPE_UNKNOWN_COMPOUND:
         return true;
@@ -574,16 +598,16 @@ bool type_is_signed(Type type) {
     }
 }
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 bool type_is_untyped(Type type) {
     if (type.is_meta || type.ref) {
         return false;
     }
 
-    return type.kind == TYPE_INT;
+    return type.kind == TYPE_INT || type.kind == TYPE_FLOAT;
 }
 
-static_assert(COUNT_TYPES == 27, "");
+static_assert(COUNT_TYPES == 30, "");
 bool type_is_unknown(Type type) {
     if (type.is_meta || type.ref) {
         return false;
@@ -592,7 +616,7 @@ bool type_is_unknown(Type type) {
     return type.kind == TYPE_UNKNOWN_ENUM || type.kind == TYPE_UNKNOWN_COMPOUND;
 }
 
-static_assert(COUNT_CONST_VALUES == 12, "");
+static_assert(COUNT_CONST_VALUES == 13, "");
 bool const_value_eq(Const_Value a, Const_Value b) {
     if (a.kind != b.kind) {
         return false;
@@ -601,6 +625,9 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     switch (a.kind) {
     case CONST_VALUE_INT:
         return int128_eq(a.as.integer, b.as.integer);
+
+    case CONST_VALUE_FLOAT:
+        return a.as.real == b.as.real;
 
     case CONST_VALUE_FN:
         return a.as.fn == b.as.fn;
@@ -744,7 +771,7 @@ static void sb_push_quoted_char(SB *sb, char ch, char quote) {
     }
 }
 
-static_assert(COUNT_CONST_VALUES == 12, "");
+static_assert(COUNT_CONST_VALUES == 13, "");
 static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw) {
     switch (v.kind) {
     case CONST_VALUE_INT:
@@ -759,6 +786,10 @@ static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw)
         } else {
             sb_push_cstr(sb, int128_to_cstr(v.as.integer));
         }
+        break;
+
+    case CONST_VALUE_FLOAT:
+        sb_sprintf(sb, "%.14g", v.as.real);
         break;
 
     case CONST_VALUE_FN:

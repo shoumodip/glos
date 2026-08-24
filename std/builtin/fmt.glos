@@ -27,6 +27,10 @@ write_type :: (w: Writer, t: Type) {
         }
         wprint(w, t.size * 8)
 
+    case Type_Info_Float
+        w.write([]char("f"))
+        wprint(w, t.size * 8)
+
     case Type_Info_Pointer
         if v.underlying != null {
             w.write([]char("&"))
@@ -206,7 +210,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
             case 2; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i16(a.data))
             case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i32(a.data))
             case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%zd".data, *&i64(a.data))
-            case; unreachable()
+            case;   unreachable()
             }
         } else {
             if a.type.size == {
@@ -214,8 +218,18 @@ write_value :: (w: Writer, a: Any, nested: bool) {
             case 2; count = C.snprintf(buffer.data, u64(buffer.count), "%u".data, *&u16(a.data))
             case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%u".data, *&u32(a.data))
             case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%zu".data, *&u64(a.data))
-            case; unreachable()
+            case;   unreachable()
             }
+        }
+        w.write(buffer[..count])
+
+    case Type_Info_Float
+        buffer: [32]char
+        count: i32
+        if a.type.size == {
+        case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%.7g".data, *&f32(a.data))
+        case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%.14g".data, *&f64(a.data))
+        case;   unreachable()
         }
         w.write(buffer[..count])
 

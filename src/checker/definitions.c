@@ -382,7 +382,7 @@ void push_context_replace(Compiler *c, Context_Replace *replace, Node_Atom *from
     if (replace->to->definition_spec->is_const) {
         Const_Value *value = &replace->to->definition_spec->const_value;
 
-        static_assert(COUNT_CONST_VALUES == 12, "");
+        static_assert(COUNT_CONST_VALUES == 13, "");
         switch (value->kind) {
         case CONST_VALUE_TRAIT: {
             const Const_Value_Trait trait = value->as.trait;

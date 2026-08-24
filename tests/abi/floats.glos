@@ -1,0 +1,127 @@
+main :: () {
+    // f32
+    {
+        f4_foo({4.2})
+        f4_foo(f4_ret(6.9))
+
+        f8_foo({4.2, 6.9})
+        f8_foo(f8_ret(4.2, 6.9))
+
+        f12_foo({4.2, 6.9, 13.37})
+        f12_foo(f12_ret(4.2, 6.9, 13.37))
+
+        f16_foo({4.2, 6.9, 13.37, 80.085})
+        f16_foo(f16_ret(4.2, 6.9, 13.37, 80.085))
+    }
+
+    // f64
+    {
+        d8_foo({4.2})
+        d8_foo(d8_ret(6.9))
+
+        d16_foo({4.2, 6.9})
+        d16_foo(d16_ret(4.2, 6.9))
+
+        d24_foo({4.2, 6.9, 13.37})
+        d24_foo(d24_ret(4.2, 6.9, 13.37))
+
+        d32_foo({4.2, 6.9, 13.37, 80.085})
+        d32_foo(d32_ret(4.2, 6.9, 13.37, 80.085))
+    }
+
+    // Mixed
+    {
+        fd16_foo({13.37, 80.085})
+        fd16_foo(fd16_ret(13.37, 80.085))
+
+        fs8_foo({6.9, 420})
+        fs8_foo(fs8_ret(6.9, 420))
+
+        ds16_foo({13.37, 80085})
+        ds16_foo(ds16_ret(13.37, 80085))
+    }
+}
+
+F4 :: struct {
+    x: f32
+}
+
+F8 :: struct {
+    x, y: f32
+}
+
+F12 :: struct {
+    x, y, z: f32
+}
+
+F16 :: struct {
+    x, y, z, w: f32
+}
+
+D8 :: struct {
+    x: f64
+}
+
+D16 :: struct {
+    x, y: f64
+}
+
+D24 :: struct {
+    x, y, z: f64
+}
+
+D32 :: struct {
+    x, y, z, w: f64
+}
+
+FD16 :: struct {
+    x: f32
+    y: f64
+}
+
+FS8 :: struct {
+    x: f32
+    y: i32
+}
+
+DS16 :: struct {
+    x: f64
+    y: i64
+}
+
+extern {
+    #library "abi"
+
+    f4_foo :: (f: F4)
+    f4_ret :: (x: f32) -> F4
+
+    f8_foo :: (f: F8)
+    f8_ret :: (x: f32, y: f32) -> F8
+
+    f12_foo :: (f: F12)
+    f12_ret :: (x: f32, y: f32, z: f32) -> F12
+
+    f16_foo :: (f: F16)
+    f16_ret :: (x: f32, y: f32, z: f32, w: f32) -> F16
+
+    d8_foo :: (d: D8)
+    d8_ret :: (x: f64) -> D8
+
+    d16_foo :: (d: D16)
+    d16_ret :: (x: f64, y: f64) -> D16
+
+    d24_foo :: (d: D24)
+    d24_ret :: (x: f64, y: f64, z: f64) -> D24
+
+    d32_foo :: (d: D32 )
+    d32_ret :: (x: f64, y: f64, z: f64, w: f64) -> D32
+
+    fd16_foo :: (f: FD16)
+    fd16_ret :: (x: f32, y: f64) -> FD16
+
+    fs8_foo :: (f: FS8 )
+    fs8_ret :: (x: f32 , y: i32) -> FS8
+
+    ds16_foo :: (f: DS16)
+    ds16_ret :: (x: f64 , y: i64) -> DS16
+}
