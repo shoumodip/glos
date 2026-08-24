@@ -7,13 +7,13 @@ typedef struct {
     size_t      count;
 } QWords;
 
-static void put_scalar_type_into_qword(Compiler *c, QWords *info, LLVMTypeRef type, size_t offset) {
+static void put_scalar_type_into_qword(Compiler *c, QWords *words, LLVMTypeRef type, size_t offset) {
     const size_t index = offset / 8;
-    assert(index < len(info->types));
+    assert(index < len(words->types));
 
-    LLVMTypeRef *dst = &info->types[index];
+    LLVMTypeRef *dst = &words->types[index];
     if (!*dst) {
-        info->count++;
+        words->count++;
     }
 
     switch (LLVMGetTypeKind(type)) {
@@ -67,10 +67,19 @@ static void put_scalar_type_into_qword(Compiler *c, QWords *info, LLVMTypeRef ty
     }
 }
 
+static void put_raw_bytes_into_words(Compiler *c, QWords *words, size_t offset, size_t size) {
+    while (size > 8) {
+        put_scalar_type_into_qword(c, words, LLVMInt64TypeInContext(c->llvm_context), offset);
+        offset += 8;
+        size -= 8;
+    }
+    put_scalar_type_into_qword(c, words, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
+}
+
 static_assert(COUNT_TYPES == 30, "");
-static void split_type_into_qwords(Compiler *c, QWords *info, const Type *type, size_t offset, size_t size) {
+static void split_type_into_qwords(Compiler *c, QWords *words, const Type *type, size_t offset, size_t size) {
     if (type->ref) {
-        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        put_scalar_type_into_qword(c, words, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
         return;
     }
 
@@ -88,73 +97,63 @@ static void split_type_into_qwords(Compiler *c, QWords *info, const Type *type, 
 
     case TYPE_INT:
     case TYPE_ENUM:
-        put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
+        put_scalar_type_into_qword(c, words, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
         break;
 
     case TYPE_F32:
-        put_scalar_type_into_qword(c, info, LLVMFloatTypeInContext(c->llvm_context), offset);
+        put_scalar_type_into_qword(c, words, LLVMFloatTypeInContext(c->llvm_context), offset);
         break;
 
     case TYPE_F64:
     case TYPE_FLOAT:
-        put_scalar_type_into_qword(c, info, LLVMDoubleTypeInContext(c->llvm_context), offset);
+        put_scalar_type_into_qword(c, words, LLVMDoubleTypeInContext(c->llvm_context), offset);
         break;
 
     case TYPE_FN:
     case TYPE_RAWPTR:
-        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        put_scalar_type_into_qword(c, words, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
         break;
 
     case TYPE_TRAIT:
-        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
-        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 8);
-        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 16);
+        put_scalar_type_into_qword(c, words, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        put_scalar_type_into_qword(c, words, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 8);
+        put_scalar_type_into_qword(c, words, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 16);
         break;
 
     case TYPE_UNION:
-        if (size > 8) {
-            put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset);
-            put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, (size - 8) * 8), offset + 8);
-        } else {
-            put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
-        }
+        put_raw_bytes_into_words(c, words, offset, size);
         break;
 
     case TYPE_STRUCT: {
         const Type_Struct *spec = type->spec.structt;
         for (size_t i = 0; i < spec->fields_count; i++) {
             const Type_Struct_Field *it = &spec->fields[i];
-            split_type_into_qwords(c, info, &it->type, offset + it->offset, it->size);
+            split_type_into_qwords(c, words, &it->type, offset + it->offset, it->size);
         }
     } break;
 
     case TYPE_ARRAY: {
         const Type_Array *spec = &type->spec.array;
         if (spec->count > 4) {
-            if (size > 8) {
-                put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset);
-                put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, (size - 8) * 8), offset + 8);
-            } else {
-                put_scalar_type_into_qword(c, info, LLVMIntTypeInContext(c->llvm_context, size * 8), offset);
-            }
+            put_raw_bytes_into_words(c, words, offset, size);
         } else {
             const size_t element_size = LLVMABISizeOfType(c->llvm_target_data, spec->element->llvm);
             for (size_t i = 0; i < spec->count; i++) {
-                split_type_into_qwords(c, info, spec->element, offset + i * element_size, element_size);
+                split_type_into_qwords(c, words, spec->element, offset + i * element_size, element_size);
             }
         }
     } break;
 
     case TYPE_DYNAMIC_ARRAY:
-        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
-        put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset + 8);
-        put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset + 16);
+        put_scalar_type_into_qword(c, words, LLVMPointerTypeInContext(c->llvm_context, 0), offset);
+        put_scalar_type_into_qword(c, words, LLVMInt64TypeInContext(c->llvm_context), offset + 8);
+        put_scalar_type_into_qword(c, words, LLVMInt64TypeInContext(c->llvm_context), offset + 16);
         break;
 
     case TYPE_SLICE:
     case TYPE_STRING:
-        put_scalar_type_into_qword(c, info, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 0);
-        put_scalar_type_into_qword(c, info, LLVMInt64TypeInContext(c->llvm_context), offset + 8);
+        put_scalar_type_into_qword(c, words, LLVMPointerTypeInContext(c->llvm_context, 0), offset + 0);
+        put_scalar_type_into_qword(c, words, LLVMInt64TypeInContext(c->llvm_context), offset + 8);
         break;
 
     case TYPE_GROUP: {
@@ -162,7 +161,7 @@ static void split_type_into_qwords(Compiler *c, QWords *info, const Type *type, 
         for (size_t i = 0; i < spec->count; i++) {
             const Type *it = &spec->data[i];
             split_type_into_qwords(
-                c, info, it, offset + spec->offsets[i], LLVMABISizeOfType(c->llvm_target_data, it->llvm));
+                c, words, it, offset + spec->offsets[i], LLVMABISizeOfType(c->llvm_target_data, it->llvm));
         }
     } break;
 
