@@ -61,3 +61,91 @@ S11 s11_ret(char xs[11]) {
     memcpy(s.xs, xs, sizeof(s.xs));
     return s;
 }
+
+void f4_foo(F4 f) {
+    printf("%.7g\n", f.x);
+}
+
+F4 f4_ret(float x) {
+    return (F4) {.x = x};
+}
+
+void f8_foo(F8 f) {
+    printf("%.7g %.7g\n", f.x, f.y);
+}
+
+F8 f8_ret(float x, float y) {
+    return (F8) {.x = x, .y = y};
+}
+
+void f12_foo(F12 f) {
+    printf("%.7g %.7g %.7g\n", f.x, f.y, f.z);
+}
+
+F12 f12_ret(float x, float y, float z) {
+    return (F12) {.x = x, .y = y, .z = z};
+}
+
+void f16_foo(F16 f) {
+    printf("%.7g %.7g %.7g %.7g\n", f.x, f.y, f.z, f.w);
+}
+
+F16 f16_ret(float x, float y, float z, float w) {
+    return (F16) {.x = x, .y = y, .z = z, .w = w};
+}
+
+void d8_foo(D8 d) {
+    printf("%.14g\n", d.x);
+}
+
+D8 d8_ret(double x) {
+    return (D8) {.x = x};
+}
+
+void d16_foo(D16 d) {
+    printf("%.14g %.14g\n", d.x, d.y);
+}
+
+D16 d16_ret(double x, double y) {
+    return (D16) {.x = x, .y = y};
+}
+
+void d24_foo(D24 d) {
+    printf("%.14g %.14g %.14g\n", d.x, d.y, d.z);
+}
+
+D24 d24_ret(double x, double y, double z) {
+    return (D24) {.x = x, .y = y, .z = z};
+}
+
+void d32_foo(D32 d) {
+    printf("%.14g %.14g %.14g %.14g\n", d.x, d.y, d.z, d.w);
+}
+
+D32 d32_ret(double x, double y, double z, double w) {
+    return (D32) {.x = x, .y = y, .z = z, .w = w};
+}
+
+void fd16_foo(FD16 f) {
+    printf("%.7g %.14g\n", f.x, f.y);
+}
+
+FD16 fd16_ret(float x, double y) {
+    return (FD16) {.x = x, .y = y};
+}
+
+void fs8_foo(FS8 f) {
+    printf("%.7g %d\n", f.x, f.y);
+}
+
+FS8 fs8_ret(float x, i32 y) {
+    return (FS8) {.x = x, .y = y};
+}
+
+void ds16_foo(DS16 f) {
+    printf("%.7g %" PRId64 "\n", f.x, f.y);
+}
+
+DS16 ds16_ret(double x, i64 y) {
+    return (DS16) {.x = x, .y = y};
+}

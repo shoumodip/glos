@@ -49,4 +49,85 @@ typedef struct {
 void s11_foo(S11 s);
 S11  s11_ret(char xs[11]);
 
+// Floats
+typedef struct {
+    float x;
+} F4;
+
+void f4_foo(F4 f);
+F4   f4_ret(float x);
+
+typedef struct {
+    float x, y;
+} F8;
+
+void f8_foo(F8 f);
+F8   f8_ret(float x, float y);
+
+typedef struct {
+    float x, y, z;
+} F12;
+
+void f12_foo(F12 f);
+F12  f12_ret(float x, float y, float z);
+
+typedef struct {
+    float x, y, z, w;
+} F16;
+
+void f16_foo(F16 f);
+F16  f16_ret(float x, float y, float z, float w);
+
+typedef struct {
+    double x;
+} D8;
+
+void d8_foo(D8 d);
+D8   d8_ret(double x);
+
+typedef struct {
+    double x, y;
+} D16;
+
+void d16_foo(D16 d);
+D16  d16_ret(double x, double y);
+
+typedef struct {
+    double x, y, z;
+} D24;
+
+void d24_foo(D24 d);
+D24  d24_ret(double x, double y, double z);
+
+typedef struct {
+    double x, y, z, w;
+} D32;
+
+void d32_foo(D32 d);
+D32  d32_ret(double x, double y, double z, double w);
+
+typedef struct {
+    float  x;
+    double y;
+} FD16;
+
+void fd16_foo(FD16 f);
+FD16 fd16_ret(float x, double y);
+
+typedef struct {
+    float x;
+    i32   y;
+} FS8;
+
+void fs8_foo(FS8 f);
+FS8  fs8_ret(float x, i32 y);
+
+typedef struct {
+    double x;
+    i64    y;
+} DS16;
+
+void ds16_foo(DS16 f);
+DS16 ds16_ret(double x, i64 y);
+
 #endif // ABI_H
