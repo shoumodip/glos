@@ -38,8 +38,14 @@ void error_redefinition_global(
 void error_number_of_return_values_mismatch(Compiler *c, Token token, size_t expected, size_t actual);
 void maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_cast(Node *n, Type expected);
 
-void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label);
-void check_int_limit(Compiler *c, Node *n, Int128 value);
+typedef struct {
+    Int128 min;
+    Int128 max;
+} Int_Limit;
+
+Int_Limit get_int_limit(Type type);
+void      check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label);
+void      check_int_limit(Compiler *c, Node *n, Int128 value);
 
 bool     get_builtin_type_kind(SV name, Type_Kind *kind);
 i64      get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t);

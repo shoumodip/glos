@@ -159,34 +159,30 @@ void maybe_show_note_about_underlying_types_being_equal_and_suggest_an_explicit_
 }
 
 static_assert(COUNT_TYPES == 30, "");
-void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label) {
-    const Type_Kind type_kind = type_kind_eq(n->type, TYPE_ENUM) ? n->type.spec.enumm.underlying : n->type.kind;
-
-    typedef struct {
-        Int128 min;
-        Int128 max;
-    } Limit;
-
-    Limit limit = {0};
-    if (type_is_signed(n->type)) {
-        const Limit limits[COUNT_TYPES] = {
+Int_Limit get_int_limit(Type type) {
+    const Type_Kind type_kind = type_kind_eq(type, TYPE_ENUM) ? type.spec.enumm.underlying : type.kind;
+    if (type_is_signed(type)) {
+        static const Int_Limit limits[COUNT_TYPES] = {
             [TYPE_I8] = {.min = INT128_FROM_I64(INT8_MIN), .max = INT128_FROM_I64(INT8_MAX)},
             [TYPE_I16] = {.min = INT128_FROM_I64(INT16_MIN), .max = INT128_FROM_I64(INT16_MAX)},
             [TYPE_I32] = {.min = INT128_FROM_I64(INT32_MIN), .max = INT128_FROM_I64(INT32_MAX)},
             [TYPE_I64] = {.min = INT128_FROM_I64(INT64_MIN), .max = INT128_FROM_I64(INT64_MAX)},
             [TYPE_INT] = {.min = INT128_FROM_I64(INT64_MIN), .max = INT128_FROM_I64(INT64_MAX)},
         };
-        limit = limits[type_kind];
+        return limits[type_kind];
     } else {
-        const Limit limits[COUNT_TYPES] = {
+        static const Int_Limit limits[COUNT_TYPES] = {
             [TYPE_U8] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT8_MAX)},
             [TYPE_U16] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT16_MAX)},
             [TYPE_U32] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT32_MAX)},
             [TYPE_U64] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT64_MAX)},
         };
-        limit = limits[type_kind];
+        return limits[type_kind];
     }
+}
 
+void check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, const char *label) {
+    Int_Limit limit = get_int_limit(n->type);
     if (min_zero) {
         limit.min = INT128_FROM_U64(0);
     }

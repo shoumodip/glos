@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 124
+tests/error_can_only_cast_floats_to_floats_or_integers.glos:1:6: ERROR: Cannot cast 'f64' to 'bool'
+
+    X :: bool(69.420)
+
+

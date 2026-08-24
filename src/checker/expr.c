@@ -1831,16 +1831,18 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                         ok = type_eq(*from_type, (Type) {.kind = TYPE_RAWPTR});
                     } else if (!type_is_pointer(*from_type) && type_is_pointer(*to_type)) {
                         // i64/u64 -> ptr
-                        if (!type_kind_eq(*from_type, TYPE_I64) && !type_kind_eq(*from_type, TYPE_U64) &&
-                            !type_kind_eq(*from_type, TYPE_INT)) {
-                            ok = false;
-                        }
+                        ok = type_kind_eq(*from_type, TYPE_I64) || type_kind_eq(*from_type, TYPE_U64) ||
+                             type_kind_eq(*from_type, TYPE_INT);
                     } else if (type_is_pointer(*from_type) && !type_is_pointer(*to_type)) {
                         // ptr -> i64/u64
-                        if (!type_kind_eq(*to_type, TYPE_I64) && !type_kind_eq(*to_type, TYPE_U64) &&
-                            !type_kind_eq(*to_type, TYPE_INT)) {
-                            ok = false;
-                        }
+                        ok = type_kind_eq(*to_type, TYPE_I64) || type_kind_eq(*to_type, TYPE_U64) ||
+                             type_kind_eq(*to_type, TYPE_INT);
+                    } else if (!type_is_float(*from_type) && type_is_float(*to_type)) {
+                        // integer -> float
+                        ok = type_is_integer(*from_type);
+                    } else if (type_is_float(*from_type) && !type_is_float(*to_type)) {
+                        // float -> integer
+                        ok = type_is_integer(*to_type);
                     } else if (
                         type_kind_eq(*from_type, TYPE_INT) &&
                         (type_is_integer(*to_type) || type_kind_eq(*to_type, TYPE_ENUM))) //

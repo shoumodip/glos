@@ -1,0 +1,9 @@
+main :: () {
+    A :: 69
+    B :: f64(A) + 0.1337
+    C :: u64(B) * 6 + 6
+
+    println(A)
+    println(B)
+    println(C)
+}

@@ -694,8 +694,9 @@ Const_Value eval_const_expr_call(Compiler *c, Node_Call *call) {
         error_node(EK_ERROR, call->fn_source, "Cannot call functions in a constant expression");
         exit(c, 1);
     }
+    Node *from = call->args.head;
 
-    const Const_Value value = eval_const_expr(c, call->args.head, false);
+    const Const_Value value = eval_const_expr(c, from, false);
     if (value.kind == CONST_VALUE_VAR || (!n->type.is_meta && n->type.ref)) {
         error_node(EK_ERROR, n, "This expression is not constant at compile time");
         exit(c, 1);
@@ -707,13 +708,78 @@ Const_Value eval_const_expr_call(Compiler *c, Node_Call *call) {
         return value;
 
     case TYPE_CAST_NORMAL:
+        if (type_is_float(n->type) && !type_is_float(from->type)) {
+            // !Float -> Float
+            assert(value.kind == CONST_VALUE_INT);
+            return const_value_float(int128_to_double(value.as.integer));
+        }
+
+        if (!type_is_float(n->type) && type_is_float(from->type)) {
+            // Float -> !Float
+            assert(value.kind == CONST_VALUE_FLOAT);
+            if (isinf(value.as.real)) {
+                error_node(
+                    EK_ERROR,
+                    from,
+                    "This expression evaluates to infinity, which cannot be casted to %s",
+                    type_to_cstr(n->type));
+                exit(c, 1);
+            }
+
+            if (isnan(value.as.real)) {
+                error_node(
+                    EK_ERROR,
+                    from,
+                    "This expression evaluates to NaN, which cannot be casted to %s",
+                    type_to_cstr(n->type));
+                exit(c, 1);
+            }
+
+            double min64 = 0.0;
+            double max64 = 0.0;
+
+            const bool is_signed = type_is_signed(n->type);
+            if (is_signed) {
+                min64 = -pow(2, 63);
+                max64 = pow(2, 63) - 1;
+            } else {
+                min64 = 0;
+                max64 = pow(2, 64) - 1;
+            }
+            const Int_Limit limit = get_int_limit(n->type);
+
+            bool ok = true;
+            if (value.as.real < min64 || value.as.real > max64) {
+                ok = false;
+            }
+
+            Int128 result = {0};
+            if (ok) {
+                result = is_signed ? int128_from_i64((i64) value.as.real) : int128_from_u64((u64) value.as.real);
+                ok = int128_ge(result, limit.min, true) && int128_le(result, limit.max, true);
+            }
+
+            if (!ok) {
+                error_node(
+                    EK_ERROR,
+                    from,
+                    "Number '%.14g' is invalid for %s, which must be in range [%s, %s]",
+                    value.as.real,
+                    type_to_cstr(n->type),
+                    int128_to_cstr(limit.min),
+                    int128_to_cstr(limit.max));
+                exit(c, 1);
+            }
+
+            return const_value_int(result);
+        }
         return value;
 
     case TYPE_CAST_TO_BOOL:
         return const_value_u64(!int128_is_zero(value.as.integer));
 
     case TYPE_CAST_TO_TRAIT:
-        return const_value_to_trait(n, &call->args.head->type, call->type_cast_trait_impl, value);
+        return const_value_to_trait(n, &from->type, call->type_cast_trait_impl, value);
 
     case TYPE_CAST_TO_UNION:
         return const_value_to_union(n->type, call->type_cast_union_index, value);
