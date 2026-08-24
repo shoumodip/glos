@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 328
-tests/error_cannot_define_method_on_type_not_defined_in_same_module.glos:1:15: ERROR: Can only define methods on types defined in the same module
+tests/error_cannot_define_method_on_type_not_defined_in_same_module.glos:1:15: Error: Can only define methods on types defined in the same module
 
     foo :: (this: i32) {}
 
-tests/error_cannot_define_method_on_type_not_defined_in_same_module.glos:1:9: NOTE: This argument is taken to be the receiver
+tests/error_cannot_define_method_on_type_not_defined_in_same_module.glos:1:9: Note: This argument is taken to be the receiver
 
     foo :: (this: i32) {}
 

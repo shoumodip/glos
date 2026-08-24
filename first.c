@@ -25,7 +25,7 @@ static void error(const char *fmt, ...) Printf_Like(1);
 static void error_at(const char *path, size_t row, size_t col, const char *fmt, ...) Printf_Like(4);
 
 static void error(const char *fmt, ...) {
-    afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
+    afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "Error:");
     fprintf(stderr, " ");
     va_list args;
     va_start(args, fmt);
@@ -35,7 +35,17 @@ static void error(const char *fmt, ...) {
 }
 
 static void note(const char *fmt, ...) {
-    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "NOTE:");
+    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Note:");
+    fprintf(stderr, " ");
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+}
+
+static void warning(const char *fmt, ...) {
+    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Warning:");
     fprintf(stderr, " ");
     va_list args;
     va_start(args, fmt);
@@ -47,7 +57,7 @@ static void note(const char *fmt, ...) {
 static void error_at(const char *path, size_t row, size_t col, const char *fmt, ...) {
     afprintf(stderr, ANSI_BOLD | ANSI_UNDERLINE, "%s:%zu:%zu:", path, row, col);
     fprintf(stderr, " ");
-    afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
+    afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "Error:");
     fprintf(stderr, " ");
     va_list args;
     va_start(args, fmt);
@@ -208,7 +218,7 @@ static void ensure_llvm(Cmd *cmd) {
     return;
 
 note:
-    fprintf(stderr, "NOTE:  Manually download '%s' and extract it into a directory named '%s'\n", url, llvm_dir_path);
+    note(" Manually download '%s' and extract it into a directory named '%s'", url, llvm_dir_path);
     exit(1);
 }
 
@@ -220,7 +230,7 @@ static void build_glos(Cmd *cmd, size_t nprocs) {
         const char *glos_contract_path = "std/builtin/contract.glos";
         const char *c_contract_path = "src/contract.h";
         if (get_modified_time(glos_contract_path) > get_modified_time(c_contract_path)) {
-            fprintf(stderr, "WARNING: The file '%s' was modified after '%s'\n", glos_contract_path, c_contract_path);
+            warning("The file '%s' was modified after '%s'", glos_contract_path, c_contract_path);
         }
     }
 

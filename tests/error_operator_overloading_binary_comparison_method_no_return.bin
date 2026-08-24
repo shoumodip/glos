@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 838
-tests/error_operator_overloading_binary_comparison_method_no_return.glos:2:1: ERROR: The method 'compare' is special because it implements an operator overload
+tests/error_operator_overloading_binary_comparison_method_no_return.glos:2:1: Error: The method 'compare' is special because it implements an operator overload
 
     compare :: (this: Foo, that: Foo) {}
 
@@ -15,7 +15,7 @@ tests/error_operator_overloading_binary_comparison_method_no_return.glos:2:1: ER
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_comparison_method_no_return.glos:2:35: NOTE: Expected to return 'Equivalence' or 'Ordering', got nothing
+tests/error_operator_overloading_binary_comparison_method_no_return.glos:2:35: Note: Expected to return 'Equivalence' or 'Ordering', got nothing
 
     compare :: (this: Foo, that: Foo) {}
 

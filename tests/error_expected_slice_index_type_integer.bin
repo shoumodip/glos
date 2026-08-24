@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 113
-tests/error_expected_slice_index_type_integer.glos:3:8: ERROR: Expected integer value, got 'bool'
+tests/error_expected_slice_index_type_integer.glos:3:8: Error: Expected integer value, got 'bool'
 
     xs[true]
 

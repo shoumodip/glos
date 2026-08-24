@@ -21,14 +21,13 @@ static void error_begin(Error_Kind kind) {
         fprintf(stderr, " ");
     }
 
-    // TODO: Do not print all caps
     switch (kind) {
     case EK_ERROR:
-        afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
+        afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "Error:");
         break;
 
     case EK_NOTE:
-        afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "NOTE:");
+        afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Note:");
         break;
 
     case EK_BLANK:

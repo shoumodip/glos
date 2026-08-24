@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 347
-tests/error_union_switch_is_not_complete.glos:8:5: ERROR: This switch statement is not complete
+tests/error_union_switch_is_not_complete.glos:8:5: Error: This switch statement is not complete
 
     if v == {
     case string
@@ -12,7 +12,7 @@ tests/error_union_switch_is_not_complete.glos:8:5: ERROR: This switch statement 
         - null
         - i64
 
-tests/error_union_switch_is_not_complete.glos:1:10: NOTE: Union defined here
+tests/error_union_switch_is_not_complete.glos:1:10: Note: Union defined here
 
     Value :: union {
         i64

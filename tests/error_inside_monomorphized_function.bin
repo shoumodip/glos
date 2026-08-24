@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 406
-tests/error_inside_monomorphized_function.glos:6:17: ERROR: Expected 'string', got 'i64'
+tests/error_inside_monomorphized_function.glos:6:17: Error: Expected 'string', got 'i64'
 
     y: string = x
 
-tests/error_inside_monomorphized_function.glos:2:5: NOTE: While inside this monomorphization
+tests/error_inside_monomorphized_function.glos:2:5: Note: While inside this monomorphization
 
     foo(69)
 
@@ -14,7 +14,7 @@ tests/error_inside_monomorphized_function.glos:2:5: NOTE: While inside this mono
 
         T :: i64
 
-tests/error_inside_monomorphized_function.glos:5:8: NOTE: Here is the function that was monomorphized
+tests/error_inside_monomorphized_function.glos:5:8: Note: Here is the function that was monomorphized
 
     foo :: (x: $T) {
 

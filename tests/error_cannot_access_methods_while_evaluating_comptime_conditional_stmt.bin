@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 613
-tests/error_cannot_access_methods_while_evaluating_comptime_conditional_stmt.glos:8:9: ERROR: Cannot access methods at this stage of compilation yet
+tests/error_cannot_access_methods_while_evaluating_comptime_conditional_stmt.glos:8:9: Error: Cannot access methods at this stage of compilation yet
 
     #if Foo(Bar {}) {
 
-tests/error_cannot_access_methods_while_evaluating_comptime_conditional_stmt.glos:8:1: NOTE: Evaluating this conditional statement
+tests/error_cannot_access_methods_while_evaluating_comptime_conditional_stmt.glos:8:1: Note: Evaluating this conditional statement
 
     #if Foo(Bar {}) {
     }

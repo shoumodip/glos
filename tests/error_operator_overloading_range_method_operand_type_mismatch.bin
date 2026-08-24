@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 604
-tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:1: ERROR: The method 'range' is special because it implements an operator overload
+tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:1: Error: The method 'range' is special because it implements an operator overload
 
     range :: (this: Foo, a: i64, b: i32) {}
 
@@ -12,7 +12,7 @@ tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:1: ER
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:30: NOTE: Types of range beginning and end must be same: Expected 'i64', got 'i32'
+tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:30: Note: Types of range beginning and end must be same: Expected 'i64', got 'i32'
 
     range :: (this: Foo, a: i64, b: i32) {}
 

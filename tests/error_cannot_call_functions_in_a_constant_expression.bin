@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 138
-tests/error_cannot_call_functions_in_a_constant_expression.glos:2:6: ERROR: Cannot call functions in a constant expression
+tests/error_cannot_call_functions_in_a_constant_expression.glos:2:6: Error: Cannot call functions in a constant expression
 
     X :: f()
 

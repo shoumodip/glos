@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 164
-tests/error_extern_blocks_can_only_have_variable_or_function_definition.glos:2:5: ERROR: Extern blocks can only have variable and function definitions
+tests/error_extern_blocks_can_only_have_variable_or_function_definition.glos:2:5: Error: Extern blocks can only have variable and function definitions
 
     for {}
 

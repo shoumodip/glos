@@ -2,15 +2,15 @@ EXIT 1
 STDOUT 0
 
 STDERR 367
-tests/error_could_not_infer_polymorphic_parameter.glos:4:9: ERROR: Expected '&$T', got 'i64'
+tests/error_could_not_infer_polymorphic_parameter.glos:4:9: Error: Expected '&$T', got 'i64'
 
     foo(69)
 
-tests/error_could_not_infer_polymorphic_parameter.glos:4:5: NOTE: While attempting to monomorphize this
+tests/error_could_not_infer_polymorphic_parameter.glos:4:5: Note: While attempting to monomorphize this
 
     foo(69)
 
-tests/error_could_not_infer_polymorphic_parameter.glos:1:8: NOTE: The function being called has signature '(v: &$T)'
+tests/error_could_not_infer_polymorphic_parameter.glos:1:8: Note: The function being called has signature '(v: &$T)'
 
     foo :: (v: &$T) {}
 

@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 214
-tests/error_method_redefinition_of_enum_value.glos:6:1: ERROR: Redefinition of 'Baz'
+tests/error_method_redefinition_of_enum_value.glos:6:1: Error: Redefinition of 'Baz'
 
     Baz :: (this: Foo) {}
 
-tests/error_method_redefinition_of_enum_value.glos:3:5: NOTE: Here is the first definition
+tests/error_method_redefinition_of_enum_value.glos:3:5: Note: Here is the first definition
 
     Baz
 

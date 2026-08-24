@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 260
-tests/error_cannot_use_variables_in_a_constant_expression.glos:3:10: ERROR: Cannot use local variables in a constant expression
+tests/error_cannot_use_variables_in_a_constant_expression.glos:3:10: Error: Cannot use local variables in a constant expression
 
     y :: x
 
-tests/error_cannot_use_variables_in_a_constant_expression.glos:2:5: NOTE: Here is the variable being used
+tests/error_cannot_use_variables_in_a_constant_expression.glos:2:5: Note: Here is the variable being used
 
     x: i64
 

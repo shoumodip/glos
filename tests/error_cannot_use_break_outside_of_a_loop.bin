@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 113
-tests/error_cannot_use_break_outside_of_a_loop.glos:1:1: ERROR: Cannot use 'break' outside of a loop
+tests/error_cannot_use_break_outside_of_a_loop.glos:1:1: Error: Cannot use 'break' outside of a loop
 
     break
 

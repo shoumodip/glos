@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 321
-tests/error_main_function_is_not_a_literal_function.glos:2:1: ERROR: Identifier 'main' must be a function literal
+tests/error_main_function_is_not_a_literal_function.glos:2:1: Error: Identifier 'main' must be a function literal
 
     main :: real
 

@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 84
-tests/error_character_unterminated.glos:2:5: ERROR: Unterminated character
+tests/error_character_unterminated.glos:2:5: Error: Unterminated character
 
     'f
 

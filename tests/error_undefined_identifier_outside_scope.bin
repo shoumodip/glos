@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 97
-tests/error_undefined_identifier_outside_scope.glos:7:5: ERROR: Undefined identifier 'x'
+tests/error_undefined_identifier_outside_scope.glos:7:5: Error: Undefined identifier 'x'
 
     x
 

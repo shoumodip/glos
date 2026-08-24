@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 143
-tests/error_array_literal_too_many_ordered_initializers.glos:2:17: ERROR: Index 1 is out of bounds in array of length 1
+tests/error_array_literal_too_many_ordered_initializers.glos:2:17: Error: Index 1 is out of bounds in array of length 1
 
     [1]i64 {69, 420}
 

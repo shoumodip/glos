@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 697
-tests/error_showcase_monomorphization_stack.glos:3:9: ERROR: Undefined identifier 'z'
+tests/error_showcase_monomorphization_stack.glos:3:9: Error: Undefined identifier 'z'
 
     z
 
-tests/error_showcase_monomorphization_stack.glos:6:5: NOTE: While inside this monomorphization
+tests/error_showcase_monomorphization_stack.glos:6:5: Note: While inside this monomorphization
 
     bar(x)
 
@@ -14,11 +14,11 @@ tests/error_showcase_monomorphization_stack.glos:6:5: NOTE: While inside this mo
 
         N :: i64
 
-tests/error_showcase_monomorphization_stack.glos:2:12: NOTE: Here is the function that was monomorphized
+tests/error_showcase_monomorphization_stack.glos:2:12: Note: Here is the function that was monomorphized
 
     bar :: (y: $N) {
 
-tests/error_showcase_monomorphization_stack.glos:10:5: NOTE: While inside this monomorphization
+tests/error_showcase_monomorphization_stack.glos:10:5: Note: While inside this monomorphization
 
     foo(69)
 
@@ -26,7 +26,7 @@ tests/error_showcase_monomorphization_stack.glos:10:5: NOTE: While inside this m
 
         T :: i64
 
-tests/error_showcase_monomorphization_stack.glos:1:8: NOTE: Here is the function that was monomorphized
+tests/error_showcase_monomorphization_stack.glos:1:8: Note: Here is the function that was monomorphized
 
     foo :: (x: $T) {
 

@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 570
-tests/error_operator_overloading_index_method_no_return.glos:2:1: ERROR: The method 'index' is special because it implements an operator overload
+tests/error_operator_overloading_index_method_no_return.glos:2:1: Error: The method 'index' is special because it implements an operator overload
 
     index :: (this: Foo, key: i64, assign: bool) {}
 
@@ -12,7 +12,7 @@ tests/error_operator_overloading_index_method_no_return.glos:2:1: ERROR: The met
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_index_method_no_return.glos:2:46: NOTE: Expected to return a pointer, got nothing
+tests/error_operator_overloading_index_method_no_return.glos:2:46: Note: Expected to return a pointer, got nothing
 
     index :: (this: Foo, key: i64, assign: bool) {}
 

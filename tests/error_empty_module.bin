@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 166
-tests/error_empty_module.glos:1:1: ERROR: Directory 'tests/directory_with_no_glos_files' does not contain any glos files
+tests/error_empty_module.glos:1:1: Error: Directory 'tests/directory_with_no_glos_files' does not contain any glos files
 
     #import "directory_with_no_glos_files"
 

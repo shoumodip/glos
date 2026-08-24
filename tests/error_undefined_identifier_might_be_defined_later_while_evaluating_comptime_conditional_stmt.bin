@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 525
-tests/error_undefined_identifier_might_be_defined_later_while_evaluating_comptime_conditional_stmt.glos:1:5: ERROR: Undefined identifier 'FOO'
+tests/error_undefined_identifier_might_be_defined_later_while_evaluating_comptime_conditional_stmt.glos:1:5: Error: Undefined identifier 'FOO'
 
     #if FOO {}
 
-tests/error_undefined_identifier_might_be_defined_later_while_evaluating_comptime_conditional_stmt.glos:1:1: NOTE: Evaluating this conditional statement
+tests/error_undefined_identifier_might_be_defined_later_while_evaluating_comptime_conditional_stmt.glos:1:1: Note: Evaluating this conditional statement
 
     #if FOO {}
 

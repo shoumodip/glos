@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 104
-tests/error_character_invalid_escape_character.glos:2:7: ERROR: Invalid escape character 'f'
+tests/error_character_invalid_escape_character.glos:2:7: Error: Invalid escape character 'f'
 
     '\f'
 

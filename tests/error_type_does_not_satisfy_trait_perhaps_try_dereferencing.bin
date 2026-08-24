@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 315
-tests/error_type_does_not_satisfy_trait_perhaps_try_dereferencing.glos:9:9: ERROR: Type '&Bar' does not implement 'Foo'
+tests/error_type_does_not_satisfy_trait_perhaps_try_dereferencing.glos:9:9: Error: Type '&Bar' does not implement 'Foo'
 
     Foo(&Bar(0))
 
-tests/error_type_does_not_satisfy_trait_perhaps_try_dereferencing.glos:9:9: NOTE: The trait is implemented for 'Bar', not '&Bar'. Perhaps try dereferencing?
+tests/error_type_does_not_satisfy_trait_perhaps_try_dereferencing.glos:9:9: Note: The trait is implemented for 'Bar', not '&Bar'. Perhaps try dereferencing?
 
     Foo(&Bar(0))
 

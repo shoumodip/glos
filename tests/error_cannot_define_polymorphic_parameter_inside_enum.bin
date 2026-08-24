@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 157
-tests/error_cannot_define_polymorphic_parameter_inside_enum.glos:1:23: ERROR: Cannot define polymorphic parameters here
+tests/error_cannot_define_polymorphic_parameter_inside_enum.glos:1:23: Error: Cannot define polymorphic parameters here
 
     foo :: (x: enum { a = $T }) {}
 
