@@ -76,7 +76,7 @@ Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed, bool
 Type type_assert_scalar(Compiler *c, const Node *n);
 bool type_assert_type_noexit(const Node *n);
 Type type_assert_type(Compiler *c, const Node *n);
-bool type_assert_type_or_Type_noexit(Compiler *c, const Node *n);
+void type_assert_type_or_Type(Compiler *c, const Node *n);
 
 Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type type, Type_Trait *trait, Node *n, i64 group_index);
 
@@ -160,6 +160,9 @@ void check_call_arity(
     size_t    args_count_max,
     Node     *excess_argument);
 void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_provided);
+
+const char *fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn_spec_raw, bool exclude_receiver);
+void        show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec);
 
 // Methods /////////////////////////////////////////////////////////////////////////////////////////
 const char *operator_method_name_from_token_kind(Token_Kind kind);

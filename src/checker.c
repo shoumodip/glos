@@ -272,6 +272,3 @@ void check_nodes(Compiler *c) {
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?
-//
-// TODO: The eval_const_expr() for polymorph monomorphization does not inform the user that it is monomorphizing in the
-// diagnostics which might cause confusion.

@@ -4,8 +4,36 @@
 // #define MONOMORPHIZATION_LOG
 
 void show_current_monomorphization(Compiler *c) {
-    if (!c->monomorphization_stack.count) {
-        return;
+    if (c->monomorphizing_site.expr) {
+        error_node(EK_NOTE, c->monomorphizing_site.expr, "While attempting to monomorphize this");
+        if (type_kind_eq(c->monomorphizing_site.node->type, TYPE_FN)) {
+            show_note_about_the_function_being_called(
+                c->monomorphizing_site.node,
+                c->monomorphizing_site.is_method,
+                c->monomorphizing_site.node->type.spec.fn);
+        } else if (type_meta_kind_eq(c->monomorphizing_site.node->type, TYPE_STRUCT)) {
+            Type_Struct *spec = c->monomorphizing_site.node->type.spec.structt;
+            Node_Struct *structure = spec->original_definition;
+            error_node_begin(EK_NOTE, (Node *) structure);
+            fprintf(stderr, "The structure being monomorphized has signature '(");
+
+            for (size_t i = 0; i < spec->polymorphs_count; i++) {
+                if (i) {
+                    fprintf(stderr, ", ");
+                }
+
+                fprintf(
+                    stderr,
+                    "$" SV_Fmt ": %s",
+                    SV_Arg(spec->polymorphs[i]->name->node.token.sv),
+                    type_to_cstr_raw(spec->polymorphs[i]->node.type));
+            }
+
+            fprintf(stderr, ")'");
+            error_finalize();
+        } else {
+            unreachable();
+        }
     }
 
     for (size_t i = 0; i < c->monomorphization_stack.count; i++) {
@@ -673,8 +701,12 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 }
 
 Node *monomorphize(Compiler *c, Node *n, Node *site) {
+    const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+    memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
+
     const size_t ref = n->type.ref;
     while (n->kind == NODE_UNARY && n->token.kind == TOKEN_BAND) {
+        // TODO: Unary `*`
         n = ((Node_Unary *) n)->value;
     }
 
@@ -875,5 +907,7 @@ end:
     afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "}\n\n");
 #endif // MONOMORPHIZATION_LOG
 
+    c->monomorphizing_site = monomorphizing_site_save;
+    c->monomorphizing_site.node = n;
     return n;
 }

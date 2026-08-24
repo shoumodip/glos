@@ -1,46 +1,6 @@
 #include "../error.h"
 #include "checker.h"
 
-static const char *
-fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn_spec_raw, bool exclude_receiver) {
-    Type_Fn spec = *fn_spec_raw;
-    if (exclude_receiver) {
-        assert(spec.args_count);
-        spec.args++;
-        spec.args_count--;
-        if (spec.args_count_min) spec.args_count_min--;
-        if (spec.variadics_index) spec.variadics_index--;
-    }
-
-    return type_to_cstr((Type) {.kind = TYPE_FN, .spec.fn = &spec});
-}
-
-static void show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec) {
-    if (!fn_spec) {
-        return;
-    }
-
-    const char *label = is_method ? "method" : "function";
-
-    Node_Fn *literal = get_function_literal(fn);
-    Node    *literal_body = NULL;
-    if (literal) {
-        literal_body = literal->body;
-        literal->body = NULL;
-    }
-
-    error_node(
-        EK_NOTE,
-        literal ? (Node *) literal : fn,
-        "The %s being called has signature %s",
-        label,
-        fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
-
-    if (literal) {
-        literal->body = literal_body;
-    }
-}
-
 static void show_error_for_uninferred_polymorphic_parameter_in_call(
     Compiler *c, Nodes args, const Type_Fn *fn_spec, Node_Polymorph *polymorph) //
 {
@@ -161,10 +121,15 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
         cc->is_polymorph = node_is_runtime_polymorphic_expression(cc->fn);
     }
 
-    const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+    const size_t              monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+    const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
     if (cc->is_polymorph) {
         ht_clear(&c->monomorph_replacements);
         c->monomorph_parameters.begin = c->monomorph_parameters.count;
+
+        c->monomorphizing_site.expr = cc->expr;
+        c->monomorphizing_site.node = cc->fn;
+        c->monomorphizing_site.is_method = cc->is_method;
     }
 
     typedef enum {
@@ -375,8 +340,6 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
         if (cc->is_method) {
             const Type expected = type_with_ref(fn_spec->args[0].type, cc->receiver->type.ref);
             if (!infer_monomorph_parameters(c, cc->receiver, &cc->receiver->type, &expected)) {
-                error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
-                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                 exit(c, 1);
             }
         }
@@ -412,12 +375,7 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                 bool         add_to_final_args = true;
                 if (argument && argument->polymorph) {
                     if (argument->polymorph->is_type) {
-                        if (!type_assert_type_or_Type_noexit(c, it)) {
-                            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
-                            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
-                            exit(c, 1);
-                        }
-
+                        type_assert_type_or_Type(c, it);
                         Const_Value value = eval_const_expr(c, it, false);
                         if (value.kind == CONST_VALUE_TYPE) {
                             value.as.type.is_meta = false;
@@ -425,17 +383,11 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                             assert(value.kind == CONST_VALUE_INT && int128_is_zero(value.as.integer));
                             error_node(
                                 EK_ERROR, it, "This expression is not a constant type (It is a null RTTI pointer)");
-                            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
                             exit(c, 1);
                         }
                         add_monomorph_parameter(c, argument->polymorph, it->type, value, NULL);
                     } else {
-                        if (!type_assert_noexit(c, it, argument->type)) {
-                            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
-                            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
-                            exit(c, 1);
-                        }
-
+                        type_assert(c, it, argument->type);
                         add_monomorph_parameter(c, argument->polymorph, it->type, eval_const_expr(c, it, false), NULL);
                     }
 
@@ -453,8 +405,6 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                     }
 
                     if (!infer_monomorph_parameters(c, it, &types[i], expected)) {
-                        error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
-                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                         exit(c, 1);
                     }
                 }
@@ -510,8 +460,6 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                 }
             }
 
-            error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
-            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
             exit(c, 1);
         }
 
@@ -546,10 +494,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                 it = ((Node_Binary *) it)->rhs;
 
                 if (!type_assert_noexit(c, it, fn_spec->args[it_index].type)) {
-                    if (cc->is_polymorph) {
-                        error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+                    if (!cc->is_polymorph) {
+                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                     }
-                    show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                     exit(c, 1);
                 }
             } else {
@@ -588,10 +535,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                         }
 
                         if (!ok) {
-                            if (cc->is_polymorph) {
-                                error_node(EK_NOTE, cc->expr, "While attempting to monomorphize this");
+                            if (!cc->is_polymorph) {
+                                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                             }
-                            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
                             exit(c, 1);
                         }
                     }
@@ -604,5 +550,45 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
 
     c->monomorph_parameters.count = c->monomorph_parameters.begin;
     c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+    c->monomorphizing_site = monomorphizing_site_save;
     arena_reset(&temp_arena, args);
+}
+
+const char *fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn_spec_raw, bool exclude_receiver) {
+    Type_Fn spec = *fn_spec_raw;
+    if (exclude_receiver) {
+        assert(spec.args_count);
+        spec.args++;
+        spec.args_count--;
+        if (spec.args_count_min) spec.args_count_min--;
+        if (spec.variadics_index) spec.variadics_index--;
+    }
+
+    return type_to_cstr((Type) {.kind = TYPE_FN, .spec.fn = &spec});
+}
+
+void show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec) {
+    if (!fn_spec) {
+        return;
+    }
+
+    const char *label = is_method ? "method" : "function";
+
+    Node_Fn *literal = get_function_literal(fn);
+    Node    *literal_body = NULL;
+    if (literal) {
+        literal_body = literal->body;
+        literal->body = NULL;
+    }
+
+    error_node(
+        EK_NOTE,
+        literal ? (Node *) literal : fn,
+        "The %s being called has signature %s",
+        label,
+        fn_type_to_cstr_but_excluding_receiver_if_required(fn_spec, is_method));
+
+    if (literal) {
+        literal->body = literal_body;
+    }
 }

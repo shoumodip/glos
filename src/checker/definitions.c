@@ -412,6 +412,9 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     const bool dont_allow_polymorphs_save = c->dont_allow_polymorphs;
     c->dont_allow_polymorphs = false;
 
+    const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+    memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
+
     assert(it->definition_spec->check_status != CHECKING); // It is already checked
     if (it->definition_spec->check_status == CHECKED) {
         goto end;
@@ -542,6 +545,7 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     it->definition_spec->check_status = CHECKED;
 
 end:
+    c->monomorphizing_site = monomorphizing_site_save;
     c->dont_allow_polymorphs = dont_allow_polymorphs_save;
 }
 

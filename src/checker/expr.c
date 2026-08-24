@@ -1549,6 +1549,10 @@ void check_expr_call(Compiler *c, Node_Call *call) {
             const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
             c->monomorph_parameters.begin = c->monomorph_parameters.count;
 
+            const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+            c->monomorphizing_site.expr = (Node *) call;
+            c->monomorphizing_site.node = call->fn;
+
             if (type_meta_kind_eq(*fn_type, TYPE_STRUCT)) {
                 Type_Struct *spec = fn_type->spec.structt;
 
@@ -1692,10 +1696,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                                 done = true;
                             }
                         } else {
-                            if (!type_assert_type_or_Type_noexit(c, it)) {
-                                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                                exit(c, 1);
-                            }
+                            type_assert_type_or_Type(c, it);
                         }
                     } else {
                         if (to_polymorph) {
@@ -1709,10 +1710,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                                 done = true;
                             }
                         } else {
-                            if (!type_assert_noexit(c, it, from_polymorph->node.type)) {
-                                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                                exit(c, 1);
-                            }
+                            type_assert(c, it, from_polymorph->node.type);
                         }
                     }
 
@@ -1724,7 +1722,6 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                             assert(value.kind == CONST_VALUE_INT && int128_is_zero(value.as.integer));
                             error_node(
                                 EK_ERROR, it, "This expression is not a constant type (It is a null RTTI pointer)");
-                            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                             exit(c, 1);
                         }
                         add_monomorph_parameter(c, from_polymorph, it->type, value, to_polymorph);
@@ -1746,6 +1743,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
 
                 c->monomorph_parameters.count = c->monomorph_parameters.begin;
                 c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+                c->monomorphizing_site = monomorphizing_site_save;
             } else {
                 unreachable();
             }

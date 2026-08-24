@@ -40,6 +40,23 @@ typedef struct {
     size_t       params_count;
 } Monomorph_Spec;
 
+// ```
+// foo :: (x: $T) {}
+//
+// main :: () {
+//
+//     |-----| -> expr
+//     foo(69)
+//     |-|
+//      ^-- node, is_fn, is_method
+// }
+// ```
+typedef struct {
+    Node *expr; // The entire expression at the call site
+    Node *node; // The thing being monomorphized at the call site
+    bool  is_method;
+} Monomorphizing_Site;
+
 typedef enum {
     O0,
     O1,
@@ -74,6 +91,9 @@ typedef struct {
         size_t begin;
     } monomorph_parameters;
     DA(Monomorphization) monomorphization_stack;
+
+    // Before the monomorphization begins, aka, during the parameter inference
+    Monomorphizing_Site monomorphizing_site;
 
     bool dont_allow_polymorphs;
 
