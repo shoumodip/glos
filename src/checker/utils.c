@@ -162,7 +162,7 @@ static_assert(COUNT_TYPES == 30, "");
 Int_Limit get_int_limit(Type type) {
     const Type_Kind type_kind = type_kind_eq(type, TYPE_ENUM) ? type.spec.enumm.underlying : type.kind;
     if (type_is_signed(type)) {
-        static const Int_Limit limits[COUNT_TYPES] = {
+        const Int_Limit limits[COUNT_TYPES] = {
             [TYPE_I8] = {.min = INT128_FROM_I64(INT8_MIN), .max = INT128_FROM_I64(INT8_MAX)},
             [TYPE_I16] = {.min = INT128_FROM_I64(INT16_MIN), .max = INT128_FROM_I64(INT16_MAX)},
             [TYPE_I32] = {.min = INT128_FROM_I64(INT32_MIN), .max = INT128_FROM_I64(INT32_MAX)},
@@ -171,7 +171,7 @@ Int_Limit get_int_limit(Type type) {
         };
         return limits[type_kind];
     } else {
-        static const Int_Limit limits[COUNT_TYPES] = {
+        const Int_Limit limits[COUNT_TYPES] = {
             [TYPE_U8] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT8_MAX)},
             [TYPE_U16] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT16_MAX)},
             [TYPE_U32] = {.min = INT128_FROM_U64(0), .max = INT128_FROM_U64(UINT32_MAX)},
