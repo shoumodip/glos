@@ -57,8 +57,6 @@ LLVMValueRef compile_cast(Compiler *c, LLVMValueRef from, LLVMTypeRef to, bool i
 Typed_LLVM_Value get_builtin_func(Compiler *c, SV name);
 void compile_panic_v2(Compiler *c, Pos pos, Contract_Panic panic, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3);
 
-void compiler_init_llvm_target_data(Compiler *c);
-
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 LLVMTypeRef     compile_type(Compiler *c, Type *type);
 LLVMTypeRef     compile_fn_type(Compiler *c, Type type, ABI *abi);
