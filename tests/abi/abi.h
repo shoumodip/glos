@@ -6,6 +6,7 @@
 typedef int32_t i32;
 typedef int64_t i64;
 
+// Basics
 typedef struct {
     i32 x;
     i32 y;
@@ -32,5 +33,20 @@ typedef struct {
 
 void s24_foo(S24 s);
 S24  s24_ret(i64 x, i64 y, i64 z);
+
+// Odd sized values
+typedef struct {
+    char xs[3];
+} S3;
+
+void s3_foo(S3 s);
+S3   s3_ret(char xs[3]);
+
+typedef struct {
+    char xs[11];
+} S11;
+
+void s11_foo(S11 s);
+S11  s11_ret(char xs[11]);
 
 #endif // ABI_H

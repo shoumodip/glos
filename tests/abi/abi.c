@@ -1,6 +1,7 @@
 #include "abi.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <string.h>
 
 void s8_foo(S8 s) {
     printf("%d %d\n", s.x, s.y);
@@ -39,4 +40,24 @@ void s24_foo(S24 s) {
 
 S24 s24_ret(i64 x, i64 y, i64 z) {
     return (S24) {.x = x, .y = y, .z = z};
+}
+
+void s3_foo(S3 s) {
+    printf("%.*s\n", (int) sizeof(s.xs), s.xs);
+}
+
+S3 s3_ret(char xs[3]) {
+    S3 s = {0};
+    memcpy(s.xs, xs, sizeof(s.xs));
+    return s;
+}
+
+void s11_foo(S11 s) {
+    printf("%.*s\n", (int) sizeof(s.xs), s.xs);
+}
+
+S11 s11_ret(char xs[11]) {
+    S11 s = {0};
+    memcpy(s.xs, xs, sizeof(s.xs));
+    return s;
 }
