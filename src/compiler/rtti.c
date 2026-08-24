@@ -1,6 +1,6 @@
 #include "compiler.h"
 
-static uint64_t ht_hasheq_type(const void *va, const void *vb, size_t n) {
+static u64 ht_hasheq_type(const void *va, const void *vb, size_t n) {
     unused(n);
     if (vb) {
         return type_eq(*(const Type *) va, *(const Type *) vb);
@@ -8,7 +8,7 @@ static uint64_t ht_hasheq_type(const void *va, const void *vb, size_t n) {
 
     // Technically this is correct, however this will decay to O(n) very often.
     // TODO: Implement a more specific hashing algorithm for types
-    uint64_t hash = 14695981039346656037UL;
+    u64 hash = 14695981039346656037UL;
     for (size_t i = 0; i < sizeof(Type); i++) {
         hash ^= *(const uint8_t *) va;
         hash *= 1099511628211UL;

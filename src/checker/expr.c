@@ -111,7 +111,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
         binary->overload = check_assignment_lhs_for_arithmetics(c, binary, binary->lhs);
     }
 
-    binary->node.type = (Type) {.kind = TYPE_UNIT};
+    binary->node.type = (Type) {.kind = TYPE_VOID};
 }
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
@@ -477,7 +477,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
             Method_Spec spec = {0};
             if (get_method_spec(c, member->lhs, member->lhs->type, n->token.sv, &spec, NULL, NULL)) {
                 can_have_methods = true;
-                member->method = get_method(c, spec, member->module);
+                member->method = get_method(c, spec, member->node.module);
                 if (member->method) {
                     n->type = member->method->node.type;
                     assert(n->type.kind == TYPE_FN);
@@ -654,7 +654,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
 
                     Method_Spec spec = {0};
                     if (get_method_spec(c, member->lhs, receiver, n->token.sv, &spec, NULL, NULL)) {
-                        member->method = get_method(c, spec, member->module);
+                        member->method = get_method(c, spec, member->node.module);
                         if (member->method) {
                             ok = true;
                             n->type = member->method->node.type;
@@ -835,7 +835,7 @@ void check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool *is_ref_valid, bool o
 
         Type return_type = {0};
         if (fn_spec->returns_count == 0) {
-            return_type.kind = TYPE_UNIT;
+            return_type.kind = TYPE_VOID;
         } else if (fn_spec->returns_count == 1) {
             return_type = *fn_spec->returns;
         } else {
@@ -847,7 +847,7 @@ void check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool *is_ref_valid, bool o
 
         n->type = (Type) {.kind = TYPE_FN, .spec.fn = fn_spec};
 
-        if (fn->defined_as && type_kind_eq(fn->defined_as->node.type, TYPE_UNIT)) {
+        if (fn->defined_as && type_kind_eq(fn->defined_as->node.type, TYPE_VOID)) {
             // The body of a function is irrelevant for outer expressions
             fn->defined_as->node.type = n->type;
             fn->defined_as->definition_spec->check_status = CHECKED;
@@ -1115,7 +1115,7 @@ void check_expr_enum(Compiler *c, Node_Enum *enumm) {
 
         it->type.kind = underlying.kind;
         check_int_limit(c, it, int128_from_i64(iota));
-        it->type.kind = TYPE_UNIT;
+        it->type.kind = TYPE_VOID;
         it->token.as.integer = iota++;
     }
 
@@ -1281,7 +1281,7 @@ void check_expr_struct(Compiler *c, Node_Struct *structt) {
         .spec.structt = spec,
     };
 
-    if (structt->defined_as && type_kind_eq(structt->defined_as->node.type, TYPE_UNIT)) {
+    if (structt->defined_as && type_kind_eq(structt->defined_as->node.type, TYPE_VOID)) {
         structt->defined_as->node.type = n->type;
     }
 
@@ -1924,7 +1924,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
         fn_type = &call->fn->type;
 
         n->type = *fn_type->spec.fn->return_type;
-        if (!call->is_stmt && type_kind_eq(n->type, TYPE_UNIT)) {
+        if (!call->is_stmt && type_kind_eq(n->type, TYPE_VOID)) {
             error_node(EK_ERROR, n, "This call cannot be used as a value as it does not return anything");
             exit(c, 1);
         }

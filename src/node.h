@@ -66,7 +66,7 @@ typedef struct {
 void modules_free(Modules *m);
 
 typedef enum {
-    TYPE_UNIT, // TODO: Rename to TYPE_VOID
+    TYPE_VOID,
     TYPE_BOOL,
     TYPE_CHAR,
 
@@ -586,9 +586,6 @@ typedef struct {
 struct Node_Atom {
     Node node;
 
-    // The module this atom was parsed in
-    Module *module;
-
     // When this atom is a definition
     Definition_Spec *definition_spec;
 
@@ -662,8 +659,6 @@ typedef struct {
 
     bool is_enum;
     bool is_trait;
-
-    Module *module;
 } Node_Member;
 
 typedef struct {
@@ -766,9 +761,6 @@ struct Node_Fn {
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
 
-    // The module this function was parsed in
-    Module *module;
-
     LLVMValueRef    llvm;
     LLVMMetadataRef llvm_debug_scope;
 };
@@ -811,9 +803,6 @@ struct Node_Trait {
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
 
-    // The module this was parsed in
-    Module *module;
-
     Token end;
 
     Node_Fn *defined_in;
@@ -827,9 +816,6 @@ struct Node_Union {
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
-
-    // The module this was parsed in
-    Module *module;
 
     Token end;
 
@@ -846,9 +832,6 @@ struct Node_Struct {
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
-
-    // The module this was parsed in
-    Module *module;
 
     Token end;
 

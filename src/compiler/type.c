@@ -22,7 +22,7 @@ LLVMTypeRef compile_type(Compiler *c, Type *type) {
     }
 
     switch (type->kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         type->llvm = LLVMVoidTypeInContext(c->llvm_context);
         break;
 
@@ -273,7 +273,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     }
 
     switch (type->kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         return NULL;
 
     case TYPE_BOOL:
@@ -367,7 +367,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->node.module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
@@ -402,17 +402,13 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->node.module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
             }
 
-            LLVMMetadataRef scope_metadata = NULL;
-            if (spec->definition->defined_in) {
-                scope_metadata = get_scope_of_definition(c, (Node *) spec->definition, spec->definition->defined_in);
-            }
-
+            LLVMMetadataRef scope_metadata = c->llvm_debug_compile_unit;
             LLVMMetadataRef file_metadata = get_debug_file(c, spec->definition->node.token.pos.path);
             LLVMMetadataRef fields[2];
 
@@ -569,18 +565,14 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->node.module);
                     sb_push(&default_sb, '.');
                     sb_push_type(&default_sb, type_without_meta(*type));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
             }
 
-            LLVMMetadataRef scope_metadata = NULL;
-            if (spec->definition->defined_in) {
-                scope_metadata = get_scope_of_definition(c, (Node *) spec->definition, spec->definition->defined_in);
-            }
-
+            LLVMMetadataRef scope_metadata = c->llvm_debug_compile_unit;
             spec->debug = LLVMDIBuilderCreateReplaceableCompositeType(
                 c->llvm_debug_builder,
                 DW_TAG_structure_type,
@@ -819,5 +811,3 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         break;
     }
 }
-
-// TODO: Anonymous types defined in function signatures are broken

@@ -206,12 +206,11 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
                     sw->preds_count++;
                 } while (read_token(p, TOKEN_COMMA));
             }
-            expect_stmt_terminator(p);
 
             case_->body = node_alloc(p->module_current, NODE_BLOCK, token);
             Node_Block *block = (Node_Block *) case_->body;
             while (true) {
-                consume_tokens(p, TOKEN_EOL);
+                expect_stmt_terminator(p);
                 ahead = peek_token(p);
                 if (ahead.kind == TOKEN_CASE || ahead.kind == TOKEN_RBRACE) {
                     break;
@@ -746,7 +745,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_DIRECTIVE_PLATFORM:
     case TOKEN_DIRECTIVE_CALLER_LOCATION:
         node = node_alloc(p->module_current, NODE_ATOM, token);
-        ((Node_Atom *) node)->module = p->module_current;
         break;
 
     case TOKEN_DOLLAR: {
@@ -787,7 +785,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         node = node_alloc(p->module_current, NODE_MEMBER, expect_token(p, TOKEN_IDENT));
         Node_Member *member = (Node_Member *) node;
         member->dot = token;
-        member->module = p->module_current;
     } break;
 
     case TOKEN_SUB:
@@ -841,7 +838,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         if (read_token(p, TOKEN_RPAREN)) {
             fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
             fn->outer_fn = p->state.fn_current;
-            fn->module = p->module_current;
             p->state.fn_current = fn;
 
             assert(p->state.ahead.kind == TOKEN_RPAREN);
@@ -849,7 +845,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         } else if (peek_token(p).kind == TOKEN_DOLLAR) {
             fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
             fn->outer_fn = p->state.fn_current;
-            fn->module = p->module_current;
 
             pb.polymorphs = &fn->polymorphs;
             if (pb_save) {
@@ -875,7 +870,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             if (peek_token(p).kind == TOKEN_COLON) {
                 fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
                 fn->outer_fn = p->state.fn_current;
-                fn->module = p->module_current;
 
                 pb.polymorphs = &fn->polymorphs;
                 if (!pb_save) {
@@ -1113,14 +1107,12 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         node = node_alloc(p->module_current, NODE_TRAIT, token);
         Node_Trait *trait = (Node_Trait *) node;
-        trait->module = p->module_current;
         trait->defined_in = p->state.fn_current;
 
         expect_token(p, TOKEN_LBRACE);
         while (!read_token(p, TOKEN_RBRACE)) {
-            Node_Atom *name = (Node_Atom *) node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
-            name->module = p->module_current;
-            Node *method = parse_define(p, (Node *) name, expect_token(p, TOKEN_COLON), false, false, false, false);
+            Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
+            Node *method = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
 
             Node_Define *define = (Node_Define *) method;
             if (define->is_const) {
@@ -1158,7 +1150,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         node = node_alloc(p->module_current, NODE_UNION, token);
         Node_Union *unionn = (Node_Union *) node;
-        unionn->module = p->module_current;
         unionn->defined_in = p->state.fn_current;
 
         expect_token(p, TOKEN_LBRACE);
@@ -1177,7 +1168,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_STRUCT: {
         node = node_alloc(p->module_current, NODE_STRUCT, token);
         Node_Struct *structt = (Node_Struct *) node;
-        structt->module = p->module_current;
         structt->defined_in = p->state.fn_current;
 
         token = expect_token(p, TOKEN_LBRACE, TOKEN_LPAREN);
@@ -1303,7 +1293,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
             member->lhs = node;
             member->dot = token;
-            member->module = p->module_current;
             if (member->node.token.kind == TOKEN_LPAREN) {
                 member->rhs = parse_expr(p, POWER_SET, false, true, NULL);
                 member->rhs_end = expect_token(p, TOKEN_RPAREN);

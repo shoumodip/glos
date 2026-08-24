@@ -122,8 +122,6 @@ static SV run_cmd_and_read_stdout(Cmd *cmd) {
         error("Command '%s' exited abnormally with code %d", name, result);
         exit(1);
     }
-
-    fclose(out);
     return sv;
 }
 
@@ -134,7 +132,6 @@ static void filter_cl_exe_output(Proc proc) {
         error("Could not read standard output of 'cl.exe'");
         exit(1);
     }
-    fclose(proc.out);
 
     while (sv.count) {
         const SV line = sv_split_mut(&sv, '\n');
@@ -621,7 +618,6 @@ static void tests_flush(
                 error("Could not read standard output of test case '%s'", it->name);
                 exit(1);
             }
-            fclose(it->pout);
         } else {
             actual.out = (SV) {0};
         }
@@ -631,7 +627,6 @@ static void tests_flush(
                 error("Could not read standard error of test case '%s'", it->name);
                 exit(1);
             }
-            fclose(it->perr);
         } else {
             actual.err = (SV) {0};
         }
@@ -666,16 +661,6 @@ static void tests_flush(
                     for (size_t j = i; j < tests->count; j++) {
                         Test *it = &tests->data[j];
                         if (j > i) {
-                            static char junk[4096];
-                            if (it->pout) {
-                                while (fread(junk, sizeof(junk), 1, it->pout) > 0);
-                                fclose(it->pout);
-                            }
-
-                            if (it->perr) {
-                                while (fread(junk, sizeof(junk), 1, it->perr) > 0);
-                                fclose(it->perr);
-                            }
                             cmd_wait(it->proc);
                         };
 
@@ -708,7 +693,6 @@ static void tests_flush(
             fprintf(f, "STDERR %zu\n", actual.err.count);
             fwrite(actual.err.data, actual.err.count, 1, f);
             fprintf(f, "\n");
-
             fclose(f);
         }
 

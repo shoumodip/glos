@@ -220,7 +220,7 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
     // Special cases
     static_assert(COUNT_TYPES == 30, "");
     switch (type->kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         info.direct_types[info.direct_types_count++] = LLVMVoidTypeInContext(c->llvm_context);
         return info;
 

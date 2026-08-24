@@ -243,7 +243,7 @@ LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
         Compile_Fn_Backup backup = {0};
         compile_fn_backup_save(c, &backup);
 
-        SV fn_name = sv_from_cstr(temp_nested_fn_name(fn, fn->module));
+        SV fn_name = sv_from_cstr(temp_nested_fn_name(fn, fn->node.module));
         if (!link_as.count) {
             link_as = fn_name;
         }
@@ -359,7 +359,7 @@ LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
             }
 
             LLVMValueRef result = compile_call_finalize(c, &call, true, false);
-            if (abi.return_type->kind == TYPE_UNIT) {
+            if (abi.return_type->kind == TYPE_VOID) {
                 LLVMBuildRetVoid(c->llvm_builder);
             } else if (abi.return_abi.direct_types_count == 0) {
                 LLVMBuildStore(c->llvm_builder, result, LLVMGetParam(fn->llvm, 0));

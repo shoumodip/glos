@@ -81,7 +81,7 @@ void sb_push_type(SB *sb, Type type) {
     }
 
     switch (type.kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         sb_push_cstr(sb, "void");
         break;
 
@@ -793,14 +793,14 @@ static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw)
         break;
 
     case CONST_VALUE_FN:
-        sb_push_fn_name(sb, v.as.fn, v.as.fn->module);
+        sb_push_fn_name(sb, v.as.fn, v.as.fn->node.module);
         break;
 
     case CONST_VALUE_VAR: {
         Node_Atom *definition = v.as.var;
         assert(definition->definition_spec); // This is a variable
         sb_push(sb, '&');
-        sb_push_fn_name(sb, definition->definition_spec->static_var_fn, definition->module);
+        sb_push_fn_name(sb, definition->definition_spec->static_var_fn, definition->node.module);
         sb_sprintf(sb, "." SV_Fmt, SV_Arg(definition->node.token.sv));
     } break;
 
@@ -994,11 +994,11 @@ void sb_push_fn_name(SB *sb, Node_Fn *fn, Module *module) {
         assert(fn->defined_as && !fn->outer_fn && fn->wrapper_for_trait);
 
         Node_Trait *definition = fn->wrapper_for_trait->definition;
-        sb_push_fn_name(sb, definition->defined_in, definition->module);
+        sb_push_fn_name(sb, definition->defined_in, definition->node.module);
         sb_push(sb, '.');
         sb_push_type(sb, (Type) {.kind = TYPE_TRAIT, .spec.trait = fn->wrapper_for_trait});
         sb_push(sb, '(');
-        sb_push_fn_name(sb, fn->wrapper, fn->module);
+        sb_push_fn_name(sb, fn->wrapper, fn->node.module);
         sb_push(sb, ')');
         return;
     }

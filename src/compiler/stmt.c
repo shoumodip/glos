@@ -18,11 +18,11 @@ void compile_var_def(Compiler *c, Node_Atom *it) {
         name = sv_from_cstr(arena_sv_to_cstr(&temp_arena, name));
     } else if (it->definition_spec->static_var_fn) {
         const size_t start = default_sb.count;
-        sb_push_fn_name(&default_sb, it->definition_spec->static_var_fn, it->module);
+        sb_push_fn_name(&default_sb, it->definition_spec->static_var_fn, it->node.module);
         sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(name));
         name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
     } else if (!it->definition_spec->is_local) {
-        name = sv_from_cstr(arena_sprintf(&temp_arena, SV_Fmt "." SV_Fmt, SV_Arg(it->module->name), SV_Arg(name)));
+        name = sv_from_cstr(arena_sprintf(&temp_arena, SV_Fmt "." SV_Fmt, SV_Arg(it->node.module->name), SV_Arg(name)));
     }
 
     if (it->definition_spec->is_local && !it->definition_spec->is_extern && !it->definition_spec->static_var_fn) {
@@ -600,7 +600,7 @@ void compile_stmt_return(Compiler *c, Node_Return *returnn) {
 
         compile_defers(c, c->defers_start, false);
         set_debug_pos(c, n->token.pos);
-        if (n->type.kind == TYPE_UNIT) {
+        if (n->type.kind == TYPE_VOID) {
             LLVMBuildRetVoid(c->llvm_builder);
         } else {
             LLVMBuildRet(c->llvm_builder, value);

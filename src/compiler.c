@@ -82,10 +82,11 @@ void compiler_build(Compiler *c, const char *output_path) {
 
     perf_begin();
 
-    // TODO: Do not do this for '-O0'
-    LLVMPassBuilderOptionsRef pass_builder_options = LLVMCreatePassBuilderOptions();
-    LLVMRunPasses(c->llvm_module, "always-inline", c->llvm_target_machine, pass_builder_options);
-    LLVMDisposePassBuilderOptions(pass_builder_options);
+    if (c->optimization_level != O0) {
+        LLVMPassBuilderOptionsRef pass_builder_options = LLVMCreatePassBuilderOptions();
+        LLVMRunPasses(c->llvm_module, "always-inline", c->llvm_target_machine, pass_builder_options);
+        LLVMDisposePassBuilderOptions(pass_builder_options);
+    }
 
     LLVMDIBuilderFinalize(c->llvm_debug_builder);
     LLVMDisposeDIBuilder(c->llvm_debug_builder);

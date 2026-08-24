@@ -117,7 +117,7 @@ void define_orderless_node(Compiler *c, Node *n, const size_t block_start) {
                     Node_Atom *previous = context_find_define_skipping(&c->context, *it.key, import->module);
                     if (!previous) {
                         previous = module_globals_find_ex(c, n->module, *it.key, import->module);
-                        if (previous && previous->definition_spec->is_private && previous->module != n->module) {
+                        if (previous && previous->definition_spec->is_private && previous->node.module != n->module) {
                             continue;
                         }
                     }
@@ -174,11 +174,11 @@ void define_orderless_node(Compiler *c, Node *n, const size_t block_start) {
                     }
 
                     if (!is_method) {
-                        Node_Atom *previous = module_globals_find(c, it->module, it->node.token.sv);
+                        Node_Atom *previous = module_globals_find(c, it->node.module, it->node.token.sv);
                         if (previous) {
-                            error_redefinition_global(c, (Node *) it, (Node *) previous, it->module, &c->context);
+                            error_redefinition_global(c, (Node *) it, (Node *) previous, it->node.module, &c->context);
                         }
-                        global_scope_push(&it->module->globals, it);
+                        global_scope_push(&it->node.module->globals, it);
                     }
                 }
 
@@ -419,7 +419,7 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     it->definition_spec->check_status = CHECKING;
 
     if (type) {
-        if (type_kind_eq(type->type, TYPE_UNIT)) {
+        if (type_kind_eq(type->type, TYPE_VOID)) {
             check_expr(c, type, REF_NONE);
             type_assert_type(c, type);
         }
@@ -434,7 +434,7 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     if (it_expr) {
         Node_Define *definition = it->definition_spec->definition_node;
 
-        if (type_kind_eq(it_expr->type, TYPE_UNIT)) {
+        if (type_kind_eq(it_expr->type, TYPE_VOID)) {
             if (it->definition_spec->arg_index && is_node_caller_location(it_expr)) {
                 it_expr->type = c->source_code_location_type;
             } else {
@@ -589,7 +589,7 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
     Module *module = NULL;
     if (n->kind == NODE_ATOM) {
         atom = (Node_Atom *) n;
-        module = atom->module;
+        module = atom->node.module;
     } else if (n->kind == NODE_MEMBER) {
         member = (Node_Member *) n;
         assert(member->lhs->type.kind == TYPE_MODULE);
@@ -673,7 +673,7 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             }
         }
 
-        if (definition && definition->definition_spec->is_private && definition->module != n->module) {
+        if (definition && definition->definition_spec->is_private && definition->node.module != n->module) {
             definition = NULL;
         }
     }

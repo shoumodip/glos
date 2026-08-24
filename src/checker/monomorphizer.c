@@ -316,7 +316,7 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
 }
 
 // TODO: Use a custom hasher instead of just operating on the raw bytes
-static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t n) {
+static u64 ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t n) {
     unused(n);
 
     const Monomorph_Spec a = *(Monomorph_Spec *) va;
@@ -343,7 +343,7 @@ static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t 
         return true;
     }
 
-    uint64_t hash = ht_hasheq_bytes(&a.from, NULL, sizeof(Node *));
+    u64 hash = ht_hasheq_bytes(&a.from, NULL, sizeof(Node *));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(&a.params_count, NULL, sizeof(a.params_count)));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_types, NULL, a.params_count * sizeof(*a.param_types)));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_values, NULL, a.params_count * sizeof(*a.param_values)));

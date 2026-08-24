@@ -95,10 +95,10 @@ bool get_method_spec(
                 *is_named = definition->defined_as != NULL;
             }
 
-            return defining_in_module == definition->module;
+            return defining_in_module == definition->node.module;
         }
 
-        check_that_methods_can_be_accessed(c, receiver_node, definition->module);
+        check_that_methods_can_be_accessed(c, receiver_node, definition->node.module);
         return true;
     } else if (type_kind_eq(receiver_type, TYPE_STRUCT)) {
         Node_Struct *definition = receiver_type.spec.structt->original_definition;
@@ -111,10 +111,10 @@ bool get_method_spec(
                 *is_named = definition->defined_as != NULL;
             }
 
-            return defining_in_module == definition->module;
+            return defining_in_module == definition->node.module;
         }
 
-        check_that_methods_can_be_accessed(c, receiver_node, definition->module);
+        check_that_methods_can_be_accessed(c, receiver_node, definition->node.module);
         return true;
     } else if (receiver_type.distinct) {
         if (spec) {
@@ -126,10 +126,10 @@ bool get_method_spec(
                 *is_named = true;
             }
 
-            return defining_in_module == receiver_type.distinct->module;
+            return defining_in_module == receiver_type.distinct->node.module;
         }
 
-        check_that_methods_can_be_accessed(c, receiver_node, receiver_type.distinct->module);
+        check_that_methods_can_be_accessed(c, receiver_node, receiver_type.distinct->node.module);
         return true;
     }
 
@@ -165,7 +165,7 @@ Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module) {
     Node_Fn *method = *fn;
     assert(method->defined_as);
 
-    if (method->module != module && method->defined_as->definition_spec->is_private) {
+    if (method->node.module != module && method->defined_as->definition_spec->is_private) {
         return NULL;
     }
 
