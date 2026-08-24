@@ -1004,21 +1004,10 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
             fn->returns_end_token = fn->args_end_token;
             if (read_token(p, TOKEN_ARROW)) {
-                if (read_token(p, TOKEN_LPAREN)) {
-                    while (!read_token(p, TOKEN_RPAREN)) {
-                        nodes_push(&fn->returns, parse_expr(p, POWER_PRE, false, false, NULL));
-                        fn->returns_count++;
-                        if (expect_token(p, TOKEN_COMMA, TOKEN_RPAREN).kind != TOKEN_COMMA) {
-                            break;
-                        }
-                    }
-
-                    assert(p->state.ahead.kind == TOKEN_RPAREN);
-                    fn->returns_end_token = p->state.ahead;
-                } else {
+                do {
                     nodes_push(&fn->returns, parse_expr(p, POWER_PRE, false, false, NULL));
                     fn->returns_count++;
-                }
+                } while (read_token(p, TOKEN_COMMA));
             }
 
             token = peek_token(p);

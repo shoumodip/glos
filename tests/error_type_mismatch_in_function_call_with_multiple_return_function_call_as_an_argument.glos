@@ -1,5 +1,5 @@
 main :: () {
-    foo :: () -> (i64, bool) { return 69, true }
+    foo :: () -> i64, bool { return 69, true }
     bar :: (_: i64, _: i64) {}
     bar(foo())
 }

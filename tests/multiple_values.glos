@@ -41,7 +41,7 @@ main :: () {
 
     // Multiple returns
     {
-        foo :: () -> (i64, i64) {
+        foo :: () -> i64, i64 {
             return 69, 420
         }
 
@@ -52,7 +52,7 @@ main :: () {
 
     // A function with multiple returns as an argument to another function
     {
-        foo :: () -> (i64, i64) {
+        foo :: () -> i64, i64 {
             return 69, 420
         }
 

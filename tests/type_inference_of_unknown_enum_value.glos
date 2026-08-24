@@ -5,7 +5,7 @@ Foo :: enum {
     w = 1757
 }
 
-foo :: () -> (Foo, Foo) {
+foo :: () -> Foo, Foo {
     return .x + .y, .z
 }
 

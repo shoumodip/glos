@@ -7,7 +7,7 @@ from_cstring :: (s: &char) -> string {
 }
 
 // TODO: Range check
-to_integer :: (s: string, base := 10) -> (i64, bool) {
+to_integer :: (s: string, base := 10) -> i64, bool {
     cstr := to_cstring(s, &arena.temporary)
     defer arena.temporary.reset(rawptr(cstr))
 
@@ -20,7 +20,7 @@ has_prefix :: (a: string, b: string) -> bool {
     return a.count >= b.count && C.memcmp(rawptr(a.data), rawptr(b.data), u64(b.count)) == 0
 }
 
-find :: (s: string, predicate: string) -> (i64, bool) {
+find :: (s: string, predicate: string) -> i64, bool {
     if predicate == "" {
         return 0, true
     }
@@ -34,7 +34,7 @@ find :: (s: string, predicate: string) -> (i64, bool) {
     return 0, false
 }
 
-split :: (s: string, by: char) -> (string, string, bool) {
+split :: (s: string, by: char) -> string, string, bool {
     lhs := s
     rhs := s
 

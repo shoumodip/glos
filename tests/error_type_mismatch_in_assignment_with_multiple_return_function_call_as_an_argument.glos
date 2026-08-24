@@ -1,4 +1,4 @@
 main :: () {
-    foo :: () -> (i64, bool) { return 69, true }
+    foo :: () -> i64, bool { return 69, true }
     a, b: i64 = foo()
 }

@@ -29,9 +29,9 @@ main :: () {
         write_type(() -> i32)
         write_type((_: i32) -> i32)
         write_type((_: i32, _: u8) -> i32)
-        write_type(() -> (i32, bool))
-        write_type((_: i32) -> (i32, bool))
-        write_type((_: i32, _: u8) -> (i32, bool))
+        write_type(() -> i32, bool)
+        write_type((_: i32) -> i32, bool)
+        write_type((_: i32, _: u8) -> i32, bool)
         write_type(() -> ((_: i32) -> bool))
     }
 
