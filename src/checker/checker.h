@@ -48,7 +48,7 @@ void      check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, 
 void      check_int_limit(Compiler *c, Node *n, Int128 value);
 
 bool     get_builtin_type_kind(SV name, Type_Kind *kind);
-i64      get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t);
+Int128   get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t);
 size_t   get_union_type_index(Compiler *c, Node *n, Type unionn);
 Node    *get_node_from_group(Node *n, size_t index, i64 *group_index);
 Node_Fn *get_function_literal(Node *fn);

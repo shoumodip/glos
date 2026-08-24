@@ -1031,7 +1031,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
 LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
     Node *n = (Node *) member;
     if (member->is_enum) {
-        return LLVMConstInt(n->type.llvm, member->enum_value, type_is_signed(n->type));
+        return LLVMConstInt(n->type.llvm, i64_from_int128(member->enum_value), type_is_signed(n->type));
     }
 
     if (member->lhs->type.kind == TYPE_MODULE) {

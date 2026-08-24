@@ -78,7 +78,9 @@ write_type :: (w: Writer, t: Type) {
                     w.write([]char("; "))
                 }
 
-                wprint(w, "\{v.names[i]} = \{v.values[i]}")
+                value := Any(v.values[i])
+                value.type = v.underlying
+                wprint(w, "\{v.names[i]} = \{value}")
             }
             w.write([]char(" "))
         }

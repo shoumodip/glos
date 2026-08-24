@@ -500,7 +500,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
 Const_Value eval_const_expr_member(Compiler *c, Node_Member *member) {
     Node *n = (Node *) member;
     if (member->is_enum) {
-        return const_value_i64(member->enum_value);
+        return const_value_int(member->enum_value);
     }
 
     if (member->method) {

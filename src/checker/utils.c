@@ -240,10 +240,14 @@ bool get_builtin_type_kind(SV name, Type_Kind *kind) {
     return false;
 }
 
-i64 get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t) {
+Int128 get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t) {
     ll_foreach(it, &enumm->values) {
         if (sv_eq(it->token.sv, name)) {
-            return it->token.as.integer;
+            if (type_is_signed(enumm->node.type)) {
+                return int128_from_i64(it->token.as.integer);
+            } else {
+                return int128_from_u64(it->token.as.integer);
+            }
         }
     }
 

@@ -266,9 +266,7 @@ void check_nodes(Compiler *c) {
     get_main(c);
 }
 
-// TODO: Sometimes non-cyclic definitions are falsely flagged as cyclic
-// TODO: Enum values is a bit broken (signedness)
-//
+// TODO: Use work lists for the recursive analyzer to not exhaust the stack
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?

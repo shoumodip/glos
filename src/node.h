@@ -644,7 +644,7 @@ typedef struct {
 
     union {
         size_t field_index;
-        size_t enum_value;
+        Int128 enum_value;
         size_t trait_method;
         size_t union_index;
     };

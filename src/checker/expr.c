@@ -1088,8 +1088,8 @@ void check_expr_enum(Compiler *c, Node_Enum *enumm) {
         spec.underlying = underlying.kind;
     }
 
-    i64 iota = 0;
-    i64 iota_max = 0;
+    Int128 iota = {0};
+    Int128 iota_max = {0};
     ll_foreach(it, &enumm->values) {
         ll_foreach(prev, &enumm->values) {
             if (prev == it) {
@@ -1109,14 +1109,18 @@ void check_expr_enum(Compiler *c, Node_Enum *enumm) {
 
             const Const_Value value = eval_const_expr(c, unary->value, false);
             assert(value.kind == CONST_VALUE_INT);
-            iota = i64_from_int128(c, unary->value, value.as.integer, false, NULL);
+            iota = value.as.integer;
         }
-        iota_max = max(iota_max, iota);
+
+        if (int128_lt(iota_max, iota, true)) {
+            iota_max = iota;
+        }
 
         it->type.kind = underlying.kind;
-        check_int_limit(c, it, int128_from_i64(iota));
+        check_int_limit(c, it, iota);
         it->type.kind = TYPE_VOID;
-        it->token.as.integer = iota++;
+        it->token.as.integer = iota.low;
+        iota = int128_add(iota, INT128_FROM_U64(1), true);
     }
 
     n->type = (Type) {.kind = TYPE_ENUM, .is_meta = true, .spec.enumm = spec};
