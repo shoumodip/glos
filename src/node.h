@@ -287,6 +287,9 @@ struct Type_Trait_Method {
     Pos  pos;
     SV   name;
     Type type;
+
+    // Used for diagnostic purposes
+    Node_Fn *signature;
 };
 
 struct Type_Union_Variant {
@@ -728,7 +731,6 @@ struct Node_Fn {
 
     Nodes  returns;
     size_t returns_count;
-    Token  returns_end_token;
 
     Polymorphs polymorphs;
     Polymorphs monomorphs;
@@ -737,8 +739,10 @@ struct Node_Fn {
 
     bool is_type;
     bool is_extern;
-    bool is_inline;
     bool is_method;
+
+    bool  is_inline;
+    Token inline_token;
 
     // Foo :: trait {
     //     foo: () // <- This function is a trait method type
@@ -749,15 +753,19 @@ struct Node_Fn {
     Node_Fn    *wrapper;
     Type_Trait *wrapper_for_trait;
 
+    // Foo :: trait {
+    //     foo: () // <- Refers to this
+    // }
+    Node_Fn *wrapper_signature;
+
     // compare :: (this: $T, that: T) -> bool       // Partial, only implements equality
     // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
     bool is_compare_operator_complete;
 
     Node_Fn *outer_fn;
 
-    // Polymorphic functions are not checked immediately but rather upon monomorphization. Therefore the context needs
-    // to be preserved to maintain lexical scoping.
-    bool             checked;
+    bool             checked_fully;
+    bool             checked_signature;
     Context_Replace *context_replace;
 
     Node_Atom *defined_as;
@@ -835,7 +843,8 @@ struct Node_Struct {
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
 
-    Token end;
+    Token fields_end;
+    Token polymorphs_end;
 
     Node_Fn *defined_in;
 };

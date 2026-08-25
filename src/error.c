@@ -44,9 +44,17 @@ static void error_begin(Error_Kind kind) {
 typedef struct {
     Token begin;
     Token end;
+    bool  started;
 } Range;
 
 static void range_apply_token(Range *r, Token t) {
+    if (!r->started) {
+        r->started = true;
+        r->begin = t;
+        r->end = t;
+        return;
+    }
+
     if (t.sv.data < r->begin.sv.data) {
         r->begin = t;
     }
@@ -60,6 +68,14 @@ static_assert(COUNT_NODES == 29, "");
 static void range_apply_node(Range *r, const Node *n) {
     if (!n) {
         return;
+    }
+
+    if (n->kind == NODE_FN) {
+        Node_Fn *fn = (Node_Fn *) n;
+        if (fn->wrapper_signature) {
+            range_apply_node(r, (Node *) fn->wrapper_signature);
+            return;
+        }
     }
 
     range_apply_token(r, n->token);
@@ -124,8 +140,11 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_FN: {
         Node_Fn *fn = (Node_Fn *) n;
+        if (fn->is_inline && fn->body) {
+            range_apply_token(r, fn->inline_token);
+        }
+
         range_apply_token(r, fn->args_end_token);
-        range_apply_token(r, fn->returns_end_token);
         range_apply_node(r, fn->returns.tail);
         range_apply_node(r, fn->body);
     } break;
@@ -147,7 +166,7 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_STRUCT: {
         Node_Struct *structt = (Node_Struct *) n;
-        range_apply_token(r, structt->end);
+        range_apply_token(r, structt->fields_end);
     } break;
 
     case NODE_COMPOUND: {
@@ -249,7 +268,7 @@ Pos get_leftmost_point_of_node(const Node *n) {
 }
 
 void error_node_begin(Error_Kind kind, const Node *n) {
-    Range r = {.begin = n->token, .end = n->token};
+    Range r = {0};
     range_apply_node(&r, n);
 
     view_error_begin = r.begin.sv.data;

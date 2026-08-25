@@ -212,6 +212,7 @@ LLVMValueRef compile_ident(Compiler *c, Node *n, Node_Atom *definition, bool ref
 }
 
 LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
+    assert(fn->checked_fully || fn->wrapper);
     if (fn->llvm) {
         return fn->llvm;
     }

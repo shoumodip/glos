@@ -185,10 +185,7 @@ void check_nodes(Compiler *c) {
             assert(fn->args.head && fn->args.head->kind == NODE_DEFINE); // Guaranteed by the parser
 
             // Define the polymorphic parameters
-            {
-                bool is_ref_valid = false;
-                check_fn(c, fn, REF_NONE, &is_ref_valid, true);
-            }
+            check_fn(c, fn, REF_NONE, NULL, true, true);
 
             Node_Define *define = (Node_Define *) fn->args.head;
             assert(define->name->kind == NODE_ATOM && define->type); // Guaranteed by the parser
@@ -266,7 +263,6 @@ void check_nodes(Compiler *c) {
     get_main(c);
 }
 
-// TODO: Use work lists for the recursive analyzer to not exhaust the stack
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?

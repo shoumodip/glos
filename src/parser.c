@@ -1002,7 +1002,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             }
             p->state.pb = pb_save;
 
-            fn->returns_end_token = fn->args_end_token;
             if (read_token(p, TOKEN_ARROW)) {
                 do {
                     nodes_push(&fn->returns, parse_expr(p, POWER_PRE, false, false, NULL));
@@ -1110,6 +1109,8 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         expect_token(p, TOKEN_LBRACE);
         while (!read_token(p, TOKEN_RBRACE)) {
             Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
+            // TODO: Do not allow this to be 'type', 'data', or 'impl'
+
             Node *method = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
 
             Node_Define *define = (Node_Define *) method;
@@ -1185,6 +1186,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             }
             p->state.pb = pb_save;
 
+            assert(p->state.ahead.kind == TOKEN_RPAREN);
+            structt->polymorphs_end = p->state.ahead;
+
             token = expect_token(p, TOKEN_LBRACE);
         }
 
@@ -1227,7 +1231,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         p->state.pb = pb_save;
 
         assert(p->state.ahead.kind == TOKEN_RBRACE);
-        structt->end = p->state.ahead;
+        structt->fields_end = p->state.ahead;
     } break;
 
     case TOKEN_SIZEOF:
@@ -1260,6 +1264,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         Node_Fn *fn = (Node_Fn *) node;
         if (p->state.in_extern) {
+            // TODO: This is kinda broken at the moment ngl
             error_node(EK_ERROR, node, "External function cannot be inlined");
             exit(1);
         }
@@ -1270,6 +1275,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         }
 
         fn->is_inline = true;
+        fn->inline_token = token;
     } break;
 
     default:

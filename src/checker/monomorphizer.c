@@ -556,6 +556,9 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
             monomorphize_replace(c, (Node **) &fn->defined_as);
             monomorphize_replace(c, (Node **) &fn->trait_method);
         }
+
+        fn->checked_fully = false;
+        fn->checked_signature = false;
     } break;
 
     case NODE_ENUM: {

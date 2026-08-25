@@ -67,7 +67,7 @@ Node_Fn *get_main(Compiler *c) {
     }
 
     c->main_fn = (Node_Fn *) main->definition_spec->assignment_node;
-    check_stmt(c, (Node *) main->definition_spec->definition_node);
+    check_fn(c, c->main_fn, REF_NONE, NULL, false, true);
 
     const Type_Fn *signature = main->node.type.spec.fn;
     if (signature->args_count) {
@@ -408,7 +408,7 @@ void push_context_replace(Compiler *c, Context_Replace *replace, Node_Atom *from
     c->context.replace = replace;
 }
 
-void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
+void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type, bool called_from_if_needed) {
     const bool dont_allow_polymorphs_save = c->dont_allow_polymorphs;
     c->dont_allow_polymorphs = false;
 
@@ -418,10 +418,21 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     const size_t partial_stack_count_save = c->partial_stack.count;
     da_push(&c->partial_stack, (Node *) it);
 
-    assert(it->definition_spec->check_status != CHECKING); // It is already asserted
     if (it->definition_spec->check_status == CHECKED) {
-        goto end;
+        bool done = true;
+        if (it_expr && it_expr->kind == NODE_FN) {
+            Node_Fn *fn = (Node_Fn *) it_expr;
+            if (!fn->checked_fully && !called_from_if_needed) {
+                done = false;
+            }
+        }
+
+        if (done) {
+            goto end;
+        }
     }
+
+    assert(it->definition_spec->check_status != CHECKING); // It is already asserted
     it->definition_spec->check_status = CHECKING;
     it->definition_spec->partial_stack_index = partial_stack_count_save;
 
@@ -440,20 +451,28 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
 
     if (it_expr) {
         Node_Define *definition = it->definition_spec->definition_node;
-
         if (type_kind_eq(it_expr->type, TYPE_VOID)) {
             if (it->definition_spec->arg_index && is_node_caller_location(it_expr)) {
                 it_expr->type = c->source_code_location_type;
             } else {
+                bool check = true;
                 if (it->definition_spec->is_const) {
                     assert(it_expr);
                     if (it_expr->kind == NODE_DISTINCT) {
                         Node_Distinct *distinct = (Node_Distinct *) it_expr;
                         distinct->defined_as = it;
                     }
+
+                    if (it_expr->kind == NODE_FN && called_from_if_needed) {
+                        check_fn(c, (Node_Fn *) it_expr, REF_NONE, NULL, false, true);
+                        check = false;
+                    }
                 }
 
-                check_expr(c, it_expr, REF_NONE);
+                if (check) {
+                    check_expr(c, it_expr, REF_NONE);
+                }
+
                 if (!type) {
                     if (it_expr->kind == NODE_GROUP) {
                         Node_Group *group = (Node_Group *) it_expr;
@@ -480,6 +499,11 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
                         it->definition_spec->is_const ? "constant" : "variable");
                     exit(c, 1);
                 }
+            }
+        } else if (it_expr->kind == NODE_FN) {
+            Node_Fn *fn = (Node_Fn *) it_expr;
+            if (!fn->checked_fully && !called_from_if_needed) {
+                check_fn(c, fn, REF_NONE, NULL, false, false);
             }
         }
 
@@ -708,7 +732,8 @@ void check_definition_if_needed(Compiler *c, Node_Atom *definition, Node *usage,
             c,
             definition,
             definition->definition_spec->assignment_node,
-            definition->definition_spec->definition_node->type);
+            definition->definition_spec->definition_node->type,
+            true);
 
         context_restore_fn(&c->context, context_fn_save);
         c->context.replace = context_replace_save;

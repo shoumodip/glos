@@ -1342,6 +1342,7 @@ Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, s
     wrapper_node->llvm_debug_scope = NULL;
     wrapper_node->wrapper = fn;
     wrapper_node->wrapper_for_trait = trait;
+    wrapper_node->wrapper_signature = trait->methods[method_index].signature;
     return wrapper_node;
 }
 

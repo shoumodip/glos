@@ -74,7 +74,10 @@ void check_call_arity(
             args_count - is_method);
 
         if (!fn->type.is_meta) {
-            show_note_about_the_function_being_called(fn, is_method, fn->type.spec.fn);
+            assert(fn->type.kind == TYPE_FN);
+            if (!fn->type.spec.fn->polymorphs_count) {
+                show_note_about_the_function_being_called(fn, is_method, fn->type.spec.fn);
+            }
         }
         exit(c, 1);
     }
@@ -88,7 +91,10 @@ void check_call_arity(
             args_count - is_method);
 
         if (!fn->type.is_meta) {
-            show_note_about_the_function_being_called(fn, is_method, fn->type.spec.fn);
+            assert(fn->type.kind == TYPE_FN);
+            if (!fn->type.spec.fn->polymorphs_count) {
+                show_note_about_the_function_being_called(fn, is_method, fn->type.spec.fn);
+            }
         }
         exit(c, 1);
     }
@@ -164,7 +170,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
 
             if (!ok) {
                 error_undefined(c, &it_name->token, "argument", true);
-                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                if (!cc->is_polymorph) {
+                    show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
+                }
                 exit(c, 1);
             }
 
@@ -176,7 +184,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
             if (fn_spec->variadics_kind != VARIADICS_TYPED) {
                 error_node(
                     EK_ERROR, it, "Cannot spread arguments in a call to a function that does not have typed variadics");
-                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                if (!cc->is_polymorph) {
+                    show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
+                }
                 exit(c, 1);
             }
 
@@ -216,7 +226,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                             "Duplication of argument '" SV_Fmt "'",
                             SV_Arg(fn_spec->args[it_index].name));
                         error_node(EK_NOTE, variadic_source, "Passed here already");
-                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                        if (!cc->is_polymorph) {
+                            show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
+                        }
                         exit(c, 1);
                     }
 
@@ -236,7 +248,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                             "This %s one source",
                             is_variadic_source_direct ? "provides" : "starts");
                         error_node(EK_NOTE, arg, "This provides another");
-                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                        if (!cc->is_polymorph) {
+                            show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
+                        }
                         exit(c, 1);
                     }
 
@@ -276,7 +290,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
 
             if (is_spread) {
                 error_node(EK_ERROR, arg, "Cannot spread arguments at this position");
-                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                if (!cc->is_polymorph) {
+                    show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
+                }
                 exit(c, 1);
             }
 
@@ -284,7 +300,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
             if (argument->node) {
                 error_node(EK_ERROR, arg, "Duplication of argument '" SV_Fmt "'", SV_Arg(fn_spec->args[it_index].name));
                 error_node(EK_NOTE, argument->node, "Passed here already");
-                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                if (!cc->is_polymorph) {
+                    show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
+                }
                 exit(c, 1);
             }
 
@@ -297,7 +315,14 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
     // Check that proper number of arguments is provided
     if (check_arguments_provided) {
         check_call_arity(
-            c, cc->fn, cc->args_count, cc->end, cc->is_method, args_count_min, args_count_max, excess_argument);
+            c,
+            cc->fn,
+            cc->args_count,
+            cc->end,
+            cc->is_method || cc->is_trait,
+            args_count_min,
+            args_count_max,
+            excess_argument);
 
         size_t not_provided_count = 0;
         SV     not_provided_name = {0};
@@ -331,7 +356,9 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                 error_finalize();
             }
 
-            show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+            if (!cc->is_polymorph) {
+                show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
+            }
             exit(c, 1);
         }
     }
@@ -495,7 +522,7 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
 
                 if (!type_assert_noexit(c, it, fn_spec->args[it_index].type)) {
                     if (!cc->is_polymorph) {
-                        show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                        show_note_about_the_function_being_called(cc->fn, cc->is_method || cc->is_trait, fn_spec);
                     }
                     exit(c, 1);
                 }
@@ -536,7 +563,8 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
 
                         if (!ok) {
                             if (!cc->is_polymorph) {
-                                show_note_about_the_function_being_called(cc->fn, cc->is_method, fn_spec);
+                                show_note_about_the_function_being_called(
+                                    cc->fn, cc->is_method || cc->is_trait, fn_spec);
                             }
                             exit(c, 1);
                         }

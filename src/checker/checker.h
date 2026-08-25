@@ -108,7 +108,7 @@ void define_orderless_node(Compiler *c, Node *n, const size_t block_start);
 void define_orderless_nodes_of_module(Compiler *c, Module *module, const Token *unqualified_import_token);
 
 void push_context_replace(Compiler *c, Context_Replace *replace, Node_Atom *from, Type to);
-void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type);
+void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type, bool called_from_if_needed);
 void check_definition_if_needed(Compiler *c, Node_Atom *definition, Node *usage, Ref_Kind ref);
 void check_ident(Compiler *c, Node *n, Ref_Kind ref);
 
@@ -204,7 +204,6 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid);
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children);
 void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_ref_valid);
-void check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool *is_ref_valid, bool only_check_polymorphic_parameters);
 void check_expr_enum(Compiler *c, Node_Enum *enumm);
 void check_expr_trait(Compiler *c, Node_Trait *trait);
 void check_expr_union(Compiler *c, Node_Union *unionn);
@@ -214,6 +213,14 @@ void check_expr_call(Compiler *c, Node_Call *call);
 void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref_valid);
 void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, bool *is_ref_valid);
 void check_expr(Compiler *c, Node *n, Ref_Kind ref);
+
+void check_fn(
+    Compiler *c,
+    Node_Fn  *fn,
+    Ref_Kind  ref,
+    bool     *is_ref_valid,
+    bool      only_check_polymorphic_parameters,
+    bool      only_check_signature);
 
 // Statements //////////////////////////////////////////////////////////////////////////////////////
 void        check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw);

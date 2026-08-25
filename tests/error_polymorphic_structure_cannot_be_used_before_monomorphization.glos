@@ -1,0 +1,5 @@
+Foo :: struct($T: Type) {}
+
+main :: () {
+    x: Foo
+}

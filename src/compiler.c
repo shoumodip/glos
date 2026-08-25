@@ -169,7 +169,6 @@ void compiler_build(Compiler *c, const char *output_path) {
     const char *object_path = temp_replace_suffix(output_path, EXE_FILE_EXTENSION, OBJ_FILE_EXTENSION);
     temporary_files_push(object_path);
     {
-        // TODO: Remove
         // LLVMPrintModuleToFile(c->llvm_module, "/dev/stdout", NULL);
 
         char *error = NULL;
