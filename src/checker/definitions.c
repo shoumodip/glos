@@ -605,20 +605,13 @@ static Type resolve_indirect_type_from_partial_stack(Compiler *c, size_t begin, 
 
         case NODE_INDEXABLE: {
             Node_Indexable *indexable = (Node_Indexable *) it;
-
-            assert(type.is_meta);
-            type.is_meta = false;
-
-            // TODO: Allocating in arena for now. But later, perhaps we should take reference from the element node
-            Type *element = arena_clone(&default_arena, &type, sizeof(type));
-            memset(&type, 0, sizeof(type));
-
+            indexable->element->type = type_without_meta(type);
             if (indexable->is_dynamic) {
                 type.kind = TYPE_DYNAMIC_ARRAY;
-                type.spec.dynamic_array.element = element;
+                type.spec.dynamic_array.element = &indexable->element->type;
             } else {
                 type.kind = TYPE_SLICE;
-                type.spec.slice.element = element;
+                type.spec.slice.element = &indexable->element->type;
             }
             type.is_meta = true;
         } break;

@@ -1738,11 +1738,10 @@ void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, 
         // It is not immediately necessary to calculate the properties of T, which allows for recursive definitions.
         check_expr(c, indexable->element, REF_SLICE);
     }
+    type_assert_type(c, indexable->element);
 
-    // TODO: Does this need to be an arena allocation??
-    Type *element_type = arena_alloc(&default_arena, sizeof(*element_type));
-    *element_type = type_without_meta(type_assert_type(c, indexable->element));
-
+    Type *element_type = &indexable->element->type;
+    element_type->is_meta = false;
     if (indexable->count) {
         Type_Array spec = {0};
         spec.element = element_type;
