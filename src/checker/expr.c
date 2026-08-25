@@ -1468,6 +1468,12 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                     } else if (type_is_float(*from_type) && !type_is_float(*to_type)) {
                         // float -> integer
                         ok = type_is_integer(*to_type);
+                        if (ok && type_kind_eq(*from_type, TYPE_FLOAT)) {
+                            call->type_cast = TYPE_CAST_NORMAL;
+
+                            // This is guaranted to be a constant expression, since we are casting from 'float'
+                            eval_const_expr(c, n, false);
+                        }
                     } else if (
                         type_kind_eq(*from_type, TYPE_INT) &&
                         (type_is_integer(*to_type) || type_kind_eq(*to_type, TYPE_ENUM))) //

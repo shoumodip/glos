@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 171
+tests/error_cannot_cast_float_value_infinity_to_integer.glos:2:14: Error: This expression evaluates to infinity, which cannot be casted to 's64'
+
+    X := s64(1.0 / 0.0)
+
+
