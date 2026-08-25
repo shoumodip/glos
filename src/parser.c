@@ -535,7 +535,7 @@ static Node *parse_define(
         error_node(
             EK_ERROR,
             name,
-            "The name 'this' is reserved for the receiver argument of a method, and therefore cannot be used here");
+            "The name 'this' is reserved for the receiver argument of a method, and therefore cannot be defined here");
 
         if (define->name_polymorph) {
             assert(p->state.pb);
