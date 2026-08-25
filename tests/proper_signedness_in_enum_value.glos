@@ -3,8 +3,5 @@ Foo :: enum u64 {
 }
 
 main :: () {
-    println(enum u64 {
-        X = 18446744073709551615
-    })
     println(u64(Foo.X))
 }

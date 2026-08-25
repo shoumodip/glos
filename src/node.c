@@ -197,6 +197,10 @@ void sb_push_type(SB *sb, Type type) {
             sb_push_sv(sb, defined_as->node.token.sv);
         } else {
             sb_push_cstr(sb, "trait {");
+            if (spec->methods_count) {
+                sb_push(sb, ' ');
+            }
+
             for (size_t i = 0; i < spec->methods_count; i++) {
                 const Type_Trait_Method it = spec->methods[i];
                 if (i) {
@@ -204,6 +208,10 @@ void sb_push_type(SB *sb, Type type) {
                 }
                 sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
                 sb_push_type(sb, it.type);
+            }
+
+            if (spec->methods_count) {
+                sb_push(sb, ' ');
             }
             sb_push_cstr(sb, "}");
         }
@@ -216,12 +224,20 @@ void sb_push_type(SB *sb, Type type) {
             sb_push_sv(sb, defined_as->node.token.sv);
         } else {
             sb_push_cstr(sb, "union {");
+            if (spec->variants_count) {
+                sb_push(sb, ' ');
+            }
+
             for (size_t i = 0; i < spec->variants_count; i++) {
                 Type_Union_Variant it = spec->variants[i];
                 if (i) {
                     sb_push_cstr(sb, "; ");
                 }
                 sb_push_type(sb, it.type);
+            }
+
+            if (spec->variants_count) {
+                sb_push(sb, ' ');
             }
             sb_push_cstr(sb, "}");
         }
@@ -248,6 +264,10 @@ void sb_push_type(SB *sb, Type type) {
 
         if (!defined_as) {
             sb_push_cstr(sb, " {");
+            if (spec->fields_count) {
+                sb_push(sb, ' ');
+            }
+
             for (size_t i = 0; i < spec->fields_count; i++) {
                 Type_Struct_Field it = spec->fields[i];
                 if (i) {
@@ -256,6 +276,10 @@ void sb_push_type(SB *sb, Type type) {
 
                 sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
                 sb_push_type(sb, it.type);
+            }
+
+            if (spec->fields_count) {
+                sb_push(sb, ' ');
             }
             sb_push_cstr(sb, "}");
         }
@@ -1345,5 +1369,3 @@ Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, s
     wrapper_node->wrapper_signature = trait->methods[method_index].signature;
     return wrapper_node;
 }
-
-// TODO: Print space in anonymous types

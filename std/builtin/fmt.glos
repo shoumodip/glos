@@ -70,21 +70,6 @@ write_type :: (w: Writer, t: Type) {
     case Type_Info_Enumeration
         w.write([]char("enum "))
         write_type(w, v.underlying)
-        w.write([]char(" {"))
-        if v.names.count != 0 {
-            w.write([]char(" "))
-            for i := 0; i < v.names.count; i += 1 {
-                if i != 0 {
-                    w.write([]char("; "))
-                }
-
-                value := Any(v.values[i])
-                value.type = v.underlying
-                wprint(w, "\{v.names[i]} = \{value}")
-            }
-            w.write([]char(" "))
-        }
-        w.write([]char("}"))
 
     case Type_Info_Trait
         w.write([]char("trait {"))
