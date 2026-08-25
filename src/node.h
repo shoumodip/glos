@@ -553,6 +553,7 @@ typedef struct {
     bool is_extern;
     bool is_private;
     bool is_assigned;
+    bool is_field;
 
     Node_Fn *static_var_fn;
 
@@ -572,6 +573,7 @@ typedef struct {
     Context_Replace *replace_context;
 
     Check_Status check_status;
+    size_t       partial_stack_index;
 
     bool        is_const;
     bool        is_const_value_evaluated;

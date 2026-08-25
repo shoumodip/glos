@@ -170,7 +170,7 @@ Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module) {
     }
 
     if (method->node.type.kind != TYPE_FN) {
-        check_definition_if_needed(c, method->defined_as, REF_NONE);
+        check_definition_if_needed(c, method->defined_as, NULL, REF_NONE);
     }
 
     return method;

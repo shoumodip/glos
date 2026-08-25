@@ -218,13 +218,15 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
         check_expr(c, unary->value, REF_NONE);
         check_that_type_is_known(c, unary->value);
 
-        if (!unary->value->type.ref) {
+        if (!unary->value->type.ref || unary->value->type.is_meta) {
+            // TODO: Make these diagnostics better
             if (type_kind_eq(unary->value->type, TYPE_RAWPTR)) {
                 error_node(EK_ERROR, unary->value, "Cannot dereference raw pointer");
                 exit(c, 1);
             }
 
-            error_node(EK_ERROR, unary->value, "Expected typed pointer, got %s", type_to_cstr(unary->value->type));
+            error_node(
+                EK_ERROR, unary->value, "Can only dereference typed pointer, got %s", type_to_cstr(unary->value->type));
             exit(c, 1);
         }
 
@@ -2116,6 +2118,7 @@ void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, 
         check_expr(c, indexable->element, REF_SLICE);
     }
 
+    // TODO: Does this need to be an arena allocation??
     Type *element_type = arena_alloc(&default_arena, sizeof(*element_type));
     *element_type = type_without_meta(type_assert_type(c, indexable->element));
 
@@ -2152,8 +2155,9 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     if (!n) {
         return;
     }
-
     bool is_ref_valid = false;
+
+    da_push(&c->partial_stack, n);
     switch (n->kind) {
     case NODE_ATOM:
         check_expr_atom(c, (Node_Atom *) n, ref, &is_ref_valid);
@@ -2278,6 +2282,7 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     default:
         unreachable();
     }
+    c->partial_stack.count--;
 
     if (!is_ref_valid) {
         switch (ref) {

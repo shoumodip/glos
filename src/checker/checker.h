@@ -109,7 +109,7 @@ void define_orderless_nodes_of_module(Compiler *c, Module *module, const Token *
 
 void push_context_replace(Compiler *c, Context_Replace *replace, Node_Atom *from, Type to);
 void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type);
-void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_Kind ref);
+void check_definition_if_needed(Compiler *c, Node_Atom *definition, Node *usage, Ref_Kind ref);
 void check_ident(Compiler *c, Node *n, Ref_Kind ref);
 
 // Control Flow Analysis ///////////////////////////////////////////////////////////////////////////

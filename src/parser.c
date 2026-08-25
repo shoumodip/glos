@@ -1215,6 +1215,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     error_node(EK_ERROR, define->expr, "Field definition cannot have assignment");
                     exit(1);
                 }
+
+                Node_Atom *it = NULL;
+                while ((it = (Node_Atom *) node_iter((Node *) it, define->name))) {
+                    it->definition_spec->is_field = true;
+                }
                 nodes_push(&structt->fields, field);
             }
             expect_stmt_terminator(p);

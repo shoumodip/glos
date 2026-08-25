@@ -415,11 +415,15 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
     memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
 
-    assert(it->definition_spec->check_status != CHECKING); // It is already checked
+    const size_t partial_stack_count_save = c->partial_stack.count;
+    da_push(&c->partial_stack, (Node *) it);
+
+    assert(it->definition_spec->check_status != CHECKING); // It is already asserted
     if (it->definition_spec->check_status == CHECKED) {
         goto end;
     }
     it->definition_spec->check_status = CHECKING;
+    it->definition_spec->partial_stack_index = partial_stack_count_save;
 
     if (type) {
         if (type_kind_eq(type->type, TYPE_VOID)) {
@@ -545,11 +549,150 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     it->definition_spec->check_status = CHECKED;
 
 end:
+    c->partial_stack.count = partial_stack_count_save;
     c->monomorphizing_site = monomorphizing_site_save;
     c->dont_allow_polymorphs = dont_allow_polymorphs_save;
 }
 
-void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_Kind ref) {
+static Type resolve_indirect_type_from_partial_stack(Compiler *c, size_t begin, size_t end) {
+    Type type = {0};
+    for (size_t i = end; i > begin; i--) {
+        Node *it = c->partial_stack.data[i - 1];
+        if (!type.is_meta && it->type.is_meta) {
+            type = it->type;
+        }
+
+        switch (it->kind) {
+        case NODE_ATOM:
+            // Pass
+            break;
+
+        case NODE_UNARY:
+            if (it->token.kind == TOKEN_BAND) {
+                type.ref++;
+            } else {
+                unreachable();
+            }
+            break;
+
+        case NODE_DISTINCT:
+            type.distinct = ((Node_Distinct *) it)->defined_as;
+            break;
+
+        case NODE_INDEXABLE: {
+            Node_Indexable *indexable = (Node_Indexable *) it;
+
+            assert(type.is_meta);
+            type.is_meta = false;
+
+            // TODO: Allocating in arena for now. But later, perhaps we should take reference from the element node
+            Type *element = arena_clone(&default_arena, &type, sizeof(type));
+            memset(&type, 0, sizeof(type));
+
+            if (indexable->is_dynamic) {
+                type.kind = TYPE_DYNAMIC_ARRAY;
+                type.spec.dynamic_array.element = element;
+            } else {
+                type.kind = TYPE_SLICE;
+                type.spec.slice.element = element;
+            }
+            type.is_meta = true;
+        } break;
+
+        case NODE_UNION:
+        case NODE_STRUCT:
+            // Pass
+            break;
+
+        default:
+            unreachable();
+            break;
+        }
+    }
+    return type;
+}
+
+static bool get_indirect_type_from_partial_stack(Compiler *c, Node_Atom *definition, Type *out) {
+    size_t begin = definition->definition_spec->partial_stack_index;
+    size_t end = 0;
+    bool   indirect = false;
+    for (size_t i = begin; i < c->partial_stack.count; i++) {
+        Node *it = c->partial_stack.data[i];
+        switch (it->kind) {
+        case NODE_ATOM: {
+            if (it->token.kind != TOKEN_IDENT) {
+                return false;
+            }
+
+            Node_Atom *atom = (Node_Atom *) it;
+            if (atom->definition_spec && !atom->definition_spec->is_const && !atom->definition_spec->is_field) {
+                return false;
+            }
+
+            if (it->type.is_meta) {
+                if (!end) {
+                    end = i + 1;
+                }
+
+                if (indirect) {
+                    *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                    return true;
+                }
+            }
+        } break;
+
+        case NODE_UNARY:
+            if (it->token.kind != TOKEN_BAND) {
+                return false;
+            }
+
+            indirect = true;
+            if (end) {
+                *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                return true;
+            }
+            break;
+
+        case NODE_DISTINCT:
+            // Pass
+            break;
+
+        case NODE_INDEXABLE: {
+            Node_Indexable *indexable = (Node_Indexable *) it;
+            if (indexable->count) {
+                return false;
+            }
+
+            indirect = true;
+            if (end) {
+                *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                return true;
+            }
+        } break;
+
+        case NODE_UNION:
+        case NODE_STRUCT:
+            if (it->type.is_meta) {
+                if (!end) {
+                    end = i + 1;
+                }
+
+                if (indirect) {
+                    *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                    return true;
+                }
+            }
+            break;
+
+        default:
+            return false;
+        }
+    }
+
+    return false;
+}
+
+void check_definition_if_needed(Compiler *c, Node_Atom *definition, Node *usage, Ref_Kind ref) {
     switch (definition->definition_spec->check_status) {
     case UNCHECKED: {
         Context_Fn *context_fn_save = c->context.fn;
@@ -572,10 +715,13 @@ void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_Kind ref
     } break;
 
     case CHECKING:
-        if ((ref == REF_ADDR || ref == REF_SLICE) && definition->node.type.is_meta) {
+        if ((ref == REF_ADDR || ref == REF_ADDR_MEMBER || ref == REF_SLICE) && definition->node.type.is_meta) {
             // Reference to incomplete type definition is allowed
-        } else {
+        } else if (!get_indirect_type_from_partial_stack(c, definition, &definition->node.type)) {
             error_node(EK_ERROR, (Node *) definition, "Cyclic definition");
+            if (usage) {
+                error_node(EK_NOTE, usage, "Used without indirection here");
+            }
             exit(c, 1);
         }
         break;
@@ -710,7 +856,7 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                 n->type.is_meta = true;
             }
         } else {
-            check_definition_if_needed(c, definition, ref);
+            check_definition_if_needed(c, definition, n, ref);
             n->type = definition->node.type;
             n->is_memory = !definition->definition_spec->is_const;
         }

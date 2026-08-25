@@ -75,6 +75,8 @@ typedef struct {
     Type interpolation_type;
     Type interpolation_marker_type;
 
+    DA(Node *) partial_stack;
+
     HT(Method_Spec, Node_Fn *) methods_table;
     DA(Node_Fn *) methods_list;
 
