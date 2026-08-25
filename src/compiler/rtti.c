@@ -86,7 +86,7 @@ static void compile_type_info_init(Compiler *c, Type_Info_Compiler *tic, Type *t
 static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip_first_arg) {
     const void *checkpoint = arena_alloc(&temp_arena, 0);
 
-    LLVMValueRef fn_fields[2] = {0};
+    LLVMValueRef fn_fields[3] = {0};
     size_t       fn_fields_iota = 0;
 
     assert(tic->type->kind == TYPE_FN);
@@ -105,6 +105,8 @@ static void compile_type_info_fn(Compiler *c, Type_Info_Compiler *tic, bool skip
     }
     fn_fields[fn_fields_iota++] =
         create_const_slice_from_memory(c, LLVMPointerTypeInContext(c->llvm_context, 0), returns, spec->returns_count);
+
+    fn_fields[fn_fields_iota++] = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), spec->variadics_kind, true);
 
     tic->tiv_fields[tic->tiv_fields_iota++] =
         LLVMConstStructInContext(c->llvm_context, fn_fields, fn_fields_iota, false);
@@ -244,7 +246,7 @@ static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
         case TYPE_STRUCT: {
             const void *checkpoint = arena_alloc(&temp_arena, 0);
 
-            LLVMValueRef struct_fields[3] = {0};
+            LLVMValueRef struct_fields[4] = {0};
             size_t       struct_fields_iota = 0;
 
             const Type_Struct *spec = tic->type->spec.structt;
@@ -268,6 +270,9 @@ static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
 
             struct_fields[struct_fields_iota++] =
                 create_const_slice_from_memory(c, LLVMInt64TypeInContext(c->llvm_context), offsets, spec->fields_count);
+
+            struct_fields[struct_fields_iota++] = LLVMConstInt(
+                LLVMInt8TypeInContext(c->llvm_context), spec->original_definition != spec->definition, true);
 
             tic->tiv_fields[tic->tiv_fields_iota++] =
                 LLVMConstStructInContext(c->llvm_context, struct_fields, struct_fields_iota, false);

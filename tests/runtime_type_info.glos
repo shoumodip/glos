@@ -33,6 +33,8 @@ main :: () {
         write_type((_: s32) -> s32, bool)
         write_type((_: s32, _: u8) -> s32, bool)
         write_type(() -> ((_: s32) -> bool))
+        write_type((ns: ...string))
+        write_type((a: s64, ...))
     }
 
     // Enumerations
@@ -68,6 +70,11 @@ main :: () {
             x, y: s32
             urmom: string
         })
+
+        Box :: struct($T: Type) {
+            v: T
+        }
+        write_type(Box(s32))
     }
 
     // Arrays
@@ -172,6 +179,12 @@ write_type :: (ti: Type) {
                 }
             }
 
+            if variant.variadics == {
+            case .NONE;    // Pass
+            case .TYPED;   write_string(" // Typed Variadics")
+            case .UNTYPED; write_string(" // Untyped Variadics")
+            }
+
         case Type_Info_Enumeration
             write_string("enum ")
             write_type(variant.underlying)
@@ -241,6 +254,10 @@ write_type :: (ti: Type) {
                 write_indent(depth)
             }
             write_string("}")
+
+            if variant.monomorph {
+                write_string(" // Monomorph")
+            }
 
         case Type_Info_Array
             write_string("[")

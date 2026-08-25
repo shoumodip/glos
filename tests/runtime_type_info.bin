@@ -1,5 +1,5 @@
 EXIT 0
-STDOUT 607
+STDOUT 713
 bool
 char
 s8
@@ -24,6 +24,8 @@ string
 (s32) -> (s32, bool)
 (s32, u8) -> (s32, bool)
 () -> (s32) -> bool
+([]string) // Typed Variadics
+(s64) // Untyped Variadics
 enum s64 {
     Foo = 0
     Bar = 1
@@ -44,6 +46,9 @@ struct {
     y: s32 // offset = 4
     urmom: string // offset = 8
 }
+struct {
+    v: s32 // offset = 0
+} // Monomorph
 [69]string
 [69][420]u8
 [..]string

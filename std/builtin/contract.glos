@@ -56,10 +56,13 @@ Type_Info_Pointer :: struct {
 }
 
 Type_Info_Function :: struct {
-    args:    []Type
-    returns: []Type
-
-    // TODO: Variadics
+    args:      []Type
+    returns:   []Type
+    variadics: enum {
+        NONE
+        TYPED
+        UNTYPED
+    }
 }
 
 Type_Info_Enumeration :: struct {
@@ -78,9 +81,10 @@ Type_Info_Union :: struct {
 }
 
 Type_Info_Structure :: struct {
-    names:   []string
-    types:   []Type
-    offsets: []s64
+    names:     []string
+    types:     []Type
+    offsets:   []s64
+    monomorph: bool
 }
 
 Type_Info_Array :: struct {
