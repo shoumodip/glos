@@ -6,8 +6,8 @@ tests/error_number_of_values_mismatch_in_function_call_with_multiple_return_func
 
     bar(foo())
 
-tests/error_number_of_values_mismatch_in_function_call_with_multiple_return_function_call_as_an_argument.glos:3:12: Note: The function being called has signature '(x: i64)'
+tests/error_number_of_values_mismatch_in_function_call_with_multiple_return_function_call_as_an_argument.glos:3:12: Note: The function being called has signature '(x: s64)'
 
-    bar :: (x: i64) {}
+    bar :: (x: s64) {}
 
 

@@ -1,4 +1,4 @@
-Array :: struct ($T: Type, $N: i64) {
+Array :: struct ($T: Type, $N: s64) {
     xs: [N]T
 }
 

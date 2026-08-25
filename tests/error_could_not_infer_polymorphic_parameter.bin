@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 367
-tests/error_could_not_infer_polymorphic_parameter.glos:4:9: Error: Expected '&$T', got 'i64'
+tests/error_could_not_infer_polymorphic_parameter.glos:4:9: Error: Expected '&$T', got 's64'
 
     foo(69)
 

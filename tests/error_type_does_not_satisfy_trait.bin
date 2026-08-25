@@ -10,7 +10,7 @@ tests/error_type_does_not_satisfy_trait.glos:2:5: Note: The method 'a' is not de
 
     a: ()           // Undefined
 
-tests/error_type_does_not_satisfy_trait.glos:15:1: Note: The method 'b' has wrong signature. Expected '(this: Bar, _: i32)', got '(this: Bar)'
+tests/error_type_does_not_satisfy_trait.glos:15:1: Note: The method 'b' has wrong signature. Expected '(this: Bar, _: s32)', got '(this: Bar)'
 
     b :: (this: Bar) {}
 

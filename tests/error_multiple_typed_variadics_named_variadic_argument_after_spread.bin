@@ -14,8 +14,8 @@ tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:5
 
     foo(...xs, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:1:8: Note: The function being called has signature '(ns: ...i64)'
+tests/error_multiple_typed_variadics_named_variadic_argument_after_spread.glos:1:8: Note: The function being called has signature '(ns: ...s64)'
 
-    foo :: (ns: ...i64) {}
+    foo :: (ns: ...s64) {}
 
 

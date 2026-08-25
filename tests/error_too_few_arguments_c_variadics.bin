@@ -6,8 +6,8 @@ tests/error_too_few_arguments_c_variadics.glos:3:9: Error: Too few arguments: Ex
 
     foo()
 
-tests/error_too_few_arguments_c_variadics.glos:2:12: Note: The function being called has signature '(x: i64, ...)'
+tests/error_too_few_arguments_c_variadics.glos:2:12: Note: The function being called has signature '(x: s64, ...)'
 
-    foo :: (x: i64, ...) {}
+    foo :: (x: s64, ...) {}
 
 

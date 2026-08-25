@@ -1,3 +1,3 @@
-Foo :: distinct i64
+Foo :: distinct s64
 foo :: (this: Foo) {}
 foo :: (this: Foo) {}

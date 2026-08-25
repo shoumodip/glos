@@ -1,2 +1,2 @@
-Foo :: distinct i64
-index :: (this: Foo, key: i64) {}
+Foo :: distinct s64
+index :: (this: Foo, key: s64) {}

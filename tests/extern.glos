@@ -1,7 +1,7 @@
 main :: () {
     extern {
-        exit :: (code: i32)
-        putchar :: (ch: i32) -> i32
+        exit :: (code: s32)
+        putchar :: (ch: s32) -> s32
     }
 
     putchar(69)

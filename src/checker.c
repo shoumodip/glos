@@ -129,10 +129,10 @@ void check_nodes(Compiler *c) {
         c->type_info_variants[TYPE_BOOL] = CONTRACT_TYPE_INFO_BOOLEAN;
         c->type_info_variants[TYPE_CHAR] = CONTRACT_TYPE_INFO_CHARACTER;
 
-        c->type_info_variants[TYPE_I8] = CONTRACT_TYPE_INFO_INTEGER;
-        c->type_info_variants[TYPE_I16] = CONTRACT_TYPE_INFO_INTEGER;
-        c->type_info_variants[TYPE_I32] = CONTRACT_TYPE_INFO_INTEGER;
-        c->type_info_variants[TYPE_I64] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S8] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S16] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S32] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S64] = CONTRACT_TYPE_INFO_INTEGER;
 
         c->type_info_variants[TYPE_U8] = CONTRACT_TYPE_INFO_INTEGER;
         c->type_info_variants[TYPE_U16] = CONTRACT_TYPE_INFO_INTEGER;

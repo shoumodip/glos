@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 227
-tests/error_type_mismatch_in_return_with_multiple_return_function_call_as_an_argument.glos:3:12: Error: Expected 1st value of this to be 'i64', got 'bool'. The type of this entire expression is '(bool, i64)'
+tests/error_type_mismatch_in_return_with_multiple_return_function_call_as_an_argument.glos:3:12: Error: Expected 1st value of this to be 's64', got 'bool'. The type of this entire expression is '(bool, s64)'
 
     return bar()
 

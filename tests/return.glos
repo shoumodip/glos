@@ -1,4 +1,4 @@
-bar :: () -> i64 {
+bar :: () -> s64 {
     return 69
     println(420) // Unreachable
 }

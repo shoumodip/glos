@@ -4,10 +4,10 @@ STDOUT 0
 STDERR 190
 tests/error_structure_field_redefinition.glos:3:5: Error: Redefinition of 'x'
 
-    x: i64
+    x: s64
 
 tests/error_structure_field_redefinition.glos:2:5: Note: Here is the first definition
 
-    x: i64
+    x: s64
 
 

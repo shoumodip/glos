@@ -155,14 +155,14 @@ typedef struct {
 
     // Dynamic_Array :: struct {
     //     data:     rawptr
-    //     count:    i64
-    //     capacity: i64
+    //     count:    s64
+    //     capacity: s64
     // }
     LLVMTypeRef llvm_dynamic_array_type;
 
     // Slice :: struct {
     //     data:  rawptr
-    //     count: i64
+    //     count: s64
     // }
     LLVMTypeRef llvm_slice_type;
 

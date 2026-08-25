@@ -14,8 +14,8 @@ tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:4:13
 
     foo(69, ...ns)
 
-tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:1:8: Note: The function being called has signature '(xs: ...i64)'
+tests/error_multiple_typed_variadics_spread_after_positional_variadics.glos:1:8: Note: The function being called has signature '(xs: ...s64)'
 
-    foo :: (xs: ...i64) {}
+    foo :: (xs: ...s64) {}
 
 

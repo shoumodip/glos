@@ -4,10 +4,10 @@ STDOUT 0
 STDERR 190
 tests/error_global_variable_redefinition.glos:2:1: Error: Redefinition of 'x'
 
-    x: i64
+    x: s64
 
 tests/error_global_variable_redefinition.glos:1:1: Note: Here is the first definition
 
-    x: i64
+    x: s64
 
 

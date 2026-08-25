@@ -70,10 +70,10 @@ typedef enum {
     TYPE_BOOL,
     TYPE_CHAR,
 
-    TYPE_I8,
-    TYPE_I16,
-    TYPE_I32,
-    TYPE_I64,
+    TYPE_S8,
+    TYPE_S16,
+    TYPE_S32,
+    TYPE_S64,
 
     TYPE_U8,
     TYPE_U16,
@@ -222,8 +222,8 @@ struct Type {
     Type_Kind kind;
     size_t    ref;
 
-    // A :: 69  // typeof(A) => Type { kind = TYPE_I64, is_meta = false }
-    // B :: i64 // typeof(B) => Type { kind = TYPE_I64, is_meta = true  }
+    // A :: 69  // typeof(A) => Type { kind = TYPE_S64, is_meta = false }
+    // B :: s64 // typeof(B) => Type { kind = TYPE_S64, is_meta = true  }
     bool is_meta;
 
     Node_Atom *distinct;

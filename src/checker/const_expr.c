@@ -12,10 +12,10 @@ Const_Value default_const_value(Compiler *c, Type type) {
     case TYPE_BOOL:
     case TYPE_CHAR:
 
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
+    case TYPE_S8:
+    case TYPE_S16:
+    case TYPE_S32:
+    case TYPE_S64:
     case TYPE_INT:
 
     case TYPE_U8:

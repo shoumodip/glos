@@ -3,7 +3,7 @@ main :: () {
     putchar(CHAR_NEWLINE)
 
     extern {
-        putchar :: (c: i32) -> i32
+        putchar :: (c: s32) -> s32
     }
 
     CHAR_E :: 69

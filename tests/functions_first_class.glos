@@ -1,8 +1,8 @@
-apply :: (x: i64, f: (_: i64)) {
+apply :: (x: s64, f: (_: s64)) {
     f(x)
 }
 
-map :: (x: i64, f: (_: i64) -> i64) -> i64 {
+map :: (x: s64, f: (_: s64) -> s64) -> s64 {
     return f(x)
 }
 
@@ -13,6 +13,6 @@ main :: () {
     foo = () { println(420) }
     foo()
 
-    apply(2674, (x: i64) { println(x / 2) })
-    println(map(26695, (x: i64) -> i64 { return x * 3 }))
+    apply(2674, (x: s64) { println(x / 2) })
+    println(map(26695, (x: s64) -> s64 { return x * 3 }))
 }

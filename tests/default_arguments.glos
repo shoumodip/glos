@@ -29,8 +29,8 @@ main :: () {
 
     {
         Opts :: struct {
-            a: i32
-            b: i32
+            a: s32
+            b: s32
         }
 
         foo :: (opts := Opts {69, 420}) {

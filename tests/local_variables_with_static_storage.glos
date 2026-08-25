@@ -1,4 +1,4 @@
-iota :: () -> i64 {
+iota :: () -> s64 {
     #static i := 0
     i += 1
     return i - 1

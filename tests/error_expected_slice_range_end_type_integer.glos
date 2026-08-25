@@ -1,4 +1,4 @@
 main :: () {
-    xs: &i64
+    xs: &s64
     xs[0..true]
 }

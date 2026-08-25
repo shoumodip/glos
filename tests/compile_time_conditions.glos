@@ -23,7 +23,7 @@
 		println("This does not get checked or compiled")
 	}
 } else {
-    foo :: () -> i64 {
+    foo :: () -> s64 {
 		return bar()
 	}
 }
@@ -33,7 +33,7 @@
 		return "Urmom"
 	}
 } else if true {
-    bar :: () -> i64 {
+    bar :: () -> s64 {
 		return 69
 	}
 }

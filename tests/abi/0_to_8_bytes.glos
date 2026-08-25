@@ -1,12 +1,12 @@
 S8 :: struct {
-    x: i32
-    y: i32
+    x: s32
+    y: s32
 }
 
 extern {
     #library "abi"
     s8_foo :: (s: S8)
-    s8_ret :: (x: i32, y: i32) -> S8
+    s8_ret :: (x: s32, y: s32) -> S8
 }
 
 main :: () {

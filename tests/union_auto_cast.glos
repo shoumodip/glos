@@ -1,11 +1,11 @@
 Value :: union {
-    i64
+    s64
     string
 }
 
 print_value :: (v: Value) {
     if v == {
-    case i64
+    case s64
         println(v)
 
     case string

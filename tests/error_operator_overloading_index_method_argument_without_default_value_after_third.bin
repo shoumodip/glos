@@ -4,7 +4,7 @@ STDOUT 0
 STDERR 682
 tests/error_operator_overloading_index_method_argument_without_default_value_after_third.glos:2:1: Error: The method 'index' is special because it implements an operator overload
 
-    index :: (this: Foo, index: i64, assign: bool, other: string) {}
+    index :: (this: Foo, index: s64, assign: bool, other: string) {}
 
     It should have this signature:
 
@@ -14,6 +14,6 @@ tests/error_operator_overloading_index_method_argument_without_default_value_aft
 
 tests/error_operator_overloading_index_method_argument_without_default_value_after_third.glos:2:48: Note: All arguments after the 3rd argument must be optional
 
-    index :: (this: Foo, index: i64, assign: bool, other: string) {}
+    index :: (this: Foo, index: s64, assign: bool, other: string) {}
 
 

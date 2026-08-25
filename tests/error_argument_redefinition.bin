@@ -4,10 +4,10 @@ STDOUT 0
 STDERR 217
 tests/error_argument_redefinition.glos:1:17: Error: Redefinition of 'x'
 
-    add :: (x: i64, x: i64) {}
+    add :: (x: s64, x: s64) {}
 
 tests/error_argument_redefinition.glos:1:9: Note: Here is the first definition
 
-    add :: (x: i64, x: i64) {}
+    add :: (x: s64, x: s64) {}
 
 

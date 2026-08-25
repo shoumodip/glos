@@ -4,7 +4,7 @@ STDOUT 0
 STDERR 653
 tests/error_operator_overloading_range_method_argument_without_default_value_after_third.glos:2:1: Error: The method 'range' is special because it implements an operator overload
 
-    range :: (this: Foo, a: i64, b: i64, other: bool) {}
+    range :: (this: Foo, a: s64, b: s64, other: bool) {}
 
     It should have this signature:
 
@@ -14,6 +14,6 @@ tests/error_operator_overloading_range_method_argument_without_default_value_aft
 
 tests/error_operator_overloading_range_method_argument_without_default_value_after_third.glos:2:38: Note: All arguments after the 3rd argument must be optional
 
-    range :: (this: Foo, a: i64, b: i64, other: bool) {}
+    range :: (this: Foo, a: s64, b: s64, other: bool) {}
 
 

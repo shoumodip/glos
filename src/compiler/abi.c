@@ -86,10 +86,10 @@ static void split_type_into_qwords(Compiler *c, QWords *words, const Type *type,
     switch (type->kind) {
     case TYPE_BOOL:
     case TYPE_CHAR:
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
+    case TYPE_S8:
+    case TYPE_S16:
+    case TYPE_S32:
+    case TYPE_S64:
     case TYPE_U8:
     case TYPE_U16:
     case TYPE_U32:

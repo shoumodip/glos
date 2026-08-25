@@ -10,12 +10,12 @@ tests/error_union_switch_is_not_complete.glos:8:5: Error: This switch statement 
 
     The following union variants are not handled:
         - null
-        - i64
+        - s64
 
 tests/error_union_switch_is_not_complete.glos:1:10: Note: Union defined here
 
     Value :: union {
-        i64
+        s64
         string
     }
 

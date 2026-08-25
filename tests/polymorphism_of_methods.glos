@@ -1,5 +1,5 @@
 Foo :: struct {
-    x: i32
+    x: s32
 }
 
 bar :: (this: Foo, that: $T) {

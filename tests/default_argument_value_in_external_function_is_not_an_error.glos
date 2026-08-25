@@ -4,5 +4,5 @@ main :: () {
 }
 
 extern {
-    putchar :: (c: i32 = 69) -> i32
+    putchar :: (c: s32 = 69) -> s32
 }

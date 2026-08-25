@@ -163,10 +163,10 @@ Int_Limit get_int_limit(Type type) {
     const Type_Kind type_kind = type_kind_eq(type, TYPE_ENUM) ? type.spec.enumm.underlying : type.kind;
     if (type_is_signed(type)) {
         const Int_Limit limits[COUNT_TYPES] = {
-            [TYPE_I8] = {.min = INT128_FROM_I64(INT8_MIN), .max = INT128_FROM_I64(INT8_MAX)},
-            [TYPE_I16] = {.min = INT128_FROM_I64(INT16_MIN), .max = INT128_FROM_I64(INT16_MAX)},
-            [TYPE_I32] = {.min = INT128_FROM_I64(INT32_MIN), .max = INT128_FROM_I64(INT32_MAX)},
-            [TYPE_I64] = {.min = INT128_FROM_I64(INT64_MIN), .max = INT128_FROM_I64(INT64_MAX)},
+            [TYPE_S8] = {.min = INT128_FROM_I64(INT8_MIN), .max = INT128_FROM_I64(INT8_MAX)},
+            [TYPE_S16] = {.min = INT128_FROM_I64(INT16_MIN), .max = INT128_FROM_I64(INT16_MAX)},
+            [TYPE_S32] = {.min = INT128_FROM_I64(INT32_MIN), .max = INT128_FROM_I64(INT32_MAX)},
+            [TYPE_S64] = {.min = INT128_FROM_I64(INT64_MIN), .max = INT128_FROM_I64(INT64_MAX)},
             [TYPE_INT] = {.min = INT128_FROM_I64(INT64_MIN), .max = INT128_FROM_I64(INT64_MAX)},
         };
         return limits[type_kind];
@@ -210,10 +210,10 @@ bool get_builtin_type_kind(SV name, Type_Kind *kind) {
         [TYPE_BOOL] = "bool",
         [TYPE_CHAR] = "char",
 
-        [TYPE_I8] = "i8",
-        [TYPE_I16] = "i16",
-        [TYPE_I32] = "i32",
-        [TYPE_I64] = "i64",
+        [TYPE_S8] = "s8",
+        [TYPE_S16] = "s16",
+        [TYPE_S32] = "s32",
+        [TYPE_S64] = "s64",
 
         [TYPE_U8] = "u8",
         [TYPE_U16] = "u16",
@@ -451,7 +451,7 @@ void cast_untyped(Compiler *c, Node *n, Type expected) {
 void finalize_untyped_type(Compiler *c, Node *n) {
     if (type_kind_eq(n->type, TYPE_INT)) {
         const Const_Value value = eval_const_expr(c, n, false);
-        n->type.kind = TYPE_I64;
+        n->type.kind = TYPE_S64;
 
         assert(value.kind == CONST_VALUE_INT);
         check_int_limit(c, n, value.as.integer);

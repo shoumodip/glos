@@ -1,6 +1,6 @@
-foo :: (ns: ...i64) {}
+foo :: (ns: ...s64) {}
 
 main :: () {
-    xs: []i64
+    xs: []s64
     foo(69, ns = xs)
 }

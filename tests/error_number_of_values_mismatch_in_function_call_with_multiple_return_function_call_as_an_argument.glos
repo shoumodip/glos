@@ -1,5 +1,5 @@
 main :: () {
-    foo :: () -> i64, i64 { return 69, 420 }
-    bar :: (x: i64) {}
+    foo :: () -> s64, s64 { return 69, 420 }
+    bar :: (x: s64) {}
     bar(foo())
 }

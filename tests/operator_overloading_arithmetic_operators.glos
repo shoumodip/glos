@@ -43,7 +43,7 @@ main :: () {
 }
 
 Int32 :: struct {
-    x: i32
+    x: s32
 }
 
 add :: (this: Int32, that: Int32) -> Int32 {

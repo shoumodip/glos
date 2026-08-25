@@ -1,2 +1,2 @@
-Foo :: distinct i64
+Foo :: distinct s64
 mod :: (this: Foo, that: Foo) -> bool {}

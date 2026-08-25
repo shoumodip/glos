@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 96
-tests/error_assignment_type_mismatch.glos:3:9: Error: Expected 'i64', got 'bool'
+tests/error_assignment_type_mismatch.glos:3:9: Error: Expected 's64', got 'bool'
 
     x = true
 

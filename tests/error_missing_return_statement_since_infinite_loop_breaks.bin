@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 114
-tests/error_missing_return_statement_since_infinite_loop_breaks.glos:7:1: Error: Expected to return 'i64'
+tests/error_missing_return_statement_since_infinite_loop_breaks.glos:7:1: Error: Expected to return 's64'
 
     }
 

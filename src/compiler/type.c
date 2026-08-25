@@ -30,23 +30,23 @@ LLVMTypeRef compile_type(Compiler *c, Type *type) {
         type->llvm = LLVMInt1TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I8:
+    case TYPE_S8:
     case TYPE_U8:
     case TYPE_CHAR:
         type->llvm = LLVMInt8TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I16:
+    case TYPE_S16:
     case TYPE_U16:
         type->llvm = LLVMInt16TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I32:
+    case TYPE_S32:
     case TYPE_U32:
         type->llvm = LLVMInt32TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I64:
+    case TYPE_S64:
     case TYPE_U64:
     case TYPE_INT:
         type->llvm = LLVMInt64TypeInContext(c->llvm_context);
@@ -282,18 +282,18 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     case TYPE_CHAR:
         return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "char", strlen("char"), 8, DW_ATE_unsigned_char, 0);
 
-    case TYPE_I8:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i8", strlen("i8"), 8, DW_ATE_signed, 0);
+    case TYPE_S8:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s8", strlen("s8"), 8, DW_ATE_signed, 0);
 
-    case TYPE_I16:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i16", strlen("i16"), 16, DW_ATE_signed, 0);
+    case TYPE_S16:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s16", strlen("s16"), 16, DW_ATE_signed, 0);
 
-    case TYPE_I32:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i32", strlen("i32"), 32, DW_ATE_signed, 0);
+    case TYPE_S32:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s32", strlen("s32"), 32, DW_ATE_signed, 0);
 
-    case TYPE_I64:
+    case TYPE_S64:
     case TYPE_INT:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i64", strlen("i64"), 64, DW_ATE_signed, 0);
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s64", strlen("s64"), 64, DW_ATE_signed, 0);
 
     case TYPE_U8:
         return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "u8", strlen("u8"), 8, DW_ATE_unsigned, 0);
@@ -429,7 +429,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
 
             // Case
             {
-                Type            case_type = {.kind = TYPE_I64};
+                Type            case_type = {.kind = TYPE_S64};
                 LLVMMetadataRef case_type_metadata = get_debug_for_type(c, &case_type);
 
                 fields[0] = LLVMDIBuilderCreateMemberType(
@@ -688,10 +688,10 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         fields[0].type.llvm = NULL;
 
         fields[1].name = sv_from_cstr("count");
-        fields[1].type = (Type) {.kind = TYPE_I64};
+        fields[1].type = (Type) {.kind = TYPE_S64};
 
         fields[2].name = sv_from_cstr("capacity");
-        fields[2].type = (Type) {.kind = TYPE_I64};
+        fields[2].type = (Type) {.kind = TYPE_S64};
 
         LLVMMetadataRef metadata = get_debug_for_builtin_compound_type(c, name, fields, len(fields));
         arena_reset(&temp_arena, checkpoint);
@@ -710,7 +710,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         fields[0].type.llvm = NULL;
 
         fields[1].name = sv_from_cstr("count");
-        fields[1].type = (Type) {.kind = TYPE_I64};
+        fields[1].type = (Type) {.kind = TYPE_S64};
 
         LLVMMetadataRef metadata = get_debug_for_builtin_compound_type(c, name, fields, len(fields));
         arena_reset(&temp_arena, checkpoint);
@@ -723,7 +723,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         fields[0].type = (Type) {.kind = TYPE_CHAR, .ref = 1};
 
         fields[1].name = sv_from_cstr("count");
-        fields[1].type = (Type) {.kind = TYPE_I64};
+        fields[1].type = (Type) {.kind = TYPE_S64};
         return get_debug_for_builtin_compound_type(c, sv_from_cstr("string"), fields, len(fields));
     }
 

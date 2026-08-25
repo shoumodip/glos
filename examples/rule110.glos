@@ -1,5 +1,5 @@
 main :: () {
-    b: [30]i32
+    b: [30]s32
 
     b[b.count - 2] = 1
     for i := 0; i < b.count - 2; i += 1 {

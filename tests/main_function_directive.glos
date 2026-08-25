@@ -1,4 +1,4 @@
-v: i64
+v: s64
 
 main :: () {
     comptime :: #main

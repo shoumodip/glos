@@ -1,8 +1,8 @@
-Array :: struct($T: Type, $N: i64) {
+Array :: struct($T: Type, $N: s64) {
     items: [N]T
 }
 
-New_Array :: ($A: Type, $B: i64) -> Array(A, B) {
+New_Array :: ($A: Type, $B: s64) -> Array(A, B) {
     return Array(A, B) {}
 }
 

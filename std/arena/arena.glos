@@ -1,10 +1,10 @@
 Arena :: struct {
     data:     rawptr
-    head:     i64
-    capacity: i64
+    head:     s64
+    capacity: s64
 }
 
-alloc :: (this: &Arena, size: i64, align := true, zeroed := true, location := #caller_location) -> rawptr {
+alloc :: (this: &Arena, size: s64, align := true, zeroed := true, location := #caller_location) -> rawptr {
     if this.data == null {
         if this.capacity == 0 {
             this.capacity = 256 * 1024 * 1024
@@ -61,7 +61,7 @@ reset :: (this: &Arena, ptr: rawptr, align := true, location := #caller_location
         panic("Arena does not contain the memory address \{ptr}", location = location)
     }
 
-    this.head = i64(ptr - this.data)
+    this.head = s64(ptr - this.data)
     if align {
         this.head = (this.head + 7) & -8
     }

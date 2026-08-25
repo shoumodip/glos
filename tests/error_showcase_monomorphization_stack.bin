@@ -12,7 +12,7 @@ tests/error_showcase_monomorphization_stack.glos:6:5: Note: While inside this mo
 
     Here are the polymorphic parameters used:
 
-        N :: i64
+        N :: s64
 
 tests/error_showcase_monomorphization_stack.glos:2:12: Note: Here is the function that was monomorphized
 
@@ -24,7 +24,7 @@ tests/error_showcase_monomorphization_stack.glos:10:5: Note: While inside this m
 
     Here are the polymorphic parameters used:
 
-        T :: i64
+        T :: s64
 
 tests/error_showcase_monomorphization_stack.glos:1:8: Note: Here is the function that was monomorphized
 

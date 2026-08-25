@@ -6,7 +6,7 @@ display :: (s: Display) {
     s.display()
 }
 
-Array :: struct($T: Type, $N: i64) {
+Array :: struct($T: Type, $N: s64) {
     items: [N]T
 }
 
@@ -15,5 +15,5 @@ display :: (this: Array($T, $N)) {
 }
 
 main :: () {
-    display(Array(i64, 2) {{69, 420}})
+    display(Array(s64, 2) {{69, 420}})
 }

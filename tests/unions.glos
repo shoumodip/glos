@@ -1,5 +1,5 @@
 Show :: union {
-    i64
+    s64
     string
 }
 
@@ -7,7 +7,7 @@ show :: (s: Show) {
     println(s.type)
 
     if s == {
-    case i64;    println(s)
+    case s64;    println(s)
     case string; println(s)
     case;        println("nil")
     }
@@ -20,7 +20,7 @@ main :: () {
     show(Show("Urmom"))
 
     s = Show(420)
-    if s == i64 {
+    if s == s64 {
         assert(s == 420)
     }
 }

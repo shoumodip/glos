@@ -9,13 +9,13 @@ main :: () {
         }
 
         println(Foo.A)
-        println(i64(Foo.A))
+        println(s64(Foo.A))
         println(Foo.B)
-        println(i64(Foo.B))
+        println(s64(Foo.B))
         println(Foo.C)
-        println(i64(Foo.C))
+        println(s64(Foo.C))
         println(Foo.D)
-        println(i64(Foo.D))
+        println(s64(Foo.D))
     }
 
     // Typed enumeration

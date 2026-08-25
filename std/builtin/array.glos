@@ -18,7 +18,7 @@ free :: (this: &[..]$T) {
     C.memset(rawptr(this), 0, sizeof(*this))
 }
 
-remove :: (this: &[..]$T, index: i64, location := #caller_location) -> T {
+remove :: (this: &[..]$T, index: s64, location := #caller_location) -> T {
     if index >= this.count {
         panic("Bounds Check Failed: Index \{index} is invalid since length is \{this.count}", location = location)
     }

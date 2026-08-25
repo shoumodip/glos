@@ -1,1 +1,1 @@
-foo :: (this: i32) {}
+foo :: (this: s32) {}

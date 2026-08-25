@@ -1,6 +1,6 @@
 Vec2 :: struct {
-    x: i64
-    y: i64
+    x: s64
+    y: s64
 }
 
 print_vec2 :: (v: Vec2) {

@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 406
-tests/error_inside_monomorphized_function.glos:6:17: Error: Expected 'string', got 'i64'
+tests/error_inside_monomorphized_function.glos:6:17: Error: Expected 'string', got 's64'
 
     y: string = x
 
@@ -12,7 +12,7 @@ tests/error_inside_monomorphized_function.glos:2:5: Note: While inside this mono
 
     Here are the polymorphic parameters used:
 
-        T :: i64
+        T :: s64
 
 tests/error_inside_monomorphized_function.glos:5:8: Note: Here is the function that was monomorphized
 

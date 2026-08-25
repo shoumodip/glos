@@ -1,8 +1,8 @@
 main :: () {
-    a := i8(69)
-    b := i16(420)
-    c := i32(1337)
-    d := i64(80085)
+    a := s8(69)
+    b := s16(420)
+    c := s32(1337)
+    d := s64(80085)
 
     // Basics
     println(a)
@@ -18,5 +18,5 @@ main :: () {
 
     // Comparisons
     println(u64(1) > 0)
-    println(u64(1) > u64(i64(-1)))
+    println(u64(1) > u64(s64(-1)))
 }

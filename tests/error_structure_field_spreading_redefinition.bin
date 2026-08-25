@@ -8,13 +8,13 @@ tests/error_structure_field_spreading_redefinition.glos:8:8: Error: While spread
 
 tests/error_structure_field_spreading_redefinition.glos:7:5: Note: It was first defined in this structure here
 
-    x: i32
+    x: s32
 
 tests/error_structure_field_spreading_redefinition.glos:1:9: Note: Here is the structure we are spreading
 
     Vec2 :: struct {
-        x: i32
-        y: i32
+        x: s32
+        y: s32
     }
 
 

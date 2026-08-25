@@ -81,12 +81,12 @@ FD16 :: struct {
 
 FS8 :: struct {
     x: f32
-    y: i32
+    y: s32
 }
 
 DS16 :: struct {
     x: f64
-    y: i64
+    y: s64
 }
 
 extern {
@@ -120,8 +120,8 @@ extern {
     fd16_ret :: (x: f32, y: f64) -> FD16
 
     fs8_foo :: (f: FS8 )
-    fs8_ret :: (x: f32 , y: i32) -> FS8
+    fs8_ret :: (x: f32 , y: s32) -> FS8
 
     ds16_foo :: (f: DS16)
-    ds16_ret :: (x: f64 , y: i64) -> DS16
+    ds16_ret :: (x: f64 , y: s64) -> DS16
 }

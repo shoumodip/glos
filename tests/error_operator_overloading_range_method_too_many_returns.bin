@@ -4,7 +4,7 @@ STDOUT 0
 STDERR 587
 tests/error_operator_overloading_range_method_too_many_returns.glos:2:1: Error: The method 'range' is special because it implements an operator overload
 
-    range :: (this: Foo, a: i64, b: i64) -> i64, i64 {}
+    range :: (this: Foo, a: s64, b: s64) -> s64, s64 {}
 
     It should have this signature:
 
@@ -14,6 +14,6 @@ tests/error_operator_overloading_range_method_too_many_returns.glos:2:1: Error: 
 
 tests/error_operator_overloading_range_method_too_many_returns.glos:2:41: Note: The range operator cannot return 2 values
 
-    range :: (this: Foo, a: i64, b: i64) -> i64, i64 {}
+    range :: (this: Foo, a: s64, b: s64) -> s64, s64 {}
 
 

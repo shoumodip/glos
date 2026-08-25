@@ -4,7 +4,7 @@ STDOUT 0
 STDERR 570
 tests/error_operator_overloading_index_method_no_return.glos:2:1: Error: The method 'index' is special because it implements an operator overload
 
-    index :: (this: Foo, key: i64, assign: bool) {}
+    index :: (this: Foo, key: s64, assign: bool) {}
 
     It should have this signature:
 
@@ -14,6 +14,6 @@ tests/error_operator_overloading_index_method_no_return.glos:2:1: Error: The met
 
 tests/error_operator_overloading_index_method_no_return.glos:2:46: Note: Expected to return a pointer, got nothing
 
-    index :: (this: Foo, key: i64, assign: bool) {}
+    index :: (this: Foo, key: s64, assign: bool) {}
 
 

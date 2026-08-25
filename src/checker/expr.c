@@ -568,7 +568,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = type_without_meta(member->rhs->type);
                 } else {
                     if (sv_match(n->token.sv, "type")) {
-                        n->type = (Type) {.kind = TYPE_I64};
+                        n->type = (Type) {.kind = TYPE_S64};
                         member->field_index = 0;
                     } else {
                         error_undefined(c, &n->token, "field or method", false);
@@ -602,7 +602,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type.ref++;
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -614,10 +614,10 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type.ref++;
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else if (sv_match(n->token.sv, "capacity")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 2;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -629,7 +629,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type.ref++;
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -640,7 +640,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = (Type) {.kind = TYPE_CHAR, .ref = 1};
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -1455,12 +1455,12 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                         // rawptr -> fn
                         ok = type_eq(*from_type, (Type) {.kind = TYPE_RAWPTR});
                     } else if (!type_is_pointer(*from_type) && type_is_pointer(*to_type)) {
-                        // i64/u64 -> ptr
-                        ok = type_kind_eq(*from_type, TYPE_I64) || type_kind_eq(*from_type, TYPE_U64) ||
+                        // s64/u64 -> ptr
+                        ok = type_kind_eq(*from_type, TYPE_S64) || type_kind_eq(*from_type, TYPE_U64) ||
                              type_kind_eq(*from_type, TYPE_INT);
                     } else if (type_is_pointer(*from_type) && !type_is_pointer(*to_type)) {
-                        // ptr -> i64/u64
-                        ok = type_kind_eq(*to_type, TYPE_I64) || type_kind_eq(*to_type, TYPE_U64) ||
+                        // ptr -> s64/u64
+                        ok = type_kind_eq(*to_type, TYPE_S64) || type_kind_eq(*to_type, TYPE_U64) ||
                              type_kind_eq(*to_type, TYPE_INT);
                     } else if (!type_is_float(*from_type) && type_is_float(*to_type)) {
                         // integer -> float

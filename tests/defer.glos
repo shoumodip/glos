@@ -1,9 +1,9 @@
-foo :: () -> i64 {
+foo :: () -> s64 {
 	println("foo()")
 	return 69
 }
 
-bar :: () -> i64 {
+bar :: () -> s64 {
 	defer println("defer")
 	return foo()
 }
@@ -14,12 +14,12 @@ main :: () {
 
 println :: (s: string) {
     extern {
-        putchar :: (c: i32) -> i32
+        putchar :: (c: s32) -> s32
     }
 
     for i := 0; i < s.count; i += 1 {
-        putchar(i32(s[i]))
+        putchar(s32(s[i]))
     }
 
-    putchar(i32('\n'))
+    putchar(s32('\n'))
 }

@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 486
-tests/error_type_mismatch_after_monomorphization_of_polymorphic_type.glos:6:11: Error: Expected 'string', got 'i64'
+tests/error_type_mismatch_after_monomorphization_of_polymorphic_type.glos:6:11: Error: Expected 'string', got 's64'
 
     first(69, "Urmom")
 

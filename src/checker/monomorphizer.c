@@ -268,7 +268,7 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
 #endif // MONOMORPHIZATION_LOG
 
                 add_monomorph_parameter(
-                    c, es.count_polymorph, (Type) {.kind = TYPE_I64}, const_value_u64(as.count), NULL);
+                    c, es.count_polymorph, (Type) {.kind = TYPE_S64}, const_value_u64(as.count), NULL);
 
                 es.count = as.count;
             }

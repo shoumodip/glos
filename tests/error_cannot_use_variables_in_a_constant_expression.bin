@@ -8,6 +8,6 @@ tests/error_cannot_use_variables_in_a_constant_expression.glos:3:10: Error: Cann
 
 tests/error_cannot_use_variables_in_a_constant_expression.glos:2:5: Note: Here is the variable being used
 
-    x: i64
+    x: s64
 
 

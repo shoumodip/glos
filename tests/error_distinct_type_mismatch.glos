@@ -1,4 +1,4 @@
-A :: distinct i64
+A :: distinct s64
 B :: distinct bool
 
 main :: () {

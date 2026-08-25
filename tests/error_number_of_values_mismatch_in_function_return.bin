@@ -4,6 +4,6 @@ STDOUT 0
 STDERR 158
 tests/error_number_of_values_mismatch_in_function_return.glos:1:25: Error: Too few return values: Expected 2, got 1
 
-    foo :: () -> i64, i64 { return 69 }
+    foo :: () -> s64, s64 { return 69 }
 
 

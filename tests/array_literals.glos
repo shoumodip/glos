@@ -1,17 +1,17 @@
-print_i64s :: (xs: []i64) {
+print_s64s :: (xs: []s64) {
     for i := 0; i < xs.count; i += 1 {
         println(xs[i])
     }
 }
 
 main :: () {
-    xs := []i64 {69, 420, 1337}
-    print_i64s(xs[..])
+    xs := []s64 {69, 420, 1337}
+    print_s64s(xs[..])
 
-    ys := [3]i64 {
+    ys := [3]s64 {
         0 = 69,
         1 = 420,
         2 = 1337
     }
-    print_i64s(ys[..])
+    print_s64s(ys[..])
 }

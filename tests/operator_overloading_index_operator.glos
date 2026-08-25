@@ -1,9 +1,9 @@
 Table :: struct {
     items: [64]struct {
         key:   string
-        value: i64
+        value: s64
     }
-    count: i64
+    count: s64
 }
 
 main :: () {
@@ -13,7 +13,7 @@ main :: () {
     println(xs["Bar"])
 }
 
-index :: (this: &Table, key: string, assign: bool, location := #caller_location) -> &i64 {
+index :: (this: &Table, key: string, assign: bool, location := #caller_location) -> &s64 {
     for i := 0; i < this.count; i += 1 {
         it := &this.items[i]
         if it.key == key {

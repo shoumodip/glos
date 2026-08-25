@@ -1,4 +1,4 @@
-Foo :: struct { _: i64 }
+Foo :: struct { _: s64 }
 
 main :: () {
     f: Foo

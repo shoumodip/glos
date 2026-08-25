@@ -20,8 +20,8 @@ PLATFORM :: #platform
 Type :: distinct &Type_Info
 
 Type_Info :: struct {
-    size: i64
-    align: i64
+    size: s64
+    align: s64
 
     name: string
     variant: union {
@@ -64,7 +64,7 @@ Type_Info_Function :: struct {
 
 Type_Info_Enumeration :: struct {
     names:      []string
-    values:     []i64
+    values:     []s64
     underlying: Type
 }
 
@@ -80,12 +80,12 @@ Type_Info_Union :: struct {
 Type_Info_Structure :: struct {
     names:   []string
     types:   []Type
-    offsets: []i64
+    offsets: []s64
 }
 
 Type_Info_Array :: struct {
     underlying: Type
-    count: i64
+    count: s64
 }
 
 Type_Info_Dynamic_Array :: struct {
@@ -103,8 +103,8 @@ Any :: trait {}
 
 Source_Code_Location :: struct {
     path: string
-    row: i64
-    col: i64
+    row: s64
+    col: s64
 }
 
 // Comparisons
@@ -127,12 +127,12 @@ Interpolation :: union {
 
 // Panic
 Panic :: enum {
-    INDEX_OUT_OF_BOUNDS       // (index: i64, count: i64)
-    RANGE_OUT_OF_BOUNDS       // (begin: i64, end: i64, count: i64)
-    RANGE_BEGIN_MORE_THAN_END // (begin: i64, end: i64)
+    INDEX_OUT_OF_BOUNDS       // (index: s64, count: s64)
+    RANGE_OUT_OF_BOUNDS       // (begin: s64, end: s64, count: s64)
+    RANGE_BEGIN_MORE_THAN_END // (begin: s64, end: s64)
     NULL_TRAIT_METHOD_ACCESS  // ()
     TRAIT_TYPE_MISMATCH       // (actual: Type, expected: Type)
-    UNION_TYPE_MISMATCH       // (actual: i64, expected: i64, type: Type)
-    INVALID_ENUM_VALUE        // (value: i64, signed: i64)
-    INVALID_UNION_TAG         // (value: i64)
+    UNION_TYPE_MISMATCH       // (actual: s64, expected: s64, type: Type)
+    INVALID_ENUM_VALUE        // (value: s64, signed: s64)
+    INVALID_UNION_TAG         // (value: s64)
 }

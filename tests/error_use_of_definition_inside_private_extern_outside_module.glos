@@ -1,5 +1,5 @@
 p :: #import "private"
 
 main :: () {
-    p.fputc(i32('E'), stdout)
+    p.fputc(s32('E'), stdout)
 }

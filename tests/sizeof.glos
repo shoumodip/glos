@@ -2,7 +2,7 @@ foo :: () {}
 
 main :: () {
     println(sizeof(bool))
-    println(sizeof(i64))
+    println(sizeof(s64))
     println(sizeof(()))
     println(sizeof(rawptr))
     println(sizeof(&&bool))

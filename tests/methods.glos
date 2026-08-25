@@ -1,8 +1,8 @@
 Counter :: struct {
-    n: i64
+    n: s64
 }
 
-get :: (this: &Counter) -> i64 {
+get :: (this: &Counter) -> s64 {
     this.n += 1
     return this.n - 1
 }

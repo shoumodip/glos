@@ -4,5 +4,5 @@ Foo :: trait {
 
 main :: () {
     f: Foo
-    f == i64
+    f == s64
 }

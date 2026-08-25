@@ -1,14 +1,14 @@
-Array :: struct($T: Type, $N: i64) {
+Array :: struct($T: Type, $N: s64) {
     items: [N]T
 }
 
-index :: (this: &Array($T, $N), n: i64, assign: bool) -> &T {
+index :: (this: &Array($T, $N), n: s64, assign: bool) -> &T {
     assert(n < this.items.count)
     return &this.items[n]
 }
 
 main :: () {
-    xs: Array(i64, 4)
+    xs: Array(s64, 4)
     xs[0] = 69
     xs[1] = 420
     xs[2] = 1337

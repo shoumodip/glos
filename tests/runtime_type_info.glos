@@ -4,10 +4,10 @@ main :: () {
         write_type(bool)
         write_type(char)
 
-        write_type(i8)
-        write_type(i16)
-        write_type(i32)
-        write_type(i64)
+        write_type(s8)
+        write_type(s16)
+        write_type(s32)
+        write_type(s64)
 
         write_type(u8)
         write_type(u16)
@@ -26,13 +26,13 @@ main :: () {
         write_type(())
         write_type((_: string))
         write_type((_: string, _: rawptr))
-        write_type(() -> i32)
-        write_type((_: i32) -> i32)
-        write_type((_: i32, _: u8) -> i32)
-        write_type(() -> i32, bool)
-        write_type((_: i32) -> i32, bool)
-        write_type((_: i32, _: u8) -> i32, bool)
-        write_type(() -> ((_: i32) -> bool))
+        write_type(() -> s32)
+        write_type((_: s32) -> s32)
+        write_type((_: s32, _: u8) -> s32)
+        write_type(() -> s32, bool)
+        write_type((_: s32) -> s32, bool)
+        write_type((_: s32, _: u8) -> s32, bool)
+        write_type(() -> ((_: s32) -> bool))
     }
 
     // Enumerations
@@ -48,24 +48,24 @@ main :: () {
     // Traits
     {
         write_type(trait {
-            read: (a: string) -> i32
-            show: (a: i32) -> string
+            read: (a: string) -> s32
+            show: (a: s32) -> string
         })
     }
 
     // Unions
     {
         write_type(union {
-            i32
+            s32
             string
-            (_: string) -> i64
+            (_: string) -> s64
         })
     }
 
     // Structures
     {
         write_type(struct {
-            x, y: i32
+            x, y: s32
             urmom: string
         })
     }
@@ -102,9 +102,9 @@ write_type :: (ti: Type) {
     write_string("\n")
 
     write_type :: (ti: Type) {
-        #static depth: i64
+        #static depth: s64
         #static tm: [1024]Type
-        #static tm_count: i64
+        #static tm_count: s64
         for i := 0; i < tm_count; i += 1 {
             if tm[i] == ti {
                 write_string("<Recursive>")
@@ -126,15 +126,15 @@ write_type :: (ti: Type) {
 
         case Type_Info_Integer
             if variant.signed {
-                write_string("i")
+                write_string("s")
             } else {
                 write_string("u")
             }
-            write_i64(ti.size * 8)
+            write_s64(ti.size * 8)
 
         case Type_Info_Float
             write_string("f")
-            write_i64(ti.size * 8)
+            write_s64(ti.size * 8)
 
         case Type_Info_Pointer
             if variant.underlying != null {
@@ -183,7 +183,7 @@ write_type :: (ti: Type) {
                     write_indent(depth)
                     write_string(variant.names[i])
                     write_string(" = ")
-                    write_i64(variant.values[i])
+                    write_s64(variant.values[i])
                     write_string("\n")
                 }
                 depth -= 1
@@ -234,7 +234,7 @@ write_type :: (ti: Type) {
                     write_string(": ")
                     write_type(variant.types[i])
                     write_string(" // offset = ")
-                    write_i64(variant.offsets[i])
+                    write_s64(variant.offsets[i])
                     write_string("\n")
                 }
                 depth -= 1
@@ -244,7 +244,7 @@ write_type :: (ti: Type) {
 
         case Type_Info_Array
             write_string("[")
-            write_i64(variant.count)
+            write_s64(variant.count)
             write_string("]")
             write_type(variant.underlying)
 
@@ -265,14 +265,14 @@ write_type :: (ti: Type) {
     }
 
     write_string :: (s: string) {
-        C.printf("%.*s".data, i32(s.count), s.data)
+        C.printf("%.*s".data, s32(s.count), s.data)
     }
 
-    write_indent :: (n: i64) {
-        C.printf("%*s".data, i32(n * 4), "".data)
+    write_indent :: (n: s64) {
+        C.printf("%*s".data, s32(n * 4), "".data)
     }
 
-    write_i64 :: (n: i64) {
+    write_s64 :: (n: s64) {
         C.printf("%ld".data, n)
     }
 

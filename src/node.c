@@ -93,20 +93,20 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_cstr(sb, "char");
         break;
 
-    case TYPE_I8:
-        sb_push_cstr(sb, "i8");
+    case TYPE_S8:
+        sb_push_cstr(sb, "s8");
         break;
 
-    case TYPE_I16:
-        sb_push_cstr(sb, "i16");
+    case TYPE_S16:
+        sb_push_cstr(sb, "s16");
         break;
 
-    case TYPE_I32:
-        sb_push_cstr(sb, "i32");
+    case TYPE_S32:
+        sb_push_cstr(sb, "s32");
         break;
 
-    case TYPE_I64:
-        sb_push_cstr(sb, "i64");
+    case TYPE_S64:
+        sb_push_cstr(sb, "s64");
         break;
 
     case TYPE_U8:
@@ -134,7 +134,7 @@ void sb_push_type(SB *sb, Type type) {
         break;
 
     case TYPE_INT:
-        sb_push_cstr(sb, "i64");
+        sb_push_cstr(sb, "s64");
         break;
 
     case TYPE_FLOAT:
@@ -518,10 +518,10 @@ bool type_is_integer(Type type) {
     }
 
     switch (type.kind) {
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
+    case TYPE_S8:
+    case TYPE_S16:
+    case TYPE_S32:
+    case TYPE_S64:
 
     case TYPE_U8:
     case TYPE_U16:
@@ -579,10 +579,10 @@ bool type_is_signed(Type type) {
     }
 
     switch (kind) {
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
+    case TYPE_S8:
+    case TYPE_S16:
+    case TYPE_S32:
+    case TYPE_S64:
     case TYPE_INT:
 
     case TYPE_F32:

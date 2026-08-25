@@ -134,10 +134,10 @@ static void compile_type_info_variant(Compiler *c, Type_Info_Compiler *tic) {
             // Pass
             break;
 
-        case TYPE_I8:
-        case TYPE_I16:
-        case TYPE_I32:
-        case TYPE_I64:
+        case TYPE_S8:
+        case TYPE_S16:
+        case TYPE_S32:
+        case TYPE_S64:
         case TYPE_INT:
 
         case TYPE_U8:

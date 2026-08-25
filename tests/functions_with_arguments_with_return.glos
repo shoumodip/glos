@@ -1,4 +1,4 @@
-add :: (x: i64, y: i64) -> i64 {
+add :: (x: s64, y: s64) -> s64 {
     return x + y
 }
 

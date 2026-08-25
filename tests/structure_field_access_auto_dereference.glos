@@ -1,5 +1,5 @@
 Iota :: struct {
-    x: i64
+    x: s64
 }
 
 single :: (i: &Iota) {

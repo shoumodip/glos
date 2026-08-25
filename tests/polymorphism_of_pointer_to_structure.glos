@@ -7,8 +7,8 @@ show :: (b: &Box($T)) {
 }
 
 main :: () {
-    b: Box(i64) = {69}
-    p: &Box(i64) = &b
+    b: Box(s64) = {69}
+    p: &Box(s64) = &b
     show(&b)
     show(p)
 

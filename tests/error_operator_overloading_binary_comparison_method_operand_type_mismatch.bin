@@ -4,7 +4,7 @@ STDOUT 0
 STDERR 856
 tests/error_operator_overloading_binary_comparison_method_operand_type_mismatch.glos:2:1: Error: The method 'compare' is special because it implements an operator overload
 
-    compare :: (this: Foo, that: i64) {}
+    compare :: (this: Foo, that: s64) {}
 
     It should have this signature:
 
@@ -15,8 +15,8 @@ tests/error_operator_overloading_binary_comparison_method_operand_type_mismatch.
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_comparison_method_operand_type_mismatch.glos:2:24: Note: Operand types must be same: Expected 'Foo', got 'i64'
+tests/error_operator_overloading_binary_comparison_method_operand_type_mismatch.glos:2:24: Note: Operand types must be same: Expected 'Foo', got 's64'
 
-    compare :: (this: Foo, that: i64) {}
+    compare :: (this: Foo, that: s64) {}
 
 

@@ -1,6 +1,6 @@
 first := 69
-second: i64 = 420
-third: i64
+second: s64 = 420
+third: s64
 
 main :: () {
     third = 3

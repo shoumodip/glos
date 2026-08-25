@@ -19,7 +19,7 @@ main :: () {
 
 write :: (s: string) {
     for i := 0; i < s.count; i += 1 {
-        extern { putchar :: (c: i32) -> i32 }
-        putchar(i32(s[i]))
+        extern { putchar :: (c: s32) -> s32 }
+        putchar(s32(s[i]))
     }
 }

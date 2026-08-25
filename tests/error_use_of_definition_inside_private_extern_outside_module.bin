@@ -4,10 +4,10 @@ STDOUT 0
 STDERR 289
 tests/error_use_of_definition_inside_private_extern_outside_module.glos:4:7: Error: Undefined identifier 'fputc'
 
-    p.fputc(i32('E'), stdout)
+    p.fputc(s32('E'), stdout)
 
 tests/error_use_of_definition_inside_private_extern_outside_module.glos:4:5: Note: Searched in module 'private'
 
-    p.fputc(i32('E'), stdout)
+    p.fputc(s32('E'), stdout)
 
 

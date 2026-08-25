@@ -4,6 +4,6 @@ STDOUT 0
 STDERR 149
 tests/error_array_literal_designated_initializer_out_of_bounds.glos:2:13: Error: Index 3 is out of bounds in array of length 3
 
-    [3]i64 {3 = 69}
+    [3]s64 {3 = 69}
 
 

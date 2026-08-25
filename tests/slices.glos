@@ -1,22 +1,22 @@
-alloc_i64s :: (n: i64) -> []i64 {
+alloc_s64s :: (n: s64) -> []s64 {
     extern {
-        malloc :: (size: i64) -> rawptr
+        malloc :: (size: s64) -> rawptr
     }
 
-    ptr := &i64(malloc(n * sizeof(i64)))
+    ptr := &s64(malloc(n * sizeof(s64)))
     return ptr[0..n]
 }
 
-print_i64s :: (xs: []i64) {
+print_s64s :: (xs: []s64) {
     for i := 0; i < xs.count; i = i + 1 {
         println(xs[i])
     }
 }
 
 main :: () {
-    xs := alloc_i64s(6)[0..5]
+    xs := alloc_s64s(6)[0..5]
     for i := 0; i < xs.count; i = i + 1 {
         xs[i] = i * 2
     }
-    print_i64s(xs)
+    print_s64s(xs)
 }

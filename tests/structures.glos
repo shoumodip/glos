@@ -1,6 +1,6 @@
 Vec2 :: struct {
-    x: i32
-    y: i32
+    x: s32
+    y: s32
 }
 
 foo :: (v: &Vec2) {
@@ -13,7 +13,7 @@ bar :: (v: Vec2) {
     println(v.y)
 }
 
-vec2 :: (x: i32, y: i32) -> Vec2 {
+vec2 :: (x: s32, y: s32) -> Vec2 {
     v: Vec2
     v.x = x
     v.y = y

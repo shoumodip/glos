@@ -1,4 +1,4 @@
-foo :: (x: i64) -> i64 {
+foo :: (x: s64) -> s64 {
 	for {
 		if x == 69 {
 			break

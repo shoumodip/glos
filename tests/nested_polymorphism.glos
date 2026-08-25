@@ -1,6 +1,6 @@
 main :: () {
     foo :: (x: $T) {
-        bar :: (x: i64) {
+        bar :: (x: s64) {
             baz :: (y: $A, z: $B) {
                 println("\{y} \{z}")
             }

@@ -1,6 +1,6 @@
-Foo :: distinct i64
+Foo :: distinct s64
 
-range :: (this: Foo, a: i64, b: i64) -> bool {
+range :: (this: Foo, a: s64, b: s64) -> bool {
     return true
 }
 
