@@ -118,11 +118,6 @@ Ordering :: enum {
     GT =  1
 }
 
-Equivalence :: enum {
-    EQ = 0
-    NE = 1
-}
-
 // Interpolation
 Interpolation :: union {
     []Any

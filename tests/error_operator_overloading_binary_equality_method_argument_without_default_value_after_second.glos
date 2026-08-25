@@ -1,0 +1,2 @@
+Foo :: distinct s64
+equal :: (this: Foo, that: Foo, other: bool) {}

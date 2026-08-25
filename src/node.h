@@ -758,10 +758,6 @@ struct Node_Fn {
     // }
     Node_Fn *wrapper_signature;
 
-    // compare :: (this: $T, that: T) -> bool       // Partial, only implements equality
-    // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
-    bool is_compare_operator_complete;
-
     Node_Fn *outer_fn;
 
     bool             checked_fully;

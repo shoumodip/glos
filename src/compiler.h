@@ -81,7 +81,6 @@ typedef struct {
     DA(Node_Fn *) methods_list;
 
     Type ordering_type;
-    Type equivalence_type;
 
     Node *current_comptime_conditional_stmt;
 

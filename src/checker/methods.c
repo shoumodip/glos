@@ -28,9 +28,11 @@ const char *operator_method_name_from_token_kind(Token_Kind kind) {
     case TOKEN_GE:
     case TOKEN_LT:
     case TOKEN_LE:
+        return "compare";
+
     case TOKEN_EQ:
     case TOKEN_NE:
-        return "compare";
+        return "equal";
 
     default:
         unreachable();
@@ -224,7 +226,7 @@ Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver
     exit(c, 1);
 }
 
-void error_special_method_wrong_signature(Token name, const char *signature, const char *note) {
+void error_special_method_wrong_signature(Token name, const char *signature) {
     error_token(
         EK_ERROR,
         name,
@@ -237,34 +239,23 @@ void error_special_method_wrong_signature(Token name, const char *signature, con
         "    It should have this signature:\n"
         "\n"
         "        " SV_Fmt " :: %s\n"
+        "\n"
+        "    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.\n"
         "\n",
         SV_Arg(name.sv),
         signature);
-
-    if (note) {
-        SV sv = sv_from_cstr(note);
-        while (sv.count) {
-            const SV line = sv_split_mut(&sv, '\n');
-            fprintf(stderr, "    " SV_Fmt "\n", SV_Arg(line));
-        }
-        fprintf(stderr, "\n");
-    }
-
-    fprintf(
-        stderr,
-        "    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.\n"
-        "\n");
 
     ansi_reset(stderr);
 }
 
 void check_special_method_signature_args_count(
-    Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature, const char *note) {
+    Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature) //
+{
     assert(fn->node.type.kind == TYPE_FN);
     const Type_Fn *fn_spec = fn->node.type.spec.fn;
 
     if (fn_spec->args_count < args_count) {
-        error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+        error_special_method_wrong_signature(fn->defined_as->node.token, signature);
         error_token(
             EK_NOTE, fn->args_end_token, "Expected at least %zu arguments, got %zu", args_count, fn_spec->args_count);
         exit(c, 1);
@@ -273,7 +264,7 @@ void check_special_method_signature_args_count(
     for (size_t i = 0; i < fn_spec->args_count; i++) {
         const Type_Fn_Arg *it = &fn_spec->args[i];
         if (!it->has_default_value && i >= args_count) {
-            error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+            error_special_method_wrong_signature(fn->defined_as->node.token, signature);
             error_parts(
                 EK_NOTE,
                 fn_spec->args[i].name,

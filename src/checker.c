@@ -164,17 +164,12 @@ void check_nodes(Compiler *c) {
         value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Ordering"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
         c->ordering_type = type_without_meta(value.as.type);
-
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Equivalence"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->equivalence_type = type_without_meta(value.as.type);
     }
 
     // Source code location
     {
         value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Source_Code_Location"), NULL);
         assert(value.kind == CONST_VALUE_TYPE);
-
         c->source_code_location_type = type_without_meta(value.as.type);
     }
 

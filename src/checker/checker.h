@@ -179,9 +179,9 @@ bool get_method_spec(
 Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module);
 Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node * receiver, Node *op, Module *module);
 
-void error_special_method_wrong_signature(Token name, const char *signature, const char *note);
+void error_special_method_wrong_signature(Token name, const char *signature);
 void check_special_method_signature_args_count(
-    Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature, const char *note);
+    Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature);
 
 // Monomorphizer ///////////////////////////////////////////////////////////////////////////////////
 void show_current_monomorphization(Compiler *c);

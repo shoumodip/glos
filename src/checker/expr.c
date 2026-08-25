@@ -359,20 +359,6 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
         if (!type_is_numeric(binary->lhs->type) && !type_is_pointer(binary->lhs->type)) {
             binary->overload = get_operator_overload(
                 c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
-
-            if (!binary->overload->is_compare_operator_complete) {
-                assert(binary->overload->returns.head);
-                error_node(
-                    EK_ERROR, n, "Type %s does not implement ordered comparisons", type_to_cstr(binary->lhs->type));
-                error_node(
-                    EK_NOTE,
-                    binary->overload->returns.head,
-                    "The method '" SV_Fmt "' only implements equality checking since its return type is %s, not %s",
-                    SV_Arg(binary->overload->defined_as->node.token.sv),
-                    type_to_cstr(*binary->overload->node.type.spec.fn->return_type),
-                    type_to_cstr(c->ordering_type));
-                exit(c, 1);
-            }
         }
         n->type = (Type) {.kind = TYPE_BOOL};
         break;
@@ -2194,12 +2180,11 @@ void check_fn(
             sv_match(name, "mod")) //
         {
             const char *signature = "(this: T, that: T) -> T";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 2, signature, note);
+            check_special_method_signature_args_count(c, fn, 2, signature);
 
             const Type lhs_type = fn_spec->args[0].type;
             if (lhs_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_parts(
                     EK_NOTE,
                     fn_spec->args[0].name,
@@ -2211,7 +2196,7 @@ void check_fn(
 
             const Type rhs_type = fn_spec->args[1].type;
             if (!type_eq(rhs_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_parts(
                     EK_NOTE,
                     fn_spec->args[1].name,
@@ -2223,7 +2208,7 @@ void check_fn(
             }
 
             if (!type_eq(*fn_spec->return_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_token(
                     EK_NOTE,
                     fn->returns.head ? fn->returns.head->token : fn->body->token,
@@ -2234,12 +2219,11 @@ void check_fn(
             }
         } else if (sv_match(name, "neg")) {
             const char *signature = "(this: T) -> T";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 1, signature, note);
+            check_special_method_signature_args_count(c, fn, 1, signature);
 
             const Type operand_type = fn_spec->args[0].type;
             if (operand_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_parts(
                     EK_NOTE,
                     fn_spec->args[0].name,
@@ -2250,7 +2234,7 @@ void check_fn(
             }
 
             if (!type_eq(*fn_spec->return_type, operand_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_token(
                     EK_NOTE,
                     fn->returns.head ? fn->returns.head->token : fn->body->token,
@@ -2259,16 +2243,13 @@ void check_fn(
                     fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
                 exit(c, 1);
             }
-        } else if (sv_match(name, "compare")) {
-            const char *signature = "(this: T, that: T) -> Ordering | Equivalence";
-            const char *note =
-                "Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.\n"
-                "Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.\n";
-            check_special_method_signature_args_count(c, fn, 2, signature, note);
+        } else if (sv_match(name, "equal")) {
+            const char *signature = "(this: T, that: T) -> bool";
+            check_special_method_signature_args_count(c, fn, 2, signature);
 
             const Type lhs_type = fn_spec->args[0].type;
             if (lhs_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_parts(
                     EK_NOTE,
                     fn_spec->args[0].name,
@@ -2280,7 +2261,7 @@ void check_fn(
 
             const Type rhs_type = fn_spec->args[1].type;
             if (!type_eq(rhs_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_parts(
                     EK_NOTE,
                     fn_spec->args[1].name,
@@ -2291,29 +2272,62 @@ void check_fn(
                 exit(c, 1);
             }
 
-            if (!type_eq(*fn_spec->return_type, c->equivalence_type) &&
-                !type_eq(*fn_spec->return_type, c->ordering_type)) //
-            {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+            if (!type_eq(*fn_spec->return_type, (Type) {.kind = TYPE_BOOL})) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_token(
                     EK_NOTE,
                     fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Expected to return %s or %s, got %s",
-                    type_to_cstr(c->equivalence_type),
+                    "Expected to return %s, got %s",
+                    type_to_cstr((Type) {.kind = TYPE_BOOL}),
+                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
+                exit(c, 1);
+            }
+        } else if (sv_match(name, "compare")) {
+            const char *signature = "(this: T, that: T) -> Ordering";
+            check_special_method_signature_args_count(c, fn, 2, signature);
+
+            const Type lhs_type = fn_spec->args[0].type;
+            if (lhs_type.ref) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[0].name,
+                    fn_spec->args[0].pos,
+                    "Operand cannot be a pointer. (Provided type is %s)",
+                    type_to_cstr(lhs_type));
+                exit(c, 1);
+            }
+
+            const Type rhs_type = fn_spec->args[1].type;
+            if (!type_eq(rhs_type, lhs_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[1].name,
+                    fn_spec->args[1].pos,
+                    "Operand types must be same: Expected %s, got %s",
+                    type_to_cstr(lhs_type),
+                    type_to_cstr(rhs_type));
+                exit(c, 1);
+            }
+
+            if (!type_eq(*fn_spec->return_type, c->ordering_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
+                error_token(
+                    EK_NOTE,
+                    fn->returns.head ? fn->returns.head->token : fn->body->token,
+                    "Expected to return %s, got %s",
                     type_to_cstr(c->ordering_type),
                     fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
                 exit(c, 1);
             }
-
-            fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->ordering_type);
         } else if (sv_match(name, "index")) {
             const char *signature = "(this: T, key: K, assign: bool) -> &V";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 3, signature, note);
+            check_special_method_signature_args_count(c, fn, 3, signature);
 
             const Type assign_type = fn_spec->args[2].type;
             if (!type_eq(assign_type, (Type) {.kind = TYPE_BOOL})) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_parts(
                     EK_NOTE,
                     fn_spec->args[2].name,
@@ -2325,7 +2339,7 @@ void check_fn(
             }
 
             if (!type_is_pointer(*fn_spec->return_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_token(
                     EK_NOTE,
                     fn->returns.head ? fn->returns.head->token : fn->body->token,
@@ -2335,13 +2349,12 @@ void check_fn(
             }
         } else if (sv_match(name, "range")) {
             const char *signature = "(this: T, begin: A, end: A) -> V";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 3, signature, note);
+            check_special_method_signature_args_count(c, fn, 3, signature);
 
             const Type begin_type = fn_spec->args[1].type;
             const Type end_type = fn_spec->args[2].type;
             if (!type_eq(end_type, begin_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_parts(
                     EK_NOTE,
                     fn_spec->args[2].name,
@@ -2353,7 +2366,7 @@ void check_fn(
             }
 
             if (fn_spec->returns_count != 1) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
                 error_token(
                     EK_NOTE,
                     fn->returns.head ? fn->returns.head->token : fn->body->token,
