@@ -609,16 +609,11 @@ static Node *parse_define(
 
     token = peek_token(p);
     if (token.kind != TOKEN_SET && token.kind != TOKEN_COLON) {
-        const bool in_extern_save = p->state.in_extern;
-        p->state.in_extern = false;
         if (define->name_polymorph) {
             p->state.pb = NULL;
         }
-
         define->type = parse_expr(p, POWER_PRE, false, true, NULL);
-
         p->state.pb = pb_save;
-        p->state.in_extern = in_extern_save;
     }
 
     token = peek_token(p);
@@ -634,34 +629,20 @@ static Node *parse_define(
             exit(1);
         }
 
-        const bool in_extern_save = p->state.in_extern;
-        p->state.in_extern = false;
         p->state.pb = NULL;
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
         p->state.pb = pb_save;
-        p->state.in_extern = in_extern_save;
 
         if (define->has_spread) {
             error_node(EK_ERROR, define->expr, "Cannot have default value here");
             exit(1);
         }
     } else if (token.kind == TOKEN_COLON) {
-        const bool in_extern_save = p->state.in_extern;
-        p->state.in_extern = false;
-
         p->state.peeked = false;
         p->state.pb = NULL;
-        if (in_extern_save) {
-            p->state.allow_methods_without_body = true;
-        }
-
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
-
-        p->state.allow_methods_without_body = false;
         p->state.pb = pb_save;
         define->is_const = true;
-
-        p->state.in_extern = in_extern_save;
 
         if (define->has_spread) {
             error_node(EK_ERROR, define->expr, "Cannot have default value here");
@@ -674,11 +655,6 @@ static Node *parse_define(
             }
 
             Node_Fn *fn = (Node_Fn *) define->expr;
-            if (fn->body) {
-                error_node(EK_ERROR, fn->body, "External function cannot have body");
-                exit(1);
-            }
-
             fn->is_type = false;
             fn->is_extern = true;
         }
@@ -843,6 +819,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         Node_Fn            *fn = NULL;
         Polymorphs_Builder  pb = {.is_fn = true};
         Polymorphs_Builder *pb_save = p->state.pb;
+        const bool          in_extern_save = p->state.in_extern;
 
         if (read_token(p, TOKEN_RPAREN)) {
             fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
@@ -868,6 +845,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 p->state.pb = &pb;
             }
             p->state.fn_current = fn;
+            p->state.in_extern = false;
 
             node = parse_expr(p, POWER_SET, false, true, NULL);
             node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false, false);
@@ -885,6 +863,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     p->state.pb = &pb;
                 }
                 p->state.fn_current = fn;
+                p->state.in_extern = false;
 
                 node = parse_define(p, node, next_token(p), false, true, true, false);
             } else {
@@ -1008,12 +987,18 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     fn->returns_count++;
                 } while (read_token(p, TOKEN_COMMA));
             }
+            p->state.in_extern = in_extern_save;
 
             token = peek_token(p);
             if (token.kind == TOKEN_LBRACE && !token.newline && compounds_allowed) {
+                if (p->state.in_extern) {
+                    error_token(EK_ERROR, token, "External function cannot have body");
+                    exit(1);
+                }
+
                 fn->body = parse_block(p, next_token(p));
             } else {
-                if (fn->is_method && !allow_methods_without_body) {
+                if (fn->is_method && !allow_methods_without_body && !p->state.in_extern) {
                     Node_Define *define = (Node_Define *) fn->args.head;
                     assert(define && define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
                     error_node(EK_ERROR, (Node *) fn, "A method must have a body");
@@ -1109,7 +1094,13 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         expect_token(p, TOKEN_LBRACE);
         while (!read_token(p, TOKEN_RBRACE)) {
             Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
-            // TODO: Do not allow this to be 'type', 'data', or 'impl'
+            if (sv_match(name->token.sv, "type") || //
+                sv_match(name->token.sv, "data") || //
+                sv_match(name->token.sv, "impl"))   //
+            {
+                error_node(EK_ERROR, name, "A trait method cannot be named '" SV_Fmt "'", SV_Arg(name->token.sv));
+                exit(1);
+            }
 
             Node *method = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
 
@@ -1256,6 +1247,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_INLINE: {
+        if (p->state.in_extern) {
+            error_token(EK_ERROR, token, "External function cannot be inlined");
+            exit(1);
+        }
+
         node = parse_expr(p, POWER_DOT, false, compounds_allowed, NULL);
         if (node->kind != NODE_FN) {
             error_node(EK_ERROR, node, "Expected function literal after %s", token_kind_to_cstr(token.kind));
@@ -1263,12 +1259,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         }
 
         Node_Fn *fn = (Node_Fn *) node;
-        if (p->state.in_extern) {
-            // TODO: This is kinda broken at the moment ngl
-            error_node(EK_ERROR, node, "External function cannot be inlined");
-            exit(1);
-        }
-
         if (fn->is_type) {
             error_node(EK_ERROR, node, "Function type cannot be inlined");
             exit(1);
