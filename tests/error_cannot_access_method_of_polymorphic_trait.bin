@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 133
+tests/error_cannot_access_method_of_polymorphic_trait.glos:7:5: Error: Cannot access methods of polymorphic traits
+
+    m.my_method
+
+

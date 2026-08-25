@@ -201,12 +201,31 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
             return it;
         }
     }
+    Type_Trait *trait_save = trait;
+
+    Type_Trait_Impl impl = {.type = receiver_without_ref};
+    if (trait->polymorph) {
+        ht_clear(&c->monomorph_replacements);
+
+        const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+        c->monomorph_parameters.begin = c->monomorph_parameters.count;
+
+        const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+        c->monomorphizing_site.expr = n;
+        c->monomorphizing_site.node = n; // TODO: The entire expression (in case of an explicit cast) would be helpful
+
+        add_monomorph_parameter(c, trait->polymorph, receiver, const_value_type(receiver), NULL);
+        Node *node = monomorphize(c, (Node *) trait->definition, n);
+
+        c->monomorph_parameters.count = c->monomorph_parameters.begin;
+        c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+        c->monomorphizing_site = monomorphizing_site_save;
+
+        assert(type_meta_kind_eq(node->type, TYPE_TRAIT));
+        trait = node->type.spec.trait;
+    }
 
     const Type expected = {.kind = TYPE_TRAIT, .spec.trait = trait};
-
-    Type_Trait_Impl impl = {0};
-    impl.type = receiver_without_ref;
-
     if (trait->methods_count) {
         impl.methods = arena_alloc(&default_arena, trait->methods_count * sizeof(*impl.methods));
         impl.methods_count = trait->methods_count;
@@ -393,6 +412,7 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                         type_to_cstr(trait->methods[i].type),
                         type_to_cstr(it.fn->node.type));
 
+                    // TODO: Print the signatures below
                     spec->args[0].type = arg0_save;
                 } break;
 
@@ -407,8 +427,9 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
         }
         arena_reset(&temp_arena, errors);
     }
-
     impl.trait = trait;
+
+    trait = trait_save;
     impl.next = trait->impls.head;
     trait->impls.head = arena_clone(&default_arena, &impl, sizeof(impl));
     return trait->impls.head;

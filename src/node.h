@@ -153,9 +153,12 @@ typedef struct {
         Type_Trait_Impl *head; // Who cares about direction...
     } impls;
 
-    LLVMMetadataRef debug;
-
     Node_Trait *definition;
+    Node_Trait *original_definition;
+
+    Node_Polymorph *polymorph;
+
+    LLVMMetadataRef debug;
 } Type_Trait;
 
 typedef struct {
@@ -805,6 +808,9 @@ struct Node_Trait {
     Node   node;
     Nodes  methods;
     size_t methods_count; // Calculated at parse time
+
+    Polymorphs polymorphs;
+    Polymorphs monomorphs;
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;

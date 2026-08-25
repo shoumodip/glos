@@ -1,5 +1,6 @@
 #include "../error.h"
 #include "checker.h"
+#include <stdlib.h>
 
 static bool is_indexable(Compiler *c, Node *n, Type type, Module *module) {
     if (type_kind_eq(type, TYPE_ARRAY) || type_kind_eq(type, TYPE_SLICE) || type_kind_eq(type, TYPE_STRING)) {
@@ -530,6 +531,20 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = (Type) {.kind = TYPE_RAWPTR};
                     member->field_index = 2;
                 } else {
+                    if (spec->polymorph) {
+                        Node_Trait *trait = spec->original_definition;
+                        ll_foreach(it, &trait->methods) {
+                            assert(it->kind == NODE_DEFINE);
+                            Node_Define *define = (Node_Define *) it;
+
+                            assert(define->name->kind == NODE_ATOM);
+                            if (sv_eq(n->token.sv, define->name->token.sv)) {
+                                error_node(EK_ERROR, n, "Cannot access methods of polymorphic traits");
+                                exit(c, 1);
+                            }
+                        }
+                    }
+
                     bool ok = false;
                     for (size_t i = 0; i < spec->methods_count; i++) {
                         const Type_Trait_Method *it = &spec->methods[i];
@@ -736,6 +751,7 @@ void check_expr_trait(Compiler *c, Node_Trait *trait) {
 
     Type_Trait *spec = arena_alloc(&default_arena, sizeof(*spec));
     spec->definition = trait;
+    spec->original_definition = trait;
 
     n->type = (Type) {
         .kind = TYPE_TRAIT,
@@ -743,9 +759,45 @@ void check_expr_trait(Compiler *c, Node_Trait *trait) {
         .spec.trait = spec,
     };
 
-    if (trait->defined_as) {
+    if (trait->defined_as && !trait->monomorphs.count) {
         trait->defined_as->node.type = n->type;
         trait->defined_as->definition_spec->check_status = CHECKED;
+    }
+
+    // Traits are very limited in the amount of polymorphism they are allowed to have
+    if (trait->polymorphs.count) {
+        assert(trait->polymorphs.count == 1);
+        Node_Polymorph *it = trait->polymorphs.head;
+
+        assert(it->name->definition_spec);
+        Node_Define *define = it->name->definition_spec->definition_node;
+
+        assert(define->type);
+        check_expr(c, define->type, REF_NONE);
+        it->name->node.type = type_without_meta(type_assert_type(c, define->type));
+
+        assert(!define->expr);
+        it->node.type = it->name->node.type;
+
+        if (!type_eq(it->node.type, c->type_info_pointer_type)) {
+            error_node(EK_ERROR, (Node *) define, "The polymorphic parameter of a trait must be a type");
+            show_explanation_about_polymorphic_traits();
+            exit(c, 1);
+        }
+        it->is_type = true;
+
+        spec->polymorph = it;
+        return;
+    }
+
+    if (trait->monomorphs.count) {
+        assert(trait->monomorphs.count == 1);
+        Node_Polymorph *it = trait->monomorphs.head;
+
+        assert(it->is_type);
+        assert(it->monomorphization_value.kind == CONST_VALUE_TYPE);
+        it->node.type = it->monomorphization_value.as.type;
+        it->node.type.is_meta = true;
     }
 
     spec->methods = arena_alloc(&default_arena, trait->methods_count * sizeof(*spec->methods));
@@ -894,6 +946,7 @@ void check_expr_struct(Compiler *c, Node_Struct *structt) {
         .spec.structt = spec,
     };
 
+    // TODO: Ideally we should check the monomorphs count
     if (structt->defined_as && type_kind_eq(structt->defined_as->node.type, TYPE_VOID)) {
         structt->defined_as->node.type = n->type;
     }

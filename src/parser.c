@@ -34,6 +34,30 @@ void error_number_of_values_mismatch(
     exit(1);
 }
 
+void show_explanation_about_polymorphic_traits(void) {
+    afprintf(
+        stderr,
+        ANSI_COLOR_YELLOW | ANSI_BOLD,
+        "    Polymorphic traits are not monomorphized manually. The intended purpose is to know the type of\n"
+        "    the implementer at compile time.\n"
+        "\n"
+        "    For example:\n"
+        "\n"
+        "        Add :: trait($T: Type) {\n"
+        "            add: (that: T) -> T\n"
+        "        }\n"
+        "\n"
+        "        Vec2 :: struct { x, y: f32 }\n"
+        "\n"
+        "        add :: (this: Vec2, that: Vec2) -> Vec2 {\n"
+        "            return {this.x + that.x, this.y + that.y}\n"
+        "        }\n"
+        "\n"
+        "        addable := Add(Vec2 {69.0, 420.0})\n"
+        "\n"
+        "    Here 'T' gets resolved to the type of the implementer, i.e., 'Vec2'.\n\n");
+}
+
 Module *module_get(Parser *p, const char *path) {
     assert(p->modules);
     if (!p->modules->table.hasheq) {
@@ -847,7 +871,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             p->state.fn_current = fn;
             p->state.in_extern = false;
 
-            node = parse_expr(p, POWER_SET, false, true, NULL);
+            node = parse_expr(p, POWER_DOT, false, true, NULL);
             node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false, false);
         } else {
             p->state.allow_methods_without_body = allow_methods_without_body; // '(EXPR)' == 'EXPR' semantically
@@ -972,7 +996,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     }
 
                     buffer_token(p, token);
-                    name = parse_expr(p, POWER_SET, false, true, NULL);
+                    name = parse_expr(p, POWER_DOT, false, true, NULL);
                 } else {
                     unreachable();
                 }
@@ -1091,7 +1115,40 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         Node_Trait *trait = (Node_Trait *) node;
         trait->defined_in = p->state.fn_current;
 
-        expect_token(p, TOKEN_LBRACE);
+        token = expect_token(p, TOKEN_LBRACE, TOKEN_LPAREN);
+        if (token.kind == TOKEN_LPAREN) {
+            Polymorphs_Builder  pb = {.polymorphs = &trait->polymorphs};
+            Polymorphs_Builder *pb_save = p->state.pb;
+            p->state.pb = &pb;
+
+            while (!read_token(p, TOKEN_RPAREN)) {
+
+                if (trait->polymorphs.count) {
+                    error_token(EK_ERROR, next_token(p), "Polymorphic traits cannot have more than one parameter");
+                    show_explanation_about_polymorphic_traits();
+                    exit(1);
+                }
+
+                buffer_token(p, expect_token(p, TOKEN_DOLLAR));
+                Node *name = parse_expr(p, POWER_DOT, false, false, NULL);
+
+                Node_Define *define =
+                    (Node_Define *) parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
+                if (define->expr) {
+                    error_node(EK_ERROR, define->expr, "Polymorphic trait parameters cannot have default values");
+                    show_explanation_about_polymorphic_traits();
+                    exit(1);
+                }
+
+                if (expect_token(p, TOKEN_COMMA, TOKEN_RPAREN).kind != TOKEN_COMMA) {
+                    break;
+                }
+            }
+            p->state.pb = pb_save;
+
+            token = expect_token(p, TOKEN_LBRACE);
+        }
+
         while (!read_token(p, TOKEN_RBRACE)) {
             Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
             if (sv_match(name->token.sv, "type") || //

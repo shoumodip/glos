@@ -6,6 +6,7 @@
 
 void error_number_of_values_mismatch(
     Node *node, size_t lhs_count, size_t rhs_count, const char *lhs_label, const char *rhs_label);
+void show_explanation_about_polymorphic_traits(void);
 
 typedef DA(const char *) Paths;
 
