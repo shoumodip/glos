@@ -1,0 +1,8 @@
+main :: () {
+    putchar()
+    putchar(10)
+}
+
+extern {
+    putchar :: (c: s32 = 69) -> s32
+}

@@ -7,7 +7,7 @@ void s8_foo(S8 s) {
     printf("%d %d\n", s.x, s.y);
 }
 
-S8 s8_ret(i32 x, i32 y) {
+S8 s8_ret(s32 x, s32 y) {
     return (S8) {.x = x, .y = y};
 }
 
@@ -30,7 +30,7 @@ void s16_baz(S16 s0, S16 s1, S16 s2, S16 s3, S16 s4) {
     printf("%" PRId64 " %" PRId64 "\n", s4.x, s4.y);
 }
 
-S16 s16_ret(i64 x, i64 y) {
+S16 s16_ret(s64 x, s64 y) {
     return (S16) {.x = x, .y = y};
 }
 
@@ -38,7 +38,7 @@ void s24_foo(S24 s) {
     printf("%" PRId64 " %" PRId64 " %" PRId64 "\n", s.x, s.y, s.z);
 }
 
-S24 s24_ret(i64 x, i64 y, i64 z) {
+S24 s24_ret(s64 x, s64 y, s64 z) {
     return (S24) {.x = x, .y = y, .z = z};
 }
 
@@ -138,7 +138,7 @@ void fs8_foo(FS8 f) {
     printf("%.7g %d\n", f.x, f.y);
 }
 
-FS8 fs8_ret(float x, i32 y) {
+FS8 fs8_ret(float x, s32 y) {
     return (FS8) {.x = x, .y = y};
 }
 
@@ -146,6 +146,6 @@ void ds16_foo(DS16 f) {
     printf("%.7g %" PRId64 "\n", f.x, f.y);
 }
 
-DS16 ds16_ret(double x, i64 y) {
+DS16 ds16_ret(double x, s64 y) {
     return (DS16) {.x = x, .y = y};
 }

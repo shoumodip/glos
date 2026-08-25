@@ -169,6 +169,7 @@ defer:
 
 int main(int argc, char **argv) {
     basic_init();
+    atexit(warnings_flush);
     const char *program = shift(&argc, &argv, NULL, NULL);
 
     int result = 0;
@@ -423,6 +424,7 @@ int main(int argc, char **argv) {
         result = cmd_wait(child_proc);
     }
 
+    warnings_flush();
     modules_free(&modules);
     parser_free(&parser);
     arena_free(&default_arena);

@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 141
-tests/error_cannot_apply_link_directive_to_constant_definitions.glos:2:1: ERROR: Cannot apply '#link' to constant definitions
+tests/error_cannot_apply_link_directive_to_constant_definitions.glos:2:1: Error: Cannot apply '#link' to constant definitions
 
     Fn :: ()
 

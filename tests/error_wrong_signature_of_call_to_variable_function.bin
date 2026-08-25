@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 262
-tests/error_wrong_signature_of_call_to_variable_function.glos:4:9: ERROR: Too few arguments: Expected 1, got 0
+tests/error_wrong_signature_of_call_to_variable_function.glos:4:9: Error: Too few arguments: Expected 1, got 0
 
     bar()
 
-tests/error_wrong_signature_of_call_to_variable_function.glos:4:5: NOTE: The function being called has signature '(s: string)'
+tests/error_wrong_signature_of_call_to_variable_function.glos:4:5: Note: The function being called has signature '(s: string)'
 
     bar()
 

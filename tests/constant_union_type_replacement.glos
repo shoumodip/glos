@@ -1,5 +1,5 @@
 Value :: union {
-    i64
+    s64
     string
 }
 
@@ -9,7 +9,7 @@ main :: () {
     case string
         println(V)
 
-    case i64
+    case s64
         println(V)
 
     case null

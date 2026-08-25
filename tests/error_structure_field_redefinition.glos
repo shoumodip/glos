@@ -1,4 +1,4 @@
 Foo :: struct {
-    x: i64
-    x: i64
+    x: s64
+    x: s64
 }

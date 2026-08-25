@@ -1,6 +1,6 @@
 test_self_ptr :: () {
     Foo :: struct {
-        v: i32
+        v: s32
         next: &Foo
     }
 
@@ -20,7 +20,7 @@ test_self_ptr :: () {
 
 test_self_slice :: () {
     Foo :: struct {
-        v: i32
+        v: s32
         children: []Foo
     }
 
@@ -35,8 +35,8 @@ test_self_slice :: () {
         }
     }
 
-    alloc_foos :: (n: i64) -> []Foo {
-        extern { calloc :: (count: i64, size: i64) -> rawptr }
+    alloc_foos :: (n: s64) -> []Foo {
+        extern { calloc :: (count: s64, size: s64) -> rawptr }
         return (&Foo(calloc(n, sizeof(Foo))))[..n]
     }
 

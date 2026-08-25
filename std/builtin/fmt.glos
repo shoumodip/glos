@@ -21,7 +21,7 @@ write_type :: (w: Writer, t: Type) {
 
     case Type_Info_Integer
         if v.signed {
-            w.write([]char("i"))
+            w.write([]char("s"))
         } else {
             w.write([]char("u"))
         }
@@ -70,19 +70,6 @@ write_type :: (w: Writer, t: Type) {
     case Type_Info_Enumeration
         w.write([]char("enum "))
         write_type(w, v.underlying)
-        w.write([]char(" {"))
-        if v.names.count != 0 {
-            w.write([]char(" "))
-            for i := 0; i < v.names.count; i += 1 {
-                if i != 0 {
-                    w.write([]char("; "))
-                }
-
-                wprint(w, "\{v.names[i]} = \{v.values[i]}")
-            }
-            w.write([]char(" "))
-        }
-        w.write([]char("}"))
 
     case Type_Info_Trait
         w.write([]char("trait {"))
@@ -146,6 +133,33 @@ write_type :: (w: Writer, t: Type) {
     }
 }
 
+write_quoted_char :: (w: Writer, ch: char, quote: char) {
+    if ch == {
+    case '\e'; w.write([]char("\\e"))
+    case '\n'; w.write([]char("\\n"))
+    case '\r'; w.write([]char("\\r"))
+    case '\t'; w.write([]char("\\t"))
+    case '\0'; w.write([]char("\\0"))
+    case '\\'; w.write([]char("\\\\"))
+
+    case '\''
+        if quote == '\'' {
+            w.write([]char("\\'"))
+        } else {
+            w.write((&ch)[..1])
+        }
+
+    case '\"'
+        if quote == '\"' {
+            w.write([]char("\\\""))
+        } else {
+            w.write((&ch)[..1])
+        }
+
+    case; w.write((&ch)[..1])
+    }
+}
+
 write_value :: (w: Writer, a: Any, nested: bool) {
     if a.type == Type {
         write_type(w, *&Type(a.data))
@@ -175,7 +189,6 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         return
     }
 
-    // TODO: Make the character and string printers respect special characters if nested
     v := a.type.variant
     if v == {
     case Type_Info_Boolean
@@ -189,13 +202,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         ch := *&char(a.data)
         if nested {
             w.write([]char("'"))
-            if ch == '\'' {
-                w.write([]char("\\'"))
-            } else if ch == '\0' {
-                w.write([]char("\\0"))
-            } else {
-                w.write((&ch)[..1])
-            }
+            write_quoted_char(w, ch, '\'')
             w.write([]char("'"))
         } else {
             w.write((&ch)[..1])
@@ -203,13 +210,13 @@ write_value :: (w: Writer, a: Any, nested: bool) {
 
     case Type_Info_Integer
         buffer: [32]char
-        count: i32
+        count: s32
         if v.signed {
             if a.type.size == {
-            case 1; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i8(a.data))
-            case 2; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i16(a.data))
-            case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&i32(a.data))
-            case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%zd".data, *&i64(a.data))
+            case 1; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&s8(a.data))
+            case 2; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&s16(a.data))
+            case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%d".data, *&s32(a.data))
+            case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%zd".data, *&s64(a.data))
             case;   unreachable()
             }
         } else {
@@ -225,7 +232,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
 
     case Type_Info_Float
         buffer: [32]char
-        count: i32
+        count: s32
         if a.type.size == {
         case 4; count = C.snprintf(buffer.data, u64(buffer.count), "%.7g".data, *&f32(a.data))
         case 8; count = C.snprintf(buffer.data, u64(buffer.count), "%.14g".data, *&f64(a.data))
@@ -244,12 +251,12 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         }
 
     case Type_Info_Enumeration
-        value: i64
+        value: s64
         if v.underlying.size == {
-        case 1; value = i64(*&i8(a.data))
-        case 2; value = i64(*&i16(a.data))
-        case 4; value = i64(*&i32(a.data))
-        case 8; value = i64(*&i64(a.data))
+        case 1; value = s64(*&s8(a.data))
+        case 2; value = s64(*&s16(a.data))
+        case 4; value = s64(*&s32(a.data))
+        case 8; value = s64(*&s64(a.data))
         }
 
         for i := 0; i < v.values.count; i += 1 {
@@ -272,7 +279,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         }
 
     case Type_Info_Union
-        tag := *&i64(a.data)
+        tag := *&s64(a.data)
         if tag == 0 {
             w.write([]char("null"))
         } else if tag - 1 >= v.variants.count {
@@ -312,7 +319,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         w.write([]char("}"))
 
     case Type_Info_Dynamic_Array
-        count := *&i64(a.data + rawptr(8))
+        count := *&s64(a.data + rawptr(8))
         data  := *&rawptr(a.data)
 
         w.write([]char("{"))
@@ -329,7 +336,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         w.write([]char("}"))
 
     case Type_Info_Slice
-        count := *&i64(a.data + rawptr(8))
+        count := *&s64(a.data + rawptr(8))
         data  := *&rawptr(a.data)
 
         w.write([]char("{"))
@@ -350,12 +357,7 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         if nested {
             w.write([]char("\""))
             for i := 0; i < s.count; i += 1 {
-                ch := s[i]
-                if ch == '"' {
-                    w.write([]char("\\\""))
-                } else {
-                    w.write((&ch)[..1])
-                }
+                write_quoted_char(w, s[i], '"')
             }
             w.write([]char("\""))
         } else {

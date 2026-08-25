@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 158
-tests/error_distinct_type_is_not_cleared_unless_fully_dereferenced_beyond_the_level_of_the_definition.glos:7:10: ERROR: Expected 'A', got '&i64'
+tests/error_distinct_type_is_not_cleared_unless_fully_dereferenced_beyond_the_level_of_the_definition.glos:7:10: Error: Expected 'A', got '&s64'
 
     *a = b
 

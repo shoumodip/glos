@@ -1,1 +1,1 @@
-foo :: () -> (i64, i64) { return 69 }
+foo :: () -> s64, s64 { return 69 }

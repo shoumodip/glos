@@ -2,20 +2,20 @@ EXIT 1
 STDOUT 0
 
 STDERR 654
-tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:5: ERROR: Multiple typed variadic sources found
+tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:5: Error: Multiple typed variadic sources found
 
     foo(69, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:9: NOTE: This starts one source
+tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:9: Note: This starts one source
 
     foo(69, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:13: NOTE: This provides another
+tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:5:13: Note: This provides another
 
     foo(69, ns = xs)
 
-tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:1:8: NOTE: The function being called has signature '(ns: ...i64)'
+tests/error_multiple_typed_variadics_named_variadic_argument_after_positional_variadics.glos:1:8: Note: The function being called has signature '(ns: ...s64)'
 
-    foo :: (ns: ...i64) {}
+    foo :: (ns: ...s64) {}
 
 

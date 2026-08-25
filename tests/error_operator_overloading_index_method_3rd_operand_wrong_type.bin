@@ -2,9 +2,9 @@ EXIT 1
 STDOUT 0
 
 STDERR 608
-tests/error_operator_overloading_index_method_3rd_operand_wrong_type.glos:2:1: ERROR: The method 'index' is special because it implements an operator overload
+tests/error_operator_overloading_index_method_3rd_operand_wrong_type.glos:2:1: Error: The method 'index' is special because it implements an operator overload
 
-    index :: (this: Foo, index: i64, assign: i64) {}
+    index :: (this: Foo, index: s64, assign: s64) {}
 
     It should have this signature:
 
@@ -12,8 +12,8 @@ tests/error_operator_overloading_index_method_3rd_operand_wrong_type.glos:2:1: E
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_index_method_3rd_operand_wrong_type.glos:2:34: NOTE: Expected the third argument to be 'bool', got 'i64'
+tests/error_operator_overloading_index_method_3rd_operand_wrong_type.glos:2:34: Note: Expected the third argument to be 'bool', got 's64'
 
-    index :: (this: Foo, index: i64, assign: i64) {}
+    index :: (this: Foo, index: s64, assign: s64) {}
 
 

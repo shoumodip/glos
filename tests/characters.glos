@@ -1,10 +1,10 @@
 main :: () {
     putc :: (c: char) {
         extern {
-            putchar :: (ch: i32) -> i32
+            putchar :: (ch: s32) -> s32
         }
 
-        putchar(i32(c))
+        putchar(s32(c))
     }
 
     putc('H')

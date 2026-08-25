@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 159
-tests/error_unexpected_static_directive_in_extern_scope.glos:2:5: ERROR: Variables defined inside extern block cannot have static storage
+tests/error_unexpected_static_directive_in_extern_scope.glos:2:5: Error: Variables defined inside extern block cannot have static storage
 
     #static v := 0
 

@@ -1,0 +1,13 @@
+EXIT 1
+STDOUT 0
+
+STDERR 314
+tests/error_polymorphic_function_cannot_be_used_before_monomorphization.glos:4:5: Error: Polymorphic functions cannot be used as runtime expressions. They must be called
+
+    foo
+
+tests/error_polymorphic_function_cannot_be_used_before_monomorphization.glos:1:8: Note: Function defined here
+
+    foo :: (x: $T) {}
+
+

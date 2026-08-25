@@ -7,9 +7,9 @@ main :: () {
 print_str :: (s: string) {
     for i := 0; i < s.count; i = i + 1 {
         extern {
-            putchar :: (c: i32) -> i32
+            putchar :: (c: s32) -> s32
         }
 
-        putchar(i32(s[i]))
+        putchar(s32(s[i]))
     }
 }

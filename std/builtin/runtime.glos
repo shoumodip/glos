@@ -1,6 +1,6 @@
 #private...
 
-runtime_panic :: (p: Panic, a: i64, b: i64, c: i64, location: &Source_Code_Location) {
+runtime_panic :: (p: Panic, a: s64, b: s64, c: s64, location: &Source_Code_Location) {
     if p == {
     case .INDEX_OUT_OF_BOUNDS
         panic("Bounds Check Failed: Index \{a} is invalid since length is \{b}", location = *location)
@@ -47,16 +47,16 @@ runtime_panic :: (p: Panic, a: i64, b: i64, c: i64, location: &Source_Code_Locat
 }
 
 #link "main"
-runtime_entry :: (argc: i32, argv: &&char) -> i32 {
+runtime_entry :: (argc: s32, argv: &&char) -> s32 {
     runtime_init(argc, argv)
     #main()
     return 0
 }
 
-runtime_init :: inline (argc: i32, argv: &&char) {
+runtime_init :: inline (argc: s32, argv: &&char) {
     #if PLATFORM == .WINDOWS {
         extern {
-            __acrt_iob_func :: (fd: i32) -> os.File
+            __acrt_iob_func :: (fd: s32) -> os.File
         }
 
         os.stdin  = __acrt_iob_func(0)

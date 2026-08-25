@@ -2,9 +2,9 @@ EXIT 1
 STDOUT 0
 
 STDERR 866
-tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos:2:1: ERROR: The method 'compare' is special because it implements an operator overload
+tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos:2:1: Error: The method 'compare' is special because it implements an operator overload
 
-    compare :: (this: Foo, that: Foo) -> i32 {}
+    compare :: (this: Foo, that: Foo) -> s32 {}
 
     It should have this signature:
 
@@ -15,8 +15,8 @@ tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos:2:38: NOTE: Expected to return 'Equivalence' or 'Ordering', got 'i32'
+tests/error_operator_overloading_binary_comparison_method_wrong_return_type.glos:2:38: Note: Expected to return 'Equivalence' or 'Ordering', got 's32'
 
-    compare :: (this: Foo, that: Foo) -> i32 {}
+    compare :: (this: Foo, that: Foo) -> s32 {}
 
 

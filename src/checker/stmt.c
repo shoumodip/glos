@@ -100,12 +100,12 @@ void check_stmt_define(Compiler *c, Node_Define *define) {
         while ((lhs = (Node_Atom *) node_iter((Node *) lhs, define->name))) {
             rhs = node_iter(rhs, define->expr);
             assert(rhs);
-            check_definition(c, lhs, rhs, define->type);
+            check_definition(c, lhs, rhs, define->type, false);
         }
     } else {
         Node_Atom *lhs = NULL;
         while ((lhs = (Node_Atom *) node_iter((Node *) lhs, define->name))) {
-            check_definition(c, lhs, define->expr, define->type);
+            check_definition(c, lhs, define->expr, define->type, false);
         }
     }
 }

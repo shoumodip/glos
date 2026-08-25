@@ -18,6 +18,81 @@ void link_flags_add_libname(Link_Flags *ls, SV name) {
 #endif // PLATFORM_X86_64_WINDOWS
 }
 
+static void compiler_init_llvm_target_data(Compiler *c) {
+    if (LLVMInitializeNativeTarget() != 0) {
+        error_standalone(EK_ERROR, "Failed to initialize native target");
+        exit(1);
+    }
+    LLVMInitializeNativeAsmPrinter();
+
+    c->llvm_context = LLVMContextCreate();
+    c->llvm_module = LLVMModuleCreateWithNameInContext("", c->llvm_context);
+
+    char *triple = LLVMGetDefaultTargetTriple();
+    LLVMSetTarget(c->llvm_module, triple);
+
+    char *error = NULL;
+
+    LLVMTargetRef target = NULL;
+    if (LLVMGetTargetFromTriple(triple, &target, &error)) {
+        error_standalone(EK_ERROR, "%s", error);
+        exit(1);
+    }
+
+    LLVMCodeGenOptLevel opt_level;
+    switch (c->optimization_level) {
+    case O0:
+        opt_level = LLVMCodeGenLevelNone;
+        break;
+
+    case O1:
+        opt_level = LLVMCodeGenLevelLess;
+        break;
+
+    case O2:
+        opt_level = LLVMCodeGenLevelDefault;
+        break;
+
+    case O3:
+        opt_level = LLVMCodeGenLevelAggressive;
+        break;
+
+    default:
+        unreachable();
+        break;
+    }
+
+    c->llvm_target_machine =
+        LLVMCreateTargetMachine(target, triple, "generic", "", opt_level, LLVMRelocPIC, LLVMCodeModelDefault);
+    c->llvm_target_data = LLVMCreateTargetDataLayout(c->llvm_target_machine);
+
+    // Initialize the common types
+    {
+        LLVMTypeRef dynamic_array_fields[] = {
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMInt64TypeInContext(c->llvm_context),
+            LLVMInt64TypeInContext(c->llvm_context),
+        };
+        c->llvm_dynamic_array_type =
+            LLVMStructTypeInContext(c->llvm_context, dynamic_array_fields, len(dynamic_array_fields), false);
+
+        LLVMTypeRef slice_fields[] = {
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMInt64TypeInContext(c->llvm_context),
+        };
+        c->llvm_slice_type = LLVMStructTypeInContext(c->llvm_context, slice_fields, len(slice_fields), false);
+
+        LLVMTypeRef trait_fields[] = {
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+            LLVMPointerTypeInContext(c->llvm_context, 0),
+        };
+        c->llvm_trait_type = LLVMStructTypeInContext(c->llvm_context, trait_fields, len(trait_fields), false);
+    }
+
+    free(triple);
+}
+
 size_t compile_sizeof(Compiler *c, Type *type) {
     if (!c->llvm_target_data) {
         compiler_init_llvm_target_data(c);
@@ -82,10 +157,11 @@ void compiler_build(Compiler *c, const char *output_path) {
 
     perf_begin();
 
-    // TODO: Do not do this for '-O0'
-    LLVMPassBuilderOptionsRef pass_builder_options = LLVMCreatePassBuilderOptions();
-    LLVMRunPasses(c->llvm_module, "always-inline", c->llvm_target_machine, pass_builder_options);
-    LLVMDisposePassBuilderOptions(pass_builder_options);
+    if (c->optimization_level != O0) {
+        LLVMPassBuilderOptionsRef pass_builder_options = LLVMCreatePassBuilderOptions();
+        LLVMRunPasses(c->llvm_module, "always-inline", c->llvm_target_machine, pass_builder_options);
+        LLVMDisposePassBuilderOptions(pass_builder_options);
+    }
 
     LLVMDIBuilderFinalize(c->llvm_debug_builder);
     LLVMDisposeDIBuilder(c->llvm_debug_builder);
@@ -93,7 +169,6 @@ void compiler_build(Compiler *c, const char *output_path) {
     const char *object_path = temp_replace_suffix(output_path, EXE_FILE_EXTENSION, OBJ_FILE_EXTENSION);
     temporary_files_push(object_path);
     {
-        // TODO: Remove
         // LLVMPrintModuleToFile(c->llvm_module, "/dev/stdout", NULL);
 
         char *error = NULL;
@@ -164,6 +239,8 @@ void compiler_build(Compiler *c, const char *output_path) {
 
     ht_free(&c->methods_table);
     da_free(&c->methods_list);
+
+    da_free(&c->partial_stack);
 
     ht_free(&c->monomorph_intern);
     ht_free(&c->monomorph_replacements);

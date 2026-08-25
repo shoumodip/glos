@@ -2,12 +2,12 @@ EXIT 1
 STDOUT 0
 
 STDERR 241
-tests/error_argument_not_provided.glos:4:15: ERROR: Argument 'b' is not provided
+tests/error_argument_not_provided.glos:4:15: Error: Argument 'b' is not provided
 
     foo(a = 69)
 
-tests/error_argument_not_provided.glos:1:8: NOTE: The function being called has signature '(a: i64, b: i64)'
+tests/error_argument_not_provided.glos:1:8: Note: The function being called has signature '(a: s64, b: s64)'
 
-    foo :: (a := 0, b: i64) {}
+    foo :: (a := 0, b: s64) {}
 
 

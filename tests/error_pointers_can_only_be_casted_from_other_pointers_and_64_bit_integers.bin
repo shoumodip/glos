@@ -2,8 +2,8 @@ EXIT 1
 STDOUT 0
 
 STDERR 149
-tests/error_pointers_can_only_be_casted_from_other_pointers_and_64_bit_integers.glos:4:10: ERROR: Cannot cast 'bool' to '&i64'
+tests/error_pointers_can_only_be_casted_from_other_pointers_and_64_bit_integers.glos:4:10: Error: Cannot cast 'bool' to '&s64'
 
-    c := &i64(true)
+    c := &s64(true)
 
 

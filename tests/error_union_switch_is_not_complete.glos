@@ -1,5 +1,5 @@
 Value :: union {
-    i64
+    s64
     string
 }
 

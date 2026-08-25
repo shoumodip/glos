@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 120
-tests/error_external_function_cannot_have_body.glos:2:16: ERROR: External function cannot have body
+tests/error_external_function_cannot_have_body.glos:2:16: Error: External function cannot have body
 
     main :: () {}
 

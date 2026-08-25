@@ -111,7 +111,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
         binary->overload = check_assignment_lhs_for_arithmetics(c, binary, binary->lhs);
     }
 
-    binary->node.type = (Type) {.kind = TYPE_UNIT};
+    binary->node.type = (Type) {.kind = TYPE_VOID};
 }
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
@@ -218,13 +218,14 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
         check_expr(c, unary->value, REF_NONE);
         check_that_type_is_known(c, unary->value);
 
-        if (!unary->value->type.ref) {
+        if (!unary->value->type.ref || unary->value->type.is_meta) {
             if (type_kind_eq(unary->value->type, TYPE_RAWPTR)) {
                 error_node(EK_ERROR, unary->value, "Cannot dereference raw pointer");
                 exit(c, 1);
             }
 
-            error_node(EK_ERROR, unary->value, "Expected typed pointer, got %s", type_to_cstr(unary->value->type));
+            error_node(
+                EK_ERROR, unary->value, "Can only dereference typed pointer, got %s", type_to_cstr(unary->value->type));
             exit(c, 1);
         }
 
@@ -477,7 +478,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
             Method_Spec spec = {0};
             if (get_method_spec(c, member->lhs, member->lhs->type, n->token.sv, &spec, NULL, NULL)) {
                 can_have_methods = true;
-                member->method = get_method(c, spec, member->module);
+                member->method = get_method(c, spec, member->node.module);
                 if (member->method) {
                     n->type = member->method->node.type;
                     assert(n->type.kind == TYPE_FN);
@@ -567,7 +568,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = type_without_meta(member->rhs->type);
                 } else {
                     if (sv_match(n->token.sv, "type")) {
-                        n->type = (Type) {.kind = TYPE_I64};
+                        n->type = (Type) {.kind = TYPE_S64};
                         member->field_index = 0;
                     } else {
                         error_undefined(c, &n->token, "field or method", false);
@@ -601,7 +602,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type.ref++;
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -613,10 +614,10 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type.ref++;
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else if (sv_match(n->token.sv, "capacity")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 2;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -628,7 +629,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type.ref++;
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -639,7 +640,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = (Type) {.kind = TYPE_CHAR, .ref = 1};
                     member->field_index = 0;
                 } else if (sv_match(n->token.sv, "count")) {
-                    n->type = (Type) {.kind = TYPE_I64};
+                    n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
                     error_undefined(c, &n->token, "field", false);
@@ -654,7 +655,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
 
                     Method_Spec spec = {0};
                     if (get_method_spec(c, member->lhs, receiver, n->token.sv, &spec, NULL, NULL)) {
-                        member->method = get_method(c, spec, member->module);
+                        member->method = get_method(c, spec, member->node.module);
                         if (member->method) {
                             ok = true;
                             n->type = member->method->node.type;
@@ -684,388 +685,6 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
     }
 }
 
-void check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool *is_ref_valid, bool only_check_polymorphic_parameters) {
-    Node *n = (Node *) fn;
-
-    Context_Fn      *context_fn_save = c->context.fn;
-    Context_Replace *context_replace_save = c->context.replace;
-
-    Context_Fn context = {0};
-    context.fn = fn;
-    if (fn->checked) {
-        for (Context_Fn *f = c->context.fn; f; f = f->outer) {
-            if (f->fn == fn->outer_fn) {
-                context.outer = f;
-                break;
-            }
-        }
-
-        c->context.replace = fn->context_replace;
-    } else {
-        context.outer = c->context.fn;
-    }
-    context_push_fn(&c->context, &context);
-
-    {
-        Type_Fn *fn_spec = arena_alloc(&default_arena, sizeof(*fn_spec));
-        fn_spec->polymorphs = arena_alloc(&default_arena, fn->polymorphs.count * sizeof(*fn_spec->polymorphs));
-
-        ll_foreach(it, &fn->polymorphs) {
-            assert(!it->is_monomorphized);
-
-            Node_Atom *previous = context_find_define_in_fn(&c->context, c->context.fn, it->name->node.token.sv);
-            if (previous) {
-                error_redefinition(c, (Node *) it->name, &previous->node.token.pos);
-            }
-            context_push_define(&c->context, it->name);
-
-            it->name->node.type = (Type) {
-                .kind = TYPE_POLYMORPH,
-                .spec.polymorph.definition = it,
-                .spec.polymorph.is_definition = true,
-                .is_meta = true,
-            };
-
-            it->node.type = it->name->node.type;
-            fn_spec->polymorphs[fn_spec->polymorphs_count++] = it;
-        }
-
-        ll_foreach(it, &fn->monomorphs) {
-            assert(it->is_monomorphized);
-
-            if (it->is_type) {
-                assert(it->monomorphization_value.kind == CONST_VALUE_TYPE);
-                it->node.type = it->monomorphization_value.as.type;
-                it->node.type.is_meta = true;
-            } else {
-                it->node.type = it->monomorphization_type;
-            }
-
-            context_push_define(&c->context, it->name);
-        }
-
-        if (only_check_polymorphic_parameters) {
-            goto end;
-        }
-
-        fn_spec->args_count = fn->args_count;
-        fn_spec->args_count_min = fn->args_count_min;
-        if (fn->trait_method) {
-            assert(fn->is_type);
-            fn_spec->args_count++;
-            fn_spec->args_count_min++;
-        }
-
-        fn_spec->args = arena_alloc(&default_arena, fn_spec->args_count * sizeof(*fn_spec->args));
-        fn_spec->variadics_kind = fn->variadics_kind;
-
-        size_t iota = 0;
-        if (fn->trait_method) {
-            assert(fn->trait_method->node.type.kind == TYPE_TRAIT);
-
-            Type_Fn_Arg *it_arg = &fn_spec->args[iota++];
-            it_arg->name = sv_from_cstr("this");
-            it_arg->pos = fn->trait_method->node.type.spec.trait->definition->node.token.pos;
-            it_arg->type.kind = TYPE_RAWPTR;
-        }
-
-        for (Node *arg = fn->args.head; arg; arg = arg->next) {
-            assert(arg->kind == NODE_DEFINE);
-            Node_Define *define = (Node_Define *) arg;
-
-            assert(define->name->kind == NODE_ATOM);
-            Node_Atom *it = (Node_Atom *) define->name;
-            it->definition_spec->fn_context = c->context.fn;
-
-            if (!sv_match(it->node.token.sv, "_")) {
-                Node_Atom *previous = context_find_define_in_fn(&c->context, c->context.fn, it->node.token.sv);
-                if (previous && previous != it) {
-                    error_redefinition(c, (Node *) it, &previous->node.token.pos);
-                }
-            }
-
-            Type_Fn_Arg *it_arg = &fn_spec->args[iota];
-            it_arg->name = it->node.token.sv;
-            it_arg->pos = it->node.token.pos;
-            it_arg->polymorph = define->name_polymorph;
-
-            check_stmt(c, arg);
-            if (define->has_spread) {
-                fn_spec->variadics_index = iota;
-                it->node.type.kind = TYPE_SLICE;
-                it->node.type.spec.slice.element = &define->type->type;
-            }
-
-            const bool dont_allow_polymorphs_save = c->dont_allow_polymorphs;
-            if (define->name_polymorph) {
-                c->dont_allow_polymorphs = true;
-                if (define->type) {
-                    define->type->type.is_meta = true;
-                    eval_const_expr(c, define->type, false);
-                    define->type->type.is_meta = false;
-                }
-            }
-
-            if (define->expr) {
-                if (is_node_caller_location(define->expr)) {
-                    it_arg->default_value_is_caller_location = true;
-                } else {
-                    it->definition_spec->const_value = eval_const_expr(c, define->expr, false);
-                    it_arg->default_value = &it->definition_spec->const_value;
-                }
-                it_arg->has_default_value = true;
-            }
-            c->dont_allow_polymorphs = dont_allow_polymorphs_save;
-
-            it_arg->type = it->node.type;
-            iota += define->count;
-        }
-
-        if (fn->returns.head) {
-            fn_spec->returns = arena_alloc(&default_arena, fn->returns_count * sizeof(*fn_spec->returns));
-
-            size_t iota = 0;
-            ll_foreach(it, &fn->returns) {
-                check_expr(c, it, REF_NONE);
-                type_assert_type(c, it);
-                fn_spec->returns[iota++] = type_without_meta(it->type);
-            }
-        }
-        fn_spec->returns_count = fn->returns_count;
-
-        Type return_type = {0};
-        if (fn_spec->returns_count == 0) {
-            return_type.kind = TYPE_UNIT;
-        } else if (fn_spec->returns_count == 1) {
-            return_type = *fn_spec->returns;
-        } else {
-            return_type.kind = TYPE_GROUP;
-            return_type.spec.group.data = fn_spec->returns;
-            return_type.spec.group.count = fn_spec->returns_count;
-        }
-        fn_spec->return_type = arena_clone(&default_arena, &return_type, sizeof(return_type));
-
-        n->type = (Type) {.kind = TYPE_FN, .spec.fn = fn_spec};
-
-        if (fn->defined_as && type_kind_eq(fn->defined_as->node.type, TYPE_UNIT)) {
-            // The body of a function is irrelevant for outer expressions
-            fn->defined_as->node.type = n->type;
-            fn->defined_as->definition_spec->check_status = CHECKED;
-
-            fn->defined_as->definition_spec->const_value = const_value_fn(fn);
-            fn->defined_as->definition_spec->is_const_value_evaluated = true;
-        }
-
-        if (fn->is_method) {
-            if (!fn->defined_as) {
-                Node_Define *define = (Node_Define *) fn->args.head;
-                assert(define);
-
-                error_node(EK_ERROR, (Node *) fn, "Anonymous function cannot be a method");
-                error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                exit(c, 1);
-            }
-
-            assert(fn->defined_as);
-            const SV name = fn->defined_as->node.token.sv;
-            if (sv_match(name, "add") || sv_match(name, "sub") || sv_match(name, "mul") || sv_match(name, "div") ||
-                sv_match(name, "mod")) //
-            {
-                const char *signature = "(this: T, that: T) -> T";
-                const char *note = NULL;
-                check_special_method_signature_args_count(c, fn, 2, signature, note);
-
-                const Type lhs_type = fn_spec->args[0].type;
-                if (lhs_type.ref) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_parts(
-                        EK_NOTE,
-                        fn_spec->args[0].name,
-                        fn_spec->args[0].pos,
-                        "Operand cannot be a pointer. (Provided type is %s)",
-                        type_to_cstr(lhs_type));
-                    exit(c, 1);
-                }
-
-                const Type rhs_type = fn_spec->args[1].type;
-                if (!type_eq(rhs_type, lhs_type)) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_parts(
-                        EK_NOTE,
-                        fn_spec->args[1].name,
-                        fn_spec->args[1].pos,
-                        "Operand types must be same: Expected %s, got %s",
-                        type_to_cstr(lhs_type),
-                        type_to_cstr(rhs_type));
-                    exit(c, 1);
-                }
-
-                if (!type_eq(*fn_spec->return_type, lhs_type)) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_token(
-                        EK_NOTE,
-                        fn->returns.head ? fn->returns.head->token : fn->body->token,
-                        "Operand types and return type must be same: Expected to return %s, got %s",
-                        type_to_cstr(lhs_type),
-                        fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                    exit(c, 1);
-                }
-            } else if (sv_match(name, "neg")) {
-                const char *signature = "(this: T) -> T";
-                const char *note = NULL;
-                check_special_method_signature_args_count(c, fn, 1, signature, note);
-
-                const Type operand_type = fn_spec->args[0].type;
-                if (operand_type.ref) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_parts(
-                        EK_NOTE,
-                        fn_spec->args[0].name,
-                        fn_spec->args[0].pos,
-                        "Operand cannot be a pointer. (Provided type is %s)",
-                        type_to_cstr(operand_type));
-                    exit(c, 1);
-                }
-
-                if (!type_eq(*fn_spec->return_type, operand_type)) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_token(
-                        EK_NOTE,
-                        fn->returns.head ? fn->returns.head->token : fn->body->token,
-                        "Operand type and return type must be same: Expected to return %s, got %s",
-                        type_to_cstr(operand_type),
-                        fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                    exit(c, 1);
-                }
-            } else if (sv_match(name, "compare")) {
-                const char *signature = "(this: T, that: T) -> Ordering | Equivalence";
-                const char *note =
-                    "Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.\n"
-                    "Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.\n";
-                check_special_method_signature_args_count(c, fn, 2, signature, note);
-
-                const Type lhs_type = fn_spec->args[0].type;
-                if (lhs_type.ref) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_parts(
-                        EK_NOTE,
-                        fn_spec->args[0].name,
-                        fn_spec->args[0].pos,
-                        "Operand cannot be a pointer. (Provided type is %s)",
-                        type_to_cstr(lhs_type));
-                    exit(c, 1);
-                }
-
-                const Type rhs_type = fn_spec->args[1].type;
-                if (!type_eq(rhs_type, lhs_type)) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_parts(
-                        EK_NOTE,
-                        fn_spec->args[1].name,
-                        fn_spec->args[1].pos,
-                        "Operand types must be same: Expected %s, got %s",
-                        type_to_cstr(lhs_type),
-                        type_to_cstr(rhs_type));
-                    exit(c, 1);
-                }
-
-                if (!type_eq(*fn_spec->return_type, c->equivalence_type) &&
-                    !type_eq(*fn_spec->return_type, c->ordering_type)) //
-                {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_token(
-                        EK_NOTE,
-                        fn->returns.head ? fn->returns.head->token : fn->body->token,
-                        "Expected to return %s or %s, got %s",
-                        type_to_cstr(c->equivalence_type),
-                        type_to_cstr(c->ordering_type),
-                        fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                    exit(c, 1);
-                }
-
-                fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->ordering_type);
-            } else if (sv_match(name, "index")) {
-                const char *signature = "(this: T, key: K, assign: bool) -> &V";
-                const char *note = NULL;
-                check_special_method_signature_args_count(c, fn, 3, signature, note);
-
-                const Type assign_type = fn_spec->args[2].type;
-                if (!type_eq(assign_type, (Type) {.kind = TYPE_BOOL})) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_parts(
-                        EK_NOTE,
-                        fn_spec->args[2].name,
-                        fn_spec->args[2].pos,
-                        "Expected the third argument to be %s, got %s",
-                        type_to_cstr((Type) {.kind = TYPE_BOOL}),
-                        type_to_cstr(assign_type));
-                    exit(c, 1);
-                }
-
-                if (!type_is_pointer(*fn_spec->return_type)) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_token(
-                        EK_NOTE,
-                        fn->returns.head ? fn->returns.head->token : fn->body->token,
-                        "Expected to return a pointer, got %s",
-                        fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                    exit(c, 1);
-                }
-            } else if (sv_match(name, "range")) {
-                const char *signature = "(this: T, begin: A, end: A) -> V";
-                const char *note = NULL;
-                check_special_method_signature_args_count(c, fn, 3, signature, note);
-
-                const Type begin_type = fn_spec->args[1].type;
-                const Type end_type = fn_spec->args[2].type;
-                if (!type_eq(end_type, begin_type)) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_parts(
-                        EK_NOTE,
-                        fn_spec->args[2].name,
-                        fn_spec->args[2].pos,
-                        "Types of range beginning and end must be same: Expected %s, got %s",
-                        type_to_cstr(begin_type),
-                        type_to_cstr(end_type));
-                    exit(c, 1);
-                }
-
-                if (fn_spec->returns_count != 1) {
-                    error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                    error_token(
-                        EK_NOTE,
-                        fn->returns.head ? fn->returns.head->token : fn->body->token,
-                        "The range operator cannot return %zu values",
-                        fn_spec->returns_count);
-                    exit(c, 1);
-                }
-            }
-        }
-
-        if (fn->is_type) {
-            n->type.is_meta = true;
-            *is_ref_valid = ref == REF_ADDR || ref == REF_ADDR_MEMBER;
-        } else if (fn->body && !fn->polymorphs.count) {
-            check_stmt(c, fn->body);
-            if (fn_spec->returns_count && !always_returns(fn->body)) {
-                assert(fn->body->kind == NODE_BLOCK);
-                error_token(
-                    EK_ERROR,
-                    ((Node_Block *) fn->body)->end,
-                    "Expected to return %s",
-                    type_to_cstr(*fn_spec->return_type));
-                exit(c, 1);
-            }
-        }
-
-        fn->checked = true;
-    }
-
-end:
-    context_restore_fn(&c->context, context_fn_save);
-    c->context.replace = context_replace_save;
-}
-
 void check_expr_enum(Compiler *c, Node_Enum *enumm) {
     Node *n = (Node *) enumm;
 
@@ -1088,8 +707,8 @@ void check_expr_enum(Compiler *c, Node_Enum *enumm) {
         spec.underlying = underlying.kind;
     }
 
-    i64 iota = 0;
-    i64 iota_max = 0;
+    Int128 iota = {0};
+    Int128 iota_max = {0};
     ll_foreach(it, &enumm->values) {
         ll_foreach(prev, &enumm->values) {
             if (prev == it) {
@@ -1109,14 +728,18 @@ void check_expr_enum(Compiler *c, Node_Enum *enumm) {
 
             const Const_Value value = eval_const_expr(c, unary->value, false);
             assert(value.kind == CONST_VALUE_INT);
-            iota = i64_from_int128(c, unary->value, value.as.integer, false, NULL);
+            iota = value.as.integer;
         }
-        iota_max = max(iota_max, iota);
+
+        if (int128_lt(iota_max, iota, true)) {
+            iota_max = iota;
+        }
 
         it->type.kind = underlying.kind;
-        check_int_limit(c, it, int128_from_i64(iota));
-        it->type.kind = TYPE_UNIT;
-        it->token.as.integer = iota++;
+        check_int_limit(c, it, iota);
+        it->type.kind = TYPE_VOID;
+        it->token.as.integer = iota.low;
+        iota = int128_add(iota, INT128_FROM_U64(1), true);
     }
 
     n->type = (Type) {.kind = TYPE_ENUM, .is_meta = true, .spec.enumm = spec};
@@ -1157,13 +780,17 @@ void check_expr_trait(Compiler *c, Node_Trait *trait) {
         }
 
         it->definition_spec->is_local = false;
-        check_definition(c, it, define->expr, define->type);
+        check_definition(c, it, define->expr, define->type, false);
+        assert(define->type);
         assert(type_kind_eq(define->type->type, TYPE_FN) && !define->type->type.ref);
 
         Type_Trait_Method *tm = &spec->methods[iota++];
         tm->pos = it->node.token.pos;
         tm->name = it->node.token.sv;
         tm->type = define->type->type;
+
+        assert(define->type->kind == NODE_FN);
+        tm->signature = (Node_Fn *) define->type;
     }
 }
 
@@ -1281,7 +908,7 @@ void check_expr_struct(Compiler *c, Node_Struct *structt) {
         .spec.structt = spec,
     };
 
-    if (structt->defined_as && type_kind_eq(structt->defined_as->node.type, TYPE_UNIT)) {
+    if (structt->defined_as && type_kind_eq(structt->defined_as->node.type, TYPE_VOID)) {
         structt->defined_as->node.type = n->type;
     }
 
@@ -1324,7 +951,7 @@ void check_expr_struct(Compiler *c, Node_Struct *structt) {
                     }
 
                     it->definition_spec->is_local = false;
-                    check_definition(c, it, define->expr, define->type);
+                    check_definition(c, it, define->expr, define->type, false);
 
                     const Type_Struct_Field it_field = {
                         .name = it->node.token.sv,
@@ -1549,6 +1176,10 @@ void check_expr_call(Compiler *c, Node_Call *call) {
             const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
             c->monomorph_parameters.begin = c->monomorph_parameters.count;
 
+            const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+            c->monomorphizing_site.expr = (Node *) call;
+            c->monomorphizing_site.node = call->fn;
+
             if (type_meta_kind_eq(*fn_type, TYPE_STRUCT)) {
                 Type_Struct *spec = fn_type->spec.structt;
 
@@ -1692,10 +1323,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                                 done = true;
                             }
                         } else {
-                            if (!type_assert_type_or_Type_noexit(c, it)) {
-                                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                                exit(c, 1);
-                            }
+                            type_assert_type_or_Type(c, it);
                         }
                     } else {
                         if (to_polymorph) {
@@ -1709,10 +1337,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                                 done = true;
                             }
                         } else {
-                            if (!type_assert_noexit(c, it, from_polymorph->node.type)) {
-                                error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
-                                exit(c, 1);
-                            }
+                            type_assert(c, it, from_polymorph->node.type);
                         }
                     }
 
@@ -1724,7 +1349,6 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                             assert(value.kind == CONST_VALUE_INT && int128_is_zero(value.as.integer));
                             error_node(
                                 EK_ERROR, it, "This expression is not a constant type (It is a null RTTI pointer)");
-                            error_node(EK_NOTE, (Node *) call, "While attempting to monomorphize this");
                             exit(c, 1);
                         }
                         add_monomorph_parameter(c, from_polymorph, it->type, value, to_polymorph);
@@ -1746,6 +1370,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
 
                 c->monomorph_parameters.count = c->monomorph_parameters.begin;
                 c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+                c->monomorphizing_site = monomorphizing_site_save;
             } else {
                 unreachable();
             }
@@ -1830,12 +1455,12 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                         // rawptr -> fn
                         ok = type_eq(*from_type, (Type) {.kind = TYPE_RAWPTR});
                     } else if (!type_is_pointer(*from_type) && type_is_pointer(*to_type)) {
-                        // i64/u64 -> ptr
-                        ok = type_kind_eq(*from_type, TYPE_I64) || type_kind_eq(*from_type, TYPE_U64) ||
+                        // s64/u64 -> ptr
+                        ok = type_kind_eq(*from_type, TYPE_S64) || type_kind_eq(*from_type, TYPE_U64) ||
                              type_kind_eq(*from_type, TYPE_INT);
                     } else if (type_is_pointer(*from_type) && !type_is_pointer(*to_type)) {
-                        // ptr -> i64/u64
-                        ok = type_kind_eq(*to_type, TYPE_I64) || type_kind_eq(*to_type, TYPE_U64) ||
+                        // ptr -> s64/u64
+                        ok = type_kind_eq(*to_type, TYPE_S64) || type_kind_eq(*to_type, TYPE_U64) ||
                              type_kind_eq(*to_type, TYPE_INT);
                     } else if (!type_is_float(*from_type) && type_is_float(*to_type)) {
                         // integer -> float
@@ -1843,6 +1468,12 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                     } else if (type_is_float(*from_type) && !type_is_float(*to_type)) {
                         // float -> integer
                         ok = type_is_integer(*to_type);
+                        if (ok && type_kind_eq(*from_type, TYPE_FLOAT)) {
+                            call->type_cast = TYPE_CAST_NORMAL;
+
+                            // This is guaranted to be a constant expression, since we are casting from 'float'
+                            eval_const_expr(c, n, false);
+                        }
                     } else if (
                         type_kind_eq(*from_type, TYPE_INT) &&
                         (type_is_integer(*to_type) || type_kind_eq(*to_type, TYPE_ENUM))) //
@@ -1924,7 +1555,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
         fn_type = &call->fn->type;
 
         n->type = *fn_type->spec.fn->return_type;
-        if (!call->is_stmt && type_kind_eq(n->type, TYPE_UNIT)) {
+        if (!call->is_stmt && type_kind_eq(n->type, TYPE_VOID)) {
             error_node(EK_ERROR, n, "This call cannot be used as a value as it does not return anything");
             exit(c, 1);
         }
@@ -2113,10 +1744,10 @@ void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, 
         // It is not immediately necessary to calculate the properties of T, which allows for recursive definitions.
         check_expr(c, indexable->element, REF_SLICE);
     }
+    type_assert_type(c, indexable->element);
 
-    Type *element_type = arena_alloc(&default_arena, sizeof(*element_type));
-    *element_type = type_without_meta(type_assert_type(c, indexable->element));
-
+    Type *element_type = &indexable->element->type;
+    element_type->is_meta = false;
     if (indexable->count) {
         Type_Array spec = {0};
         spec.element = element_type;
@@ -2150,8 +1781,9 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     if (!n) {
         return;
     }
-
     bool is_ref_valid = false;
+
+    da_push(&c->partial_stack, n);
     switch (n->kind) {
     case NODE_ATOM:
         check_expr_atom(c, (Node_Atom *) n, ref, &is_ref_valid);
@@ -2221,7 +1853,7 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     } break;
 
     case NODE_FN:
-        check_fn(c, (Node_Fn *) n, ref, &is_ref_valid, false);
+        check_fn(c, (Node_Fn *) n, ref, &is_ref_valid, false, false);
         break;
 
     case NODE_ENUM:
@@ -2276,6 +1908,7 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     default:
         unreachable();
     }
+    c->partial_stack.count--;
 
     if (!is_ref_valid) {
         switch (ref) {
@@ -2306,19 +1939,452 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
         }
 
         if (type_kind_eq(n->type, TYPE_FN)) {
-            error_node(EK_ERROR, n, "Polymorphic functions cannot be used as runtime expressions. They must be called");
-        } else if (type_meta_kind_eq(n->type, TYPE_STRUCT)) {
-            error_node(EK_ERROR, n, "Polymorphic types cannot be used directly. They must be monomorphized first");
+            Node_Fn *literal = get_function_literal(n);
+            assert(literal);
 
+            Node *literal_body_save = literal->body;
+            literal->body = NULL;
+            error_node(
+                EK_ERROR,
+                n,
+                "Polymorphic %s cannot be used as runtime expressions. They must be called",
+                literal->is_method ? "methods" : "functions");
+
+            error_node(EK_NOTE, (Node *) literal, "%s defined here", literal->is_method ? "Method" : "Function");
+            literal->body = literal_body_save;
+        } else if (type_meta_kind_eq(n->type, TYPE_STRUCT)) {
+            Node_Struct *structure = n->type.spec.structt->definition;
+
+            const Token fields_end_save = structure->fields_end;
+            structure->fields_end = structure->polymorphs_end;
+
+            error_node(EK_ERROR, n, "Polymorphic structures cannot be used directly. They must be monomorphized first");
             afprintf(
                 stderr,
                 ANSI_COLOR_YELLOW | ANSI_BOLD,
-                "    Call the type like a function, providing the polymorphic parameters as arguments\n\n");
+                "    Call the structure like a function, providing the polymorphic parameters as arguments\n\n");
+            error_node(EK_NOTE, (Node *) structure, "Structure defined here");
 
-            error_node(EK_NOTE, (Node *) n->type.spec.structt->definition, "Structure defined here");
+            structure->fields_end = fields_end_save;
         } else {
             unreachable();
         }
         exit(c, 1);
     }
+}
+
+void check_fn(
+    Compiler *c,
+    Node_Fn  *fn,
+    Ref_Kind  ref,
+    bool     *is_ref_valid,
+    bool      only_check_polymorphic_parameters,
+    bool      only_check_signature) //
+{
+    if (fn->checked_signature && (only_check_signature || only_check_polymorphic_parameters)) {
+        return;
+    }
+
+    Node *n = (Node *) fn;
+
+    Context_Fn      *context_fn_save = c->context.fn;
+    Context_Replace *context_replace_save = c->context.replace;
+
+    Context_Fn context = {0};
+    context.fn = fn;
+    if (fn->checked_signature) {
+        for (Context_Fn *f = c->context.fn; f; f = f->outer) {
+            if (f->fn == fn->outer_fn) {
+                context.outer = f;
+                break;
+            }
+        }
+
+        c->context.replace = fn->context_replace;
+    } else {
+        context.outer = c->context.fn;
+    }
+    context_push_fn(&c->context, &context);
+
+    Type_Fn *fn_spec = n->type.spec.fn;
+    if (!fn_spec) {
+        fn_spec = arena_alloc(&default_arena, sizeof(*fn_spec));
+        fn_spec->polymorphs = arena_alloc(&default_arena, fn->polymorphs.count * sizeof(*fn_spec->polymorphs));
+
+        ll_foreach(it, &fn->polymorphs) {
+            assert(!it->is_monomorphized);
+            Node_Atom *previous = context_find_define_in_fn(&c->context, c->context.fn, it->name->node.token.sv);
+            if (previous) {
+                error_redefinition(c, (Node *) it->name, &previous->node.token.pos);
+            }
+            context_push_define(&c->context, it->name);
+
+            it->name->node.type = (Type) {
+                .kind = TYPE_POLYMORPH,
+                .spec.polymorph.definition = it,
+                .spec.polymorph.is_definition = true,
+                .is_meta = true,
+            };
+
+            it->node.type = it->name->node.type;
+            fn_spec->polymorphs[fn_spec->polymorphs_count++] = it;
+        }
+    } else {
+        ll_foreach(it, &fn->polymorphs) {
+            context_push_define(&c->context, it->name);
+        }
+    }
+
+    ll_foreach(it, &fn->monomorphs) {
+        assert(it->is_monomorphized);
+
+        if (it->is_type) {
+            assert(it->monomorphization_value.kind == CONST_VALUE_TYPE);
+            it->node.type = it->monomorphization_value.as.type;
+            it->node.type.is_meta = true;
+        } else {
+            it->node.type = it->monomorphization_type;
+        }
+
+        context_push_define(&c->context, it->name);
+    }
+
+    if (only_check_polymorphic_parameters) {
+        goto end;
+    }
+
+    if (fn->checked_signature) {
+        ll_foreach(arg, &fn->args) {
+            assert(arg->kind == NODE_DEFINE);
+            Node_Define *define = (Node_Define *) arg;
+
+            assert(define->name->kind == NODE_ATOM);
+            Node_Atom *it = (Node_Atom *) define->name;
+            it->definition_spec->fn_context = c->context.fn;
+
+            context_push_define(&c->context, it);
+        }
+
+        if (fn->defined_as) {
+            fn->defined_as->definition_spec->check_status = CHECKED;
+        }
+    } else {
+        fn_spec->args_count = fn->args_count;
+        fn_spec->args_count_min = fn->args_count_min;
+        if (fn->trait_method) {
+            assert(fn->is_type);
+            fn_spec->args_count++;
+            fn_spec->args_count_min++;
+        }
+
+        fn_spec->args = arena_alloc(&default_arena, fn_spec->args_count * sizeof(*fn_spec->args));
+        fn_spec->variadics_kind = fn->variadics_kind;
+
+        size_t iota = 0;
+        if (fn->trait_method) {
+            assert(fn->trait_method->node.type.kind == TYPE_TRAIT);
+
+            Type_Fn_Arg *it_arg = &fn_spec->args[iota++];
+            it_arg->name = sv_from_cstr("this");
+            it_arg->pos = fn->trait_method->node.type.spec.trait->definition->node.token.pos;
+            it_arg->type.kind = TYPE_RAWPTR;
+        }
+
+        for (Node *arg = fn->args.head; arg; arg = arg->next) {
+            assert(arg->kind == NODE_DEFINE);
+            Node_Define *define = (Node_Define *) arg;
+
+            assert(define->name->kind == NODE_ATOM);
+            Node_Atom *it = (Node_Atom *) define->name;
+            it->definition_spec->fn_context = c->context.fn;
+
+            if (!sv_match(it->node.token.sv, "_")) {
+                Node_Atom *previous = context_find_define_in_fn(&c->context, c->context.fn, it->node.token.sv);
+                if (previous && previous != it) {
+                    error_redefinition(c, (Node *) it, &previous->node.token.pos);
+                }
+            }
+
+            Type_Fn_Arg *it_arg = &fn_spec->args[iota];
+            it_arg->name = it->node.token.sv;
+            it_arg->pos = it->node.token.pos;
+            it_arg->polymorph = define->name_polymorph;
+
+            check_stmt(c, arg);
+            if (define->has_spread) {
+                fn_spec->variadics_index = iota;
+                it->node.type.kind = TYPE_SLICE;
+                it->node.type.spec.slice.element = &define->type->type;
+            }
+
+            const bool dont_allow_polymorphs_save = c->dont_allow_polymorphs;
+            if (define->name_polymorph) {
+                c->dont_allow_polymorphs = true;
+                if (define->type) {
+                    define->type->type.is_meta = true;
+                    eval_const_expr(c, define->type, false);
+                    define->type->type.is_meta = false;
+                }
+            }
+
+            if (define->expr) {
+                if (is_node_caller_location(define->expr)) {
+                    it_arg->default_value_is_caller_location = true;
+                } else {
+                    it->definition_spec->const_value = eval_const_expr(c, define->expr, false);
+                    it_arg->default_value = &it->definition_spec->const_value;
+                }
+                it_arg->has_default_value = true;
+            }
+            c->dont_allow_polymorphs = dont_allow_polymorphs_save;
+
+            it_arg->type = it->node.type;
+            iota += define->count;
+        }
+
+        if (fn->returns.head) {
+            fn_spec->returns = arena_alloc(&default_arena, fn->returns_count * sizeof(*fn_spec->returns));
+
+            size_t iota = 0;
+            ll_foreach(it, &fn->returns) {
+                check_expr(c, it, REF_NONE);
+                type_assert_type(c, it);
+                fn_spec->returns[iota++] = type_without_meta(it->type);
+            }
+        }
+        fn_spec->returns_count = fn->returns_count;
+
+        Type return_type = {0};
+        if (fn_spec->returns_count == 0) {
+            return_type.kind = TYPE_VOID;
+        } else if (fn_spec->returns_count == 1) {
+            return_type = *fn_spec->returns;
+        } else {
+            return_type.kind = TYPE_GROUP;
+            return_type.spec.group.data = fn_spec->returns;
+            return_type.spec.group.count = fn_spec->returns_count;
+        }
+        fn_spec->return_type = arena_clone(&default_arena, &return_type, sizeof(return_type));
+
+        n->type = (Type) {.kind = TYPE_FN, .spec.fn = fn_spec};
+
+        if (fn->defined_as && type_kind_eq(fn->defined_as->node.type, TYPE_VOID) && !only_check_signature) {
+            // The body of a function is irrelevant for outer expressions
+            fn->defined_as->node.type = n->type;
+            fn->defined_as->definition_spec->check_status = CHECKED;
+
+            fn->defined_as->definition_spec->const_value = const_value_fn(fn);
+            fn->defined_as->definition_spec->is_const_value_evaluated = true;
+        }
+    }
+
+    if (fn->is_method) {
+        if (!fn->defined_as) {
+            Node_Define *define = (Node_Define *) fn->args.head;
+            assert(define);
+
+            error_node(EK_ERROR, (Node *) fn, "Anonymous function cannot be a method");
+            error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
+            exit(c, 1);
+        }
+
+        assert(fn->defined_as);
+        const SV name = fn->defined_as->node.token.sv;
+        if (sv_match(name, "add") || sv_match(name, "sub") || sv_match(name, "mul") || sv_match(name, "div") ||
+            sv_match(name, "mod")) //
+        {
+            const char *signature = "(this: T, that: T) -> T";
+            const char *note = NULL;
+            check_special_method_signature_args_count(c, fn, 2, signature, note);
+
+            const Type lhs_type = fn_spec->args[0].type;
+            if (lhs_type.ref) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[0].name,
+                    fn_spec->args[0].pos,
+                    "Operand cannot be a pointer. (Provided type is %s)",
+                    type_to_cstr(lhs_type));
+                exit(c, 1);
+            }
+
+            const Type rhs_type = fn_spec->args[1].type;
+            if (!type_eq(rhs_type, lhs_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[1].name,
+                    fn_spec->args[1].pos,
+                    "Operand types must be same: Expected %s, got %s",
+                    type_to_cstr(lhs_type),
+                    type_to_cstr(rhs_type));
+                exit(c, 1);
+            }
+
+            if (!type_eq(*fn_spec->return_type, lhs_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_token(
+                    EK_NOTE,
+                    fn->returns.head ? fn->returns.head->token : fn->body->token,
+                    "Operand types and return type must be same: Expected to return %s, got %s",
+                    type_to_cstr(lhs_type),
+                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
+                exit(c, 1);
+            }
+        } else if (sv_match(name, "neg")) {
+            const char *signature = "(this: T) -> T";
+            const char *note = NULL;
+            check_special_method_signature_args_count(c, fn, 1, signature, note);
+
+            const Type operand_type = fn_spec->args[0].type;
+            if (operand_type.ref) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[0].name,
+                    fn_spec->args[0].pos,
+                    "Operand cannot be a pointer. (Provided type is %s)",
+                    type_to_cstr(operand_type));
+                exit(c, 1);
+            }
+
+            if (!type_eq(*fn_spec->return_type, operand_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_token(
+                    EK_NOTE,
+                    fn->returns.head ? fn->returns.head->token : fn->body->token,
+                    "Operand type and return type must be same: Expected to return %s, got %s",
+                    type_to_cstr(operand_type),
+                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
+                exit(c, 1);
+            }
+        } else if (sv_match(name, "compare")) {
+            const char *signature = "(this: T, that: T) -> Ordering | Equivalence";
+            const char *note =
+                "Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.\n"
+                "Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.\n";
+            check_special_method_signature_args_count(c, fn, 2, signature, note);
+
+            const Type lhs_type = fn_spec->args[0].type;
+            if (lhs_type.ref) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[0].name,
+                    fn_spec->args[0].pos,
+                    "Operand cannot be a pointer. (Provided type is %s)",
+                    type_to_cstr(lhs_type));
+                exit(c, 1);
+            }
+
+            const Type rhs_type = fn_spec->args[1].type;
+            if (!type_eq(rhs_type, lhs_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[1].name,
+                    fn_spec->args[1].pos,
+                    "Operand types must be same: Expected %s, got %s",
+                    type_to_cstr(lhs_type),
+                    type_to_cstr(rhs_type));
+                exit(c, 1);
+            }
+
+            if (!type_eq(*fn_spec->return_type, c->equivalence_type) &&
+                !type_eq(*fn_spec->return_type, c->ordering_type)) //
+            {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_token(
+                    EK_NOTE,
+                    fn->returns.head ? fn->returns.head->token : fn->body->token,
+                    "Expected to return %s or %s, got %s",
+                    type_to_cstr(c->equivalence_type),
+                    type_to_cstr(c->ordering_type),
+                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
+                exit(c, 1);
+            }
+
+            fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->ordering_type);
+        } else if (sv_match(name, "index")) {
+            const char *signature = "(this: T, key: K, assign: bool) -> &V";
+            const char *note = NULL;
+            check_special_method_signature_args_count(c, fn, 3, signature, note);
+
+            const Type assign_type = fn_spec->args[2].type;
+            if (!type_eq(assign_type, (Type) {.kind = TYPE_BOOL})) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[2].name,
+                    fn_spec->args[2].pos,
+                    "Expected the third argument to be %s, got %s",
+                    type_to_cstr((Type) {.kind = TYPE_BOOL}),
+                    type_to_cstr(assign_type));
+                exit(c, 1);
+            }
+
+            if (!type_is_pointer(*fn_spec->return_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_token(
+                    EK_NOTE,
+                    fn->returns.head ? fn->returns.head->token : fn->body->token,
+                    "Expected to return a pointer, got %s",
+                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
+                exit(c, 1);
+            }
+        } else if (sv_match(name, "range")) {
+            const char *signature = "(this: T, begin: A, end: A) -> V";
+            const char *note = NULL;
+            check_special_method_signature_args_count(c, fn, 3, signature, note);
+
+            const Type begin_type = fn_spec->args[1].type;
+            const Type end_type = fn_spec->args[2].type;
+            if (!type_eq(end_type, begin_type)) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_parts(
+                    EK_NOTE,
+                    fn_spec->args[2].name,
+                    fn_spec->args[2].pos,
+                    "Types of range beginning and end must be same: Expected %s, got %s",
+                    type_to_cstr(begin_type),
+                    type_to_cstr(end_type));
+                exit(c, 1);
+            }
+
+            if (fn_spec->returns_count != 1) {
+                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
+                error_token(
+                    EK_NOTE,
+                    fn->returns.head ? fn->returns.head->token : fn->body->token,
+                    "The range operator cannot return %zu values",
+                    fn_spec->returns_count);
+                exit(c, 1);
+            }
+        }
+    }
+    fn->checked_signature = true;
+
+    if (fn->is_type) {
+        n->type.is_meta = true;
+        if (is_ref_valid) {
+            *is_ref_valid = ref == REF_ADDR || ref == REF_ADDR_MEMBER;
+        }
+    } else if (fn->body && !fn->polymorphs.count && !only_check_signature) {
+        check_stmt(c, fn->body);
+        if (fn_spec->returns_count && !always_returns(fn->body)) {
+            assert(fn->body->kind == NODE_BLOCK);
+            error_token(
+                EK_ERROR, ((Node_Block *) fn->body)->end, "Expected to return %s", type_to_cstr(*fn_spec->return_type));
+            exit(c, 1);
+        }
+    }
+
+    if (!only_check_signature || !fn->body) {
+        fn->checked_fully = true;
+    }
+
+end:
+    context_restore_fn(&c->context, context_fn_save);
+    c->context.replace = context_replace_save;
 }

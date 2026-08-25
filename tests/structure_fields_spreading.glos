@@ -1,11 +1,11 @@
 Vec2 :: struct {
-    x: i32
-    y: i32
+    x: s32
+    y: s32
 }
 
 Vec3 :: struct {
     ...Vec2
-    z: i32
+    z: s32
 }
 
 main :: () {

@@ -42,7 +42,7 @@ Const_Value get_const_definition_value(Compiler *c, Module *m, SV name, Type *ty
     return atom->definition_spec->const_value;
 }
 
-static uint64_t ht_hasheq_method_spec(const void *va, const void *vb, size_t n) {
+static u64 ht_hasheq_method_spec(const void *va, const void *vb, size_t n) {
     unused(n);
 
     const Method_Spec a = *(const Method_Spec *) va;
@@ -51,8 +51,8 @@ static uint64_t ht_hasheq_method_spec(const void *va, const void *vb, size_t n) 
         return a.uid == b.uid && sv_eq(a.name, b.name);
     }
 
-    const uint64_t receiver_hash = ht_hasheq_bytes(&a.uid, NULL, sizeof(a.uid));
-    const uint64_t name_hash = ht_hasheq_bytes(a.name.data, NULL, a.name.count);
+    const u64 receiver_hash = ht_hasheq_bytes(&a.uid, NULL, sizeof(a.uid));
+    const u64 name_hash = ht_hasheq_bytes(a.name.data, NULL, a.name.count);
     return ht_hash_combine(receiver_hash, name_hash);
 }
 
@@ -67,7 +67,7 @@ void check_nodes(Compiler *c) {
     {
         Type_Fn *fn_spec = arena_alloc(&default_arena, sizeof(*fn_spec));
 
-        const Type unit = {.kind = TYPE_UNIT};
+        const Type unit = {.kind = TYPE_VOID};
         fn_spec->return_type = arena_clone(&default_arena, &unit, sizeof(unit));
 
         c->main_fn_type = (Type) {
@@ -129,10 +129,10 @@ void check_nodes(Compiler *c) {
         c->type_info_variants[TYPE_BOOL] = CONTRACT_TYPE_INFO_BOOLEAN;
         c->type_info_variants[TYPE_CHAR] = CONTRACT_TYPE_INFO_CHARACTER;
 
-        c->type_info_variants[TYPE_I8] = CONTRACT_TYPE_INFO_INTEGER;
-        c->type_info_variants[TYPE_I16] = CONTRACT_TYPE_INFO_INTEGER;
-        c->type_info_variants[TYPE_I32] = CONTRACT_TYPE_INFO_INTEGER;
-        c->type_info_variants[TYPE_I64] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S8] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S16] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S32] = CONTRACT_TYPE_INFO_INTEGER;
+        c->type_info_variants[TYPE_S64] = CONTRACT_TYPE_INFO_INTEGER;
 
         c->type_info_variants[TYPE_U8] = CONTRACT_TYPE_INFO_INTEGER;
         c->type_info_variants[TYPE_U16] = CONTRACT_TYPE_INFO_INTEGER;
@@ -185,10 +185,7 @@ void check_nodes(Compiler *c) {
             assert(fn->args.head && fn->args.head->kind == NODE_DEFINE); // Guaranteed by the parser
 
             // Define the polymorphic parameters
-            {
-                bool is_ref_valid = false;
-                check_fn(c, fn, REF_NONE, &is_ref_valid, true);
-            }
+            check_fn(c, fn, REF_NONE, NULL, true, true);
 
             Node_Define *define = (Node_Define *) fn->args.head;
             assert(define->name->kind == NODE_ATOM && define->type); // Guaranteed by the parser
@@ -215,7 +212,7 @@ void check_nodes(Compiler *c) {
                     type_to_cstr(receiver_type));
                 error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
                 exit(c, 1);
-            } else if (get_method_spec(c, define->type, receiver_type, name, &spec, fn->module, &is_named)) {
+            } else if (get_method_spec(c, define->type, receiver_type, name, &spec, fn->node.module, &is_named)) {
                 if (!is_named) {
                     error_node(EK_ERROR, define->type, "The receiver of a method cannot have an anonymous type");
                     error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
@@ -266,14 +263,6 @@ void check_nodes(Compiler *c) {
     get_main(c);
 }
 
-// TODO: Sometimes non-cyclic definitions are falsely flagged as cyclic
-// TODO: Enum values is a bit broken (signedness)
-//
 // TODO: Apply the type restriction of special methods into traits
 //       -> Or rather should we move from "special" methods into particular traits?
 //       -> Perhaps after compile time polymorphism is implemented?
-//
-// TODO: Replace all uint64_t with u64
-//
-// TODO: The eval_const_expr() for polymorph monomorphization does not inform the user that it is monomorphizing in the
-// diagnostics which might cause confusion.

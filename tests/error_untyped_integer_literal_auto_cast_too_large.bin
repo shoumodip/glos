@@ -2,8 +2,8 @@ EXIT 1
 STDOUT 0
 
 STDERR 160
-tests/error_untyped_integer_literal_auto_cast_too_large.glos:1:9: ERROR: Number '420' is invalid for 'i8', which must be in range [-128, 127]
+tests/error_untyped_integer_literal_auto_cast_too_large.glos:1:9: Error: Number '420' is invalid for 's8', which must be in range [-128, 127]
 
-    x: i8 = 420
+    x: s8 = 420
 
 

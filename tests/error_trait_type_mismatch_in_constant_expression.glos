@@ -9,8 +9,8 @@ Foo :: trait {
     foo: ()
 }
 
-A   :: distinct i64
+A   :: distinct s64
 foo :: (this: A) {}
 
-B   :: distinct i64
+B   :: distinct s64
 foo :: (this: B) {}

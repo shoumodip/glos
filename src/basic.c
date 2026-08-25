@@ -185,12 +185,12 @@ void da_resize(void **data, size_t *capacity, size_t size, size_t count) {
 #define HT_LOAD     0.75
 #define HT_INIT_CAP DA_INIT_CAP
 
-uint64_t ht_hasheq_bytes(const void *a, const void *b, size_t n) {
+u64 ht_hasheq_bytes(const void *a, const void *b, size_t n) {
     if (b) {
         return memcmp(a, b, n) == 0;
     }
 
-    uint64_t hash = 14695981039346656037UL;
+    u64 hash = 14695981039346656037UL;
     for (size_t i = 0; i < n; i++) {
         hash ^= ((uint8_t *) a)[i];
         hash *= 1099511628211UL;
@@ -198,7 +198,7 @@ uint64_t ht_hasheq_bytes(const void *a, const void *b, size_t n) {
     return hash;
 }
 
-uint64_t ht_hasheq_cstr(const void *va, const void *vb, size_t n) {
+u64 ht_hasheq_cstr(const void *va, const void *vb, size_t n) {
     unused(n);
 
     const char *a = *(const char **) va;
@@ -206,7 +206,7 @@ uint64_t ht_hasheq_cstr(const void *va, const void *vb, size_t n) {
         return strcmp(a, *(const char **) vb) == 0;
     }
 
-    uint64_t hash = 14695981039346656037UL;
+    u64 hash = 14695981039346656037UL;
     for (const char *p = a; *p; p++) {
         hash ^= *p;
         hash *= 1099511628211UL;
@@ -219,8 +219,8 @@ void *ht_find_impl(void *data, size_t capacity, HT_Layout layout, HT_Hasheq hash
         hasheq = ht_hasheq_bytes;
     }
 
-    const uint64_t start = hasheq(key, NULL, layout.key_size);
-    void          *tombstone = NULL;
+    const u64 start = hasheq(key, NULL, layout.key_size);
+    void     *tombstone = NULL;
     for (size_t i = 0; i < capacity; i++) {
         const size_t index = (start + i) & (capacity - 1);
         uint8_t     *entry = (uint8_t *) data + index * layout.entry_size;
@@ -245,7 +245,7 @@ void *ht_find_impl(void *data, size_t capacity, HT_Layout layout, HT_Hasheq hash
     return tombstone;
 }
 
-uint64_t ht_hasheq_sv(const void *va, const void *vb, size_t n) {
+u64 ht_hasheq_sv(const void *va, const void *vb, size_t n) {
     unused(n);
 
     const SV a = *(const SV *) va;
@@ -256,7 +256,7 @@ uint64_t ht_hasheq_sv(const void *va, const void *vb, size_t n) {
     return ht_hasheq_bytes(a.data, NULL, a.count);
 }
 
-uint64_t ht_hash_combine(uint64_t a, uint64_t b) {
+u64 ht_hash_combine(u64 a, u64 b) {
     return a ^ (b + 0x9E3779B97F4A7C15ULL + (a << 6) + (a >> 2));
 }
 
@@ -333,25 +333,6 @@ bool ht_iter_impl(
     }
 
     return false;
-}
-
-// Characters
-bool is_space(char ch) {
-    return isspace(ch);
-}
-
-void print_char_safe(FILE *f, char ch) {
-    const uint8_t c = ch;
-    if ((c >= 32 && c < 127) || (is_space(c) && c != 0xB)) {
-        fputc(c, f);
-    } else if (c < 32) {
-        fputc('^', f);
-        fputc(c + '@', f);
-    } else if (c == 127) {
-        fputs("^?", f);
-    } else {
-        fprintf(f, "<%02x>", c);
-    }
 }
 
 // String View
@@ -516,6 +497,73 @@ void sb_push_cstr(SB *sb, const char *cstr) {
 }
 
 SB default_sb;
+
+// Characters
+bool is_space(char ch) {
+    return isspace(ch);
+}
+
+void print_char_safe(FILE *f, char ch) {
+    const uint8_t c = ch;
+    if ((c >= 32 && c < 127) || (is_space(c) && c != 0xB)) {
+        fputc(c, f);
+    } else if (c < 32) {
+        fputc('^', f);
+        fputc(c + '@', f);
+    } else if (c == 127) {
+        fputs("^?", f);
+    } else {
+        fprintf(f, "<%02x>", c);
+    }
+}
+
+void sb_push_quoted_char(SB *sb, char ch, char quote) {
+    switch (ch) {
+    case 033:
+        sb_push_cstr(sb, "\\e");
+        break;
+
+    case '\n':
+        sb_push_cstr(sb, "\\n");
+        break;
+
+    case '\r':
+        sb_push_cstr(sb, "\\r");
+        break;
+
+    case '\t':
+        sb_push_cstr(sb, "\\t");
+        break;
+
+    case '\0':
+        sb_push_cstr(sb, "\\0");
+        break;
+
+    case '\\':
+        sb_push_cstr(sb, "\\\\");
+        break;
+
+    case '\'':
+        if (quote == '\'') {
+            sb_push_cstr(sb, "\\'");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    case '"':
+        if (quote == '"') {
+            sb_push_cstr(sb, "\\\"");
+        } else {
+            sb_push(sb, ch);
+        }
+        break;
+
+    default:
+        sb_push(sb, ch);
+        break;
+    }
+}
 
 // Arena Allocator
 void arena_free(Arena *a) {
@@ -1008,7 +1056,6 @@ void unixify_path_separators_inplace(char *data, size_t count) {
 
 // Processes
 void cmd_show(Cmd cmd, FILE *f) {
-    // TODO: Escaping
     fprintf(f, "$");
     for (size_t i = 0; i < cmd.count; i++) {
         fprintf(f, " %s", cmd.data[i]);
@@ -1238,12 +1285,29 @@ Proc cmd_run_async(Cmd *c, Cmd_Stdio stdio) {
 }
 
 int cmd_wait(Proc proc) {
-#ifdef PLATFORM_X86_64_WINDOWS
     if (proc.id == PROC_INVALID) {
         return 1;
     }
 
-    // TODO: Flush the files if any, otherwise it deadlocks on windows
+    // Clear out the pipes
+    {
+        static char junk[4096];
+        if (proc.out) {
+            while (fread(junk, sizeof(junk), 1, proc.out) > 0);
+            fclose(proc.out);
+        }
+
+        if (proc.err) {
+            while (fread(junk, sizeof(junk), 1, proc.err) > 0);
+            fclose(proc.err);
+        }
+
+        if (proc.in) {
+            fclose(proc.in);
+        }
+    }
+
+#ifdef PLATFORM_X86_64_WINDOWS
     if (WaitForSingleObject(proc.id, INFINITE) == WAIT_FAILED) {
         return 1;
     }
@@ -1252,7 +1316,6 @@ int cmd_wait(Proc proc) {
     if (!GetExitCodeProcess(proc.id, &exit_code)) {
         return 1;
     }
-
     CloseHandle(proc.id);
 
     switch (exit_code) {
@@ -1261,12 +1324,9 @@ int cmd_wait(Proc proc) {
         exit_code = 134;
         break;
     }
+
     return exit_code;
 #else
-    if (proc.id == PROC_INVALID) {
-        return 1;
-    }
-
     int status = 0;
     if (waitpid(proc.id, &status, 0) < 0) {
         return 1;

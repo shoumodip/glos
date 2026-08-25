@@ -40,6 +40,23 @@ typedef struct {
     size_t       params_count;
 } Monomorph_Spec;
 
+// ```
+// foo :: (x: $T) {}
+//
+// main :: () {
+//
+//     |-----| -> expr
+//     foo(69)
+//     |-|
+//      ^-- node, is_fn, is_method
+// }
+// ```
+typedef struct {
+    Node *expr; // The entire expression at the call site
+    Node *node; // The thing being monomorphized at the call site
+    bool  is_method;
+} Monomorphizing_Site;
+
 typedef enum {
     O0,
     O1,
@@ -58,6 +75,8 @@ typedef struct {
     Type interpolation_type;
     Type interpolation_marker_type;
 
+    DA(Node *) partial_stack;
+
     HT(Method_Spec, Node_Fn *) methods_table;
     DA(Node_Fn *) methods_list;
 
@@ -74,6 +93,9 @@ typedef struct {
         size_t begin;
     } monomorph_parameters;
     DA(Monomorphization) monomorphization_stack;
+
+    // Before the monomorphization begins, aka, during the parameter inference
+    Monomorphizing_Site monomorphizing_site;
 
     bool dont_allow_polymorphs;
 
@@ -133,14 +155,14 @@ typedef struct {
 
     // Dynamic_Array :: struct {
     //     data:     rawptr
-    //     count:    i64
-    //     capacity: i64
+    //     count:    s64
+    //     capacity: s64
     // }
     LLVMTypeRef llvm_dynamic_array_type;
 
     // Slice :: struct {
     //     data:  rawptr
-    //     count: i64
+    //     count: s64
     // }
     LLVMTypeRef llvm_slice_type;
 

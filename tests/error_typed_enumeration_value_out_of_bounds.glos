@@ -1,4 +1,4 @@
-Foo :: enum i8 {
+Foo :: enum s8 {
     A
     B = 420
 }

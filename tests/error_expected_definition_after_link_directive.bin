@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 122
-tests/error_expected_definition_after_link_directive.glos:2:1: ERROR: Expected definition after '#link'
+tests/error_expected_definition_after_link_directive.glos:2:1: Error: Expected definition after '#link'
 
     #if true {}
 

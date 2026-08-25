@@ -86,10 +86,10 @@ static void split_type_into_qwords(Compiler *c, QWords *words, const Type *type,
     switch (type->kind) {
     case TYPE_BOOL:
     case TYPE_CHAR:
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
+    case TYPE_S8:
+    case TYPE_S16:
+    case TYPE_S32:
+    case TYPE_S64:
     case TYPE_U8:
     case TYPE_U16:
     case TYPE_U32:
@@ -220,7 +220,7 @@ ABI_Info get_abi_info_for_type(Compiler *c, Type *type, bool is_arg) {
     // Special cases
     static_assert(COUNT_TYPES == 30, "");
     switch (type->kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         info.direct_types[info.direct_types_count++] = LLVMVoidTypeInContext(c->llvm_context);
         return info;
 

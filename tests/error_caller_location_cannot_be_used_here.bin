@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 189
-tests/error_caller_location_cannot_be_used_here.glos:2:5: ERROR: Cannot use '#caller_location' here. It can only be used as the default value for a function argument
+tests/error_caller_location_cannot_be_used_here.glos:2:5: Error: Cannot use '#caller_location' here. It can only be used as the default value for a function argument
 
     #caller_location
 

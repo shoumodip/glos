@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 161
+tests/error_cannot_cast_float_value_nan_to_integer.glos:2:14: Error: This expression evaluates to NaN, which cannot be casted to 's64'
+
+    X := s64(0.0 / 0.0)
+
+

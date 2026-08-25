@@ -1,9 +1,9 @@
 Vec2 :: struct {
-    x: i64
-    y: i64
+    x: s64
+    y: s64
 }
 
 Vec3 :: struct {
     ...&Vec2
-    z: i64
+    z: s64
 }

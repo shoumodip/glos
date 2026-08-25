@@ -21,14 +21,17 @@ static void error_begin(Error_Kind kind) {
         fprintf(stderr, " ");
     }
 
-    // TODO: Do not print all caps
     switch (kind) {
     case EK_ERROR:
-        afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "ERROR:");
+        afprintf(stderr, ANSI_COLOR_RED | ANSI_BOLD, "Error:");
+        break;
+
+    case EK_WARN:
+        afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Warn:");
         break;
 
     case EK_NOTE:
-        afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "NOTE:");
+        afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "Note:");
         break;
 
     case EK_BLANK:
@@ -41,9 +44,17 @@ static void error_begin(Error_Kind kind) {
 typedef struct {
     Token begin;
     Token end;
+    bool  started;
 } Range;
 
 static void range_apply_token(Range *r, Token t) {
+    if (!r->started) {
+        r->started = true;
+        r->begin = t;
+        r->end = t;
+        return;
+    }
+
     if (t.sv.data < r->begin.sv.data) {
         r->begin = t;
     }
@@ -57,6 +68,14 @@ static_assert(COUNT_NODES == 29, "");
 static void range_apply_node(Range *r, const Node *n) {
     if (!n) {
         return;
+    }
+
+    if (n->kind == NODE_FN) {
+        Node_Fn *fn = (Node_Fn *) n;
+        if (fn->wrapper_signature) {
+            range_apply_node(r, (Node *) fn->wrapper_signature);
+            return;
+        }
     }
 
     range_apply_token(r, n->token);
@@ -121,8 +140,11 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_FN: {
         Node_Fn *fn = (Node_Fn *) n;
+        if (fn->is_inline && fn->body) {
+            range_apply_token(r, fn->inline_token);
+        }
+
         range_apply_token(r, fn->args_end_token);
-        range_apply_token(r, fn->returns_end_token);
         range_apply_node(r, fn->returns.tail);
         range_apply_node(r, fn->body);
     } break;
@@ -144,7 +166,7 @@ static void range_apply_node(Range *r, const Node *n) {
 
     case NODE_STRUCT: {
         Node_Struct *structt = (Node_Struct *) n;
-        range_apply_token(r, structt->end);
+        range_apply_token(r, structt->fields_end);
     } break;
 
     case NODE_COMPOUND: {
@@ -246,7 +268,7 @@ Pos get_leftmost_point_of_node(const Node *n) {
 }
 
 void error_node_begin(Error_Kind kind, const Node *n) {
-    Range r = {.begin = n->token, .end = n->token};
+    Range r = {0};
     range_apply_node(&r, n);
 
     view_error_begin = r.begin.sv.data;
@@ -450,9 +472,41 @@ void error_standalone(Error_Kind kind, const char *fmt, ...) {
     error_finalize();
 }
 
-/* NOTES:
- *
- * - For function without body, highlight the signature only
- * - For A[B] without A, highlight the B only
- *
- */
+typedef struct {
+    Warning_Kind kind;
+    Token        token;
+} Warning;
+
+static DA(Warning) warnings;
+
+void warnings_add(Warning_Kind kind, Token token) {
+    da_push(&warnings, ((Warning) {.kind = kind, .token = token}));
+}
+
+static_assert(COUNT_WARNING_KINDS == 2, "");
+void warnings_flush(void) {
+    for (size_t i = 0; i < warnings.count; i++) {
+        const Warning *it = &warnings.data[i];
+        error_token_begin(EK_WARN, it->token);
+
+        switch (it->kind) {
+        case WARN_REDUNDANT_STATIC:
+            fprintf(
+                stderr,
+                "Application of '#static' is not needed here, as variables defined in global scope already have static storage");
+            break;
+
+        case WARN_REDUNDANT_DISTINCT:
+            fprintf(stderr, "Application of '#distinct' is not needed here");
+            break;
+
+        default:
+            unreachable();
+            break;
+        }
+
+        error_finalize();
+    }
+
+    da_free(&warnings);
+}

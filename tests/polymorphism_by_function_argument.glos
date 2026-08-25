@@ -1,4 +1,4 @@
-Array :: ($T: Type, $N: i64) -> [N]T {
+Array :: ($T: Type, $N: s64) -> [N]T {
     println("T =", T)
     println("N =", N)
 

@@ -2,8 +2,8 @@ EXIT 1
 STDOUT 0
 
 STDERR 185
-tests/error_distinct_type_must_be_defined_as_a_constant_before_it_can_be_used.glos:2:8: ERROR: A distinct type must be defined as a constant before it can be used
+tests/error_distinct_type_must_be_defined_as_a_constant_before_it_can_be_used.glos:2:8: Error: A distinct type must be defined as a constant before it can be used
 
-    x: distinct i64
+    x: distinct s64
 
 

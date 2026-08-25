@@ -6,7 +6,7 @@ foo :: ($T: Type) {
     println(T)
 }
 
-Int := i64
+Int := s64
 
 main :: () {
     foo(Int)

@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 809
-tests/error_operator_overloading_binary_comparison_method_too_few_arguments.glos:2:1: ERROR: The method 'compare' is special because it implements an operator overload
+tests/error_operator_overloading_binary_comparison_method_too_few_arguments.glos:2:1: Error: The method 'compare' is special because it implements an operator overload
 
     compare :: (this: Foo) {}
 
@@ -15,7 +15,7 @@ tests/error_operator_overloading_binary_comparison_method_too_few_arguments.glos
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_comparison_method_too_few_arguments.glos:2:22: NOTE: Expected at least 2 arguments, got 1
+tests/error_operator_overloading_binary_comparison_method_too_few_arguments.glos:2:22: Note: Expected at least 2 arguments, got 1
 
     compare :: (this: Foo) {}
 

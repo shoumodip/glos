@@ -2,15 +2,15 @@ EXIT 1
 STDOUT 0
 
 STDERR 524
-tests/error_could_not_infer_polymorphic_parameter_from_variadic_argument.glos:1:16: ERROR: Cannot infer the type of polymorphic parameter 'T' because no variadic arguments were provided
+tests/error_could_not_infer_polymorphic_parameter_from_variadic_argument.glos:1:16: Error: Cannot infer the type of polymorphic parameter 'T' because no variadic arguments were provided
 
     foo :: (xs: ...$T) {}
 
-tests/error_could_not_infer_polymorphic_parameter_from_variadic_argument.glos:4:5: NOTE: While attempting to monomorphize this
+tests/error_could_not_infer_polymorphic_parameter_from_variadic_argument.glos:4:5: Note: While attempting to monomorphize this
 
     foo()
 
-tests/error_could_not_infer_polymorphic_parameter_from_variadic_argument.glos:1:8: NOTE: The function being called has signature '(xs: ...$T)'
+tests/error_could_not_infer_polymorphic_parameter_from_variadic_argument.glos:1:8: Note: The function being called has signature '(xs: ...$T)'
 
     foo :: (xs: ...$T) {}
 

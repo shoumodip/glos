@@ -4,8 +4,36 @@
 // #define MONOMORPHIZATION_LOG
 
 void show_current_monomorphization(Compiler *c) {
-    if (!c->monomorphization_stack.count) {
-        return;
+    if (c->monomorphizing_site.expr) {
+        error_node(EK_NOTE, c->monomorphizing_site.expr, "While attempting to monomorphize this");
+        if (type_kind_eq(c->monomorphizing_site.node->type, TYPE_FN)) {
+            show_note_about_the_function_being_called(
+                c->monomorphizing_site.node,
+                c->monomorphizing_site.is_method,
+                c->monomorphizing_site.node->type.spec.fn);
+        } else if (type_meta_kind_eq(c->monomorphizing_site.node->type, TYPE_STRUCT)) {
+            Type_Struct *spec = c->monomorphizing_site.node->type.spec.structt;
+            Node_Struct *structure = spec->original_definition;
+            error_node_begin(EK_NOTE, (Node *) structure);
+            fprintf(stderr, "The structure being monomorphized has signature '(");
+
+            for (size_t i = 0; i < spec->polymorphs_count; i++) {
+                if (i) {
+                    fprintf(stderr, ", ");
+                }
+
+                fprintf(
+                    stderr,
+                    "$" SV_Fmt ": %s",
+                    SV_Arg(spec->polymorphs[i]->name->node.token.sv),
+                    type_to_cstr_raw(spec->polymorphs[i]->node.type));
+            }
+
+            fprintf(stderr, ")'");
+            error_finalize();
+        } else {
+            unreachable();
+        }
     }
 
     for (size_t i = 0; i < c->monomorphization_stack.count; i++) {
@@ -240,7 +268,7 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
 #endif // MONOMORPHIZATION_LOG
 
                 add_monomorph_parameter(
-                    c, es.count_polymorph, (Type) {.kind = TYPE_I64}, const_value_u64(as.count), NULL);
+                    c, es.count_polymorph, (Type) {.kind = TYPE_S64}, const_value_u64(as.count), NULL);
 
                 es.count = as.count;
             }
@@ -316,7 +344,7 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
 }
 
 // TODO: Use a custom hasher instead of just operating on the raw bytes
-static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t n) {
+static u64 ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t n) {
     unused(n);
 
     const Monomorph_Spec a = *(Monomorph_Spec *) va;
@@ -343,7 +371,7 @@ static uint64_t ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t 
         return true;
     }
 
-    uint64_t hash = ht_hasheq_bytes(&a.from, NULL, sizeof(Node *));
+    u64 hash = ht_hasheq_bytes(&a.from, NULL, sizeof(Node *));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(&a.params_count, NULL, sizeof(a.params_count)));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_types, NULL, a.params_count * sizeof(*a.param_types)));
     hash = ht_hash_combine(hash, ht_hasheq_bytes(a.param_values, NULL, a.params_count * sizeof(*a.param_values)));
@@ -528,6 +556,9 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
             monomorphize_replace(c, (Node **) &fn->defined_as);
             monomorphize_replace(c, (Node **) &fn->trait_method);
         }
+
+        fn->checked_fully = false;
+        fn->checked_signature = false;
     } break;
 
     case NODE_ENUM: {
@@ -673,10 +704,10 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 }
 
 Node *monomorphize(Compiler *c, Node *n, Node *site) {
+    const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+    memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
+
     const size_t ref = n->type.ref;
-    while (n->kind == NODE_UNARY && n->token.kind == TOKEN_BAND) {
-        n = ((Node_Unary *) n)->value;
-    }
 
 #ifdef MONOMORPHIZATION_LOG
     afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "Monomorphize {\n\n");
@@ -875,5 +906,7 @@ end:
     afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "}\n\n");
 #endif // MONOMORPHIZATION_LOG
 
+    c->monomorphizing_site = monomorphizing_site_save;
+    c->monomorphizing_site.node = n;
     return n;
 }

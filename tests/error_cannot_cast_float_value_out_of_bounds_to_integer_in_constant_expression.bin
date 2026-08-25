@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 200
-tests/error_cannot_cast_float_value_out_of_bounds_to_integer_in_constant_expression.glos:1:9: ERROR: Number '1337.80085' is invalid for 'u8', which must be in range [0, 255]
+tests/error_cannot_cast_float_value_out_of_bounds_to_integer_in_constant_expression.glos:1:9: Error: Number '1337.80085' is invalid for 'u8', which must be in range [0, 255]
 
     X :: u8(1337.80085)
 

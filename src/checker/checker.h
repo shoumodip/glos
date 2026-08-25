@@ -48,7 +48,7 @@ void      check_int_limit_ex(Compiler *c, Node *n, Int128 value, bool min_zero, 
 void      check_int_limit(Compiler *c, Node *n, Int128 value);
 
 bool     get_builtin_type_kind(SV name, Type_Kind *kind);
-i64      get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t);
+Int128   get_enum_value(Compiler *c, Node_Enum *enumm, SV name, const Token *t);
 size_t   get_union_type_index(Compiler *c, Node *n, Type unionn);
 Node    *get_node_from_group(Node *n, size_t index, i64 *group_index);
 Node_Fn *get_function_literal(Node *fn);
@@ -76,7 +76,7 @@ Type type_assert_numeric(Compiler *c, const Node *n, bool pointers_allowed, bool
 Type type_assert_scalar(Compiler *c, const Node *n);
 bool type_assert_type_noexit(const Node *n);
 Type type_assert_type(Compiler *c, const Node *n);
-bool type_assert_type_or_Type_noexit(Compiler *c, const Node *n);
+void type_assert_type_or_Type(Compiler *c, const Node *n);
 
 Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type type, Type_Trait *trait, Node *n, i64 group_index);
 
@@ -108,8 +108,8 @@ void define_orderless_node(Compiler *c, Node *n, const size_t block_start);
 void define_orderless_nodes_of_module(Compiler *c, Module *module, const Token *unqualified_import_token);
 
 void push_context_replace(Compiler *c, Context_Replace *replace, Node_Atom *from, Type to);
-void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type);
-void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_Kind ref);
+void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type, bool called_from_if_needed);
+void check_definition_if_needed(Compiler *c, Node_Atom *definition, Node *usage, Ref_Kind ref);
 void check_ident(Compiler *c, Node *n, Ref_Kind ref);
 
 // Control Flow Analysis ///////////////////////////////////////////////////////////////////////////
@@ -161,6 +161,9 @@ void check_call_arity(
     Node     *excess_argument);
 void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_provided);
 
+const char *fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn_spec_raw, bool exclude_receiver);
+void        show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec);
+
 // Methods /////////////////////////////////////////////////////////////////////////////////////////
 const char *operator_method_name_from_token_kind(Token_Kind kind);
 void        check_that_methods_can_be_accessed(Compiler *c, Node *receiver, Module *definition);
@@ -201,7 +204,6 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid);
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children);
 void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_ref_valid);
-void check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool *is_ref_valid, bool only_check_polymorphic_parameters);
 void check_expr_enum(Compiler *c, Node_Enum *enumm);
 void check_expr_trait(Compiler *c, Node_Trait *trait);
 void check_expr_union(Compiler *c, Node_Union *unionn);
@@ -211,6 +213,14 @@ void check_expr_call(Compiler *c, Node_Call *call);
 void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref_valid);
 void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, bool *is_ref_valid);
 void check_expr(Compiler *c, Node *n, Ref_Kind ref);
+
+void check_fn(
+    Compiler *c,
+    Node_Fn  *fn,
+    Ref_Kind  ref,
+    bool     *is_ref_valid,
+    bool      only_check_polymorphic_parameters,
+    bool      only_check_signature);
 
 // Statements //////////////////////////////////////////////////////////////////////////////////////
 void        check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw);

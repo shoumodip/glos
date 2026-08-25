@@ -1,30 +1,30 @@
 extern {
-    puts :: (s: &char) -> i32
-    printf :: (fmt: &char, ...) -> i32
-    fprintf :: (f: os.File, fmt: &char, ...) -> i32
-    snprintf :: (out: &char, size: u64, fmt: &char, ...) -> i32
+    puts :: (s: &char) -> s32
+    printf :: (fmt: &char, ...) -> s32
+    fprintf :: (f: os.File, fmt: &char, ...) -> s32
+    snprintf :: (out: &char, size: u64, fmt: &char, ...) -> s32
     fwrite :: (ptr: rawptr, size: u64, count: u64, f: os.File)
     fflush :: (f: os.File)
     abort :: ()
-    memcmp :: (a: rawptr, b: rawptr, n: u64) -> i32
+    memcmp :: (a: rawptr, b: rawptr, n: u64) -> s32
     free :: (ptr: rawptr)
     malloc :: (size: u64) -> rawptr
     calloc :: (count: u64, size: u64) -> rawptr
     realloc :: (ptr: rawptr, size: u64) -> rawptr
     memcpy :: (dst: rawptr, src: rawptr, count: u64) -> rawptr
     memmove :: (dst: rawptr, src: rawptr, count: u64) -> rawptr
-    memset :: (dst: rawptr, ch: i32, count: u64) -> rawptr
-    memchr :: (s: rawptr, ch: i32, count: u64) -> rawptr
+    memset :: (dst: rawptr, ch: s32, count: u64) -> rawptr
+    memchr :: (s: rawptr, ch: s32, count: u64) -> rawptr
     strlen :: (s: &char) -> u64
-    atexit :: (function: ()) -> i32
+    atexit :: (function: ()) -> s32
     getenv :: (name: &char) -> &char
     fopen :: (path: &char, mode: &char) -> os.File
-    fclose :: (f: os.File) -> i32
-    fseek :: (f: os.File, offset: i64, whence: i32) -> i32
-    ftell :: (f: os.File) -> i64
-    ferror :: (f: os.File) -> i32
+    fclose :: (f: os.File) -> s32
+    fseek :: (f: os.File, offset: s64, whence: s32) -> s32
+    ftell :: (f: os.File) -> s64
+    ferror :: (f: os.File) -> s32
     fread :: (ptr: rawptr, size: u64, count: u64, f: os.File) -> u64
-    strtoll :: (s: &char, end: &&char, base: i32) -> i64
+    strtoll :: (s: &char, end: &&char, base: s32) -> s64
 }
 
 SEEK_SET :: 0
@@ -40,7 +40,7 @@ SEEK_END :: 2
 
     extern {
         VirtualAlloc :: (lpAddress: rawptr, dwSize: u64, flAllocationType: u32, flProtect: u32) -> rawptr
-        VirtualFree :: (lpAddress: rawptr, dwSize: u64, dwFreeType: u32) -> i32
+        VirtualFree :: (lpAddress: rawptr, dwSize: u64, dwFreeType: u32) -> s32
     }
 } else {
     MAP_FAILED :: rawptr(-1)
@@ -57,8 +57,8 @@ SEEK_END :: 2
     }
 
     extern {
-        mmap :: (addr: rawptr, length: u64, prot: i32, flags: i32, fd: i32, offset: i64) -> rawptr
-        munmap :: (addr: rawptr, length: u64) -> i32
+        mmap :: (addr: rawptr, length: u64, prot: s32, flags: s32, fd: s32, offset: s64) -> rawptr
+        munmap :: (addr: rawptr, length: u64) -> s32
     }
 }
 

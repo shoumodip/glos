@@ -2,12 +2,12 @@ EXIT 1
 STDOUT 0
 
 STDERR 380
-tests/error_type_mismatch_in_assignment_with_multiple_return_function_call_as_an_argument.glos:3:17: ERROR: Expected 2nd value of this to be 'i64', got 'bool'. The type of this entire expression is '(i64, bool)'
+tests/error_type_mismatch_in_assignment_with_multiple_return_function_call_as_an_argument.glos:3:17: Error: Expected 2nd value of this to be 's64', got 'bool'. The type of this entire expression is '(s64, bool)'
 
-    a, b: i64 = foo()
+    a, b: s64 = foo()
 
-tests/error_type_mismatch_in_assignment_with_multiple_return_function_call_as_an_argument.glos:3:8: NOTE: Required here
+tests/error_type_mismatch_in_assignment_with_multiple_return_function_call_as_an_argument.glos:3:8: Note: Required here
 
-    a, b: i64 = foo()
+    a, b: s64 = foo()
 
 

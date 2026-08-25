@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 421
-tests/error_switch_on_enum_not_complete.glos:9:5: ERROR: This switch statement is not complete
+tests/error_switch_on_enum_not_complete.glos:9:5: Error: This switch statement is not complete
 
     if Foo.D == {
     case .A
@@ -15,7 +15,7 @@ tests/error_switch_on_enum_not_complete.glos:9:5: ERROR: This switch statement i
         - C
         - D
 
-tests/error_switch_on_enum_not_complete.glos:1:8: NOTE: Enumeration defined here
+tests/error_switch_on_enum_not_complete.glos:1:8: Note: Enumeration defined here
 
     Foo :: enum {
         A

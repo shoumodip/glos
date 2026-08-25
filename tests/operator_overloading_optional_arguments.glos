@@ -1,5 +1,5 @@
 Int :: struct {
-    v: i64
+    v: s64
 }
 
 add :: (this: Int, that: Int, location := #caller_location) -> Int {

@@ -1,5 +1,5 @@
 println :: (s: string) {
-    extern { putchar :: (c: char) -> i32 }
+    extern { putchar :: (c: char) -> s32 }
     for i := 0; i < s.count; i += 1 {
         putchar(s[i])
     }

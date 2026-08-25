@@ -81,7 +81,7 @@ void sb_push_type(SB *sb, Type type) {
     }
 
     switch (type.kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         sb_push_cstr(sb, "void");
         break;
 
@@ -93,20 +93,20 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_cstr(sb, "char");
         break;
 
-    case TYPE_I8:
-        sb_push_cstr(sb, "i8");
+    case TYPE_S8:
+        sb_push_cstr(sb, "s8");
         break;
 
-    case TYPE_I16:
-        sb_push_cstr(sb, "i16");
+    case TYPE_S16:
+        sb_push_cstr(sb, "s16");
         break;
 
-    case TYPE_I32:
-        sb_push_cstr(sb, "i32");
+    case TYPE_S32:
+        sb_push_cstr(sb, "s32");
         break;
 
-    case TYPE_I64:
-        sb_push_cstr(sb, "i64");
+    case TYPE_S64:
+        sb_push_cstr(sb, "s64");
         break;
 
     case TYPE_U8:
@@ -134,7 +134,7 @@ void sb_push_type(SB *sb, Type type) {
         break;
 
     case TYPE_INT:
-        sb_push_cstr(sb, "i64");
+        sb_push_cstr(sb, "s64");
         break;
 
     case TYPE_FLOAT:
@@ -197,6 +197,10 @@ void sb_push_type(SB *sb, Type type) {
             sb_push_sv(sb, defined_as->node.token.sv);
         } else {
             sb_push_cstr(sb, "trait {");
+            if (spec->methods_count) {
+                sb_push(sb, ' ');
+            }
+
             for (size_t i = 0; i < spec->methods_count; i++) {
                 const Type_Trait_Method it = spec->methods[i];
                 if (i) {
@@ -204,6 +208,10 @@ void sb_push_type(SB *sb, Type type) {
                 }
                 sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
                 sb_push_type(sb, it.type);
+            }
+
+            if (spec->methods_count) {
+                sb_push(sb, ' ');
             }
             sb_push_cstr(sb, "}");
         }
@@ -216,12 +224,20 @@ void sb_push_type(SB *sb, Type type) {
             sb_push_sv(sb, defined_as->node.token.sv);
         } else {
             sb_push_cstr(sb, "union {");
+            if (spec->variants_count) {
+                sb_push(sb, ' ');
+            }
+
             for (size_t i = 0; i < spec->variants_count; i++) {
                 Type_Union_Variant it = spec->variants[i];
                 if (i) {
                     sb_push_cstr(sb, "; ");
                 }
                 sb_push_type(sb, it.type);
+            }
+
+            if (spec->variants_count) {
+                sb_push(sb, ' ');
             }
             sb_push_cstr(sb, "}");
         }
@@ -248,6 +264,10 @@ void sb_push_type(SB *sb, Type type) {
 
         if (!defined_as) {
             sb_push_cstr(sb, " {");
+            if (spec->fields_count) {
+                sb_push(sb, ' ');
+            }
+
             for (size_t i = 0; i < spec->fields_count; i++) {
                 Type_Struct_Field it = spec->fields[i];
                 if (i) {
@@ -256,6 +276,10 @@ void sb_push_type(SB *sb, Type type) {
 
                 sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
                 sb_push_type(sb, it.type);
+            }
+
+            if (spec->fields_count) {
+                sb_push(sb, ' ');
             }
             sb_push_cstr(sb, "}");
         }
@@ -518,10 +542,10 @@ bool type_is_integer(Type type) {
     }
 
     switch (type.kind) {
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
+    case TYPE_S8:
+    case TYPE_S16:
+    case TYPE_S32:
+    case TYPE_S64:
 
     case TYPE_U8:
     case TYPE_U16:
@@ -579,10 +603,10 @@ bool type_is_signed(Type type) {
     }
 
     switch (kind) {
-    case TYPE_I8:
-    case TYPE_I16:
-    case TYPE_I32:
-    case TYPE_I64:
+    case TYPE_S8:
+    case TYPE_S16:
+    case TYPE_S32:
+    case TYPE_S64:
     case TYPE_INT:
 
     case TYPE_F32:
@@ -723,54 +747,6 @@ bool const_value_eq(Const_Value a, Const_Value b) {
     }
 }
 
-static void sb_push_quoted_char(SB *sb, char ch, char quote) {
-    switch (ch) {
-    case 033:
-        sb_push_cstr(sb, "\\e");
-        break;
-
-    case '\n':
-        sb_push_cstr(sb, "\\n");
-        break;
-
-    case '\r':
-        sb_push_cstr(sb, "\\r");
-        break;
-
-    case '\t':
-        sb_push_cstr(sb, "\\t");
-        break;
-
-    case '\0':
-        sb_push_cstr(sb, "\\0");
-        break;
-
-    case '\\':
-        sb_push_cstr(sb, "\\\\");
-        break;
-
-    case '\'':
-        if (quote == '\'') {
-            sb_push_cstr(sb, "\\'");
-        } else {
-            sb_push(sb, ch);
-        }
-        break;
-
-    case '"':
-        if (quote == '"') {
-            sb_push_cstr(sb, "\\\"");
-        } else {
-            sb_push(sb, ch);
-        }
-        break;
-
-    default:
-        sb_push(sb, ch);
-        break;
-    }
-}
-
 static_assert(COUNT_CONST_VALUES == 13, "");
 static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw) {
     switch (v.kind) {
@@ -793,14 +769,14 @@ static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw)
         break;
 
     case CONST_VALUE_FN:
-        sb_push_fn_name(sb, v.as.fn, v.as.fn->module);
+        sb_push_fn_name(sb, v.as.fn, v.as.fn->node.module);
         break;
 
     case CONST_VALUE_VAR: {
         Node_Atom *definition = v.as.var;
         assert(definition->definition_spec); // This is a variable
         sb_push(sb, '&');
-        sb_push_fn_name(sb, definition->definition_spec->static_var_fn, definition->module);
+        sb_push_fn_name(sb, definition->definition_spec->static_var_fn, definition->node.module);
         sb_sprintf(sb, "." SV_Fmt, SV_Arg(definition->node.token.sv));
     } break;
 
@@ -994,11 +970,11 @@ void sb_push_fn_name(SB *sb, Node_Fn *fn, Module *module) {
         assert(fn->defined_as && !fn->outer_fn && fn->wrapper_for_trait);
 
         Node_Trait *definition = fn->wrapper_for_trait->definition;
-        sb_push_fn_name(sb, definition->defined_in, definition->module);
+        sb_push_fn_name(sb, definition->defined_in, definition->node.module);
         sb_push(sb, '.');
         sb_push_type(sb, (Type) {.kind = TYPE_TRAIT, .spec.trait = fn->wrapper_for_trait});
         sb_push(sb, '(');
-        sb_push_fn_name(sb, fn->wrapper, fn->module);
+        sb_push_fn_name(sb, fn->wrapper, fn->node.module);
         sb_push(sb, ')');
         return;
     }
@@ -1390,7 +1366,6 @@ Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, s
     wrapper_node->llvm_debug_scope = NULL;
     wrapper_node->wrapper = fn;
     wrapper_node->wrapper_for_trait = trait;
+    wrapper_node->wrapper_signature = trait->methods[method_index].signature;
     return wrapper_node;
 }
-
-// TODO: Print space in anonymous types

@@ -67,7 +67,7 @@ Node_Fn *get_main(Compiler *c) {
     }
 
     c->main_fn = (Node_Fn *) main->definition_spec->assignment_node;
-    check_stmt(c, (Node *) main->definition_spec->definition_node);
+    check_fn(c, c->main_fn, REF_NONE, NULL, false, true);
 
     const Type_Fn *signature = main->node.type.spec.fn;
     if (signature->args_count) {
@@ -117,7 +117,7 @@ void define_orderless_node(Compiler *c, Node *n, const size_t block_start) {
                     Node_Atom *previous = context_find_define_skipping(&c->context, *it.key, import->module);
                     if (!previous) {
                         previous = module_globals_find_ex(c, n->module, *it.key, import->module);
-                        if (previous && previous->definition_spec->is_private && previous->module != n->module) {
+                        if (previous && previous->definition_spec->is_private && previous->node.module != n->module) {
                             continue;
                         }
                     }
@@ -174,11 +174,11 @@ void define_orderless_node(Compiler *c, Node *n, const size_t block_start) {
                     }
 
                     if (!is_method) {
-                        Node_Atom *previous = module_globals_find(c, it->module, it->node.token.sv);
+                        Node_Atom *previous = module_globals_find(c, it->node.module, it->node.token.sv);
                         if (previous) {
-                            error_redefinition_global(c, (Node *) it, (Node *) previous, it->module, &c->context);
+                            error_redefinition_global(c, (Node *) it, (Node *) previous, it->node.module, &c->context);
                         }
-                        global_scope_push(&it->module->globals, it);
+                        global_scope_push(&it->node.module->globals, it);
                     }
                 }
 
@@ -408,18 +408,36 @@ void push_context_replace(Compiler *c, Context_Replace *replace, Node_Atom *from
     c->context.replace = replace;
 }
 
-void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
+void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type, bool called_from_if_needed) {
     const bool dont_allow_polymorphs_save = c->dont_allow_polymorphs;
     c->dont_allow_polymorphs = false;
 
-    assert(it->definition_spec->check_status != CHECKING); // It is already checked
+    const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+    memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
+
+    const size_t partial_stack_count_save = c->partial_stack.count;
+    da_push(&c->partial_stack, (Node *) it);
+
     if (it->definition_spec->check_status == CHECKED) {
-        goto end;
+        bool done = true;
+        if (it_expr && it_expr->kind == NODE_FN) {
+            Node_Fn *fn = (Node_Fn *) it_expr;
+            if (!fn->checked_fully && !called_from_if_needed) {
+                done = false;
+            }
+        }
+
+        if (done) {
+            goto end;
+        }
     }
+
+    assert(it->definition_spec->check_status != CHECKING); // It is already asserted
     it->definition_spec->check_status = CHECKING;
+    it->definition_spec->partial_stack_index = partial_stack_count_save;
 
     if (type) {
-        if (type_kind_eq(type->type, TYPE_UNIT)) {
+        if (type_kind_eq(type->type, TYPE_VOID)) {
             check_expr(c, type, REF_NONE);
             type_assert_type(c, type);
         }
@@ -433,20 +451,28 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
 
     if (it_expr) {
         Node_Define *definition = it->definition_spec->definition_node;
-
-        if (type_kind_eq(it_expr->type, TYPE_UNIT)) {
+        if (type_kind_eq(it_expr->type, TYPE_VOID)) {
             if (it->definition_spec->arg_index && is_node_caller_location(it_expr)) {
                 it_expr->type = c->source_code_location_type;
             } else {
+                bool check = true;
                 if (it->definition_spec->is_const) {
                     assert(it_expr);
                     if (it_expr->kind == NODE_DISTINCT) {
                         Node_Distinct *distinct = (Node_Distinct *) it_expr;
                         distinct->defined_as = it;
                     }
+
+                    if (it_expr->kind == NODE_FN && called_from_if_needed) {
+                        check_fn(c, (Node_Fn *) it_expr, REF_NONE, NULL, false, true);
+                        check = false;
+                    }
                 }
 
-                check_expr(c, it_expr, REF_NONE);
+                if (check) {
+                    check_expr(c, it_expr, REF_NONE);
+                }
+
                 if (!type) {
                     if (it_expr->kind == NODE_GROUP) {
                         Node_Group *group = (Node_Group *) it_expr;
@@ -473,6 +499,11 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
                         it->definition_spec->is_const ? "constant" : "variable");
                     exit(c, 1);
                 }
+            }
+        } else if (it_expr->kind == NODE_FN) {
+            Node_Fn *fn = (Node_Fn *) it_expr;
+            if (!fn->checked_fully && !called_from_if_needed) {
+                check_fn(c, fn, REF_NONE, NULL, false, false);
             }
         }
 
@@ -542,10 +573,143 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type) {
     it->definition_spec->check_status = CHECKED;
 
 end:
+    c->partial_stack.count = partial_stack_count_save;
+    c->monomorphizing_site = monomorphizing_site_save;
     c->dont_allow_polymorphs = dont_allow_polymorphs_save;
 }
 
-void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_Kind ref) {
+static Type resolve_indirect_type_from_partial_stack(Compiler *c, size_t begin, size_t end) {
+    Type type = {0};
+    for (size_t i = end; i > begin; i--) {
+        Node *it = c->partial_stack.data[i - 1];
+        if (!type.is_meta && it->type.is_meta) {
+            type = it->type;
+        }
+
+        switch (it->kind) {
+        case NODE_ATOM:
+            // Pass
+            break;
+
+        case NODE_UNARY:
+            if (it->token.kind == TOKEN_BAND) {
+                type.ref++;
+            } else {
+                unreachable();
+            }
+            break;
+
+        case NODE_DISTINCT:
+            type.distinct = ((Node_Distinct *) it)->defined_as;
+            break;
+
+        case NODE_INDEXABLE: {
+            Node_Indexable *indexable = (Node_Indexable *) it;
+            indexable->element->type = type_without_meta(type);
+            if (indexable->is_dynamic) {
+                type.kind = TYPE_DYNAMIC_ARRAY;
+                type.spec.dynamic_array.element = &indexable->element->type;
+            } else {
+                type.kind = TYPE_SLICE;
+                type.spec.slice.element = &indexable->element->type;
+            }
+            type.is_meta = true;
+        } break;
+
+        case NODE_UNION:
+        case NODE_STRUCT:
+            // Pass
+            break;
+
+        default:
+            unreachable();
+            break;
+        }
+    }
+    return type;
+}
+
+static bool get_indirect_type_from_partial_stack(Compiler *c, Node_Atom *definition, Type *out) {
+    size_t begin = definition->definition_spec->partial_stack_index;
+    size_t end = 0;
+    bool   indirect = false;
+    for (size_t i = begin; i < c->partial_stack.count; i++) {
+        Node *it = c->partial_stack.data[i];
+        switch (it->kind) {
+        case NODE_ATOM: {
+            if (it->token.kind != TOKEN_IDENT) {
+                return false;
+            }
+
+            Node_Atom *atom = (Node_Atom *) it;
+            if (atom->definition_spec && !atom->definition_spec->is_const && !atom->definition_spec->is_field) {
+                return false;
+            }
+
+            if (it->type.is_meta) {
+                if (!end) {
+                    end = i + 1;
+                }
+
+                if (indirect) {
+                    *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                    return true;
+                }
+            }
+        } break;
+
+        case NODE_UNARY:
+            if (it->token.kind != TOKEN_BAND) {
+                return false;
+            }
+
+            indirect = true;
+            if (end) {
+                *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                return true;
+            }
+            break;
+
+        case NODE_DISTINCT:
+            // Pass
+            break;
+
+        case NODE_INDEXABLE: {
+            Node_Indexable *indexable = (Node_Indexable *) it;
+            if (indexable->count) {
+                return false;
+            }
+
+            indirect = true;
+            if (end) {
+                *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                return true;
+            }
+        } break;
+
+        case NODE_UNION:
+        case NODE_STRUCT:
+            if (it->type.is_meta) {
+                if (!end) {
+                    end = i + 1;
+                }
+
+                if (indirect) {
+                    *out = resolve_indirect_type_from_partial_stack(c, begin, end);
+                    return true;
+                }
+            }
+            break;
+
+        default:
+            return false;
+        }
+    }
+
+    return false;
+}
+
+void check_definition_if_needed(Compiler *c, Node_Atom *definition, Node *usage, Ref_Kind ref) {
     switch (definition->definition_spec->check_status) {
     case UNCHECKED: {
         Context_Fn *context_fn_save = c->context.fn;
@@ -561,17 +725,21 @@ void check_definition_if_needed(Compiler *c, Node_Atom *definition, Ref_Kind ref
             c,
             definition,
             definition->definition_spec->assignment_node,
-            definition->definition_spec->definition_node->type);
+            definition->definition_spec->definition_node->type,
+            true);
 
         context_restore_fn(&c->context, context_fn_save);
         c->context.replace = context_replace_save;
     } break;
 
     case CHECKING:
-        if ((ref == REF_ADDR || ref == REF_SLICE) && definition->node.type.is_meta) {
+        if ((ref == REF_ADDR || ref == REF_ADDR_MEMBER || ref == REF_SLICE) && definition->node.type.is_meta) {
             // Reference to incomplete type definition is allowed
-        } else {
+        } else if (!get_indirect_type_from_partial_stack(c, definition, &definition->node.type)) {
             error_node(EK_ERROR, (Node *) definition, "Cyclic definition");
+            if (usage) {
+                error_node(EK_NOTE, usage, "Used without indirection here");
+            }
             exit(c, 1);
         }
         break;
@@ -589,7 +757,7 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
     Module *module = NULL;
     if (n->kind == NODE_ATOM) {
         atom = (Node_Atom *) n;
-        module = atom->module;
+        module = atom->node.module;
     } else if (n->kind == NODE_MEMBER) {
         member = (Node_Member *) n;
         assert(member->lhs->type.kind == TYPE_MODULE);
@@ -673,7 +841,7 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             }
         }
 
-        if (definition && definition->definition_spec->is_private && definition->module != n->module) {
+        if (definition && definition->definition_spec->is_private && definition->node.module != n->module) {
             definition = NULL;
         }
     }
@@ -706,7 +874,7 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                 n->type.is_meta = true;
             }
         } else {
-            check_definition_if_needed(c, definition, ref);
+            check_definition_if_needed(c, definition, n, ref);
             n->type = definition->node.type;
             n->is_memory = !definition->definition_spec->is_const;
         }
@@ -750,6 +918,15 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             }
         }
     } else {
-        error_undefined(c, &n->token, "identifier", false);
+        error_undefined(c, &n->token, "identifier", true);
+        if (member) {
+            const size_t start = default_sb.count;
+            for (size_t i = 0; i < module->name.count; i++) {
+                sb_push_quoted_char(&default_sb, module->name.data[i], '\'');
+            }
+            error_node(
+                EK_NOTE, member->lhs, "Searched in module '%s'", arena_sb_to_cstr(&temp_arena, &default_sb, start));
+        }
+        exit(c, 1);
     }
 }

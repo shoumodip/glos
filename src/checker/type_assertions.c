@@ -184,17 +184,14 @@ Type type_assert_type(Compiler *c, const Node *n) {
     exit(c, 1);
 }
 
-bool type_assert_type_or_Type_noexit(Compiler *c, const Node *n) {
-    if (!check_that_type_is_known_noexit(n)) {
-        return false;
-    }
-
+void type_assert_type_or_Type(Compiler *c, const Node *n) {
+    check_that_type_is_known(c, n);
     if (n->type.is_meta || type_eq(n->type, c->type_info_pointer_type)) {
-        return true;
+        return;
     }
 
     error_node(EK_ERROR, n, "Expected a type, got %s", type_to_cstr(n->type));
-    return false;
+    exit(c, 1);
 }
 
 Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) {

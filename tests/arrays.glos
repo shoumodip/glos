@@ -1,16 +1,16 @@
-print_i64s :: (xs: []i64) {
+print_s64s :: (xs: []s64) {
     for i := 0; i < xs.count; i += 1 {
         println(xs[i])
     }
 }
 
 main :: () {
-    xs: [6]i64
+    xs: [6]s64
     println(xs.data == &xs[0])
     println(xs.count)
 
     for i := 0; i < xs.count; i += 1 {
         xs[i] = i * 2
     }
-    print_i64s(xs[..])
+    print_s64s(xs[..])
 }

@@ -1,5 +1,5 @@
-A :: distinct i64
-B :: distinct i64
+A :: distinct s64
+B :: distinct s64
 
 main :: () {
     a: A

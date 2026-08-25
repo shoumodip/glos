@@ -2,8 +2,8 @@ EXIT 1
 STDOUT 0
 
 STDERR 97
-tests/error_expected_return.glos:1:19: ERROR: Expected to return 'i64'
+tests/error_expected_return.glos:1:19: Error: Expected to return 's64'
 
-    foo :: () -> i64 {}
+    foo :: () -> s64 {}
 
 

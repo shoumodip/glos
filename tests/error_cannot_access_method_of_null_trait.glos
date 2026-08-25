@@ -7,7 +7,7 @@ Show :: trait {
     show: ()
 }
 
-Int :: distinct i64
+Int :: distinct s64
 
 show :: (this: Int) {
     println(this)

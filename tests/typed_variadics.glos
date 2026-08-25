@@ -1,11 +1,11 @@
-foo :: (ns: ...i64) {
+foo :: (ns: ...s64) {
     println("foo:")
     for i := 0; i < ns.count; i += 1 {
         println(ns[i])
     }
 }
 
-bar :: (ns: ...i64) {
+bar :: (ns: ...s64) {
     println("bar:")
     foo(...ns)
 }

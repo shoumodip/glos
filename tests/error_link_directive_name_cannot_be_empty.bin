@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 106
-tests/error_link_directive_name_cannot_be_empty.glos:1:7: ERROR: Link name cannot be empty
+tests/error_link_directive_name_cannot_be_empty.glos:1:7: Error: Link name cannot be empty
 
     #link ""
 

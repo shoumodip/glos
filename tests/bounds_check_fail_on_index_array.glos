@@ -1,5 +1,5 @@
 main :: () {
-    xs: [5]i64
+    xs: [5]s64
     for i := 0; i < xs.count; i = i + 1 {
         xs[i] = i * 2
     }

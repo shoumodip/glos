@@ -1,7 +1,7 @@
-a :: (x: i8)  { println(x) }
-b :: (x: i16) { println(x) }
-c :: (x: i32) { println(x) }
-d :: (x: i64) { println(x) }
+a :: (x: s8)  { println(x) }
+b :: (x: s16) { println(x) }
+c :: (x: s32) { println(x) }
+d :: (x: s64) { println(x) }
 
 e :: (x: u8)  { println(x) }
 f :: (x: u16) { println(x) }

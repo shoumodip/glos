@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 131
-tests/error_could_not_find_module.glos:1:1: ERROR: Could not find module 'non_existant_module'
+tests/error_could_not_find_module.glos:1:1: Error: Could not find module 'non_existant_module'
 
     #import "non_existant_module"
 

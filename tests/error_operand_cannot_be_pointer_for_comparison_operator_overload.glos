@@ -1,2 +1,2 @@
-Foo :: distinct i64
+Foo :: distinct s64
 compare :: (this: &Foo, that: Foo) {}

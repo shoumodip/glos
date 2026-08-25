@@ -13,7 +13,7 @@ wprint :: (w: Writer, vs: ...Any) {
 
         v := vs[i]
         if v.type == Interpolation_Marker {
-            interpolating = i64(v.data)
+            interpolating = s64(v.data)
             continue
         }
 
@@ -47,4 +47,4 @@ eprintln :: (vs: ...Any) {
 }
 
 #private
-Interpolation_Marker :: distinct i64
+Interpolation_Marker :: distinct s64

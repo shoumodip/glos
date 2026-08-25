@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 122
-tests/error_cannot_use_continue_outside_of_a_loop.glos:1:1: ERROR: Cannot use 'continue' outside of a loop
+tests/error_cannot_use_continue_outside_of_a_loop.glos:1:1: Error: Cannot use 'continue' outside of a loop
 
     continue
 

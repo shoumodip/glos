@@ -1,6 +1,6 @@
 S16 :: struct {
-    x: i64
-    y: i64
+    x: s64
+    y: s64
 }
 
 extern {
@@ -8,7 +8,7 @@ extern {
     s16_foo :: (s: S16)
     s16_bar :: (s0: S16, s1: S16, s2: S16, s3: S16)
     s16_baz :: (s0: S16, s1: S16, s2: S16, s3: S16, s4: S16)
-    s16_ret :: (x: i64, y: i64) -> S16
+    s16_ret :: (x: s64, y: s64) -> S16
 }
 
 main :: () {

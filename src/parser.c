@@ -206,12 +206,11 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
                     sw->preds_count++;
                 } while (read_token(p, TOKEN_COMMA));
             }
-            expect_stmt_terminator(p);
 
             case_->body = node_alloc(p->module_current, NODE_BLOCK, token);
             Node_Block *block = (Node_Block *) case_->body;
             while (true) {
-                consume_tokens(p, TOKEN_EOL);
+                expect_stmt_terminator(p);
                 ahead = peek_token(p);
                 if (ahead.kind == TOKEN_CASE || ahead.kind == TOKEN_RBRACE) {
                     break;
@@ -326,16 +325,30 @@ static void definition_lhs_atom_setup(
 
     if (it->definition_spec->is_const) {
         assert(it_expr);
-        if (it_expr->kind == NODE_FN) {
+        switch (it_expr->kind) {
+        case NODE_FN:
             ((Node_Fn *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_ENUM) {
+            break;
+
+        case NODE_ENUM:
             ((Node_Enum *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_TRAIT) {
+            break;
+
+        case NODE_TRAIT:
             ((Node_Trait *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_UNION) {
+            break;
+
+        case NODE_UNION:
             ((Node_Union *) it_expr)->defined_as = it;
-        } else if (it_expr->kind == NODE_STRUCT) {
+            break;
+
+        case NODE_STRUCT:
             ((Node_Struct *) it_expr)->defined_as = it;
+            break;
+
+        default:
+            // Pass
+            break;
         }
     }
 }
@@ -596,16 +609,11 @@ static Node *parse_define(
 
     token = peek_token(p);
     if (token.kind != TOKEN_SET && token.kind != TOKEN_COLON) {
-        const bool in_extern_save = p->state.in_extern;
-        p->state.in_extern = false;
         if (define->name_polymorph) {
             p->state.pb = NULL;
         }
-
         define->type = parse_expr(p, POWER_PRE, false, true, NULL);
-
         p->state.pb = pb_save;
-        p->state.in_extern = in_extern_save;
     }
 
     token = peek_token(p);
@@ -621,34 +629,20 @@ static Node *parse_define(
             exit(1);
         }
 
-        const bool in_extern_save = p->state.in_extern;
-        p->state.in_extern = false;
         p->state.pb = NULL;
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
         p->state.pb = pb_save;
-        p->state.in_extern = in_extern_save;
 
         if (define->has_spread) {
             error_node(EK_ERROR, define->expr, "Cannot have default value here");
             exit(1);
         }
     } else if (token.kind == TOKEN_COLON) {
-        const bool in_extern_save = p->state.in_extern;
-        p->state.in_extern = false;
-
         p->state.peeked = false;
         p->state.pb = NULL;
-        if (in_extern_save) {
-            p->state.allow_methods_without_body = true;
-        }
-
         define->expr = parse_expr(p, POWER_SET, groups_allowed, true, NULL);
-
-        p->state.allow_methods_without_body = false;
         p->state.pb = pb_save;
         define->is_const = true;
-
-        p->state.in_extern = in_extern_save;
 
         if (define->has_spread) {
             error_node(EK_ERROR, define->expr, "Cannot have default value here");
@@ -661,11 +655,6 @@ static Node *parse_define(
             }
 
             Node_Fn *fn = (Node_Fn *) define->expr;
-            if (fn->body) {
-                error_node(EK_ERROR, fn->body, "External function cannot have body");
-                exit(1);
-            }
-
             fn->is_type = false;
             fn->is_extern = true;
         }
@@ -746,7 +735,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_DIRECTIVE_PLATFORM:
     case TOKEN_DIRECTIVE_CALLER_LOCATION:
         node = node_alloc(p->module_current, NODE_ATOM, token);
-        ((Node_Atom *) node)->module = p->module_current;
         break;
 
     case TOKEN_DOLLAR: {
@@ -787,7 +775,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         node = node_alloc(p->module_current, NODE_MEMBER, expect_token(p, TOKEN_IDENT));
         Node_Member *member = (Node_Member *) node;
         member->dot = token;
-        member->module = p->module_current;
     } break;
 
     case TOKEN_SUB:
@@ -808,28 +795,23 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_DISTINCT: {
-        node = node_alloc(p->module_current, NODE_DISTINCT, token);
-        Node_Distinct *distinct = (Node_Distinct *) node;
-        distinct->value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
-
+        Node *value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
         static_assert(COUNT_NODES == 29, "");
-        switch (distinct->value->kind) {
+        switch (value->kind) {
         case NODE_ENUM:
         case NODE_TRAIT:
         case NODE_UNION:
         case NODE_STRUCT:
-            error_token(
-                EK_ERROR,
-                token,
-                "Redundant application of %s to %s",
-                token_kind_to_cstr(token.kind),
-                token_kind_to_cstr(distinct->value->token.kind));
-            exit(1);
-            // TODO: This should be a warning instead to reduce friction during prototyping
+        case NODE_DISTINCT:
+            node = value;
+            warnings_add(WARN_REDUNDANT_DISTINCT, token);
             break;
 
-        default:
-            break;
+        default: {
+            node = node_alloc(p->module_current, NODE_DISTINCT, token);
+            Node_Distinct *distinct = (Node_Distinct *) node;
+            distinct->value = value;
+        } break;
         }
     } break;
 
@@ -837,11 +819,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         Node_Fn            *fn = NULL;
         Polymorphs_Builder  pb = {.is_fn = true};
         Polymorphs_Builder *pb_save = p->state.pb;
+        const bool          in_extern_save = p->state.in_extern;
 
         if (read_token(p, TOKEN_RPAREN)) {
             fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
             fn->outer_fn = p->state.fn_current;
-            fn->module = p->module_current;
             p->state.fn_current = fn;
 
             assert(p->state.ahead.kind == TOKEN_RPAREN);
@@ -849,7 +831,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         } else if (peek_token(p).kind == TOKEN_DOLLAR) {
             fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
             fn->outer_fn = p->state.fn_current;
-            fn->module = p->module_current;
 
             pb.polymorphs = &fn->polymorphs;
             if (pb_save) {
@@ -864,6 +845,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 p->state.pb = &pb;
             }
             p->state.fn_current = fn;
+            p->state.in_extern = false;
 
             node = parse_expr(p, POWER_SET, false, true, NULL);
             node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false, false);
@@ -875,13 +857,13 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             if (peek_token(p).kind == TOKEN_COLON) {
                 fn = (Node_Fn *) node_alloc(p->module_current, NODE_FN, token);
                 fn->outer_fn = p->state.fn_current;
-                fn->module = p->module_current;
 
                 pb.polymorphs = &fn->polymorphs;
                 if (!pb_save) {
                     p->state.pb = &pb;
                 }
                 p->state.fn_current = fn;
+                p->state.in_extern = false;
 
                 node = parse_define(p, node, next_token(p), false, true, true, false);
             } else {
@@ -999,30 +981,24 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             }
             p->state.pb = pb_save;
 
-            fn->returns_end_token = fn->args_end_token;
             if (read_token(p, TOKEN_ARROW)) {
-                if (read_token(p, TOKEN_LPAREN)) {
-                    while (!read_token(p, TOKEN_RPAREN)) {
-                        nodes_push(&fn->returns, parse_expr(p, POWER_PRE, false, false, NULL));
-                        fn->returns_count++;
-                        if (expect_token(p, TOKEN_COMMA, TOKEN_RPAREN).kind != TOKEN_COMMA) {
-                            break;
-                        }
-                    }
-
-                    assert(p->state.ahead.kind == TOKEN_RPAREN);
-                    fn->returns_end_token = p->state.ahead;
-                } else {
+                do {
                     nodes_push(&fn->returns, parse_expr(p, POWER_PRE, false, false, NULL));
                     fn->returns_count++;
-                }
+                } while (read_token(p, TOKEN_COMMA));
             }
+            p->state.in_extern = in_extern_save;
 
             token = peek_token(p);
             if (token.kind == TOKEN_LBRACE && !token.newline && compounds_allowed) {
+                if (p->state.in_extern) {
+                    error_token(EK_ERROR, token, "External function cannot have body");
+                    exit(1);
+                }
+
                 fn->body = parse_block(p, next_token(p));
             } else {
-                if (fn->is_method && !allow_methods_without_body) {
+                if (fn->is_method && !allow_methods_without_body && !p->state.in_extern) {
                     Node_Define *define = (Node_Define *) fn->args.head;
                     assert(define && define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
                     error_node(EK_ERROR, (Node *) fn, "A method must have a body");
@@ -1113,14 +1089,20 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         node = node_alloc(p->module_current, NODE_TRAIT, token);
         Node_Trait *trait = (Node_Trait *) node;
-        trait->module = p->module_current;
         trait->defined_in = p->state.fn_current;
 
         expect_token(p, TOKEN_LBRACE);
         while (!read_token(p, TOKEN_RBRACE)) {
-            Node_Atom *name = (Node_Atom *) node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
-            name->module = p->module_current;
-            Node *method = parse_define(p, (Node *) name, expect_token(p, TOKEN_COLON), false, false, false, false);
+            Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
+            if (sv_match(name->token.sv, "type") || //
+                sv_match(name->token.sv, "data") || //
+                sv_match(name->token.sv, "impl"))   //
+            {
+                error_node(EK_ERROR, name, "A trait method cannot be named '" SV_Fmt "'", SV_Arg(name->token.sv));
+                exit(1);
+            }
+
+            Node *method = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
 
             Node_Define *define = (Node_Define *) method;
             if (define->is_const) {
@@ -1158,7 +1140,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         node = node_alloc(p->module_current, NODE_UNION, token);
         Node_Union *unionn = (Node_Union *) node;
-        unionn->module = p->module_current;
         unionn->defined_in = p->state.fn_current;
 
         expect_token(p, TOKEN_LBRACE);
@@ -1177,7 +1158,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_STRUCT: {
         node = node_alloc(p->module_current, NODE_STRUCT, token);
         Node_Struct *structt = (Node_Struct *) node;
-        structt->module = p->module_current;
         structt->defined_in = p->state.fn_current;
 
         token = expect_token(p, TOKEN_LBRACE, TOKEN_LPAREN);
@@ -1196,6 +1176,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 }
             }
             p->state.pb = pb_save;
+
+            assert(p->state.ahead.kind == TOKEN_RPAREN);
+            structt->polymorphs_end = p->state.ahead;
 
             token = expect_token(p, TOKEN_LBRACE);
         }
@@ -1227,6 +1210,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     error_node(EK_ERROR, define->expr, "Field definition cannot have assignment");
                     exit(1);
                 }
+
+                Node_Atom *it = NULL;
+                while ((it = (Node_Atom *) node_iter((Node *) it, define->name))) {
+                    it->definition_spec->is_field = true;
+                }
                 nodes_push(&structt->fields, field);
             }
             expect_stmt_terminator(p);
@@ -1234,7 +1222,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         p->state.pb = pb_save;
 
         assert(p->state.ahead.kind == TOKEN_RBRACE);
-        structt->end = p->state.ahead;
+        structt->fields_end = p->state.ahead;
     } break;
 
     case TOKEN_SIZEOF:
@@ -1259,6 +1247,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     } break;
 
     case TOKEN_INLINE: {
+        if (p->state.in_extern) {
+            error_token(EK_ERROR, token, "External function cannot be inlined");
+            exit(1);
+        }
+
         node = parse_expr(p, POWER_DOT, false, compounds_allowed, NULL);
         if (node->kind != NODE_FN) {
             error_node(EK_ERROR, node, "Expected function literal after %s", token_kind_to_cstr(token.kind));
@@ -1266,17 +1259,13 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         }
 
         Node_Fn *fn = (Node_Fn *) node;
-        if (p->state.in_extern) {
-            error_node(EK_ERROR, node, "External function cannot be inlined");
-            exit(1);
-        }
-
         if (fn->is_type) {
             error_node(EK_ERROR, node, "Function type cannot be inlined");
             exit(1);
         }
 
         fn->is_inline = true;
+        fn->inline_token = token;
     } break;
 
     default:
@@ -1303,7 +1292,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
             member->lhs = node;
             member->dot = token;
-            member->module = p->module_current;
             if (member->node.token.kind == TOKEN_LPAREN) {
                 member->rhs = parse_expr(p, POWER_SET, false, true, NULL);
                 member->rhs_end = expect_token(p, TOKEN_RPAREN);
@@ -1553,9 +1541,7 @@ static Node *parse_stmt(Parser *p) {
         }
 
         if (!p->state.fn_current) {
-            // TODO: Perhaps this should just be warning for reduced friction while prototyping
-            error_token(EK_ERROR, token, "Variables defined in global scope already have static storage");
-            exit(1);
+            warnings_add(WARN_REDUNDANT_STATIC, token);
         }
 
         node = parse_expr(p, POWER_NIL, true, true, NULL);

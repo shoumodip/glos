@@ -4,5 +4,5 @@ main :: () {
 
 extern {
     #link "puts"
-    println :: (s: &char) -> i32
+    println :: (s: &char) -> s32
 }

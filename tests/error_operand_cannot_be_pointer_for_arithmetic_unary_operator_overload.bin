@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 547
-tests/error_operand_cannot_be_pointer_for_arithmetic_unary_operator_overload.glos:2:1: ERROR: The method 'neg' is special because it implements an operator overload
+tests/error_operand_cannot_be_pointer_for_arithmetic_unary_operator_overload.glos:2:1: Error: The method 'neg' is special because it implements an operator overload
 
     neg :: (this: &Foo) {}
 
@@ -12,7 +12,7 @@ tests/error_operand_cannot_be_pointer_for_arithmetic_unary_operator_overload.glo
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operand_cannot_be_pointer_for_arithmetic_unary_operator_overload.glos:2:9: NOTE: Operand cannot be a pointer. (Provided type is '&Foo')
+tests/error_operand_cannot_be_pointer_for_arithmetic_unary_operator_overload.glos:2:9: Note: Operand cannot be a pointer. (Provided type is '&Foo')
 
     neg :: (this: &Foo) {}
 

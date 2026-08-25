@@ -1,0 +1,15 @@
+EXIT 1
+STDOUT 0
+
+STDERR 420
+tests/error_polymorphic_structure_cannot_be_used_before_monomorphization.glos:4:8: Error: Polymorphic structures cannot be used directly. They must be monomorphized first
+
+    x: Foo
+
+    Call the structure like a function, providing the polymorphic parameters as arguments
+
+tests/error_polymorphic_structure_cannot_be_used_before_monomorphization.glos:1:8: Note: Structure defined here
+
+    Foo :: struct($T: Type) {}
+
+

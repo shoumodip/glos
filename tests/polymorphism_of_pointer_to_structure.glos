@@ -1,0 +1,19 @@
+Box :: struct($T: Type) {
+    v: T
+}
+
+show :: (b: &Box($T)) {
+    println(*b)
+}
+
+main :: () {
+    b: Box(s64) = {69}
+    p: &Box(s64) = &b
+    show(&b)
+    show(p)
+
+    b: Box(string) = {"Urmom"}
+    p: &Box(string) = &b
+    show(&b)
+    show(p)
+}

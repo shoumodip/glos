@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 163
-tests/error_cannot_define_polymorphic_parameter_inside_structure.glos:1:24: ERROR: Cannot define polymorphic parameters here
+tests/error_cannot_define_polymorphic_parameter_inside_structure.glos:1:24: Error: Cannot define polymorphic parameters here
 
     foo :: (x: struct { a: $T }) {}
 

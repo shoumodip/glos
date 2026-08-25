@@ -1,5 +1,5 @@
 main :: () {
-    xs: [..]i64
+    xs: [..]s64
     defer xs.free()
 
     xs.push(69)

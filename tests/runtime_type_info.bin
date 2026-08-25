@@ -1,11 +1,11 @@
 EXIT 0
-STDOUT 607
+STDOUT 713
 bool
 char
-i8
-i16
-i32
-i64
+s8
+s16
+s32
+s64
 u8
 u16
 u32
@@ -17,33 +17,38 @@ string
 ()
 (string)
 (string, rawptr)
-() -> i32
-(i32) -> i32
-(i32, u8) -> i32
-() -> (i32, bool)
-(i32) -> (i32, bool)
-(i32, u8) -> (i32, bool)
-() -> (i32) -> bool
-enum i64 {
+() -> s32
+(s32) -> s32
+(s32, u8) -> s32
+() -> (s32, bool)
+(s32) -> (s32, bool)
+(s32, u8) -> (s32, bool)
+() -> (s32) -> bool
+([]string) // Typed Variadics
+(s64) // Untyped Variadics
+enum s64 {
     Foo = 0
     Bar = 1
     Baz = 69
     Urmom = 70
 }
 trait {
-    read: (string) -> i32
-    show: (i32) -> string
+    read: (string) -> s32
+    show: (s32) -> string
 }
 union {
-    i32
+    s32
     string
-    (string) -> i64
+    (string) -> s64
 }
 struct {
-    x: i32 // offset = 0
-    y: i32 // offset = 4
+    x: s32 // offset = 0
+    y: s32 // offset = 4
     urmom: string // offset = 8
 }
+struct {
+    v: s32 // offset = 0
+} // Monomorph
 [69]string
 [69][420]u8
 [..]string

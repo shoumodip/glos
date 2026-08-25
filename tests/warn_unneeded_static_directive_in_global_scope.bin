@@ -1,0 +1,9 @@
+EXIT 0
+STDOUT 0
+
+STDERR 200
+tests/warn_unneeded_static_directive_in_global_scope.glos:1:1: Warn: Application of '#static' is not needed here, as variables defined in global scope already have static storage
+
+    #static i := 0
+
+

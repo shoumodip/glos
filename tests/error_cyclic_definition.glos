@@ -1,0 +1,7 @@
+Foo :: struct {
+    b: Bar
+}
+
+Bar :: struct {
+    f: Foo
+}

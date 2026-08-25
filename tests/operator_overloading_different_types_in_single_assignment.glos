@@ -10,11 +10,11 @@ main :: () {
 }
 
 Vec2 :: struct {
-    x, y: i32
+    x, y: s32
 }
 
 Vec3 :: struct {
-    x, y, z: i32
+    x, y, z: s32
 }
 
 add :: (this: Vec2, that: Vec2) -> Vec2 {

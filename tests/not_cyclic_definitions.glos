@@ -1,0 +1,71 @@
+main :: () {
+    {
+        Foo :: Bar
+        Bar :: struct {
+            f: &Foo
+        }
+    }
+
+    {
+        Foo :: &Bar
+        Bar :: struct {
+            f: Foo
+        }
+    }
+
+    {
+        Foo :: []Bar
+        Bar :: struct {
+            f: Foo
+        }
+    }
+
+    {
+        Foo :: [..]Bar
+        Bar :: struct {
+            f: Foo
+        }
+    }
+
+    {
+        Foo :: [..]Bar
+        Bar :: struct {
+            f: Foo
+        }
+    }
+
+    {
+        Foo :: Bar
+        Bar :: union {
+            &Foo
+        }
+    }
+
+    {
+        Foo :: &Bar
+        Bar :: union {
+            Foo
+        }
+    }
+
+    {
+        Foo :: []Bar
+        Bar :: union {
+            Foo
+        }
+    }
+
+    {
+        Foo :: [..]Bar
+        Bar :: union {
+            Foo
+        }
+    }
+
+    {
+        Foo :: [..]Bar
+        Bar :: union {
+            Foo
+        }
+    }
+}

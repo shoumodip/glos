@@ -1,2 +1,2 @@
-Foo :: distinct i64
-range :: (this: Foo, a: i64, b: i64) -> (i64, i64) {}
+Foo :: distinct s64
+range :: (this: Foo, a: s64, b: s64) -> s64, s64 {}

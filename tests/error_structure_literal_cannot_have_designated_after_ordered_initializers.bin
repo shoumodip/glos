@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 158
-tests/error_structure_literal_cannot_have_designated_after_ordered_initializers.glos:9:9: ERROR: Cannot mix ordered and designated initializers
+tests/error_structure_literal_cannot_have_designated_after_ordered_initializers.glos:9:9: Error: Cannot mix ordered and designated initializers
 
     y = 420
 

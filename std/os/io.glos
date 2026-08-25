@@ -31,7 +31,7 @@ case .WINDOWS
 }
 
 // TODO: Only binary is supported
-open :: (path: string, read: bool) -> (File, bool) {
+open :: (path: string, read: bool) -> File, bool {
     path := strings.to_cstring(path, &arena.temporary)
     defer arena.temporary.reset(rawptr(path))
 
@@ -45,7 +45,7 @@ open :: (path: string, read: bool) -> (File, bool) {
 }
 
 // TODO: Only binary is supported
-read_entire_file :: (path: string, a := &arena.default) -> ([]char, bool) {
+read_entire_file :: (path: string, a := &arena.default) -> []char, bool {
     f, ok := open(path, true)
     if !ok {
         return {}, false

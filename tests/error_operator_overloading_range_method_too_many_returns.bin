@@ -1,10 +1,10 @@
 EXIT 1
 STDOUT 0
 
-STDERR 591
-tests/error_operator_overloading_range_method_too_many_returns.glos:2:1: ERROR: The method 'range' is special because it implements an operator overload
+STDERR 587
+tests/error_operator_overloading_range_method_too_many_returns.glos:2:1: Error: The method 'range' is special because it implements an operator overload
 
-    range :: (this: Foo, a: i64, b: i64) -> (i64, i64) {}
+    range :: (this: Foo, a: s64, b: s64) -> s64, s64 {}
 
     It should have this signature:
 
@@ -12,8 +12,8 @@ tests/error_operator_overloading_range_method_too_many_returns.glos:2:1: ERROR: 
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_range_method_too_many_returns.glos:2:42: NOTE: The range operator cannot return 2 values
+tests/error_operator_overloading_range_method_too_many_returns.glos:2:41: Note: The range operator cannot return 2 values
 
-    range :: (this: Foo, a: i64, b: i64) -> (i64, i64) {}
+    range :: (this: Foo, a: s64, b: s64) -> s64, s64 {}
 
 

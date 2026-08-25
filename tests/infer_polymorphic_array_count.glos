@@ -1,5 +1,5 @@
 main :: () {
-    foo :: (xs: [$N]i64) {
+    foo :: (xs: [$N]s64) {
         println("foo:")
         println(xs)
         println("N = \{N}")
@@ -12,6 +12,6 @@ main :: () {
         println("T = \{T}")
     }
 
-    foo([]i64 {69, 420, 1337})
+    foo([]s64 {69, 420, 1337})
     bar([]string {"Deez", "Nuts"})
 }

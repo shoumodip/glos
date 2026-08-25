@@ -2,16 +2,16 @@ EXIT 1
 STDOUT 0
 
 STDERR 367
-tests/error_named_arguments_redefinition.glos:4:17: ERROR: Duplication of argument 'a'
+tests/error_named_arguments_redefinition.glos:4:17: Error: Duplication of argument 'a'
 
     foo(a = 69, a = 420)
 
-tests/error_named_arguments_redefinition.glos:4:9: NOTE: Passed here already
+tests/error_named_arguments_redefinition.glos:4:9: Note: Passed here already
 
     foo(a = 69, a = 420)
 
-tests/error_named_arguments_redefinition.glos:1:8: NOTE: The function being called has signature '(a: i64, b: i64)'
+tests/error_named_arguments_redefinition.glos:1:8: Note: The function being called has signature '(a: s64, b: s64)'
 
-    foo :: (a: i64, b: i64) {}
+    foo :: (a: s64, b: s64) {}
 
 

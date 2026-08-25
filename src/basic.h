@@ -166,7 +166,7 @@ void da_resize(void **data, size_t *capacity, size_t size, size_t count);
 // ```
 // HT(const char *, int) ht = {.hasheq = ht_hasheq_cstr};
 // ```
-typedef uint64_t (*HT_Hasheq)(const void *a, const void *b, size_t n);
+typedef u64 (*HT_Hasheq)(const void *a, const void *b, size_t n);
 
 // V *ht_get(HT(K, V) *ht, K key)
 #define ht_get(ht, k)                                                                                                  \
@@ -245,10 +245,10 @@ typedef struct {
         .entry_size = sizeof(*(ht)->data),                                                                             \
     })
 
-uint64_t ht_hasheq_bytes(const void *a, const void *b, size_t n);
-uint64_t ht_hasheq_cstr(const void *a, const void *b, size_t n);
-uint64_t ht_hasheq_sv(const void *va, const void *vb, size_t n);
-uint64_t ht_hash_combine(uint64_t a, uint64_t b);
+u64 ht_hasheq_bytes(const void *a, const void *b, size_t n);
+u64 ht_hasheq_cstr(const void *a, const void *b, size_t n);
+u64 ht_hasheq_sv(const void *va, const void *vb, size_t n);
+u64 ht_hash_combine(u64 a, u64 b);
 
 void *ht_find_impl(void *data, size_t capacity, HT_Layout layout, HT_Hasheq hasheq, const void *key);
 void *ht_get_impl(void *data, size_t capacity, HT_Layout layout, HT_Hasheq hasheq, const void *key);
@@ -270,10 +270,6 @@ bool ht_iter_impl(
 #else
 #define MSVC_SUPPRESS_4116
 #endif // _MSC_VER
-
-// Characters
-bool is_space(char ch);
-void print_char_safe(FILE *f, char ch);
 
 // String View
 typedef struct {
@@ -318,6 +314,11 @@ void sb_push_sv(SB *sb, SV sv);
 void sb_push_cstr(SB *sb, const char *cstr);
 
 extern SB default_sb;
+
+// Characters
+bool is_space(char ch);
+void print_char_safe(FILE *f, char ch);
+void sb_push_quoted_char(SB *sb, char ch, char quote);
 
 // Arena Allocator
 typedef struct {

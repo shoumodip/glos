@@ -1,15 +1,15 @@
-print_i64s :: (xs: []i64) {
+print_s64s :: (xs: []s64) {
     for i := 0; i < xs.count; i = i + 1 {
         println(xs[i])
     }
 }
 
 main :: () {
-    xs: [5]i64
+    xs: [5]s64
     for i := 0; i < xs.count; i = i + 1 {
         xs[i] = i * 2
     }
 
-    print_i64s(xs[1..4])
-    print_i64s(xs[1..6])
+    print_s64s(xs[1..4])
+    print_s64s(xs[1..6])
 }

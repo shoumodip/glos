@@ -1,5 +1,5 @@
 A :: distinct &bool
-B :: &i64
+B :: &s64
 
 main :: () {
     a: &A

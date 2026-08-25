@@ -1,1 +1,1 @@
-x: i64 = true
+x: s64 = true

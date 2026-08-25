@@ -1,9 +1,0 @@
-EXIT 1
-STDOUT 0
-
-STDERR 156
-tests/error_unexpected_static_directive_in_global_scope.glos:1:1: ERROR: Variables defined in global scope already have static storage
-
-    #static i := 0
-
-

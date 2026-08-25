@@ -1,6 +1,6 @@
 main :: () {
     println(
-        foo(210, (x: i64) -> i64 {
+        foo(210, (x: s64) -> s64 {
             return x * 2
         })
     )

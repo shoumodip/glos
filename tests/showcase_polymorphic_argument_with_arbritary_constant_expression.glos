@@ -2,7 +2,7 @@ foo :: ($A: Any) {
     println(A)
 }
 
-bar :: ($A: &i32) {
+bar :: ($A: &s32) {
     assert(A == &x)
 }
 
@@ -10,13 +10,13 @@ baz :: ($A: ()) {
     assert(A == main)
 }
 
-x: i32
+x: s32
 
 main :: () {
     foo(69)
-    foo(i64)
-    foo(union { i64; string }     ("Hello, world!"))
-    foo(struct { x: i64; y: i64 } {420, 1337})
+    foo(s64)
+    foo(union { s64; string }     ("Hello, world!"))
+    foo(struct { x: s64; y: s64 } {420, 1337})
     foo([]char {'H', 'i', '!'})
     bar(&x)
     baz(main)

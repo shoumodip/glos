@@ -66,14 +66,14 @@ typedef struct {
 void modules_free(Modules *m);
 
 typedef enum {
-    TYPE_UNIT, // TODO: Rename to TYPE_VOID
+    TYPE_VOID,
     TYPE_BOOL,
     TYPE_CHAR,
 
-    TYPE_I8,
-    TYPE_I16,
-    TYPE_I32,
-    TYPE_I64,
+    TYPE_S8,
+    TYPE_S16,
+    TYPE_S32,
+    TYPE_S64,
 
     TYPE_U8,
     TYPE_U16,
@@ -222,8 +222,8 @@ struct Type {
     Type_Kind kind;
     size_t    ref;
 
-    // A :: 69  // typeof(A) => Type { kind = TYPE_I64, is_meta = false }
-    // B :: i64 // typeof(B) => Type { kind = TYPE_I64, is_meta = true  }
+    // A :: 69  // typeof(A) => Type { kind = TYPE_S64, is_meta = false }
+    // B :: s64 // typeof(B) => Type { kind = TYPE_S64, is_meta = true  }
     bool is_meta;
 
     Node_Atom *distinct;
@@ -287,6 +287,9 @@ struct Type_Trait_Method {
     Pos  pos;
     SV   name;
     Type type;
+
+    // Used for diagnostic purposes
+    Node_Fn *signature;
 };
 
 struct Type_Union_Variant {
@@ -553,6 +556,7 @@ typedef struct {
     bool is_extern;
     bool is_private;
     bool is_assigned;
+    bool is_field;
 
     Node_Fn *static_var_fn;
 
@@ -572,6 +576,7 @@ typedef struct {
     Context_Replace *replace_context;
 
     Check_Status check_status;
+    size_t       partial_stack_index;
 
     bool        is_const;
     bool        is_const_value_evaluated;
@@ -585,9 +590,6 @@ typedef struct {
 
 struct Node_Atom {
     Node node;
-
-    // The module this atom was parsed in
-    Module *module;
 
     // When this atom is a definition
     Definition_Spec *definition_spec;
@@ -647,7 +649,7 @@ typedef struct {
 
     union {
         size_t field_index;
-        size_t enum_value;
+        Int128 enum_value;
         size_t trait_method;
         size_t union_index;
     };
@@ -662,8 +664,6 @@ typedef struct {
 
     bool is_enum;
     bool is_trait;
-
-    Module *module;
 } Node_Member;
 
 typedef struct {
@@ -731,7 +731,6 @@ struct Node_Fn {
 
     Nodes  returns;
     size_t returns_count;
-    Token  returns_end_token;
 
     Polymorphs polymorphs;
     Polymorphs monomorphs;
@@ -740,8 +739,10 @@ struct Node_Fn {
 
     bool is_type;
     bool is_extern;
-    bool is_inline;
     bool is_method;
+
+    bool  is_inline;
+    Token inline_token;
 
     // Foo :: trait {
     //     foo: () // <- This function is a trait method type
@@ -752,22 +753,23 @@ struct Node_Fn {
     Node_Fn    *wrapper;
     Type_Trait *wrapper_for_trait;
 
+    // Foo :: trait {
+    //     foo: () // <- Refers to this
+    // }
+    Node_Fn *wrapper_signature;
+
     // compare :: (this: $T, that: T) -> bool       // Partial, only implements equality
     // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
     bool is_compare_operator_complete;
 
     Node_Fn *outer_fn;
 
-    // Polymorphic functions are not checked immediately but rather upon monomorphization. Therefore the context needs
-    // to be preserved to maintain lexical scoping.
-    bool             checked;
+    bool             checked_fully;
+    bool             checked_signature;
     Context_Replace *context_replace;
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
-
-    // The module this function was parsed in
-    Module *module;
 
     LLVMValueRef    llvm;
     LLVMMetadataRef llvm_debug_scope;
@@ -811,9 +813,6 @@ struct Node_Trait {
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
 
-    // The module this was parsed in
-    Module *module;
-
     Token end;
 
     Node_Fn *defined_in;
@@ -827,9 +826,6 @@ struct Node_Union {
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
-
-    // The module this was parsed in
-    Module *module;
 
     Token end;
 
@@ -847,10 +843,8 @@ struct Node_Struct {
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
 
-    // The module this was parsed in
-    Module *module;
-
-    Token end;
+    Token fields_end;
+    Token polymorphs_end;
 
     Node_Fn *defined_in;
 };

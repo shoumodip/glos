@@ -1,4 +1,4 @@
-add_and_print :: (x: i64, y: i64) {
+add_and_print :: (x: s64, y: s64) {
     z := x + y
     println(z)
 }

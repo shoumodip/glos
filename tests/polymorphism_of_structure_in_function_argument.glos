@@ -1,4 +1,4 @@
-Foo :: struct($T: Type, $N: i64) {
+Foo :: struct($T: Type, $N: s64) {
     v: [N]T
 }
 
@@ -7,6 +7,6 @@ show :: (b: Foo($T, $N)) {
 }
 
 main :: () {
-    show(Foo(i64, 2)    {{69, 420}})
+    show(Foo(s64, 2)    {{69, 420}})
     show(Foo(string, 3) {{"Urmom", "Sucked on", "Deez nuts"}})
 }

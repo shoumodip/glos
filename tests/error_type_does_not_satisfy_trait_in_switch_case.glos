@@ -5,6 +5,6 @@ Foo :: trait {
 main :: () {
     f: Foo
     if f == {
-    case i64
+    case s64
     }
 }

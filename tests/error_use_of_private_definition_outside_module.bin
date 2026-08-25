@@ -1,8 +1,12 @@
 EXIT 1
 STDOUT 0
 
-STDERR 111
-tests/error_use_of_private_definition_outside_module.glos:4:7: ERROR: Undefined identifier 'foo'
+STDERR 223
+tests/error_use_of_private_definition_outside_module.glos:4:7: Error: Undefined identifier 'foo'
+
+    p.foo()
+
+tests/error_use_of_private_definition_outside_module.glos:4:5: Note: Searched in module 'private'
 
     p.foo()
 

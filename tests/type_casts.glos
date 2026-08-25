@@ -1,9 +1,9 @@
-print_i64  :: (x: i64)  { println(x) }
+print_s64  :: (x: s64)  { println(x) }
 print_bool :: (x: bool) { println(x) }
 
 main :: () {
-    print_i64(i64(true))
-    print_i64(i64(false))
+    print_s64(s64(true))
+    print_s64(s64(false))
 
     print_bool(bool(-69))
     print_bool(bool(0))

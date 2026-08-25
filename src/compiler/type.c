@@ -22,7 +22,7 @@ LLVMTypeRef compile_type(Compiler *c, Type *type) {
     }
 
     switch (type->kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         type->llvm = LLVMVoidTypeInContext(c->llvm_context);
         break;
 
@@ -30,23 +30,23 @@ LLVMTypeRef compile_type(Compiler *c, Type *type) {
         type->llvm = LLVMInt1TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I8:
+    case TYPE_S8:
     case TYPE_U8:
     case TYPE_CHAR:
         type->llvm = LLVMInt8TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I16:
+    case TYPE_S16:
     case TYPE_U16:
         type->llvm = LLVMInt16TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I32:
+    case TYPE_S32:
     case TYPE_U32:
         type->llvm = LLVMInt32TypeInContext(c->llvm_context);
         break;
 
-    case TYPE_I64:
+    case TYPE_S64:
     case TYPE_U64:
     case TYPE_INT:
         type->llvm = LLVMInt64TypeInContext(c->llvm_context);
@@ -273,7 +273,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     }
 
     switch (type->kind) {
-    case TYPE_UNIT:
+    case TYPE_VOID:
         return NULL;
 
     case TYPE_BOOL:
@@ -282,18 +282,18 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
     case TYPE_CHAR:
         return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "char", strlen("char"), 8, DW_ATE_unsigned_char, 0);
 
-    case TYPE_I8:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i8", strlen("i8"), 8, DW_ATE_signed, 0);
+    case TYPE_S8:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s8", strlen("s8"), 8, DW_ATE_signed, 0);
 
-    case TYPE_I16:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i16", strlen("i16"), 16, DW_ATE_signed, 0);
+    case TYPE_S16:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s16", strlen("s16"), 16, DW_ATE_signed, 0);
 
-    case TYPE_I32:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i32", strlen("i32"), 32, DW_ATE_signed, 0);
+    case TYPE_S32:
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s32", strlen("s32"), 32, DW_ATE_signed, 0);
 
-    case TYPE_I64:
+    case TYPE_S64:
     case TYPE_INT:
-        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "i64", strlen("i64"), 64, DW_ATE_signed, 0);
+        return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "s64", strlen("s64"), 64, DW_ATE_signed, 0);
 
     case TYPE_U8:
         return LLVMDIBuilderCreateBasicType(c->llvm_debug_builder, "u8", strlen("u8"), 8, DW_ATE_unsigned, 0);
@@ -367,7 +367,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->node.module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
@@ -402,17 +402,13 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->node.module);
                     sb_sprintf(&default_sb, "." SV_Fmt, SV_Arg(defined_as->node.token.sv));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
             }
 
-            LLVMMetadataRef scope_metadata = NULL;
-            if (spec->definition->defined_in) {
-                scope_metadata = get_scope_of_definition(c, (Node *) spec->definition, spec->definition->defined_in);
-            }
-
+            LLVMMetadataRef scope_metadata = c->llvm_debug_compile_unit;
             LLVMMetadataRef file_metadata = get_debug_file(c, spec->definition->node.token.pos.path);
             LLVMMetadataRef fields[2];
 
@@ -433,7 +429,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
 
             // Case
             {
-                Type            case_type = {.kind = TYPE_I64};
+                Type            case_type = {.kind = TYPE_S64};
                 LLVMMetadataRef case_type_metadata = get_debug_for_type(c, &case_type);
 
                 fields[0] = LLVMDIBuilderCreateMemberType(
@@ -569,18 +565,14 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
                 Node_Atom *defined_as = spec->definition->defined_as;
                 if (defined_as) {
                     const size_t start = default_sb.count;
-                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->module);
+                    sb_push_fn_name(&default_sb, spec->definition->defined_in, spec->definition->node.module);
                     sb_push(&default_sb, '.');
                     sb_push_type(&default_sb, type_without_meta(*type));
                     name = sv_from_cstr(arena_sb_to_cstr(&temp_arena, &default_sb, start));
                 }
             }
 
-            LLVMMetadataRef scope_metadata = NULL;
-            if (spec->definition->defined_in) {
-                scope_metadata = get_scope_of_definition(c, (Node *) spec->definition, spec->definition->defined_in);
-            }
-
+            LLVMMetadataRef scope_metadata = c->llvm_debug_compile_unit;
             spec->debug = LLVMDIBuilderCreateReplaceableCompositeType(
                 c->llvm_debug_builder,
                 DW_TAG_structure_type,
@@ -696,10 +688,10 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         fields[0].type.llvm = NULL;
 
         fields[1].name = sv_from_cstr("count");
-        fields[1].type = (Type) {.kind = TYPE_I64};
+        fields[1].type = (Type) {.kind = TYPE_S64};
 
         fields[2].name = sv_from_cstr("capacity");
-        fields[2].type = (Type) {.kind = TYPE_I64};
+        fields[2].type = (Type) {.kind = TYPE_S64};
 
         LLVMMetadataRef metadata = get_debug_for_builtin_compound_type(c, name, fields, len(fields));
         arena_reset(&temp_arena, checkpoint);
@@ -718,7 +710,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         fields[0].type.llvm = NULL;
 
         fields[1].name = sv_from_cstr("count");
-        fields[1].type = (Type) {.kind = TYPE_I64};
+        fields[1].type = (Type) {.kind = TYPE_S64};
 
         LLVMMetadataRef metadata = get_debug_for_builtin_compound_type(c, name, fields, len(fields));
         arena_reset(&temp_arena, checkpoint);
@@ -731,7 +723,7 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         fields[0].type = (Type) {.kind = TYPE_CHAR, .ref = 1};
 
         fields[1].name = sv_from_cstr("count");
-        fields[1].type = (Type) {.kind = TYPE_I64};
+        fields[1].type = (Type) {.kind = TYPE_S64};
         return get_debug_for_builtin_compound_type(c, sv_from_cstr("string"), fields, len(fields));
     }
 
@@ -819,5 +811,3 @@ LLVMMetadataRef get_debug_for_type(Compiler *c, Type *type) {
         break;
     }
 }
-
-// TODO: Anonymous types defined in function signatures are broken

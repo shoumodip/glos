@@ -2,8 +2,8 @@ EXIT 1
 STDOUT 0
 
 STDERR 184
-tests/error_cannot_cast_float_value_nan_to_integer_in_constant_expression.glos:1:10: ERROR: This expression evaluates to NaN, which cannot be casted to 'i64'
+tests/error_cannot_cast_float_value_nan_to_integer_in_constant_expression.glos:1:10: Error: This expression evaluates to NaN, which cannot be casted to 's64'
 
-    X :: i64(0.0 / 0.0)
+    X :: s64(0.0 / 0.0)
 
 

@@ -3,7 +3,7 @@ Foo :: trait {
     b: ()
 }
 
-Bar :: distinct i64
+Bar :: distinct s64
 
 main :: () {
     Foo(Bar(0))

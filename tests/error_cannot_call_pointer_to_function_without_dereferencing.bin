@@ -2,7 +2,7 @@ EXIT 1
 STDOUT 0
 
 STDERR 140
-tests/error_cannot_call_pointer_to_function_without_dereferencing.glos:6:5: ERROR: Cannot call '&()' without deferencing it first
+tests/error_cannot_call_pointer_to_function_without_dereferencing.glos:6:5: Error: Cannot call '&()' without deferencing it first
 
     g()
 

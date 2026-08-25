@@ -1,5 +1,5 @@
 Foo :: union {
-    i64
+    s64
     string
 }
 
@@ -8,7 +8,7 @@ main :: () {
     f.type = 69
     if f == {
     case null
-    case i64
+    case s64
     case string
     }
 }

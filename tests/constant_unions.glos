@@ -1,6 +1,6 @@
 Foo :: union {
     bool
-    i64
+    s64
 }
 
 Value :: union {
@@ -12,7 +12,7 @@ a :: Value(Foo(69))
 #if a == {
 case Foo
     #if a == {
-    case i64
+    case s64
         main :: () {
             other()
             println(a)

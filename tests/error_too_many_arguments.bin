@@ -2,11 +2,11 @@ EXIT 1
 STDOUT 0
 
 STDERR 212
-tests/error_too_many_arguments.glos:3:9: ERROR: Too many arguments: Expected 0, got 1
+tests/error_too_many_arguments.glos:3:9: Error: Too many arguments: Expected 0, got 1
 
     foo(69)
 
-tests/error_too_many_arguments.glos:2:12: NOTE: The function being called has signature '()'
+tests/error_too_many_arguments.glos:2:12: Note: The function being called has signature '()'
 
     foo :: () {}
 

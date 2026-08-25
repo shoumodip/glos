@@ -1,6 +1,6 @@
 A, B :: 69, 420
 c, d := 1337, 80085
-e, f: i64
+e, f: s64
 
 main :: () {
     // Compile time assignment
@@ -30,10 +30,10 @@ main :: () {
 
     // Assignment with typed definition
     {
-        foo :: () -> i32 { return 69 }
-        bar :: () -> i32 { return 420 }
+        foo :: () -> s32 { return 69 }
+        bar :: () -> s32 { return 420 }
 
-        a, b: i32 = 69, 420
+        a, b: s32 = 69, 420
         a, b += bar(), foo()
         assert(a == 489)
         assert(b == 489)
@@ -41,7 +41,7 @@ main :: () {
 
     // Multiple returns
     {
-        foo :: () -> (i64, i64) {
+        foo :: () -> s64, s64 {
             return 69, 420
         }
 
@@ -52,11 +52,11 @@ main :: () {
 
     // A function with multiple returns as an argument to another function
     {
-        foo :: () -> (i64, i64) {
+        foo :: () -> s64, s64 {
             return 69, 420
         }
 
-        bar :: (a: i64, b: i64) {
+        bar :: (a: s64, b: s64) {
             assert(a == 69)
             assert(b == 420)
         }
@@ -67,7 +67,7 @@ main :: () {
     // A structure type definition with multiple fields in the same statement
     {
         Vec2 :: struct {
-            x, y: i64
+            x, y: s64
         }
 
         v := Vec2 {y = 420, x = 69}

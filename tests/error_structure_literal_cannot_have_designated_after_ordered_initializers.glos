@@ -1,6 +1,6 @@
 Vec2 :: struct {
-    x: i32
-    y: i32
+    x: s32
+    y: s32
 }
 
 main :: () {
