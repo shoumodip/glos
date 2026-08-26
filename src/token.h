@@ -101,6 +101,7 @@ typedef enum {
     TOKEN_ELSE,
     TOKEN_FOR,
     TOKEN_CASE,
+    TOKEN_IMPL,
 
     TOKEN_DEFER,
     TOKEN_BREAK,

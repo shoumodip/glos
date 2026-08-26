@@ -611,7 +611,7 @@ void compile_stmt_return(Compiler *c, Node_Return *returnn) {
     c->group_values.count = group_values_count_save;
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 void compile_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;

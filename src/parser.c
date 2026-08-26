@@ -736,7 +736,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 79, "");
+static_assert(COUNT_TOKENS == 80, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -820,7 +820,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
     case TOKEN_DISTINCT: {
         Node *value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
-        static_assert(COUNT_NODES == 29, "");
+        static_assert(COUNT_NODES == 30, "");
         switch (value->kind) {
         case NODE_ENUM:
         case NODE_TRAIT:
@@ -1517,7 +1517,7 @@ static void local_assert(Parser *p, bool expected_is_local, Token token, const c
     }
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 static Node *parse_stmt(Parser *p) {
     Node *node = NULL;
 
@@ -1673,6 +1673,95 @@ static Node *parse_stmt(Parser *p) {
         local_assert(p, true, token, NULL);
         node = parse_for(p, token);
         break;
+
+    case TOKEN_IMPL: {
+        local_assert(p, false, token, NULL);
+        node = node_alloc(p->module_current, NODE_IMPL, token);
+        Node_Impl *impl = (Node_Impl *) node;
+
+        impl->receiver = parse_expr(p, POWER_SET, false, false, NULL);
+        expect_token(p, TOKEN_LBRACE);
+        while (!read_token(p, TOKEN_RBRACE)) {
+            Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
+
+            Node_Define *define =
+                (Node_Define *) parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
+
+            if (!define->is_const) {
+                error_node(EK_ERROR, define->name, "Expected constant definition of method, got variable instead");
+                exit(1);
+            }
+
+            if (define->expr->kind != NODE_FN) {
+                error_node(EK_ERROR, define->expr, "Expected function literal for method definition");
+                exit(1);
+            }
+
+            Node_Fn *fn = (Node_Fn *) define->expr;
+            {
+                if (fn->args_count == 0) {
+                    error_token(
+                        EK_ERROR,
+                        fn->args_end_token,
+                        "A method must have atleast one argument to behave as the receiver");
+                    exit(1);
+                }
+                assert(fn->args.head->kind == NODE_DEFINE);
+
+                Node_Define *receiver = (Node_Define *) fn->args.head;
+                if (receiver->name_polymorph) {
+                    error_node(
+                        EK_ERROR,
+                        (Node *) receiver->name_polymorph,
+                        "The receiver of a method cannot be a polymorphic argument");
+
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    The receiver can have a polymorphic type, but the argument itself cannot be polymorphic.\n"
+                        "\n"
+                        "        foo :: (f: Foo(");
+                    afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
+                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "T)) {}    ");
+                    afprintf(stderr, ANSI_COLOR_GREEN | ANSI_BOLD, "// This is allowed\n");
+
+                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "        bar :: (");
+                    afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
+                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "B: Bar)    {}    ");
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_RED | ANSI_BOLD,
+                        "// This is not (Notice the difference in the position of the '$')\n");
+                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
+                    exit(1);
+                }
+
+                if (receiver->has_spread) {
+                    error_token(EK_ERROR, receiver->spread_token, "The receiver of a method cannot be variadic");
+                    exit(1);
+                }
+
+                if (receiver->expr) {
+                    error_node(EK_ERROR, receiver->expr, "The receiver of a method cannot have a default value");
+                    exit(1);
+                }
+
+                if (!fn->body && !p->state.in_extern) {
+                    error_node(EK_ERROR, (Node *) fn, "A method must have a body");
+                    error_node(EK_NOTE, receiver->name, "This argument is taken to be the receiver");
+                    exit(1);
+                }
+
+                fn->is_method = true;
+            }
+
+            nodes_push(&impl->methods, (Node *) define);
+            expect_stmt_terminator(p);
+        }
+
+        assert(p->state.ahead.kind == TOKEN_RBRACE);
+        impl->end = p->state.ahead;
+    } break;
 
     case TOKEN_DEFER: {
         not_in_extern_assert(p, token);

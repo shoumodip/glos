@@ -469,6 +469,8 @@ typedef enum {
     NODE_CASE,
     NODE_SWITCH,
 
+    NODE_IMPL,
+
     NODE_JUMP,
     NODE_DEFER,
     NODE_RETURN,
@@ -1015,6 +1017,13 @@ typedef struct {
 
     Token end;
 } Node_Switch;
+
+typedef struct {
+    Node  node;
+    Node *receiver;
+    Nodes methods;
+    Token end;
+} Node_Impl;
 
 typedef struct {
     Node node;

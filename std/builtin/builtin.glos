@@ -52,34 +52,36 @@ unreachable :: (message: ...Any, location := #caller_location) {
     C.abort()
 }
 
-equal :: (this: string, that: string) -> bool {
-    return this.count == that.count && C.memcmp(rawptr(this.data), rawptr(that.data), u64(this.count)) == 0
-}
-
-order :: (this: string, that: string) -> Ordering {
-    n := this.count
-    if n > that.count {
-        n = that.count
+impl string {
+    equal :: (lhs: string, rhs: string) -> bool {
+        return lhs.count == rhs.count && C.memcmp(rawptr(lhs.data), rawptr(rhs.data), u64(lhs.count)) == 0
     }
 
-    diff := C.memcmp(rawptr(this.data), rawptr(that.data), u64(n))
-    if diff < 0 {
-        return .LT
-    }
+    order :: (lhs: string, rhs: string) -> Ordering {
+        n := lhs.count
+        if n > rhs.count {
+            n = rhs.count
+        }
 
-    if diff > 0 {
-        return .GT
-    }
+        diff := C.memcmp(rawptr(lhs.data), rawptr(rhs.data), u64(n))
+        if diff < 0 {
+            return .LT
+        }
 
-    if this.count < that.count {
-        return .LT
-    }
+        if diff > 0 {
+            return .GT
+        }
 
-    if this.count > that.count {
-        return .GT
-    }
+        if lhs.count < rhs.count {
+            return .LT
+        }
 
-    return .EQ
+        if lhs.count > rhs.count {
+            return .GT
+        }
+
+        return .EQ
+    }
 }
 
 New :: ($T: Type, n := 1, a := &arena.default) -> &T {

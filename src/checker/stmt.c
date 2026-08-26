@@ -261,7 +261,7 @@ void check_stmt_return(Compiler *c, Node_Return *returnn) {
     n->type = *fn_type->return_type;
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 void check_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;
@@ -294,6 +294,17 @@ void check_stmt(Compiler *c, Node *n) {
     case NODE_SWITCH:
         check_stmt_switch(c, (Node_Switch *) n);
         break;
+
+    case NODE_IMPL: {
+        Node_Impl *impl = (Node_Impl *) n;
+        ll_foreach(it, &impl->methods) {
+            assert(it->kind == NODE_DEFINE);
+            Node_Define *define = (Node_Define *) it;
+
+            assert(define->expr->kind == NODE_FN);
+            check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, false, false);
+        }
+    } break;
 
     case NODE_JUMP:
         // Pass

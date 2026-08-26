@@ -1,12 +1,14 @@
 File :: distinct rawptr
 
-write :: (this: File, bytes: []char) {
-    C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), this);
-}
+impl File {
+    write :: (f: File, bytes: []char) {
+        C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), f);
+    }
 
-close :: (this: &File) {
-    C.fclose(*this)
-    *this = null
+    close :: (f: &File) {
+        C.fclose(*f)
+        *f = null
+    }
 }
 
 #if PLATFORM == {

@@ -245,6 +245,84 @@ void check_nodes(Compiler *c) {
         }
     }
 
+    // Impls
+    {
+        for (size_t i = 0; i < c->impls_list.count; i++) {
+            Node_Impl *impl = c->impls_list.data[i];
+            check_expr(c, impl->receiver, REF_NONE);
+            type_assert_type(c, impl->receiver);
+
+            Type *receiver = &impl->receiver->type;
+            receiver->is_meta = false;
+
+            if (type_kind_eq(*receiver, TYPE_TRAIT)) {
+                error_node_begin(EK_ERROR, impl->receiver);
+                fprintf(stderr, "Cannot define methods on %s", type_to_cstr(*receiver));
+                if (receiver->spec.trait->definition->defined_as) {
+                    fprintf(stderr, ". (It is a trait)");
+                }
+                error_finalize();
+                exit(c, 1);
+            }
+
+            bool        is_named = false;
+            Method_Spec spec = {0};
+            if (!get_method_spec(c, impl->receiver, *receiver, (SV) {0}, &spec, impl->node.module, &is_named)) {
+                error_node(EK_ERROR, impl->receiver, "Can only define methods on types defined in the same module");
+                exit(c, 1);
+            }
+
+            // TODO: Is this even relevant anymore?
+            if (!is_named) {
+                error_node(EK_ERROR, impl->receiver, "The receiver of a method cannot have an anonymous type");
+                exit(c, 1);
+            }
+
+            ll_foreach(it, &impl->methods) {
+                assert(it->kind == NODE_DEFINE);
+                Node_Define *define = (Node_Define *) it;
+
+                assert(define->expr->kind == NODE_FN);
+                Node_Fn *fn = (Node_Fn *) define->expr;
+                assert(fn->defined_as && fn->args.head && fn->args.head->kind == NODE_DEFINE);
+
+                // Define the polymorphic parameters
+                check_fn(c, fn, REF_NONE, NULL, true, true);
+
+                Node_Define *argument = (Node_Define *) fn->args.head;
+                assert(argument->name->kind == NODE_ATOM && argument->type && fn->defined_as);
+                spec.name = fn->defined_as->node.token.sv;
+
+                check_expr(c, argument->type, REF_NONE);
+                type_assert_type(c, argument->type);
+
+                argument->type->type.is_meta = false;
+                type_assert(c, argument->type, type_with_ref(*receiver, argument->type->type.ref));
+
+                if (type_kind_eq(*receiver, TYPE_ENUM)) {
+                    ll_foreach(it, &receiver->spec.enumm.definition->values) {
+                        if (sv_eq(it->token.sv, spec.name)) {
+                            error_redefinition(c, (Node *) fn->defined_as, &it->token.pos);
+                        }
+                    }
+                } else if (type_kind_eq(*receiver, TYPE_STRUCT)) {
+                    for (size_t i = 0; i < receiver->spec.structt->fields_count; i++) {
+                        const Type_Struct_Field it = receiver->spec.structt->fields[i];
+                        if (sv_eq(it.name, spec.name)) {
+                            error_redefinition(c, (Node *) fn->defined_as, &it.pos);
+                        }
+                    }
+                }
+
+                Node_Fn **previous = ht_get(&c->methods_table, spec);
+                if (previous) {
+                    error_redefinition(c, (Node *) fn->defined_as, &(*previous)->defined_as->node.token.pos);
+                }
+                ht_set(&c->methods_table, spec, fn);
+            }
+        }
+    }
+
     for (Module *m = c->modules->head; m; m = m->next) {
         for (Node *it = m->nodes.head; it; it = it->next) {
             check_stmt(c, it);

@@ -884,7 +884,7 @@ void const_value_debug(FILE *f, Type type, Const_Value v) {
     default_sb.count = start;
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 size_t node_size(Node_Kind kind) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(Node_Atom), // This comment is here to prevent clang-format from messing this up
@@ -917,6 +917,8 @@ size_t node_size(Node_Kind kind) {
 
         [NODE_CASE] = sizeof(Node_Case),
         [NODE_SWITCH] = sizeof(Node_Switch),
+
+        [NODE_IMPL] = sizeof(Node_Impl),
 
         [NODE_JUMP] = sizeof(Node_Jump),
         [NODE_DEFER] = sizeof(Node_Defer),
@@ -1077,7 +1079,7 @@ static void polymorphs_debug_impl(FILE *f, Polymorphs ns, int depth, const char 
     }
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label) {
     if (!n) {
         return;
@@ -1305,6 +1307,14 @@ static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label
         fprintf(f, "Switch {\n");
         node_debug_impl(f, sw->expr, depth + 1, "Expr");
         nodes_debug_impl(f, sw->cases, depth + 1, "Cases");
+        fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
+    } break;
+
+    case NODE_IMPL: {
+        Node_Impl *impl = (Node_Impl *) n;
+        fprintf(f, "Impl {\n");
+        node_debug_impl(f, impl->receiver, depth + 1, "Receiver");
+        nodes_debug_impl(f, impl->methods, depth + 1, "Methods");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
 

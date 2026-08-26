@@ -79,6 +79,7 @@ typedef struct {
 
     HT(Method_Spec, Node_Fn *) methods_table;
     DA(Node_Fn *) methods_list;
+    DA(Node_Impl *) impls_list;
 
     Type ordering_type;
 

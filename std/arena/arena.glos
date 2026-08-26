@@ -4,66 +4,68 @@ Arena :: struct {
     capacity: s64
 }
 
-alloc :: (this: &Arena, size: s64, align := true, zeroed := true, location := #caller_location) -> rawptr {
-    if this.data == null {
-        if this.capacity == 0 {
-            this.capacity = 256 * 1024 * 1024
-        }
-
-        #if PLATFORM == .WINDOWS {
-            this.data = C.VirtualAlloc(null, u64(this.capacity), C.MEM_RESERVE | C.MEM_COMMIT, C.PAGE_READWRITE)
-        } else {
-            this.data = C.mmap(null, u64(this.capacity), C.PROT_READ | C.PROT_WRITE, C.MAP_PRIVATE | C.MAP_ANONYMOUS, -1, 0)
-            if this.data == C.MAP_FAILED {
-                this.data = null
+impl Arena {
+    alloc :: (a: &Arena, size: s64, align := true, zeroed := true, location := #caller_location) -> rawptr {
+        if a.data == null {
+            if a.capacity == 0 {
+                a.capacity = 256 * 1024 * 1024
             }
+
+            #if PLATFORM == .WINDOWS {
+                a.data = C.VirtualAlloc(null, u64(a.capacity), C.MEM_RESERVE | C.MEM_COMMIT, C.PAGE_READWRITE)
+            } else {
+                a.data = C.mmap(null, u64(a.capacity), C.PROT_READ | C.PROT_WRITE, C.MAP_PRIVATE | C.MAP_ANONYMOUS, -1, 0)
+                if a.data == C.MAP_FAILED {
+                    a.data = null
+                }
+            }
+
+            assert(a.data != null)
         }
 
-        assert(this.data != null)
-    }
+        ptr := a.data + rawptr(a.head)
+        if size == 0 {
+            return ptr
+        }
 
-    ptr := this.data + rawptr(this.head)
-    if size == 0 {
+        if align {
+            size = (size + 7) & -8
+        }
+
+        if a.head + size > a.capacity {
+            panic("Arena overflow", location = location)
+        }
+        a.head += size
+
+        if zeroed {
+            C.memset(ptr, 0, u64(size))
+        }
         return ptr
     }
 
-    if align {
-        size = (size + 7) & -8
+    free :: (a: &Arena) {
+        if a.data == null {
+            return
+        }
+
+        #if PLATFORM == .WINDOWS {
+            C.VirtualFree(a.data, 0, C.MEM_RELEASE)
+        } else {
+            C.munmap(a.data, u64(a.capacity))
+        }
+
+        C.memset(rawptr(a), 0, sizeof(*a))
     }
 
-    if this.head + size > this.capacity {
-        panic("Arena overflow", location = location)
-    }
-    this.head += size
+    reset :: (a: &Arena, ptr: rawptr, align := true, location := #caller_location) {
+        if ptr < a.data || ptr > a.data + rawptr(a.head) {
+            panic("Arena does not contain the memory address \{ptr}", location = location)
+        }
 
-    if zeroed {
-        C.memset(ptr, 0, u64(size))
-    }
-    return ptr
-}
-
-free :: (this: &Arena) {
-    if this.data == null {
-        return
-    }
-
-    #if PLATFORM == .WINDOWS {
-        C.VirtualFree(this.data, 0, C.MEM_RELEASE)
-    } else {
-        C.munmap(this.data, u64(this.capacity))
-    }
-
-    C.memset(rawptr(this), 0, sizeof(*this))
-}
-
-reset :: (this: &Arena, ptr: rawptr, align := true, location := #caller_location) {
-    if ptr < this.data || ptr > this.data + rawptr(this.head) {
-        panic("Arena does not contain the memory address \{ptr}", location = location)
-    }
-
-    this.head = s64(ptr - this.data)
-    if align {
-        this.head = (this.head + 7) & -8
+        a.head = s64(ptr - a.data)
+        if align {
+            a.head = (a.head + 7) & -8
+        }
     }
 }
 
