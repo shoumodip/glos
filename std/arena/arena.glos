@@ -5,7 +5,7 @@ Arena :: struct {
 }
 
 impl Arena {
-    alloc :: (a: &Arena, size: s64, align := true, zeroed := true, location := #caller_location) -> rawptr {
+    alloc :: (a: &Self, size: s64, align := true, zeroed := true, location := #caller_location) -> rawptr {
         if a.data == null {
             if a.capacity == 0 {
                 a.capacity = 256 * 1024 * 1024
@@ -43,7 +43,7 @@ impl Arena {
         return ptr
     }
 
-    free :: (a: &Arena) {
+    free :: (a: &Self) {
         if a.data == null {
             return
         }
@@ -57,7 +57,7 @@ impl Arena {
         C.memset(rawptr(a), 0, sizeof(*a))
     }
 
-    reset :: (a: &Arena, ptr: rawptr, align := true, location := #caller_location) {
+    reset :: (a: &Self, ptr: rawptr, align := true, location := #caller_location) {
         if ptr < a.data || ptr > a.data + rawptr(a.head) {
             panic("Arena does not contain the memory address \{ptr}", location = location)
         }

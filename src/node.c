@@ -884,7 +884,7 @@ void const_value_debug(FILE *f, Type type, Const_Value v) {
     default_sb.count = start;
 }
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 size_t node_size(Node_Kind kind) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(Node_Atom), // This comment is here to prevent clang-format from messing this up
@@ -919,6 +919,7 @@ size_t node_size(Node_Kind kind) {
         [NODE_SWITCH] = sizeof(Node_Switch),
 
         [NODE_IMPL] = sizeof(Node_Impl),
+        [NODE_SELF] = sizeof(Node_Self),
 
         [NODE_JUMP] = sizeof(Node_Jump),
         [NODE_DEFER] = sizeof(Node_Defer),
@@ -1079,7 +1080,7 @@ static void polymorphs_debug_impl(FILE *f, Polymorphs ns, int depth, const char 
     }
 }
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label) {
     if (!n) {
         return;
@@ -1317,6 +1318,10 @@ static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label
         nodes_debug_impl(f, impl->methods, depth + 1, "Methods");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
+
+    case NODE_SELF:
+        fprintf(f, "Self\n");
+        break;
 
     case NODE_JUMP:
         if (n->token.kind == TOKEN_BREAK) {

@@ -26,10 +26,11 @@ typedef struct {
     bool in_extern;
     bool in_compile_time_condition;
     bool allow_methods_without_body;
-
     bool after_private;
 
-    Node_Fn            *fn_current;
+    Node_Impl *impl_current;
+    Node_Fn   *fn_current;
+
     Polymorphs_Builder *pb;
 } Parser_State;
 

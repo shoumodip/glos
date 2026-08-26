@@ -470,6 +470,7 @@ typedef enum {
     NODE_SWITCH,
 
     NODE_IMPL,
+    NODE_SELF,
 
     NODE_JUMP,
     NODE_DEFER,
@@ -1024,6 +1025,11 @@ typedef struct {
     Nodes methods;
     Token end;
 } Node_Impl;
+
+typedef struct {
+    Node       node;
+    Node_Impl *impl;
+} Node_Self;
 
 typedef struct {
     Node node;

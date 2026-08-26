@@ -1,7 +1,7 @@
 #include "../error.h"
 #include "checker.h"
 
-static_assert(COUNT_TOKENS == 80, "");
+static_assert(COUNT_TOKENS == 81, "");
 const char *operator_method_name_from_token_kind(Token_Kind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -39,7 +39,7 @@ const char *operator_method_name_from_token_kind(Token_Kind kind) {
     }
 }
 
-static_assert(COUNT_TOKENS == 80, "");
+static_assert(COUNT_TOKENS == 81, "");
 Type_Trait *operator_trait_from_token_kind(Compiler *c, Token_Kind kind) {
     switch (kind) {
     case TOKEN_ADD:

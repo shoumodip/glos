@@ -1,7 +1,7 @@
 #include "../error.h"
 #include "checker.h"
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 bool loop_breaks(Node *n) {
     if (!n) {
         return false;
@@ -56,7 +56,7 @@ bool loop_breaks(Node *n) {
     }
 }
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 bool always_returns(Node *n) {
     if (!n) {
         return false;

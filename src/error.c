@@ -64,7 +64,7 @@ static void range_apply_token(Range *r, Token t) {
     }
 }
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 static void range_apply_node(Range *r, const Node *n) {
     if (!n) {
         return;
@@ -231,6 +231,7 @@ static void range_apply_node(Range *r, const Node *n) {
         range_apply_token(r, impl->end);
     } break;
 
+    case NODE_SELF:
     case NODE_JUMP:
         // Pass
         break;

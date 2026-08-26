@@ -261,7 +261,7 @@ void check_stmt_return(Compiler *c, Node_Return *returnn) {
     n->type = *fn_type->return_type;
 }
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 void check_stmt(Compiler *c, Node *n) {
     if (!n) {
         return;

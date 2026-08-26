@@ -736,7 +736,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 80, "");
+static_assert(COUNT_TOKENS == 81, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -820,7 +820,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
     case TOKEN_DISTINCT: {
         Node *value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
-        static_assert(COUNT_NODES == 30, "");
+        static_assert(COUNT_NODES == 31, "");
         switch (value->kind) {
         case NODE_ENUM:
         case NODE_TRAIT:
@@ -1303,6 +1303,16 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         }
     } break;
 
+    case TOKEN_SELF: {
+        if (!p->state.impl_current) {
+            error_token(EK_ERROR, token, "Unexpected %s outside 'impl' block", token_kind_to_cstr(token.kind));
+            exit(1);
+        }
+
+        node = node_alloc(p->module_current, NODE_SELF, token);
+        ((Node_Self *) node)->impl = p->state.impl_current;
+    } break;
+
     case TOKEN_INLINE: {
         if (p->state.in_extern) {
             error_token(EK_ERROR, token, "External function cannot be inlined");
@@ -1517,7 +1527,7 @@ static void local_assert(Parser *p, bool expected_is_local, Token token, const c
     }
 }
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 static Node *parse_stmt(Parser *p) {
     Node *node = NULL;
 
@@ -1677,7 +1687,9 @@ static Node *parse_stmt(Parser *p) {
     case TOKEN_IMPL: {
         local_assert(p, false, token, NULL);
         node = node_alloc(p->module_current, NODE_IMPL, token);
+
         Node_Impl *impl = (Node_Impl *) node;
+        p->state.impl_current = impl;
 
         impl->receiver = parse_expr(p, POWER_SET, false, false, NULL);
         expect_token(p, TOKEN_LBRACE);
@@ -1714,25 +1726,6 @@ static Node *parse_stmt(Parser *p) {
                         EK_ERROR,
                         (Node *) receiver->name_polymorph,
                         "The receiver of a method cannot be a polymorphic argument");
-
-                    afprintf(
-                        stderr,
-                        ANSI_COLOR_YELLOW | ANSI_BOLD,
-                        "    The receiver can have a polymorphic type, but the argument itself cannot be polymorphic.\n"
-                        "\n"
-                        "        foo :: (f: Foo(");
-                    afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
-                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "T)) {}    ");
-                    afprintf(stderr, ANSI_COLOR_GREEN | ANSI_BOLD, "// This is allowed\n");
-
-                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "        bar :: (");
-                    afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
-                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "B: Bar)    {}    ");
-                    afprintf(
-                        stderr,
-                        ANSI_COLOR_RED | ANSI_BOLD,
-                        "// This is not (Notice the difference in the position of the '$')\n");
-                    afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
                     exit(1);
                 }
 
@@ -1744,6 +1737,19 @@ static Node *parse_stmt(Parser *p) {
                 if (receiver->expr) {
                     error_node(EK_ERROR, receiver->expr, "The receiver of a method cannot have a default value");
                     exit(1);
+                }
+
+                {
+                    Node *type = receiver->type;
+                    while (type->kind == NODE_UNARY && type->token.kind == TOKEN_BAND) {
+                        type = ((Node_Unary *) type)->value;
+                    }
+
+                    if (type->kind != NODE_SELF) {
+                        error_node(
+                            EK_ERROR, receiver->type, "The type of the receiver must be 'Self' or pointer to 'Self'");
+                        exit(1);
+                    }
                 }
 
                 if (!fn->body && !p->state.in_extern) {
@@ -1761,6 +1767,8 @@ static Node *parse_stmt(Parser *p) {
 
         assert(p->state.ahead.kind == TOKEN_RBRACE);
         impl->end = p->state.ahead;
+
+        p->state.impl_current = NULL;
     } break;
 
     case TOKEN_DEFER: {

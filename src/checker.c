@@ -295,9 +295,7 @@ void check_nodes(Compiler *c) {
 
                 check_expr(c, argument->type, REF_NONE);
                 type_assert_type(c, argument->type);
-
                 argument->type->type.is_meta = false;
-                type_assert(c, argument->type, type_with_ref(*receiver, argument->type->type.ref));
 
                 if (type_kind_eq(*receiver, TYPE_ENUM)) {
                     ll_foreach(it, &receiver->spec.enumm.definition->values) {

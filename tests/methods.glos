@@ -3,7 +3,7 @@ Counter :: struct {
 }
 
 impl Counter {
-    get :: (c: &Counter) -> s64 {
+    get :: (c: &Self) -> s64 {
         c.n += 1
         return c.n - 1
     }

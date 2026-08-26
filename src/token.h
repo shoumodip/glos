@@ -81,6 +81,7 @@ typedef enum {
     TOKEN_SIZEOF,
     TOKEN_TYPEOF,
 
+    TOKEN_SELF,
     TOKEN_INLINE,
     TOKEN_DISTINCT,
 

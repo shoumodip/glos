@@ -53,11 +53,11 @@ unreachable :: (message: ...Any, location := #caller_location) {
 }
 
 impl string {
-    equal :: (lhs: string, rhs: string) -> bool {
+    equal :: (lhs: Self, rhs: string) -> bool {
         return lhs.count == rhs.count && C.memcmp(rawptr(lhs.data), rawptr(rhs.data), u64(lhs.count)) == 0
     }
 
-    order :: (lhs: string, rhs: string) -> Ordering {
+    order :: (lhs: Self, rhs: string) -> Ordering {
         n := lhs.count
         if n > rhs.count {
             n = rhs.count

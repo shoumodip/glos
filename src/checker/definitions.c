@@ -85,7 +85,7 @@ Node_Fn *get_main(Compiler *c) {
     return c->main_fn;
 }
 
-static_assert(COUNT_NODES == 30, "");
+static_assert(COUNT_NODES == 31, "");
 void define_orderless_node(Compiler *c, Node *n, const size_t block_start) {
     switch (n->kind) {
     case NODE_IMPORT: {
