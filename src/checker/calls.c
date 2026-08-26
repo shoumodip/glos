@@ -54,6 +54,13 @@ static void show_error_for_uninferred_polymorphic_parameter_in_call(
     }
 }
 
+// TODO: This seems to be broken:
+//
+// ```
+// main :: () {
+//    Type.method()
+// }
+// ```
 void check_call_arity(
     Compiler *c,
     Node     *fn,

@@ -66,7 +66,15 @@ bool node_is_runtime_polymorphic_expression(Node *n) {
             n = ((Node_Unary *) n)->value;
         }
 
-        return n->kind != NODE_CALL || !((Node_Call *) n)->is_monomorphization_of_polymorphic_type;
+        if (n->kind == NODE_SELF) {
+            return false;
+        }
+
+        if (n->kind == NODE_CALL && ((Node_Call *) n)->is_monomorphization_of_polymorphic_type) {
+            return false;
+        }
+
+        return true;
     }
 
     return false;

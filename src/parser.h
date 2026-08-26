@@ -45,6 +45,8 @@ typedef struct {
 
     Module  *module_current;
     Modules *modules;
+
+    Monomorph_Replacements monomorph_replacements;
 } Parser;
 
 Module *module_get(Parser *p, const char *path); // `path` is absolute

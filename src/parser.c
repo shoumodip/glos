@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define DONT_DEFINE_EXIT_WRAPPER
+#include "checker/checker.h"
+
 #ifndef PLATFORM_X86_64_WINDOWS
 #include <dirent.h>
 #include <errno.h>
@@ -1219,8 +1222,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         token = expect_token(p, TOKEN_LBRACE, TOKEN_LPAREN);
         if (token.kind == TOKEN_LPAREN) {
-            Polymorphs_Builder pb = {.polymorphs = &structt->polymorphs};
-
+            Polymorphs_Builder  pb = {.polymorphs = &structt->polymorphs};
             Polymorphs_Builder *pb_save = p->state.pb;
             p->state.pb = &pb;
             while (!read_token(p, TOKEN_RPAREN)) {
@@ -1689,9 +1691,14 @@ static Node *parse_stmt(Parser *p) {
         node = node_alloc(p->module_current, NODE_IMPL, token);
 
         Node_Impl *impl = (Node_Impl *) node;
-        p->state.impl_current = impl;
 
+        Polymorphs_Builder  pb = {.polymorphs = &impl->polymorphs};
+        Polymorphs_Builder *pb_save = p->state.pb;
+        p->state.pb = &pb;
         impl->receiver = parse_expr(p, POWER_SET, false, false, NULL);
+        p->state.pb = pb_save;
+
+        p->state.impl_current = impl;
         expect_token(p, TOKEN_LBRACE);
         while (!read_token(p, TOKEN_RBRACE)) {
             Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
@@ -1740,15 +1747,40 @@ static Node *parse_stmt(Parser *p) {
                 }
 
                 {
-                    Node *type = receiver->type;
-                    while (type->kind == NODE_UNARY && type->token.kind == TOKEN_BAND) {
-                        type = ((Node_Unary *) type)->value;
+                    Node **self = &receiver->type;
+                    while ((*self)->kind == NODE_UNARY && (*self)->token.kind == TOKEN_BAND) {
+                        self = &((Node_Unary *) *self)->value;
                     }
 
-                    if (type->kind != NODE_SELF) {
+                    if ((*self)->kind != NODE_SELF) {
                         error_node(
                             EK_ERROR, receiver->type, "The type of the receiver must be 'Self' or pointer to 'Self'");
                         exit(1);
+                    }
+
+                    if (impl->polymorphs.count) {
+                        Node *from = impl->receiver;
+                        ht_clear(&p->monomorph_replacements);
+                        monomorphize_node(&p->monomorph_replacements, &from, true);
+                        monomorphize_node(&p->monomorph_replacements, &from, false);
+                        *self = from;
+
+                        Polymorphs fn_polymorphs = {0};
+                        ll_foreach(it, &impl->polymorphs) {
+                            polymorphs_push(
+                                &fn_polymorphs, *(Node_Polymorph **) ht_get(&p->monomorph_replacements, (Node *) it));
+                        }
+
+                        ll_foreach(it, &fn->polymorphs) {
+                            polymorphs_push(&fn_polymorphs, it);
+                        }
+                        fn->polymorphs = fn_polymorphs;
+
+                        // Monomorphizes impl block polymorphic parameters at parse time.
+                        // Compiles.
+                        // Refuses to elaborate.
+                        //
+                        //       <insert gigachad.gif>
                     }
                 }
 
@@ -1866,6 +1898,7 @@ static Node *parse_stmt(Parser *p) {
 
 void parser_free(Parser *p) {
     da_free(&p->paths);
+    ht_free(&p->monomorph_replacements);
 }
 
 Parse_Result parse_file(Parser *p, const char *path) {

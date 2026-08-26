@@ -249,6 +249,28 @@ void check_nodes(Compiler *c) {
     {
         for (size_t i = 0; i < c->impls_list.count; i++) {
             Node_Impl *impl = c->impls_list.data[i];
+            ll_foreach(it, &impl->polymorphs) {
+                ll_foreach(prev, &impl->polymorphs) {
+                    if (prev == it) {
+                        break;
+                    }
+
+                    const Token *previous = &prev->name->node.token;
+                    if (sv_eq(previous->sv, it->name->node.token.sv)) {
+                        error_redefinition(c, (Node *) it->name, &previous->pos);
+                    }
+                }
+
+                it->name->node.type = (Type) {
+                    .kind = TYPE_POLYMORPH,
+                    .spec.polymorph.definition = it,
+                    .spec.polymorph.is_definition = true,
+                    .is_meta = true,
+                };
+
+                it->node.type = it->name->node.type;
+            }
+
             check_expr(c, impl->receiver, REF_NONE);
             type_assert_type(c, impl->receiver);
 

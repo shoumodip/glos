@@ -199,6 +199,7 @@ void add_monomorph_parameter_default_value(
     Node           *default_value_as_caller_location);
 bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const Type *expected);
 
+void  monomorphize_node(Monomorph_Replacements *rs, Node **np, bool first);
 Node *monomorphize(Compiler *c, Node *n, Node *site);
 
 // Expressions /////////////////////////////////////////////////////////////////////////////////////

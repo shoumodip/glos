@@ -401,14 +401,12 @@ static u64 ht_hasheq_monomorph_spec(const void *va, const void *vb, size_t n) {
     return hash;
 }
 
-static void monomorphize_node(Compiler *c, Node **np, bool first);
-
-static void monomorphize_nodes(Compiler *c, Nodes *ns, bool first) {
+static void monomorphize_nodes(Monomorph_Replacements *rs, Nodes *ns, bool first) {
     Nodes from = *ns;
     memset(ns, 0, sizeof(*ns));
 
     ll_foreach(it, &from) {
-        monomorphize_node(c, &it, first);
+        monomorphize_node(rs, &it, first);
         nodes_push(ns, it);
     }
 
@@ -417,12 +415,12 @@ static void monomorphize_nodes(Compiler *c, Nodes *ns, bool first) {
     }
 }
 
-static void monomorphize_polymorphs(Compiler *c, Polymorphs *ps, bool first) {
+static void monomorphize_polymorphs(Monomorph_Replacements *rs, Polymorphs *ps, bool first) {
     Polymorphs from = *ps;
     memset(ps, 0, sizeof(*ps));
 
     ll_foreach(it, &from) {
-        monomorphize_node(c, (Node **) &it, first);
+        monomorphize_node(rs, (Node **) &it, first);
         polymorphs_push(ps, it);
     }
 
@@ -431,18 +429,18 @@ static void monomorphize_polymorphs(Compiler *c, Polymorphs *ps, bool first) {
     }
 }
 
-static void monomorphize_replace(Compiler *c, Node **from) {
+static void monomorphize_replace(Monomorph_Replacements *rs, Node **from) {
     if (!*from) {
         return;
     }
 
-    Node **to = (Node **) ht_get(&c->monomorph_replacements, *from);
+    Node **to = (Node **) ht_get(rs, *from);
     if (to) {
         *from = *to;
     }
 }
 
-static void monomorphize_node(Compiler *c, Node **np, bool first) {
+void monomorphize_node(Monomorph_Replacements *rs, Node **np, bool first) {
     if (!*np) {
         return;
     }
@@ -451,10 +449,10 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     if (first) {
         Node *copy = arena_clone(&default_arena, n, node_size(n->kind));
         memset(&copy->type, 0, sizeof(copy->type));
-        ht_set(&c->monomorph_replacements, n, copy);
+        ht_set(rs, n, copy);
         n = copy;
     } else {
-        monomorphize_replace(c, np);
+        monomorphize_replace(rs, np);
         n = *np;
     }
 
@@ -470,43 +468,43 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
             }
         } else {
             if (atom->definition_spec) {
-                monomorphize_replace(c, (Node **) &atom->definition_spec->static_var_fn);
-                monomorphize_replace(c, (Node **) &atom->definition_spec->definition_node);
-                monomorphize_replace(c, (Node **) &atom->definition_spec->assignment_node);
-                monomorphize_replace(c, (Node **) &atom->definition_spec->polymorph);
+                monomorphize_replace(rs, (Node **) &atom->definition_spec->static_var_fn);
+                monomorphize_replace(rs, (Node **) &atom->definition_spec->definition_node);
+                monomorphize_replace(rs, (Node **) &atom->definition_spec->assignment_node);
+                monomorphize_replace(rs, (Node **) &atom->definition_spec->polymorph);
             }
 
-            monomorphize_replace(c, (Node **) &atom->definition);
-            monomorphize_replace(c, (Node **) &atom->polymorph);
+            monomorphize_replace(rs, (Node **) &atom->definition);
+            monomorphize_replace(rs, (Node **) &atom->polymorph);
         }
     } break;
 
     case NODE_GROUP: {
         Node_Group *group = (Node_Group *) n;
-        monomorphize_nodes(c, &group->nodes, first);
+        monomorphize_nodes(rs, &group->nodes, first);
     } break;
 
     case NODE_UNARY: {
         Node_Unary *unary = (Node_Unary *) n;
-        monomorphize_node(c, &unary->value, first);
+        monomorphize_node(rs, &unary->value, first);
     } break;
 
     case NODE_BINARY: {
         Node_Binary *binary = (Node_Binary *) n;
-        monomorphize_node(c, &binary->lhs, first);
-        monomorphize_node(c, &binary->rhs, first);
+        monomorphize_node(rs, &binary->lhs, first);
+        monomorphize_node(rs, &binary->rhs, first);
     } break;
 
     case NODE_MEMBER: {
         Node_Member *member = (Node_Member *) n;
-        monomorphize_node(c, &member->lhs, first);
-        monomorphize_node(c, &member->rhs, first);
+        monomorphize_node(rs, &member->lhs, first);
+        monomorphize_node(rs, &member->rhs, first);
     } break;
 
     case NODE_ASSERT: {
         Node_Assert *assertt = (Node_Assert *) n;
-        monomorphize_node(c, &assertt->expr, first);
-        monomorphize_node(c, &assertt->message, first);
+        monomorphize_node(rs, &assertt->expr, first);
+        monomorphize_node(rs, &assertt->message, first);
     } break;
 
     case NODE_IMPORT:
@@ -515,20 +513,20 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_DISTINCT: {
         Node_Distinct *distinct = (Node_Distinct *) n;
-        monomorphize_node(c, &distinct->value, first);
+        monomorphize_node(rs, &distinct->value, first);
         if (!first) {
-            monomorphize_replace(c, (Node **) &distinct->defined_as);
+            monomorphize_replace(rs, (Node **) &distinct->defined_as);
         }
     } break;
 
     case NODE_POLYMORPH: {
         Node_Polymorph *polymorph = (Node_Polymorph *) n;
-        monomorphize_node(c, (Node **) &polymorph->name, first);
+        monomorphize_node(rs, (Node **) &polymorph->name, first);
     } break;
 
     case NODE_INTERPOLATION: {
         Node_Interpolation *interpolation = (Node_Interpolation *) n;
-        monomorphize_nodes(c, &interpolation->children, first);
+        monomorphize_nodes(rs, &interpolation->children, first);
     } break;
 
     case NODE_FN: {
@@ -546,7 +544,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
             ll_foreach(it, &from) {
                 assert(it->kind == NODE_DEFINE);
                 Node_Define *define = (Node_Define *) it;
-                monomorphize_node(c, &it, first);
+                monomorphize_node(rs, &it, first);
                 if (define->name_polymorph && define->name_polymorph->is_monomorphized) {
                     if (first) {
                         nodes_push(&fn->args, it);
@@ -570,14 +568,14 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
             }
         }
 
-        monomorphize_nodes(c, &fn->returns, first);
-        monomorphize_node(c, &fn->body, first);
+        monomorphize_nodes(rs, &fn->returns, first);
+        monomorphize_node(rs, &fn->body, first);
 
         if (!first) {
-            monomorphize_polymorphs(c, &fn->polymorphs, first);
-            monomorphize_replace(c, (Node **) &fn->outer_fn);
-            monomorphize_replace(c, (Node **) &fn->defined_as);
-            monomorphize_replace(c, (Node **) &fn->trait_method);
+            monomorphize_polymorphs(rs, &fn->polymorphs, first);
+            monomorphize_replace(rs, (Node **) &fn->outer_fn);
+            monomorphize_replace(rs, (Node **) &fn->defined_as);
+            monomorphize_replace(rs, (Node **) &fn->trait_method);
         }
 
         fn->checked_fully = false;
@@ -586,57 +584,57 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_ENUM: {
         Node_Enum *enumm = (Node_Enum *) n;
-        monomorphize_node(c, &enumm->underlying, first);
-        monomorphize_nodes(c, &enumm->values, first);
+        monomorphize_node(rs, &enumm->underlying, first);
+        monomorphize_nodes(rs, &enumm->values, first);
 
         if (!first) {
-            monomorphize_replace(c, (Node **) &enumm->defined_as);
-            monomorphize_replace(c, (Node **) &enumm->defined_in);
+            monomorphize_replace(rs, (Node **) &enumm->defined_as);
+            monomorphize_replace(rs, (Node **) &enumm->defined_in);
         }
     } break;
 
     case NODE_TRAIT: {
         Node_Trait *trait = (Node_Trait *) n;
-        monomorphize_nodes(c, &trait->methods, first);
-        monomorphize_polymorphs(c, &trait->polymorphs, first);
+        monomorphize_nodes(rs, &trait->methods, first);
+        monomorphize_polymorphs(rs, &trait->polymorphs, first);
 
         if (!first) {
-            monomorphize_replace(c, (Node **) &trait->defined_as);
-            monomorphize_replace(c, (Node **) &trait->defined_in);
+            monomorphize_replace(rs, (Node **) &trait->defined_as);
+            monomorphize_replace(rs, (Node **) &trait->defined_in);
         }
     } break;
 
     case NODE_UNION: {
         Node_Union *unionn = (Node_Union *) n;
-        monomorphize_nodes(c, &unionn->variants, first);
+        monomorphize_nodes(rs, &unionn->variants, first);
 
         if (!first) {
-            monomorphize_replace(c, (Node **) &unionn->defined_as);
-            monomorphize_replace(c, (Node **) &unionn->defined_in);
+            monomorphize_replace(rs, (Node **) &unionn->defined_as);
+            monomorphize_replace(rs, (Node **) &unionn->defined_in);
         }
     } break;
 
     case NODE_STRUCT: {
         Node_Struct *structt = (Node_Struct *) n;
-        monomorphize_nodes(c, &structt->fields, first);
-        monomorphize_polymorphs(c, &structt->polymorphs, first);
+        monomorphize_nodes(rs, &structt->fields, first);
+        monomorphize_polymorphs(rs, &structt->polymorphs, first);
 
         if (!first) {
-            monomorphize_replace(c, (Node **) &structt->defined_as);
-            monomorphize_replace(c, (Node **) &structt->defined_in);
+            monomorphize_replace(rs, (Node **) &structt->defined_as);
+            monomorphize_replace(rs, (Node **) &structt->defined_in);
         }
     } break;
 
     case NODE_COMPOUND: {
         Node_Compound *compound = (Node_Compound *) n;
-        monomorphize_node(c, &compound->lhs, first);
-        monomorphize_nodes(c, &compound->children, first);
+        monomorphize_node(rs, &compound->lhs, first);
+        monomorphize_nodes(rs, &compound->children, first);
     } break;
 
     case NODE_CALL: {
         Node_Call *call = (Node_Call *) n;
-        monomorphize_node(c, &call->fn_source, first);
-        monomorphize_nodes(c, &call->args, first);
+        monomorphize_node(rs, &call->fn_source, first);
+        monomorphize_nodes(rs, &call->args, first);
 
         // The body of a polymorphic function is not checked directly. Only the monomorphized copy is checked.
         // Therefore there is no need to check 'call->fn'
@@ -644,62 +642,62 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_INDEX: {
         Node_Index *index = (Node_Index *) n;
-        monomorphize_node(c, &index->lhs, first);
-        monomorphize_node(c, &index->a, first);
-        monomorphize_node(c, &index->b, first);
+        monomorphize_node(rs, &index->lhs, first);
+        monomorphize_node(rs, &index->a, first);
+        monomorphize_node(rs, &index->b, first);
     } break;
 
     case NODE_INDEXABLE: {
         Node_Indexable *indexable = (Node_Indexable *) n;
-        monomorphize_node(c, &indexable->element, first);
-        monomorphize_node(c, &indexable->count, first);
+        monomorphize_node(rs, &indexable->element, first);
+        monomorphize_node(rs, &indexable->count, first);
     } break;
 
     case NODE_DEFINE: {
         Node_Define *define = (Node_Define *) n;
         if (define->name_polymorph) {
-            monomorphize_node(c, (Node **) &define->name_polymorph, first);
+            monomorphize_node(rs, (Node **) &define->name_polymorph, first);
         } else {
-            monomorphize_node(c, &define->name, first);
+            monomorphize_node(rs, &define->name, first);
         }
 
-        monomorphize_node(c, &define->expr, first);
-        monomorphize_node(c, &define->type, first);
+        monomorphize_node(rs, &define->expr, first);
+        monomorphize_node(rs, &define->type, first);
     } break;
 
     case NODE_BLOCK: {
         Node_Block *block = (Node_Block *) n;
-        monomorphize_nodes(c, &block->body, first);
+        monomorphize_nodes(rs, &block->body, first);
     } break;
 
     case NODE_IF: {
         Node_If *iff = (Node_If *) n;
-        monomorphize_node(c, &iff->condition, first);
-        monomorphize_node(c, &iff->consequence, first);
-        monomorphize_node(c, &iff->antecedence, first);
+        monomorphize_node(rs, &iff->condition, first);
+        monomorphize_node(rs, &iff->consequence, first);
+        monomorphize_node(rs, &iff->antecedence, first);
     } break;
 
     case NODE_FOR: {
         Node_For *forr = (Node_For *) n;
-        monomorphize_node(c, &forr->init, first);
-        monomorphize_node(c, &forr->condition, first);
-        monomorphize_node(c, &forr->update, first);
-        monomorphize_node(c, &forr->body, first);
+        monomorphize_node(rs, &forr->init, first);
+        monomorphize_node(rs, &forr->condition, first);
+        monomorphize_node(rs, &forr->update, first);
+        monomorphize_node(rs, &forr->body, first);
     } break;
 
     case NODE_CASE: {
         Node_Case *case_ = (Node_Case *) n;
-        monomorphize_nodes(c, &case_->preds, first);
-        monomorphize_node(c, &case_->body, first);
+        monomorphize_nodes(rs, &case_->preds, first);
+        monomorphize_node(rs, &case_->body, first);
     } break;
 
     case NODE_SWITCH: {
         Node_Switch *sw = (Node_Switch *) n;
-        monomorphize_node(c, &sw->expr, first);
-        monomorphize_nodes(c, &sw->cases, first);
+        monomorphize_node(rs, &sw->expr, first);
+        monomorphize_nodes(rs, &sw->cases, first);
 
         if (!first) {
-            monomorphize_replace(c, &sw->fallback);
+            monomorphize_replace(rs, &sw->fallback);
         }
     } break;
 
@@ -709,17 +707,17 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
 
     case NODE_DEFER: {
         Node_Defer *defer = (Node_Defer *) n;
-        monomorphize_node(c, &defer->stmt, first);
+        monomorphize_node(rs, &defer->stmt, first);
     } break;
 
     case NODE_RETURN: {
         Node_Return *returnn = (Node_Return *) n;
-        monomorphize_node(c, &returnn->value, first);
+        monomorphize_node(rs, &returnn->value, first);
     } break;
 
     case NODE_EXTERN: {
         Node_Extern *externn = (Node_Extern *) n;
-        monomorphize_nodes(c, &externn->nodes, first);
+        monomorphize_nodes(rs, &externn->nodes, first);
     } break;
 
     default:
@@ -848,8 +846,8 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
     }
 #endif // MONOMORPHIZATION_LOG
 
-    monomorphize_node(c, &n, true);
-    monomorphize_node(c, &n, false);
+    monomorphize_node(&c->monomorph_replacements, &n, true);
+    monomorphize_node(&c->monomorph_replacements, &n, false);
 
     for (size_t i = c->monomorph_parameters.begin; i < c->monomorph_parameters.count; i++) {
         Node_Polymorph *it = c->monomorph_parameters.data[i].from;

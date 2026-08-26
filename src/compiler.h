@@ -86,7 +86,7 @@ typedef struct {
     Node *current_comptime_conditional_stmt;
 
     HT(Monomorph_Spec, Node *) monomorph_intern;
-    HT(void *, void *) monomorph_replacements;
+    Monomorph_Replacements monomorph_replacements;
 
     struct {
         DA_Fields(Monomorph_Parameter);

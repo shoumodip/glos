@@ -1,0 +1,15 @@
+Array :: struct($T: Type, $N: s64) {
+    items: [N]T
+}
+
+impl Array($T, $N) {
+    show :: (a: Self) {
+        println(a)
+        println("T = \{T}")
+        println("N = \{N}")
+    }
+}
+
+main :: () {
+    Array(string, 4) {}.show()
+}

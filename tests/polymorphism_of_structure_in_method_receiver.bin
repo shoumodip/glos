@@ -1,0 +1,8 @@
+EXIT 0
+STDOUT 36
+{{"", "", "", ""}}
+T = string
+N = 4
+
+STDERR 0
+

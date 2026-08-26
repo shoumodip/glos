@@ -1024,6 +1024,8 @@ typedef struct {
     Node *receiver;
     Nodes methods;
     Token end;
+
+    Polymorphs polymorphs;
 } Node_Impl;
 
 typedef struct {
@@ -1055,6 +1057,8 @@ void node_debug(FILE *f, const Node *n);
 void nodes_debug(FILE *f, Nodes ns);
 
 Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, size_t method_index);
+
+typedef HT(void *, void *) Monomorph_Replacements;
 
 #endif // NODE_H
 

@@ -1,33 +1,35 @@
-push :: (this: &[..]$T, v: T) {
-    if this.count >= this.capacity {
-        this.capacity *= 2
-        if this.capacity == 0 {
-            this.capacity = 128
+impl [..]$T {
+    push :: (this: &Self, v: T) {
+        if this.count >= this.capacity {
+            this.capacity *= 2
+            if this.capacity == 0 {
+                this.capacity = 128
+            }
+
+            this.data = &T(C.realloc(rawptr(this.data), u64(this.capacity) * sizeof(T)))
+            assert(this.data != null)
         }
 
-        this.data = &T(C.realloc(rawptr(this.data), u64(this.capacity) * sizeof(T)))
-        assert(this.data != null)
+        *(this.data + &T(this.count * sizeof(T))) = v
+        this.count += 1
     }
 
-    *(this.data + &T(this.count * sizeof(T))) = v
-    this.count += 1
-}
-
-free :: (this: &[..]$T) {
-    C.free(rawptr(this.data))
-    C.memset(rawptr(this), 0, sizeof(*this))
-}
-
-remove :: (this: &[..]$T, index: s64, location := #caller_location) -> T {
-    if index >= this.count {
-        panic("Bounds Check Failed: Index \{index} is invalid since length is \{this.count}", location = location)
+    free :: (this: &Self) {
+        C.free(rawptr(this.data))
+        C.memset(rawptr(this), 0, sizeof(*this))
     }
 
-    value := (*this)[index]
-    if index + 1 < this.count {
-        C.memmove(rawptr(&(*this)[index]), rawptr(&(*this)[index + 1]), u64(this.count - index - 1) * sizeof(T))
-    }
+    remove :: (this: &Self, index: s64, location := #caller_location) -> T {
+        if index >= this.count {
+            panic("Bounds Check Failed: Index \{index} is invalid since length is \{this.count}", location = location)
+        }
 
-    this.count -= 1
-    return value
+        value := (*this)[index]
+        if index + 1 < this.count {
+            C.memmove(rawptr(&(*this)[index]), rawptr(&(*this)[index + 1]), u64(this.count - index - 1) * sizeof(T))
+        }
+
+        this.count -= 1
+        return value
+    }
 }
