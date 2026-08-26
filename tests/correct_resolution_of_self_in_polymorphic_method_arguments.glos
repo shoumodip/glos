@@ -1,0 +1,16 @@
+Array :: struct($T: Type, $N: s64) {
+    items: [N]T
+}
+
+impl Array($T, $N) {
+    show :: (a: Self, b: &Self) {
+        println(a)
+        println(*b)
+    }
+}
+
+main :: () {
+    a := Array(string, 4) {{"Deez"}}
+    b := Array(string, 4) {{"Nuts"}}
+    a.show(&b)
+}

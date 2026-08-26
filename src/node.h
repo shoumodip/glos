@@ -1029,8 +1029,8 @@ typedef struct {
 } Node_Impl;
 
 typedef struct {
-    Node       node;
-    Node_Impl *impl;
+    Node  node;
+    Node *definition;
 } Node_Self;
 
 typedef struct {

@@ -1312,7 +1312,12 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         }
 
         node = node_alloc(p->module_current, NODE_SELF, token);
-        ((Node_Self *) node)->impl = p->state.impl_current;
+        Node_Self *self = (Node_Self *) node;
+        self->definition = p->state.impl_current->receiver;
+
+        if (p->state.impl_current->polymorphs.count) {
+            da_push(&p->self_nodes, self);
+        }
     } break;
 
     case TOKEN_INLINE: {
@@ -1703,6 +1708,7 @@ static Node *parse_stmt(Parser *p) {
         while (!read_token(p, TOKEN_RBRACE)) {
             Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
 
+            const size_t self_nodes_count_save = p->self_nodes.count;
             Node_Define *define =
                 (Node_Define *) parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
 
@@ -1765,6 +1771,10 @@ static Node *parse_stmt(Parser *p) {
                         monomorphize_node(&p->monomorph_replacements, &from, false);
                         *self = from;
 
+                        for (size_t i = self_nodes_count_save; i < p->self_nodes.count; i++) {
+                            p->self_nodes.data[i]->definition = *self;
+                        }
+
                         Polymorphs fn_polymorphs = {0};
                         ll_foreach(it, &impl->polymorphs) {
                             polymorphs_push(
@@ -1792,6 +1802,7 @@ static Node *parse_stmt(Parser *p) {
 
                 fn->is_method = true;
             }
+            p->self_nodes.count = self_nodes_count_save;
 
             nodes_push(&impl->methods, (Node *) define);
             expect_stmt_terminator(p);
@@ -1898,6 +1909,7 @@ static Node *parse_stmt(Parser *p) {
 
 void parser_free(Parser *p) {
     da_free(&p->paths);
+    da_free(&p->self_nodes);
     ht_free(&p->monomorph_replacements);
 }
 

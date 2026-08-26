@@ -440,6 +440,7 @@ static void monomorphize_replace(Monomorph_Replacements *rs, Node **from) {
     }
 }
 
+static_assert(COUNT_NODES == 31, "");
 void monomorphize_node(Monomorph_Replacements *rs, Node **np, bool first) {
     if (!*np) {
         return;
@@ -701,6 +702,16 @@ void monomorphize_node(Monomorph_Replacements *rs, Node **np, bool first) {
         }
     } break;
 
+    case NODE_IMPL:
+        unreachable();
+
+    case NODE_SELF: {
+        Node_Self *self = (Node_Self *) n;
+        if (!first) {
+            monomorphize_replace(rs, &self->definition);
+        }
+    } break;
+
     case NODE_JUMP:
         // Pass
         break;
@@ -721,6 +732,7 @@ void monomorphize_node(Monomorph_Replacements *rs, Node **np, bool first) {
     } break;
 
     default:
+        unreachable();
         break;
     }
 }

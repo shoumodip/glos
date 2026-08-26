@@ -1942,7 +1942,7 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
         break;
 
     case NODE_SELF:
-        n->type = type_with_meta(((Node_Self *) n)->impl->receiver->type);
+        n->type = type_with_meta(((Node_Self *) n)->definition->type);
         break;
 
     default:

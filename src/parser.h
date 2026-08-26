@@ -46,6 +46,7 @@ typedef struct {
     Module  *module_current;
     Modules *modules;
 
+    DA(Node_Self *) self_nodes;
     Monomorph_Replacements monomorph_replacements;
 } Parser;
 
