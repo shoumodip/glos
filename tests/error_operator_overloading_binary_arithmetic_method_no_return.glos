@@ -1,2 +1,0 @@
-Foo :: distinct s64
-div :: (this: Foo, that: Foo) {}

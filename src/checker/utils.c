@@ -400,7 +400,7 @@ void cast_untyped(Compiler *c, Node *n, Type expected) {
             cast_untyped(c, unary->value, expected);
             if (n->token.kind == TOKEN_SUB) {
                 if (!type_is_numeric(n->type) && !type_is_pointer(n->type)) {
-                    unary->overload = get_operator_overload(c, "neg", unary->value, n, unary->module);
+                    unary->overload = get_operator_overload(c, c->neg_trait, unary->value, n, -1);
                 }
             }
         }

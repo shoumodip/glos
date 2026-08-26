@@ -11,6 +11,8 @@ void show_current_monomorphization(Compiler *c) {
                 c->monomorphizing_site.node,
                 c->monomorphizing_site.is_method,
                 c->monomorphizing_site.node->type.spec.fn);
+        } else if (type_meta_kind_eq(c->monomorphizing_site.node->type, TYPE_TRAIT)) {
+            // Pass
         } else if (type_meta_kind_eq(c->monomorphizing_site.node->type, TYPE_STRUCT)) {
             Type_Struct *spec = c->monomorphizing_site.node->type.spec.structt;
             Node_Struct *structure = spec->original_definition;
@@ -67,6 +69,27 @@ void show_current_monomorphization(Compiler *c) {
                     from->body = from_body_save;
                 }
             }
+        } else if (m.into->kind == NODE_TRAIT) {
+            error_node(EK_NOTE, m.site, "While inside this monomorphization");
+
+            ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
+            fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
+
+            Node_Trait *trait = (Node_Trait *) m.into;
+            Polymorphs *ps = trait->monomorphs.count ? &trait->monomorphs : &trait->polymorphs;
+            ll_foreach(it, ps) {
+                assert(it->is_monomorphized);
+                fprintf(stderr, "        " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+                fprintf(stderr, "\n");
+            }
+
+            fprintf(stderr, "\n");
+            ansi_reset(stderr);
+
+            assert(type_meta_kind_eq(m.from->type, TYPE_TRAIT));
+            error_node(
+                EK_NOTE, (Node *) m.from->type.spec.trait->definition, "Here is the trait that was monomorphized");
         } else if (m.into->kind == NODE_STRUCT) {
             error_node(EK_NOTE, m.site, "While inside this monomorphization");
 
@@ -575,6 +598,7 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     case NODE_TRAIT: {
         Node_Trait *trait = (Node_Trait *) n;
         monomorphize_nodes(c, &trait->methods, first);
+        monomorphize_polymorphs(c, &trait->polymorphs, first);
 
         if (!first) {
             monomorphize_replace(c, (Node **) &trait->defined_as);
@@ -720,12 +744,15 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
     };
 
     bool is_fn = type_kind_eq(n->type, TYPE_FN);
+    bool is_trait = type_meta_kind_eq(n->type, TYPE_TRAIT);
     bool is_struct = type_meta_kind_eq(n->type, TYPE_STRUCT);
     bool is_complete = true;
     if (is_fn) {
         Node_Fn *fn = get_function_literal(n);
         assert(fn);
         n = (Node *) fn;
+    } else if (is_trait) {
+        n = (Node *) n->type.spec.trait->definition;
     } else if (is_struct) {
         n = (Node *) n->type.spec.structt->definition;
 
@@ -794,6 +821,17 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
         }
         fprintf(stderr, "\n");
         ansi_reset(stderr);
+    } else if (is_trait) {
+        Node_Trait *trait = (Node_Trait *) n;
+        error_node(EK_NOTE, n, "Beginning to monomorphize this node");
+        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+        ll_foreach(it, &trait->polymorphs) {
+            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "\n");
+        ansi_reset(stderr);
     } else if (is_struct) {
         Node_Struct *structt = (Node_Struct *) n;
         error_node(EK_NOTE, n, "Beginning to monomorphize this node");
@@ -830,6 +868,24 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
         error_node(EK_NOTE, n, "Monomorphized this node");
         ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
         ll_foreach(it, &fn->monomorphs) {
+            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "\n");
+        ansi_reset(stderr);
+        show_current_monomorphization(c);
+#endif // MONOMORPHIZATION_LOG
+
+    } else if (is_trait) {
+        Node_Trait *trait = (Node_Trait *) n;
+        trait->monomorphs = trait->polymorphs;
+        memset(&trait->polymorphs, 0, sizeof(trait->polymorphs));
+
+#ifdef MONOMORPHIZATION_LOG
+        error_node(EK_NOTE, n, "Monomorphized this node");
+        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+        ll_foreach(it, &trait->monomorphs) {
             fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
             const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
             fprintf(stderr, "\n");
@@ -891,6 +947,14 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
 
 end:
     n->type.ref = ref;
+
+    if (is_trait) {
+        const Node *from = monomorphization.from;
+        const Node *into = monomorphization.into;
+        assert(type_meta_kind_eq(from->type, TYPE_TRAIT));
+        assert(type_meta_kind_eq(into->type, TYPE_TRAIT));
+        into->type.spec.trait->original_definition = from->type.spec.trait->original_definition;
+    }
 
     if (is_struct) {
         const Node *from = monomorphization.from;

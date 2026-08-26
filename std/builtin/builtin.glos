@@ -52,7 +52,11 @@ unreachable :: (message: ...Any, location := #caller_location) {
     C.abort()
 }
 
-compare :: (this: string, that: string) -> Ordering {
+equal :: (this: string, that: string) -> bool {
+    return this.count == that.count && C.memcmp(rawptr(this.data), rawptr(that.data), u64(this.count)) == 0
+}
+
+order :: (this: string, that: string) -> Ordering {
     n := this.count
     if n > that.count {
         n = that.count

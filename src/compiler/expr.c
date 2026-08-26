@@ -657,7 +657,7 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
     case TOKEN_LNOT:
         value = compile_expr(c, unary->value, false);
         set_debug_pos(c, n->token.pos);
-        return LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, value, LLVMConstNull(n->type.llvm), "");
+        return LLVMBuildXor(c->llvm_builder, value, LLVMConstInt(n->type.llvm, true, true), "");
 
     case TOKEN_SIZEOF:
         return LLVMConstInt(n->type.llvm, compile_sizeof(c, &unary->value->type), false);
@@ -814,7 +814,13 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             set_debug_pos(c, n->token.pos);
             if (binary->overload) {
                 LLVMValueRef value = compile_binary_with_overloaded_operator(c, binary, 0, lhs, rhs);
-                return LLVMBuildICmp(c->llvm_builder, op.i, value, LLVMConstNull(LLVMTypeOf(value)), "");
+                if (n->token.kind == TOKEN_EQ) {
+                    return value;
+                } else if (n->token.kind == TOKEN_NE) {
+                    return LLVMBuildXor(c->llvm_builder, value, LLVMConstInt(n->type.llvm, true, true), "");
+                } else {
+                    return LLVMBuildICmp(c->llvm_builder, op.i, value, LLVMConstNull(LLVMTypeOf(value)), "");
+                }
             } else if (op.u && !type_is_signed(binary->lhs->type)) {
                 return LLVMBuildICmp(c->llvm_builder, op.u, lhs, rhs, "");
             } else {

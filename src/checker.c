@@ -56,6 +56,19 @@ static u64 ht_hasheq_method_spec(const void *va, const void *vb, size_t n) {
     return ht_hash_combine(receiver_hash, name_hash);
 }
 
+static void get_type_from_builtin_module(Compiler *c, const char *name, Const_Value *v, Type *t) {
+    *v = get_const_definition_value(c, c->builtin_module, sv_from_cstr(name), NULL);
+    assert(v->kind == CONST_VALUE_TYPE);
+    *t = type_without_meta(v->as.type);
+}
+
+static Type_Trait *get_trait_from_builtin_module(Compiler *c, const char *name, Const_Value *v) {
+    *v = get_const_definition_value(c, c->builtin_module, sv_from_cstr(name), NULL);
+    assert(v->kind == CONST_VALUE_TYPE);
+    assert(type_meta_kind_eq(v->as.type, TYPE_TRAIT));
+    return v->as.type.spec.trait;
+}
+
 void check_nodes(Compiler *c) {
     assert(c->parser);
     assert(c->modules);
@@ -80,40 +93,12 @@ void check_nodes(Compiler *c) {
         define_orderless_nodes_of_module(c, m, NULL);
     }
 
-    // Any
     Const_Value value;
-    {
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Any"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->any_type = type_without_meta(value.as.type);
-    }
-
-    // Interpolation
-    {
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Interpolation"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->interpolation_type = type_without_meta(value.as.type);
-    }
-
-    // Panic
-    {
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Panic"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-
-        const Type panic = type_without_meta(value.as.type);
-        assert(panic.kind == TYPE_ENUM);
-        assert(panic.spec.enumm.definition->values_count == 8);
-    }
 
     // Type info
     {
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type_Info"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->type_info_type = type_without_meta(value.as.type);
-
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Type"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->type_info_pointer_type = type_without_meta(value.as.type);
+        get_type_from_builtin_module(c, "Type_Info", &value, &c->type_info_type);
+        get_type_from_builtin_module(c, "Type", &value, &c->type_info_pointer_type);
 
         assert(c->type_info_pointer_type.kind == TYPE_STRUCT);
         const Type_Struct *type_info_structure = c->type_info_pointer_type.spec.structt;
@@ -159,23 +144,36 @@ void check_nodes(Compiler *c) {
         c->type_info_variants[TYPE_STRING] = CONTRACT_TYPE_INFO_STRING;
     }
 
-    // Comparisons
-    {
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Ordering"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->ordering_type = type_without_meta(value.as.type);
+    // Source code location
+    get_type_from_builtin_module(c, "Source_Code_Location", &value, &c->source_code_location_type);
 
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Equivalence"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
-        c->equivalence_type = type_without_meta(value.as.type);
+    // Interpolation
+    get_type_from_builtin_module(c, "Interpolation", &value, &c->interpolation_type);
+
+    // Panic
+    {
+        Type panic = {0};
+        get_type_from_builtin_module(c, "Panic", &value, &panic);
+        assert(panic.kind == TYPE_ENUM);
+        assert(panic.spec.enumm.definition->values_count == 8);
     }
 
-    // Source code location
-    {
-        value = get_const_definition_value(c, c->builtin_module, sv_from_cstr("Source_Code_Location"), NULL);
-        assert(value.kind == CONST_VALUE_TYPE);
+    // Comparisons
+    get_type_from_builtin_module(c, "Ordering", &value, &c->ordering_type);
 
-        c->source_code_location_type = type_without_meta(value.as.type);
+    // Builtin Traits
+    {
+        get_type_from_builtin_module(c, "Any", &value, &c->any_type);
+        assert(type_kind_eq(c->any_type, TYPE_TRAIT));
+
+        c->add_trait = get_trait_from_builtin_module(c, "Add", &value);
+        c->sub_trait = get_trait_from_builtin_module(c, "Sub", &value);
+        c->mul_trait = get_trait_from_builtin_module(c, "Mul", &value);
+        c->div_trait = get_trait_from_builtin_module(c, "Div", &value);
+        c->mod_trait = get_trait_from_builtin_module(c, "Mod", &value);
+        c->neg_trait = get_trait_from_builtin_module(c, "Neg", &value);
+        c->equal_trait = get_trait_from_builtin_module(c, "Equal", &value);
+        c->ordered_trait = get_trait_from_builtin_module(c, "Ordered", &value);
     }
 
     // Define the methods

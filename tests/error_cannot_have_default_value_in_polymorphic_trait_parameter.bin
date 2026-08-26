@@ -1,0 +1,28 @@
+EXIT 1
+STDOUT 0
+
+STDERR 675
+tests/error_cannot_have_default_value_in_polymorphic_trait_parameter.glos:1:18: Error: Polymorphic trait parameters cannot have default values
+
+    X :: trait($T := 69) {}
+
+    Polymorphic traits are not monomorphized manually. The intended purpose is to know the type of
+    the implementer at compile time.
+
+    For example:
+
+        Add :: trait($T: Type) {
+            add: (that: T) -> T
+        }
+
+        Vec2 :: struct { x, y: f32 }
+
+        add :: (this: Vec2, that: Vec2) -> Vec2 {
+            return {this.x + that.x, this.y + that.y}
+        }
+
+        addable := Add(Vec2 {69.0, 420.0})
+
+    Here 'T' gets resolved to the type of the implementer, i.e., 'Vec2'.
+
+

@@ -194,6 +194,11 @@ void type_assert_type_or_Type(Compiler *c, const Node *n) {
     exit(c, 1);
 }
 
+static bool is_arithmetic_operator_overload_trait(Compiler *c, Type_Trait *trait) {
+    return trait == c->add_trait || trait == c->sub_trait || trait == c->mul_trait || trait == c->div_trait ||
+           trait == c->mod_trait || trait == c->neg_trait || trait == c->equal_trait || trait == c->ordered_trait;
+}
+
 Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) {
     const Type receiver_without_ref = type_without_ref(receiver);
     ll_foreach(it, &trait->impls) {
@@ -201,12 +206,31 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
             return it;
         }
     }
+    Type_Trait *trait_save = trait;
+
+    Type_Trait_Impl impl = {.type = receiver_without_ref};
+    if (trait->polymorph) {
+        ht_clear(&c->monomorph_replacements);
+
+        const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+        c->monomorph_parameters.begin = c->monomorph_parameters.count;
+
+        const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+        c->monomorphizing_site.expr = n;
+        c->monomorphizing_site.node = n; // TODO: The entire expression (in case of an explicit cast) would be helpful
+
+        add_monomorph_parameter(c, trait->polymorph, receiver, const_value_type(receiver), NULL);
+        Node *node = monomorphize(c, (Node *) trait->definition, n);
+
+        c->monomorph_parameters.count = c->monomorph_parameters.begin;
+        c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+        c->monomorphizing_site = monomorphizing_site_save;
+
+        assert(type_meta_kind_eq(node->type, TYPE_TRAIT));
+        trait = node->type.spec.trait;
+    }
 
     const Type expected = {.kind = TYPE_TRAIT, .spec.trait = trait};
-
-    Type_Trait_Impl impl = {0};
-    impl.type = receiver_without_ref;
-
     if (trait->methods_count) {
         impl.methods = arena_alloc(&default_arena, trait->methods_count * sizeof(*impl.methods));
         impl.methods_count = trait->methods_count;
@@ -263,21 +287,12 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                 assert(fn->node.type.kind == TYPE_FN);
                 const Type_Fn *actual_spec = fn->node.type.spec.fn;
 
-                if (!type_eq(actual_spec->args[0].type, receiver)) {
-                    errors[i] = (Error) {.kind = WRONG_RECEIVER, .fn = fn};
-                    goto next;
-                }
-
                 if (expected_spec->args_count != actual_spec->args_count) {
                     errors[i] = (Error) {.kind = WRONG_SIGNATURE, .fn = fn};
                     goto next;
                 }
 
-                for (size_t j = 0; j < actual_spec->args_count; j++) {
-                    if (j == 0) {
-                        continue;
-                    }
-
+                for (size_t j = 1; j < actual_spec->args_count; j++) {
                     if (!type_eq(actual_spec->args[j].type, expected_spec->args[j].type)) {
                         errors[i] = (Error) {.kind = WRONG_SIGNATURE, .fn = fn};
                         goto next;
@@ -289,6 +304,11 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                     goto next;
                 }
 
+                if (!type_eq(actual_spec->args[0].type, receiver)) {
+                    errors[i] = (Error) {.kind = WRONG_RECEIVER, .fn = fn};
+                    goto next;
+                }
+
                 impl.methods[i].fn = fn;
 
             next:;
@@ -296,7 +316,9 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
 
             bool ok = true;
             bool impl_for_other_type = false;
-            if (trait->methods_count && errors[0].kind == WRONG_RECEIVER) {
+            if (trait->methods_count && errors[0].kind == WRONG_RECEIVER &&
+                !is_arithmetic_operator_overload_trait(c, trait_save)) //
+            {
                 impl_for_other_type = true;
                 const Type receiver = errors[0].fn->node.type.spec.fn->args[0].type;
                 for (size_t i = 1; i < trait->methods_count; i++) {
@@ -367,7 +389,7 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                     it.fn->body = NULL;
                     error_node(
                         EK_NOTE,
-                        (Node *) it.fn->defined_as->definition_spec->definition_node,
+                        it.fn->args.head,
                         "The method '" SV_Fmt "' has receiver %s, not %s",
                         SV_Arg(it.fn->defined_as->node.token.sv),
                         type_to_cstr(it.fn->node.type.spec.fn->args[0].type),
@@ -387,11 +409,17 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                     it.fn->body = NULL;
                     error_node(
                         EK_NOTE,
-                        (Node *) it.fn->defined_as->definition_spec->definition_node,
-                        "The method '" SV_Fmt "' has wrong signature. Expected %s, got %s",
-                        SV_Arg(it.fn->defined_as->node.token.sv),
-                        type_to_cstr(trait->methods[i].type),
-                        type_to_cstr(it.fn->node.type));
+                        (Node *) it.fn,
+                        "The method '" SV_Fmt "' has wrong signature",
+                        SV_Arg(it.fn->defined_as->node.token.sv));
+
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    Expected: %s\n"
+                        "    Actual:   %s\n\n",
+                        type_to_cstr_raw(trait->methods[i].type),
+                        type_to_cstr_raw(it.fn->node.type));
 
                     spec->args[0].type = arg0_save;
                 } break;
@@ -407,8 +435,9 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
         }
         arena_reset(&temp_arena, errors);
     }
-
     impl.trait = trait;
+
+    trait = trait_save;
     impl.next = trait->impls.head;
     trait->impls.head = arena_clone(&default_arena, &impl, sizeof(impl));
     return trait->impls.head;

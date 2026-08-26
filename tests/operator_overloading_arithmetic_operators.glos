@@ -76,7 +76,11 @@ neg :: (this: Int32) -> Int32 {
     return this
 }
 
-compare :: (this: Int32, that: Int32) -> Ordering {
+equal :: (this: Int32, that: Int32) -> bool {
+    return this.x == that.x
+}
+
+order :: (this: Int32, that: Int32) -> Ordering {
     if this.x < that.x {
         return .LT
     }

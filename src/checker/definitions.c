@@ -809,9 +809,16 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
 
     if (!definition && c->monomorphization_stack.count) {
         const Monomorphization m = c->monomorphization_stack.data[c->monomorphization_stack.count - 1];
-        if (m.into->kind == NODE_STRUCT) {
-            Node_Struct *structt = (Node_Struct *) m.into;
-            ll_foreach(it, &structt->monomorphs) {
+
+        Polymorphs *ps = NULL;
+        if (m.into->kind == NODE_TRAIT) {
+            ps = &((Node_Trait *) m.into)->monomorphs;
+        } else if (m.into->kind == NODE_STRUCT) {
+            ps = &((Node_Struct *) m.into)->monomorphs;
+        }
+
+        if (ps) {
+            ll_foreach(it, ps) {
                 if (sv_eq(it->name->node.token.sv, n->token.sv)) {
                     definition = it->name;
                     break;

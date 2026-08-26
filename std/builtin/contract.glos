@@ -102,25 +102,11 @@ Type_Info_Slice :: struct {
 
 Type_Info_String :: struct {}
 
-// Builtin compound types
-Any :: trait {}
-
+// Source Code Location
 Source_Code_Location :: struct {
     path: string
     row: s64
     col: s64
-}
-
-// Comparisons
-Ordering :: enum {
-    LT = -1
-    EQ =  0
-    GT =  1
-}
-
-Equivalence :: enum {
-    EQ = 0
-    NE = 1
 }
 
 // Interpolation
@@ -139,4 +125,46 @@ Panic :: enum {
     UNION_TYPE_MISMATCH       // (actual: s64, expected: s64, type: Type)
     INVALID_ENUM_VALUE        // (value: s64, signed: s64)
     INVALID_UNION_TAG         // (value: s64)
+}
+
+// Comparisons
+Ordering :: enum {
+    LT = -1
+    EQ =  0
+    GT =  1
+}
+
+// Builtin Traits
+Any :: trait {}
+
+Add :: trait($T: Type) {
+    add: (that: T) -> T
+}
+
+Sub :: trait($T: Type) {
+    sub: (that: T) -> T
+}
+
+Mul :: trait($T: Type) {
+    mul: (that: T) -> T
+}
+
+Div :: trait($T: Type) {
+    div: (that: T) -> T
+}
+
+Mod :: trait($T: Type) {
+    mod: (that: T) -> T
+}
+
+Neg :: trait($T: Type) {
+    neg: () -> T
+}
+
+Equal :: trait($T: Type) {
+    equal: (that: T) -> bool
+}
+
+Ordered :: trait($T: Type) {
+    order: (that: T) -> Ordering
 }

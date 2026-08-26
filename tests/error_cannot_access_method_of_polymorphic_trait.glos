@@ -1,0 +1,8 @@
+My_Trait :: trait($T: Type) {
+    my_method: (that: T) -> T
+}
+
+main :: () {
+    m: My_Trait
+    m.my_method
+}
