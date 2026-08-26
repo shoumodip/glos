@@ -30,14 +30,13 @@ static void check_whether_member_access_is_valid(Compiler *c, Node_Member *m) {
     }
 }
 
-static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *binary, Node *n) {
+static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *binary, Node *n, i64 group_index) {
     const Token_Kind op = binary->node.token.kind;
     switch (op) {
     case TOKEN_ADD_SET:
     case TOKEN_SUB_SET:
         if (!type_is_numeric(n->type) && !type_is_pointer(n->type)) {
-            return get_operator_overload(
-                c, operator_method_name_from_token_kind(op), n, (Node *) binary, binary->module);
+            return get_operator_overload(c, operator_trait_from_token_kind(c, op), n, (Node *) binary, group_index);
         }
         break;
 
@@ -51,8 +50,7 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
         }
 
         if (!type_is_numeric(n->type)) {
-            return get_operator_overload(
-                c, operator_method_name_from_token_kind(op), n, (Node *) binary, binary->module);
+            return get_operator_overload(c, operator_trait_from_token_kind(c, op), n, (Node *) binary, group_index);
         }
         break;
 
@@ -104,12 +102,12 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
             type_assert_grouped(c, rhs, lhs->type, rhs_group_index, &lhs->token);
 
             if (binary->overloads) {
-                binary->overloads[i] = check_assignment_lhs_for_arithmetics(c, binary, lhs);
+                binary->overloads[i] = check_assignment_lhs_for_arithmetics(c, binary, lhs, i);
             }
         }
     } else {
         type_assert(c, binary->rhs, binary->lhs->type);
-        binary->overload = check_assignment_lhs_for_arithmetics(c, binary, binary->lhs);
+        binary->overload = check_assignment_lhs_for_arithmetics(c, binary, binary->lhs, -1);
     }
 
     binary->node.type = (Type) {.kind = TYPE_VOID};
@@ -210,7 +208,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
         if (!type_is_numeric(unary->value->type) && !type_is_pointer(unary->value->type)) {
-            unary->overload = get_operator_overload(c, "neg", unary->value, n, unary->module);
+            unary->overload = get_operator_overload(c, c->neg_trait, unary->value, n, -1);
         }
         n->type = unary->value->type;
         break;
@@ -290,8 +288,8 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
         }
 
         if (!type_is_numeric(binary->lhs->type) && !type_is_pointer(binary->lhs->type)) {
-            binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+            binary->overload =
+                get_operator_overload(c, operator_trait_from_token_kind(c, n->token.kind), binary->lhs, n, -1);
         }
         n->type = binary->lhs->type;
         break;
@@ -312,8 +310,8 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
         }
 
         if (!type_is_numeric(binary->lhs->type)) {
-            binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+            binary->overload =
+                get_operator_overload(c, operator_trait_from_token_kind(c, n->token.kind), binary->lhs, n, -1);
         }
         n->type = binary->lhs->type;
         break;
@@ -358,8 +356,8 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
         check_expr(c, binary->rhs, REF_NONE);
         type_assert_node(c, binary->rhs, binary->lhs);
         if (!type_is_numeric(binary->lhs->type) && !type_is_pointer(binary->lhs->type)) {
-            binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+            binary->overload =
+                get_operator_overload(c, operator_trait_from_token_kind(c, n->token.kind), binary->lhs, n, -1);
         }
         n->type = (Type) {.kind = TYPE_BOOL};
         break;
@@ -405,8 +403,8 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
             if (try_auto_cast_type_to_rtti(c, binary->lhs, c->type_info_pointer_type)) {
                 assert(try_auto_cast_type_to_rtti(c, binary->rhs, c->type_info_pointer_type));
             } else if (!type_is_scalar(binary->lhs->type)) {
-                binary->overload = get_operator_overload(
-                    c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+                binary->overload =
+                    get_operator_overload(c, operator_trait_from_token_kind(c, n->token.kind), binary->lhs, n, -1);
             }
         }
         n->type = (Type) {.kind = TYPE_BOOL};
@@ -759,7 +757,7 @@ void check_expr_trait(Compiler *c, Node_Trait *trait) {
         .spec.trait = spec,
     };
 
-    if (trait->defined_as && !trait->monomorphs.count) {
+    if (trait->defined_as && type_kind_eq(trait->defined_as->node.type, TYPE_VOID)) {
         trait->defined_as->node.type = n->type;
         trait->defined_as->definition_spec->check_status = CHECKED;
     }
@@ -946,7 +944,6 @@ void check_expr_struct(Compiler *c, Node_Struct *structt) {
         .spec.structt = spec,
     };
 
-    // TODO: Ideally we should check the monomorphs count
     if (structt->defined_as && type_kind_eq(structt->defined_as->node.type, TYPE_VOID)) {
         structt->defined_as->node.type = n->type;
     }
@@ -1659,7 +1656,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                 n->type.kind = TYPE_SLICE;
             }
         } else {
-            index->overload = get_operator_overload(c, "range", index->lhs, n, index->module);
+            index->overload = get_operator_overload_old(c, "range", index->lhs, n, index->module);
             assert(index->overload->node.type.kind == TYPE_FN);
             const Type_Fn *fn_spec = index->overload->node.type.spec.fn;
 
@@ -1724,7 +1721,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                 exit(c, 1);
             }
 
-            index->overload = get_operator_overload(c, "index", index->lhs, n, index->module);
+            index->overload = get_operator_overload_old(c, "index", index->lhs, n, index->module);
 
             assert(index->overload->node.type.kind == TYPE_FN);
             const Type_Fn *fn_spec = index->overload->node.type.spec.fn;
@@ -2229,152 +2226,7 @@ void check_fn(
 
         assert(fn->defined_as);
         const SV name = fn->defined_as->node.token.sv;
-        if (sv_match(name, "add") || sv_match(name, "sub") || sv_match(name, "mul") || sv_match(name, "div") ||
-            sv_match(name, "mod")) //
-        {
-            const char *signature = "(this: T, that: T) -> T";
-            check_special_method_signature_args_count(c, fn, 2, signature);
-
-            const Type lhs_type = fn_spec->args[0].type;
-            if (lhs_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[0].name,
-                    fn_spec->args[0].pos,
-                    "Operand cannot be a pointer. (Provided type is %s)",
-                    type_to_cstr(lhs_type));
-                exit(c, 1);
-            }
-
-            const Type rhs_type = fn_spec->args[1].type;
-            if (!type_eq(rhs_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[1].name,
-                    fn_spec->args[1].pos,
-                    "Operand types must be same: Expected %s, got %s",
-                    type_to_cstr(lhs_type),
-                    type_to_cstr(rhs_type));
-                exit(c, 1);
-            }
-
-            if (!type_eq(*fn_spec->return_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Operand types and return type must be same: Expected to return %s, got %s",
-                    type_to_cstr(lhs_type),
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-        } else if (sv_match(name, "neg")) {
-            const char *signature = "(this: T) -> T";
-            check_special_method_signature_args_count(c, fn, 1, signature);
-
-            const Type operand_type = fn_spec->args[0].type;
-            if (operand_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[0].name,
-                    fn_spec->args[0].pos,
-                    "Operand cannot be a pointer. (Provided type is %s)",
-                    type_to_cstr(operand_type));
-                exit(c, 1);
-            }
-
-            if (!type_eq(*fn_spec->return_type, operand_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Operand type and return type must be same: Expected to return %s, got %s",
-                    type_to_cstr(operand_type),
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-        } else if (sv_match(name, "equal")) {
-            const char *signature = "(this: T, that: T) -> bool";
-            check_special_method_signature_args_count(c, fn, 2, signature);
-
-            const Type lhs_type = fn_spec->args[0].type;
-            if (lhs_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[0].name,
-                    fn_spec->args[0].pos,
-                    "Operand cannot be a pointer. (Provided type is %s)",
-                    type_to_cstr(lhs_type));
-                exit(c, 1);
-            }
-
-            const Type rhs_type = fn_spec->args[1].type;
-            if (!type_eq(rhs_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[1].name,
-                    fn_spec->args[1].pos,
-                    "Operand types must be same: Expected %s, got %s",
-                    type_to_cstr(lhs_type),
-                    type_to_cstr(rhs_type));
-                exit(c, 1);
-            }
-
-            if (!type_eq(*fn_spec->return_type, (Type) {.kind = TYPE_BOOL})) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Expected to return %s, got %s",
-                    type_to_cstr((Type) {.kind = TYPE_BOOL}),
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-        } else if (sv_match(name, "compare")) {
-            const char *signature = "(this: T, that: T) -> Ordering";
-            check_special_method_signature_args_count(c, fn, 2, signature);
-
-            const Type lhs_type = fn_spec->args[0].type;
-            if (lhs_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[0].name,
-                    fn_spec->args[0].pos,
-                    "Operand cannot be a pointer. (Provided type is %s)",
-                    type_to_cstr(lhs_type));
-                exit(c, 1);
-            }
-
-            const Type rhs_type = fn_spec->args[1].type;
-            if (!type_eq(rhs_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[1].name,
-                    fn_spec->args[1].pos,
-                    "Operand types must be same: Expected %s, got %s",
-                    type_to_cstr(lhs_type),
-                    type_to_cstr(rhs_type));
-                exit(c, 1);
-            }
-
-            if (!type_eq(*fn_spec->return_type, c->ordering_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Expected to return %s, got %s",
-                    type_to_cstr(c->ordering_type),
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-        } else if (sv_match(name, "index")) {
+        if (sv_match(name, "index")) {
             const char *signature = "(this: T, key: K, assign: bool) -> &V";
             check_special_method_signature_args_count(c, fn, 3, signature);
 

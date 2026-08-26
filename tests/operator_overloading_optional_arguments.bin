@@ -1,7 +1,0 @@
-EXIT 0
-STDOUT 127
-tests/operator_overloading_optional_arguments.glos:20:10: {69}
-tests/operator_overloading_optional_arguments.glos:22:13: {-69}
-
-STDERR 0
-

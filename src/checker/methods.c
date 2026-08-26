@@ -24,15 +24,53 @@ const char *operator_method_name_from_token_kind(Token_Kind kind) {
     case TOKEN_MOD_SET:
         return "mod";
 
+    case TOKEN_EQ:
+    case TOKEN_NE:
+        return "equal";
+
     case TOKEN_GT:
     case TOKEN_GE:
     case TOKEN_LT:
     case TOKEN_LE:
         return "compare";
 
+    default:
+        unreachable();
+    }
+}
+
+static_assert(COUNT_TOKENS == 79, "");
+Type_Trait *operator_trait_from_token_kind(Compiler *c, Token_Kind kind) {
+    switch (kind) {
+    case TOKEN_ADD:
+    case TOKEN_ADD_SET:
+        return c->add_trait;
+
+    case TOKEN_SUB:
+    case TOKEN_SUB_SET:
+        return c->sub_trait;
+
+    case TOKEN_MUL:
+    case TOKEN_MUL_SET:
+        return c->mul_trait;
+
+    case TOKEN_DIV:
+    case TOKEN_DIV_SET:
+        return c->div_trait;
+
+    case TOKEN_MOD:
+    case TOKEN_MOD_SET:
+        return c->mod_trait;
+
     case TOKEN_EQ:
     case TOKEN_NE:
-        return "equal";
+        return c->equal_trait;
+
+    case TOKEN_GT:
+    case TOKEN_GE:
+    case TOKEN_LT:
+    case TOKEN_LE:
+        return c->ordered_trait;
 
     default:
         unreachable();
@@ -178,7 +216,7 @@ Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module) {
     return method;
 }
 
-Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
+Node_Fn *get_operator_overload_old(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
     Method_Spec spec = {0};
     if (get_method_spec(c, receiver, receiver->type, sv_from_cstr(operator), &spec, NULL, NULL)) {
         Node_Fn *method = get_method(c, spec, module);
@@ -224,6 +262,12 @@ Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver
     error_node(
         EK_ERROR, op, "Method '" SV_Fmt "' is not defined for %s", SV_Arg(spec.name), type_to_cstr(receiver->type));
     exit(c, 1);
+}
+
+Node_Fn *get_operator_overload(Compiler *c, Type_Trait *trait, Node *receiver, Node *op, i64 group_index) {
+    Type_Trait_Impl *impl = check_type_satisfies_trait(c, receiver->type, trait, op, group_index);
+    assert(impl->methods_count == 1);
+    return impl->methods[0].fn;
 }
 
 void error_special_method_wrong_signature(Token name, const char *signature) {
