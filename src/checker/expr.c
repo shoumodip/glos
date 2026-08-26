@@ -1566,7 +1566,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
         if (call->fn->kind == NODE_MEMBER) {
             Node_Member *member = (Node_Member *) call->fn;
             cc.is_trait = member->is_trait;
-            cc.is_method = member->method != NULL;
+            cc.is_method = member->method != NULL && !member->lhs->type.is_meta;
             if (cc.is_method || cc.is_trait) {
                 cc.receiver = member->lhs;
             }
