@@ -265,7 +265,7 @@ Node_Fn *get_operator_overload_old(Compiler *c, const char *operator, Node *rece
 }
 
 Node_Fn *get_operator_overload(Compiler *c, Type_Trait *trait, Node *receiver, Node *op, i64 group_index) {
-    Type_Trait_Impl *impl = check_type_satisfies_trait_old(c, receiver->type, trait, op, group_index);
+    Type_Trait_Impl *impl = check_type_satisfies_trait(c, receiver->type, trait, op, group_index);
     assert(impl->methods_count == 1);
     return impl->methods[0].fn;
 }
@@ -326,7 +326,9 @@ void check_special_method_signature_args_count(
 
 Node_Impl *get_trait_implementation(Compiler *c, Type receiver, Type_Trait *trait, Node *n) {
     Method_Spec spec = {0};
-    assert(get_method_spec(c, n, type_without_ref(receiver), (SV) {0}, &spec, NULL, NULL));
+    if (!get_method_spec(c, n, type_without_ref(receiver), (SV) {0}, &spec, NULL, NULL)) {
+        return NULL;
+    }
 
     if (trait->definition != trait->original_definition) {
         assert(type_meta_kind_eq(trait->original_definition->node.type, TYPE_TRAIT));

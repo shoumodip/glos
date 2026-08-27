@@ -1,4 +1,14 @@
+Number :: struct {
+    x: s64
+}
+
+impl Number {
+    show :: (n: Self) {
+        println(n.x)
+    }
+}
+
 main :: () {
-    println(string.equal("Foo", "Foo"))
-    println(string.equal("Foo", "Bar"))
+    Number {69}.show()
+    Number.show({420})
 }

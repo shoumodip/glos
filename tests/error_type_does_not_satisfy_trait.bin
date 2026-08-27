@@ -1,50 +1,43 @@
 EXIT 1
 STDOUT 0
 
-STDERR 1318
-tests/error_type_does_not_satisfy_trait.glos:15:1: Error: This implementation of 'Bar' does not satisfy 'Foo'
+STDERR 1161
+tests/error_type_does_not_satisfy_trait.glos:14:1: Error: This implementation of 'Bar' does not satisfy 'Foo'
 
     impl Bar for Foo {
 
-tests/error_type_does_not_satisfy_trait.glos:2:5: Note: The trait method 'a' is not implemented
+tests/error_type_does_not_satisfy_trait.glos:15:10: Note: The trait method 'a' has wrong signature
 
-    a: ()           // Undefined
+    a :: (this: Self) {}
 
-    Expected: (this: Self)
+    Expected: (self: Self, _: s32)
+    Actual:   (this: Self)
 
 tests/error_type_does_not_satisfy_trait.glos:16:10: Note: The trait method 'b' has wrong signature
 
-    b :: (this: Self) {}
+    b :: (this: Self, _: string) {}
 
-    Expected: (this: Self, _: s32)
-    Actual:   (this: Self)
+    Expected: (self: Self, _: bool)
+    Actual:   (this: Self, _: string)
 
 tests/error_type_does_not_satisfy_trait.glos:17:10: Note: The trait method 'c' has wrong signature
 
-    c :: (this: Self, _: string) {}
+    c :: (this: Self) {}
 
-    Expected: (this: Self, _: bool)
-    Actual:   (this: Self, _: string)
-
-tests/error_type_does_not_satisfy_trait.glos:18:10: Note: The trait method 'd' has wrong signature
-
-    d :: (this: Self) {}
-
-    Expected: (this: Self) -> string
+    Expected: (self: Self) -> string
     Actual:   (this: Self)
 
-tests/error_type_does_not_satisfy_trait.glos:19:11: Note: The trait method 'e' has receiver '&Self', not 'Self'
+tests/error_type_does_not_satisfy_trait.glos:18:11: Note: The trait method 'd' has receiver '&Self', not 'Self'
 
-    e :: (this: &Self) {}
+    d :: (this: &Self) {}
 
 tests/error_type_does_not_satisfy_trait.glos:1:8: Note: Trait defined here
 
     Foo :: trait {
-        a: ()           // Undefined
-        b: (_: s32)     // Wrong number of arguments
-        c: (_: bool)    // Wrong argument type
-        d: () -> string // Wrong Return type
-    ...
+        a: (_: s32)     // Wrong number of arguments
+        b: (_: bool)    // Wrong argument type
+        c: () -> string // Wrong Return type
+        d: ()           // Wrong receiver type
     }
 
 

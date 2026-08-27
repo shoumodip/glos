@@ -39,7 +39,7 @@ Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, size_t *
         } else {
             type_assert_type(c, pred);
             const Type type = type_without_meta(pred->type);
-            check_type_satisfies_trait_old(c, type, sw->trait->node.type.spec.trait, pred, -1);
+            check_type_satisfies_trait(c, type, sw->trait->node.type.spec.trait, pred, -1);
             value = const_value_type(type);
         }
     } else if (sw->unionn) {
@@ -230,16 +230,16 @@ void check_stmt_switch(Compiler *c, Node_Switch *sw) {
     }
 }
 
-static void prepare_impl_method_for_printing_type(Node_Impl *impl, Node_Fn *actual, Type_Trait_Method *expected) {
+void prepare_impl_method_for_printing_type(Node_Fn *actual, Type_Trait_Method *expected) {
     assert(expected->type.kind == TYPE_FN);
     Type_Fn *spec = expected->type.spec.fn;
     assert(spec->args_count);
 
-    Type type = impl->receiver->type;
-    type.distinct = (Node_Atom *) node_alloc(impl->node.module, NODE_ATOM, (Token) {.sv = sv_from_cstr("Self")});
-    // This allocation per method might be a bit wasteful, but we are gonna die anyways, so who cares...
-
-    spec->args[0].type = type;
+    Type receiver = {
+        .kind = TYPE_RAWPTR,
+        .distinct = (Node_Atom *) node_alloc(NULL, NODE_ATOM, (Token) {.sv = sv_from_cstr("Self")}),
+    };
+    spec->args[0].type = receiver;
     if (actual) {
         actual->body = NULL;
 
@@ -247,7 +247,7 @@ static void prepare_impl_method_for_printing_type(Node_Impl *impl, Node_Fn *actu
         Type_Fn *spec = actual->node.type.spec.fn;
         assert(spec->args_count);
 
-        spec->args[0].type = type_with_ref(type, spec->args[0].type.ref);
+        spec->args[0].type = type_with_ref(receiver, spec->args[0].type.ref);
     }
 }
 
@@ -402,7 +402,7 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
 
                 Node_Fn           *actual = methods[i];
                 Type_Trait_Method *expected = &trait->methods[i];
-                prepare_impl_method_for_printing_type(impl, actual, expected);
+                prepare_impl_method_for_printing_type(actual, expected);
 
                 switch (it) {
                 case UNDEFINED:

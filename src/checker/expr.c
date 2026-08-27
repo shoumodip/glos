@@ -371,7 +371,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
             if (!node_is_null(binary->rhs)) {
                 type_assert_type(c, binary->rhs);
                 binary->rhs->type.is_meta = false;
-                check_type_satisfies_trait_old(c, binary->rhs->type, binary->lhs->type.spec.trait, binary->rhs, -1);
+                check_type_satisfies_trait(c, binary->rhs->type, binary->lhs->type.spec.trait, binary->rhs, -1);
                 binary->trait_check_type = arena_clone(&default_arena, &binary->rhs->type, sizeof(binary->rhs->type));
                 binary->rhs->type.is_meta = true;
             }
@@ -380,7 +380,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
             if (!node_is_null(binary->lhs)) {
                 type_assert_type(c, binary->lhs);
                 binary->lhs->type.is_meta = false;
-                check_type_satisfies_trait_old(c, binary->lhs->type, binary->rhs->type.spec.trait, binary->lhs, -1);
+                check_type_satisfies_trait(c, binary->lhs->type, binary->rhs->type.spec.trait, binary->lhs, -1);
                 binary->trait_check_type = arena_clone(&default_arena, &binary->lhs->type, sizeof(binary->lhs->type));
                 binary->lhs->type.is_meta = true;
             }
@@ -518,7 +518,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     check_expr(c, member->rhs, REF_NONE);
                     type_assert_type(c, member->rhs);
                     n->type = type_without_meta(member->rhs->type);
-                    check_type_satisfies_trait_old(c, n->type, spec, member->rhs, -1);
+                    check_type_satisfies_trait(c, n->type, spec, member->rhs, -1);
                 } else if (sv_match(n->token.sv, "type")) {
                     n->type = c->type_info_pointer_type;
                     member->field_index = 0;
@@ -1476,7 +1476,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                 } else if (to_trait) {
                     finalize_untyped_type(c, call->args.head);
                     call->type_cast_trait_impl =
-                        check_type_satisfies_trait_old(c, *from_type, to_type->spec.trait, call->args.head, -1);
+                        check_type_satisfies_trait(c, *from_type, to_type->spec.trait, call->args.head, -1);
                 } else if (to_union) {
                     finalize_untyped_type(c, call->args.head);
                     call->type_cast_union_index = get_union_type_index(c, call->args.head, *to_type);
@@ -2125,7 +2125,7 @@ void check_fn(
             assert(fn->trait_method->node.type.kind == TYPE_TRAIT);
 
             Type_Fn_Arg *it_arg = &fn_spec->args[iota++];
-            it_arg->name = sv_from_cstr("this"); // TODO: This should become 'self'
+            it_arg->name = sv_from_cstr("self");
             it_arg->pos = fn->trait_method->node.type.spec.trait->definition->node.token.pos;
             it_arg->type.kind = TYPE_RAWPTR;
         }

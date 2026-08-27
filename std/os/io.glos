@@ -1,13 +1,15 @@
 File :: distinct rawptr
 
 impl File {
-    write :: (f: Self, bytes: []char) {
-        C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), f);
-    }
-
     close :: (f: &Self) {
         C.fclose(*f)
         *f = null
+    }
+}
+
+impl File for Writer {
+    write :: (f: Self, bytes: []char) {
+        C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), f);
     }
 }
 

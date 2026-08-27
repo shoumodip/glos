@@ -1,5 +1,5 @@
 My_Trait :: trait($T: Type) {
-    my_method: (that: T) -> T
+    my_method: (other: T) -> T
 }
 
 Foo :: struct {
@@ -10,15 +10,15 @@ Bar :: struct {
     x: string
 }
 
-impl Foo {
-    my_method :: (this: Self, that: Foo) -> Foo {
-        return this
+impl Foo for My_Trait {
+    my_method :: (self: Self, other: Self) -> Self {
+        return self
     }
 }
 
-impl Bar {
-    my_method :: (this: Self, that: Bar) -> Bar {
-        return this
+impl Bar for My_Trait {
+    my_method :: (self: Self, other: Self) -> Self {
+        return self
     }
 }
 

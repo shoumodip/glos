@@ -1,7 +1,7 @@
 EXIT 0
-STDOUT 11
-true
-false
+STDOUT 7
+69
+420
 
 STDERR 0
 

@@ -52,11 +52,13 @@ unreachable :: (message: ...Any, location := #caller_location) {
     C.abort()
 }
 
-impl string {
+impl string for Equal {
     equal :: (lhs: Self, rhs: Self) -> bool {
         return lhs.count == rhs.count && C.memcmp(rawptr(lhs.data), rawptr(rhs.data), u64(lhs.count)) == 0
     }
+}
 
+impl string for Ordered {
     order :: (lhs: Self, rhs: Self) -> Ordering {
         n := lhs.count
         if n > rhs.count {

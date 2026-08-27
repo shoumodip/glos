@@ -138,23 +138,23 @@ Ordering :: enum {
 Any :: trait {}
 
 Add :: trait($T: Type) {
-    add: (that: T) -> T
+    add: (other: T) -> T
 }
 
 Sub :: trait($T: Type) {
-    sub: (that: T) -> T
+    sub: (other: T) -> T
 }
 
 Mul :: trait($T: Type) {
-    mul: (that: T) -> T
+    mul: (other: T) -> T
 }
 
 Div :: trait($T: Type) {
-    div: (that: T) -> T
+    div: (other: T) -> T
 }
 
 Mod :: trait($T: Type) {
-    mod: (that: T) -> T
+    mod: (other: T) -> T
 }
 
 Neg :: trait($T: Type) {
@@ -162,9 +162,9 @@ Neg :: trait($T: Type) {
 }
 
 Equal :: trait($T: Type) {
-    equal: (that: T) -> bool
+    equal: (other: T) -> bool
 }
 
 Ordered :: trait($T: Type) {
-    order: (that: T) -> Ordering
+    order: (other: T) -> Ordering
 }

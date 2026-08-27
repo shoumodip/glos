@@ -23,12 +23,12 @@ Foo :: trait {
 
 A   :: distinct s64
 
-impl A {
+impl A for Foo {
     foo :: (a: Self) { println("A: ", a) }
 }
 
 B   :: distinct string
 
-impl B {
+impl B for Foo {
     foo :: (b: Self) { println("B: ", b) }
 }

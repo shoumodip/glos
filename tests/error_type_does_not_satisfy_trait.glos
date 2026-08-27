@@ -1,9 +1,8 @@
 Foo :: trait {
-    a: ()           // Undefined
-    b: (_: s32)     // Wrong number of arguments
-    c: (_: bool)    // Wrong argument type
-    d: () -> string // Wrong Return type
-    e: ()           // Wrong receiver type
+    a: (_: s32)     // Wrong number of arguments
+    b: (_: bool)    // Wrong argument type
+    c: () -> string // Wrong Return type
+    d: ()           // Wrong receiver type
 }
 
 Bar :: distinct s64
@@ -13,8 +12,8 @@ main :: () {
 }
 
 impl Bar for Foo {
-    b :: (this: Self) {}
-    c :: (this: Self, _: string) {}
-    d :: (this: Self) {}
-    e :: (this: &Self) {}
+    a :: (this: Self) {}
+    b :: (this: Self, _: string) {}
+    c :: (this: Self) {}
+    d :: (this: &Self) {}
 }

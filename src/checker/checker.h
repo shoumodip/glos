@@ -78,8 +78,7 @@ bool type_assert_type_noexit(const Node *n);
 Type type_assert_type(Compiler *c, const Node *n);
 void type_assert_type_or_Type(Compiler *c, const Node *n);
 
-bool             is_arithmetic_operator_overload_trait(Compiler *c, Type_Trait *trait);
-Type_Trait_Impl *check_type_satisfies_trait_old(Compiler *c, Type type, Type_Trait *trait, Node *n, i64 group_index);
+Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type type, Type_Trait *trait, Node *n, i64 group_index);
 
 // Constant Expressions ////////////////////////////////////////////////////////////////////////////
 Const_Value default_const_value(Compiler *c, Type type);
@@ -243,6 +242,9 @@ void check_stmt_switch(Compiler *c, Node_Switch *sw);
 void check_stmt_impl(Compiler *c, Node_Impl *impl);
 void check_stmt_return(Compiler *c, Node_Return *returnn);
 void check_stmt(Compiler *c, Node *n);
+
+// This modifies the type itself, so only do this for diagnostics, i.e., when the program is about to exit
+void prepare_impl_method_for_printing_type(Node_Fn *actual, Type_Trait_Method *expected);
 
 // Exit Wrapper ////////////////////////////////////////////////////////////////////////////////////
 #ifdef DONT_DEFINE_EXIT_WRAPPER
