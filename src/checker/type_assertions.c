@@ -233,33 +233,101 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
             return it;
         }
     }
+
     Type_Trait *trait_save = trait;
+    Node_Impl  *impl = get_trait_implementation(c, receiver, trait, n);
+    Node_Impl  *impl_save = impl;
 
     Type_Trait_Impl trait_impl = {.type = receiver_without_ref};
-    if (trait->polymorph) {
-        ht_clear(&c->monomorph_replacements);
+    if (trait->polymorph) { // TODO: This will probably need a rework when manual trait monomorphization is introduced
+        if (impl->polymorphs.count) {
+            ht_clear(&c->monomorph_replacements);
+            const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+            c->monomorph_parameters.begin = c->monomorph_parameters.count;
 
-        const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
-        c->monomorph_parameters.begin = c->monomorph_parameters.count;
+            const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+            c->monomorphizing_site.expr = n;
+            c->monomorphizing_site.node = (Node *) impl;
 
-        const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
-        c->monomorphizing_site.expr = n;
-        c->monomorphizing_site.node = n; // TODO: The entire expression (in case of an explicit cast) would be helpful
+            infer_monomorph_parameters(c, (Node *) impl, &receiver, &impl->receiver->type);
 
-        add_monomorph_parameter(c, trait->polymorph, receiver, const_value_type(receiver), NULL);
-        Node *node = monomorphize(c, (Node *) trait->definition, n);
+            Node *node = monomorphize(c, (Node *) impl, n);
+            c->monomorph_parameters.count = c->monomorph_parameters.begin;
+            c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+            c->monomorphizing_site = monomorphizing_site_save;
+            impl = (Node_Impl *) node;
 
-        c->monomorph_parameters.count = c->monomorph_parameters.begin;
-        c->monomorph_parameters.begin = monomorph_parameters_begin_save;
-        c->monomorphizing_site = monomorphizing_site_save;
+            assert(type_kind_eq(impl->trait->type, TYPE_TRAIT));
+            trait = impl->trait->type.spec.trait;
 
-        assert(type_meta_kind_eq(node->type, TYPE_TRAIT));
-        trait = node->type.spec.trait;
+            assert(impl->monomorphs.count);
+            {
+                ll_foreach(it, &impl->methods) {
+                    assert(it->kind == NODE_DEFINE);
+                    Node_Define *define = (Node_Define *) it;
+
+                    Node *method = define->expr;
+                    assert(method->kind == NODE_FN);
+                    check_fn(c, (Node_Fn *) method, REF_NONE, NULL, true);
+
+                    Call_Checker cc = {0};
+                    cc.expr = n;
+                    cc.fn_source = n;
+                    cc.fn = method;
+                    cc.end = n->token;
+
+                    cc.is_method = true;
+                    cc.receiver = n;
+                    cc.is_polymorph = true;
+
+                    Type n_type_save = n->type;
+                    n->type = receiver;
+                    check_call_arguments(c, &cc, false);
+                    n->type = n_type_save;
+
+                    assert(cc.fn->kind == NODE_FN);
+                    define->expr = cc.fn;
+                }
+            }
+        } else {
+            ht_clear(&c->monomorph_replacements);
+
+            const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+            c->monomorph_parameters.begin = c->monomorph_parameters.count;
+
+            const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+            c->monomorphizing_site.expr = n;
+            c->monomorphizing_site.node = n;
+
+            // TODO: Can this be done using infer_monomorph_parameters()?
+            add_monomorph_parameter(c, trait->polymorph, receiver, const_value_type(receiver), NULL);
+
+            Node *node = monomorphize(c, (Node *) trait->definition, n);
+
+            c->monomorph_parameters.count = c->monomorph_parameters.begin;
+            c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+            c->monomorphizing_site = monomorphizing_site_save;
+
+            assert(type_meta_kind_eq(node->type, TYPE_TRAIT));
+            trait = node->type.spec.trait;
+        }
     }
 
-    Node_Impl *impl = get_trait_implementation(c, receiver, trait, n);
     if (impl) {
-        check_stmt_impl(c, impl);
+        if (impl->monomorphs.count) {
+            const Monomorphization monomorphization = {
+                .from = (Node *) impl_save,
+                .into = (Node *) impl,
+                .site = n,
+                .site_fn = c->context.fn ? c->context.fn->fn : NULL,
+            };
+            da_push(&c->monomorphization_stack, monomorphization);
+            check_stmt_impl(c, impl);
+
+            c->monomorphization_stack.count--;
+        } else {
+            check_stmt_impl(c, impl);
+        }
 
         Type impl_receiver = impl->receiver->type;
         if (impl->polymorphs.count) {
@@ -287,7 +355,7 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                 trait_impl.methods[it->token.as.integer].fn = (Node_Fn *) cc.fn;
             }
 
-            // TODO: I don't know how correct this. Try checking this
+            // TODO: I don't know how correct this is yet
             impl_receiver = type_with_ref(receiver, impl_receiver.ref);
         }
 

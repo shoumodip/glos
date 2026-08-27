@@ -257,18 +257,14 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
     }
 
     if (impl->trait) {
-        ll_foreach(it, &impl->methods) {
-            assert(it->kind == NODE_DEFINE);
-            Node_Define *define = (Node_Define *) it;
-
-            assert(define->expr->kind == NODE_FN);
-            check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, true);
-        }
-
         assert(type_kind_eq(impl->trait->type, TYPE_TRAIT));
         Type_Trait *trait = impl->trait->type.spec.trait;
         Type_Trait *trait_save = trait;
         if (trait->polymorph) {
+            if (impl->polymorphs.count) {
+                return;
+            }
+
             ht_clear(&c->monomorph_replacements);
 
             const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
@@ -288,6 +284,14 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
 
             assert(type_meta_kind_eq(node->type, TYPE_TRAIT));
             trait = node->type.spec.trait;
+        }
+
+        ll_foreach(it, &impl->methods) {
+            assert(it->kind == NODE_DEFINE);
+            Node_Define *define = (Node_Define *) it;
+
+            assert(define->expr->kind == NODE_FN);
+            check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, true);
         }
 
         Node_Fn **methods = arena_alloc(&temp_arena, trait->methods_count * sizeof(*methods));
@@ -396,7 +400,7 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
                         get_rightmost_token_of_node(impl->trait),
                         "This implementation of %s does not satisfy %s",
                         type_to_cstr(impl->receiver->type),
-                        type_to_cstr(impl->trait->type));
+                        type_to_cstr((Type) {.kind = TYPE_TRAIT, .spec.trait = trait}));
                     ok = false;
                 }
 

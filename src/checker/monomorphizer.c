@@ -33,6 +33,8 @@ void show_current_monomorphization(Compiler *c) {
 
             fprintf(stderr, ")'");
             error_finalize();
+        } else if (c->monomorphizing_site.node->kind == NODE_IMPL) {
+            // Pass
         } else {
             unreachable();
         }
@@ -113,6 +115,23 @@ void show_current_monomorphization(Compiler *c) {
                 EK_NOTE,
                 (Node *) m.from->type.spec.structt->definition,
                 "Here is the structure that was monomorphized");
+        } else if (m.into->kind == NODE_IMPL) {
+            error_node(EK_NOTE, m.site, "While inside this monomorphization");
+
+            ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
+            fprintf(stderr, "    Here are the polymorphic parameters used:\n\n");
+
+            Node_Impl  *impl = (Node_Impl *) m.into;
+            Polymorphs *ps = impl->monomorphs.count ? &impl->monomorphs : &impl->polymorphs;
+            ll_foreach(it, ps) {
+                assert(it->is_monomorphized);
+                fprintf(stderr, "        " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+                fprintf(stderr, "\n");
+            }
+
+            fprintf(stderr, "\n");
+            ansi_reset(stderr);
         } else {
             unreachable();
         }
@@ -702,8 +721,14 @@ void monomorphize_node(Monomorph_Replacements *rs, Node **np, bool first) {
         }
     } break;
 
-    case NODE_IMPL:
-        unreachable();
+    case NODE_IMPL: {
+        Node_Impl *impl = (Node_Impl *) n;
+        monomorphize_node(rs, &impl->receiver, first);
+        monomorphize_node(rs, &impl->trait, first);
+        monomorphize_nodes(rs, &impl->methods, first); // TODO: Can we get away with not doing this??
+        monomorphize_polymorphs(rs, &impl->polymorphs, first);
+        impl->checked = false;
+    } break;
 
     case NODE_SELF: {
         Node_Self *self = (Node_Self *) n;
@@ -737,6 +762,65 @@ void monomorphize_node(Monomorph_Replacements *rs, Node **np, bool first) {
     }
 }
 
+static_assert(COUNT_TYPES == 30, "");
+static bool type_is_polymorphic(Type type) {
+    switch (type.kind) {
+    case TYPE_FN: {
+        const Type_Fn *spec = type.spec.fn;
+        for (size_t i = 0; i < spec->args_count; i++) {
+            if (type_is_polymorphic(spec->args[i].type)) {
+                return true;
+            }
+        }
+
+        return type_is_polymorphic(*spec->return_type);
+    }
+
+    case TYPE_TRAIT:
+        return type.spec.trait->polymorph != NULL;
+
+    case TYPE_STRUCT:
+        return type.spec.structt->polymorphs_count != 0;
+
+    case TYPE_ARRAY:
+        return type.spec.array.count_polymorph != NULL || type_is_polymorphic(*type.spec.array.element);
+
+    case TYPE_DYNAMIC_ARRAY:
+        return type_is_polymorphic(*type.spec.dynamic_array.element);
+
+    case TYPE_SLICE:
+        return type_is_polymorphic(*type.spec.slice.element);
+
+    case TYPE_POLYMORPH: {
+        Node_Polymorph *polymorph = type.spec.polymorph.definition;
+        if (!polymorph->is_monomorphized) {
+            return true;
+        }
+
+        if (polymorph->is_type) {
+            assert(polymorph->monomorphization_value.kind == CONST_VALUE_TYPE);
+            return type_is_polymorphic(polymorph->monomorphization_value.as.type);
+        }
+
+        return type_is_polymorphic(polymorph->monomorphization_type);
+    }
+
+    case TYPE_GROUP: {
+        const Type_Group *spec = &type.spec.group;
+        for (size_t i = 0; i < spec->count; i++) {
+            if (type_is_polymorphic(spec->data[i])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    default:
+        return false;
+    }
+}
+
 Node *monomorphize(Compiler *c, Node *n, Node *site) {
     const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
     memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
@@ -753,10 +837,10 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
         .site_fn = c->context.fn ? c->context.fn->fn : NULL,
     };
 
-    bool is_fn = type_kind_eq(n->type, TYPE_FN);
-    bool is_trait = type_meta_kind_eq(n->type, TYPE_TRAIT);
-    bool is_struct = type_meta_kind_eq(n->type, TYPE_STRUCT);
-    bool is_complete = true;
+    const bool is_fn = type_kind_eq(n->type, TYPE_FN) || n->kind == NODE_FN;
+    const bool is_trait = type_meta_kind_eq(n->type, TYPE_TRAIT);
+    const bool is_struct = type_meta_kind_eq(n->type, TYPE_STRUCT);
+    const bool is_impl = n->kind == NODE_IMPL;
     if (is_fn) {
         Node_Fn *fn = get_function_literal(n);
         assert(fn);
@@ -765,7 +849,14 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
         n = (Node *) n->type.spec.trait->definition;
     } else if (is_struct) {
         n = (Node *) n->type.spec.structt->definition;
+    } else if (is_impl) {
+        // Pass
+    } else {
+        unreachable();
+    }
 
+    bool is_complete = true;
+    if (is_trait || is_struct) {
         for (size_t i = c->monomorph_parameters.begin; i < c->monomorph_parameters.count; i++) {
             Monomorph_Parameter it = c->monomorph_parameters.data[i];
             if (it.to_polymorph && !it.to_polymorph->is_monomorphized) {
@@ -777,9 +868,12 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
                 is_complete = false;
                 break;
             }
+
+            if (it.value.kind == CONST_VALUE_TYPE && type_is_polymorphic(it.value.as.type)) {
+                is_complete = false;
+                break;
+            }
         }
-    } else {
-        unreachable();
     }
 
     Monomorph_Spec spec = {0};
@@ -853,6 +947,17 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
         }
         fprintf(stderr, "\n");
         ansi_reset(stderr);
+    } else if (is_impl) {
+        Node_Impl *impl = (Node_Impl *) n;
+        error_node(EK_NOTE, n, "Beginning to monomorphize this node");
+        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+        ll_foreach(it, &impl->polymorphs) {
+            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "\n");
+        ansi_reset(stderr);
     } else {
         unreachable();
     }
@@ -889,22 +994,41 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
 
     } else if (is_trait) {
         Node_Trait *trait = (Node_Trait *) n;
-        trait->monomorphs = trait->polymorphs;
-        memset(&trait->polymorphs, 0, sizeof(trait->polymorphs));
+        if (is_complete) {
+            trait->monomorphs = trait->polymorphs;
+            memset(&trait->polymorphs, 0, sizeof(trait->polymorphs));
 
 #ifdef MONOMORPHIZATION_LOG
-        error_node(EK_NOTE, n, "Monomorphized this node");
-        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
-        ll_foreach(it, &trait->monomorphs) {
-            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
-            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            error_node(EK_NOTE, n, "Monomorphized this node");
+            ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+            ll_foreach(it, &trait->monomorphs) {
+                fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+                fprintf(stderr, "\n");
+            }
             fprintf(stderr, "\n");
-        }
-        fprintf(stderr, "\n");
-        ansi_reset(stderr);
-        show_current_monomorphization(c);
+            ansi_reset(stderr);
+            show_current_monomorphization(c);
 #endif // MONOMORPHIZATION_LOG
 
+        } else {
+            ll_foreach(it, &trait->polymorphs) {
+                it->node.type = it->monomorphization_type;
+            }
+
+#ifdef MONOMORPHIZATION_LOG
+            error_node(EK_NOTE, n, "Monomorphized this node partially");
+            ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+            ll_foreach(it, &trait->polymorphs) {
+                fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+                const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+                fprintf(stderr, "\n");
+            }
+            fprintf(stderr, "\n");
+            ansi_reset(stderr);
+            show_current_monomorphization(c);
+#endif // MONOMORPHIZATION_LOG
+        }
     } else if (is_struct) {
         Node_Struct *structt = (Node_Struct *) n;
         if (is_complete) {
@@ -942,6 +1066,25 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
             show_current_monomorphization(c);
 #endif // MONOMORPHIZATION_LOG
         }
+    } else if (is_impl) {
+        assert(is_complete);
+        Node_Impl *impl = (Node_Impl *) n;
+        impl->monomorphs = impl->polymorphs;
+        memset(&impl->polymorphs, 0, sizeof(impl->polymorphs));
+
+#ifdef MONOMORPHIZATION_LOG
+        error_node(EK_NOTE, n, "Monomorphized this node");
+        ansi_set(stderr, ANSI_COLOR_MAGENTA | ANSI_BOLD);
+        ll_foreach(it, &impl->monomorphs) {
+            fprintf(stderr, "    " SV_Fmt " :: ", SV_Arg(it->name->node.token.sv));
+            const_value_debug(stderr, it->monomorphization_type, it->monomorphization_value);
+            fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "\n");
+        ansi_reset(stderr);
+        show_current_monomorphization(c);
+#endif // MONOMORPHIZATION_LOG
+
     } else {
         unreachable();
     }
@@ -952,11 +1095,21 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
     }
     da_push(&c->monomorphization_stack, monomorphization);
 
-    check_expr(c, n, REF_NONE);
+    if (is_impl) {
+        Node_Impl *impl = (Node_Impl *) n;
+        check_expr(c, impl->receiver, REF_NONE);
+        impl->receiver->type.is_meta = false;
+        check_expr(c, impl->trait, REF_NONE);
+        impl->trait->type.is_meta = false;
+    } else {
+        check_expr(c, n, REF_NONE);
+    }
     c->monomorphization_stack.count--;
 
 end:
-    n->type.ref = ref;
+    if (!is_impl) {
+        n->type.ref = ref;
+    }
 
     if (is_trait) {
         const Node *from = monomorphization.from;
@@ -975,8 +1128,11 @@ end:
     }
 
 #ifdef MONOMORPHIZATION_LOG
-    error_node(EK_NOTE, n, "Type checked to %s", type_to_cstr(type_without_meta(n->type)));
-    show_current_monomorphization(c);
+    if (!is_impl) {
+        error_node(EK_NOTE, n, "Type checked to %s", type_to_cstr(type_without_meta(n->type)));
+        show_current_monomorphization(c);
+    }
+
     afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "}\n\n");
 #endif // MONOMORPHIZATION_LOG
 

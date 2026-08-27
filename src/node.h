@@ -1030,6 +1030,7 @@ typedef struct {
 
     Token      end;
     Polymorphs polymorphs;
+    Polymorphs monomorphs;
 
     bool checked;
 } Node_Impl;

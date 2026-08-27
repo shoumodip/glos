@@ -819,6 +819,8 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
             ps = &((Node_Trait *) m.into)->monomorphs;
         } else if (m.into->kind == NODE_STRUCT) {
             ps = &((Node_Struct *) m.into)->monomorphs;
+        } else if (m.into->kind == NODE_IMPL) {
+            ps = &((Node_Impl *) m.into)->monomorphs;
         }
 
         if (ps) {

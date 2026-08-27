@@ -1,0 +1,17 @@
+Vec :: struct($T: Type) {
+    x, y: T
+}
+
+main :: () {
+    v: Vec(s32) = {34, 200} + {35, 220}
+    println(v)
+
+    v: Vec(f32) = {668.5, 40042.5} + {668.5, 40042.5}
+    println(v)
+}
+
+impl Vec($E) for Add {
+    add :: (lhs: Self, rhs: Self) -> Self {
+        return {lhs.x + rhs.x, lhs.y + rhs.y}
+    }
+}

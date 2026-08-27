@@ -1896,9 +1896,9 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
         check_expr_enum(c, (Node_Enum *) n);
         break;
 
-    case NODE_TRAIT: {
+    case NODE_TRAIT:
         check_expr_trait(c, (Node_Trait *) n);
-    } break;
+        break;
 
     case NODE_UNION:
         check_expr_union(c, (Node_Union *) n);

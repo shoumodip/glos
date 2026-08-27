@@ -196,7 +196,21 @@ void sb_push_type(SB *sb, Type type) {
         if (defined_as) {
             sb_push_sv(sb, defined_as->node.token.sv);
         } else {
-            sb_push_cstr(sb, "trait {");
+            sb_push_cstr(sb, "trait");
+        }
+
+        if (spec->definition->polymorphs.count) {
+            assert(!spec->definition->monomorphs.count);
+            sb_push_polymorphs(sb, spec->definition->polymorphs);
+        }
+
+        if (spec->definition->monomorphs.count) {
+            assert(!spec->definition->polymorphs.count);
+            sb_push_polymorphs(sb, spec->definition->monomorphs);
+        }
+
+        if (!defined_as) {
+            sb_push_cstr(sb, " {");
             if (spec->methods_count) {
                 sb_push(sb, ' ');
             }
@@ -1314,7 +1328,10 @@ static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label
     case NODE_IMPL: {
         Node_Impl *impl = (Node_Impl *) n;
         fprintf(f, "Impl {\n");
+        polymorphs_debug_impl(f, impl->polymorphs, depth + 1, "Polymorphs");
+        polymorphs_debug_impl(f, impl->monomorphs, depth + 1, "Monomorphs");
         node_debug_impl(f, impl->receiver, depth + 1, "Receiver");
+        node_debug_impl(f, impl->trait, depth + 1, "Trait");
         nodes_debug_impl(f, impl->methods, depth + 1, "Methods");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;
