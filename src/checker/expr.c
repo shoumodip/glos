@@ -1889,7 +1889,7 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     } break;
 
     case NODE_FN:
-        check_fn(c, (Node_Fn *) n, ref, &is_ref_valid, false, false);
+        check_fn(c, (Node_Fn *) n, ref, &is_ref_valid, false);
         break;
 
     case NODE_ENUM:
@@ -2018,10 +2018,9 @@ void check_fn(
     Node_Fn  *fn,
     Ref_Kind  ref,
     bool     *is_ref_valid,
-    bool      only_check_polymorphic_parameters,
     bool      only_check_signature) //
 {
-    if (fn->checked_signature && (only_check_signature || only_check_polymorphic_parameters)) {
+    if (fn->checked_signature && only_check_signature) {
         return;
     }
 
@@ -2087,10 +2086,6 @@ void check_fn(
         }
 
         context_push_define(&c->context, it->name);
-    }
-
-    if (only_check_polymorphic_parameters) {
-        goto end;
     }
 
     if (fn->checked_signature) {
@@ -2306,7 +2301,6 @@ void check_fn(
         fn->checked_fully = true;
     }
 
-end:
     context_restore_fn(&c->context, context_fn_save);
     c->context.replace = context_replace_save;
 }

@@ -256,15 +256,15 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
         return;
     }
 
-    ll_foreach(it, &impl->methods) {
-        assert(it->kind == NODE_DEFINE);
-        Node_Define *define = (Node_Define *) it;
-
-        assert(define->expr->kind == NODE_FN);
-        check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, false, false);
-    }
-
     if (impl->trait) {
+        ll_foreach(it, &impl->methods) {
+            assert(it->kind == NODE_DEFINE);
+            Node_Define *define = (Node_Define *) it;
+
+            assert(define->expr->kind == NODE_FN);
+            check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, true);
+        }
+
         assert(type_kind_eq(impl->trait->type, TYPE_TRAIT));
         Type_Trait *trait = impl->trait->type.spec.trait;
         Type_Trait *trait_save = trait;
@@ -471,6 +471,14 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
         trait->impls.head = arena_clone(&default_arena, &trait_impl, sizeof(trait_impl));
 
         arena_reset(&temp_arena, methods);
+    }
+
+    ll_foreach(it, &impl->methods) {
+        assert(it->kind == NODE_DEFINE);
+        Node_Define *define = (Node_Define *) it;
+
+        assert(define->expr->kind == NODE_FN);
+        check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, false);
     }
 
     impl->checked = true;

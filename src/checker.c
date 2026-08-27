@@ -253,19 +253,9 @@ void check_nodes(Compiler *c) {
 
                 assert(define->expr->kind == NODE_FN);
                 Node_Fn *fn = (Node_Fn *) define->expr;
+
                 assert(fn->defined_as && fn->args.head && fn->args.head->kind == NODE_DEFINE);
-
-                // Define the polymorphic parameters
-                check_fn(c, fn, REF_NONE, NULL, true, true);
-
-                Node_Define *argument = (Node_Define *) fn->args.head;
-                assert(argument->name->kind == NODE_ATOM && argument->type && fn->defined_as);
                 spec.name = fn->defined_as->node.token.sv;
-
-                check_expr(c, argument->type, REF_NONE);
-                type_assert_type(c, argument->type);
-                argument->type->type.is_meta = false;
-
                 if (type_kind_eq(*receiver, TYPE_ENUM)) {
                     ll_foreach(it, &receiver->spec.enumm.definition->values) {
                         if (sv_eq(it->token.sv, spec.name)) {

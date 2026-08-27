@@ -221,13 +221,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
 void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, bool *is_ref_valid);
 void check_expr(Compiler *c, Node *n, Ref_Kind ref);
 
-void check_fn(
-    Compiler *c,
-    Node_Fn  *fn,
-    Ref_Kind  ref,
-    bool     *is_ref_valid,
-    bool      only_check_polymorphic_parameters,
-    bool      only_check_signature);
+void check_fn(Compiler *c, Node_Fn *fn, Ref_Kind ref, bool *is_ref_valid, bool only_check_signature);
 
 // Statements //////////////////////////////////////////////////////////////////////////////////////
 void        check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw);

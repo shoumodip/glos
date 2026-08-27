@@ -67,7 +67,7 @@ Node_Fn *get_main(Compiler *c) {
     }
 
     c->main_fn = (Node_Fn *) main->definition_spec->assignment_node;
-    check_fn(c, c->main_fn, REF_NONE, NULL, false, true);
+    check_fn(c, c->main_fn, REF_NONE, NULL, true);
 
     const Type_Fn *signature = main->node.type.spec.fn;
     if (signature->args_count) {
@@ -468,7 +468,7 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type, boo
                     }
 
                     if (it_expr->kind == NODE_FN && called_from_if_needed) {
-                        check_fn(c, (Node_Fn *) it_expr, REF_NONE, NULL, false, true);
+                        check_fn(c, (Node_Fn *) it_expr, REF_NONE, NULL, true);
                         check = false;
                     }
                 }
@@ -507,7 +507,7 @@ void check_definition(Compiler *c, Node_Atom *it, Node *it_expr, Node *type, boo
         } else if (it_expr->kind == NODE_FN) {
             Node_Fn *fn = (Node_Fn *) it_expr;
             if (!fn->checked_fully && !called_from_if_needed) {
-                check_fn(c, fn, REF_NONE, NULL, false, false);
+                check_fn(c, fn, REF_NONE, NULL, false);
             }
         }
 
