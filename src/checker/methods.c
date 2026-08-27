@@ -323,3 +323,28 @@ void check_special_method_signature_args_count(
     // The previous loop guarantees this
     assert(fn_spec->args_count_min <= args_count);
 }
+
+Node_Impl *get_trait_implementation(Compiler *c, Type receiver, Type_Trait *trait, Node *n) {
+    Method_Spec spec = {0};
+    assert(get_method_spec(c, n, type_without_ref(receiver), (SV) {0}, &spec, NULL, NULL));
+
+    Trait_Implementation key = {
+        .trait = trait,
+        .receiver = spec.uid,
+    };
+
+    Node_Impl **impl = ht_get(&c->implementations, key);
+    return impl ? *impl : NULL;
+}
+
+void add_trait_implementation(Compiler *c, Type receiver, Type_Trait *trait, Node_Impl *impl) {
+    Method_Spec spec = {0};
+    assert(get_method_spec(c, (Node *) impl, type_without_ref(receiver), (SV) {0}, &spec, impl->node.module, NULL));
+
+    Trait_Implementation key = {
+        .trait = trait,
+        .receiver = spec.uid,
+    };
+
+    ht_set(&c->implementations, key, impl);
+}

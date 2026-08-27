@@ -57,6 +57,11 @@ typedef struct {
     bool  is_method;
 } Monomorphizing_Site;
 
+typedef struct {
+    uintptr_t   receiver;
+    Type_Trait *trait;
+} Trait_Implementation;
+
 typedef enum {
     O0,
     O1,
@@ -79,7 +84,9 @@ typedef struct {
 
     HT(Method_Spec, Node_Fn *) methods_table;
     DA(Node_Fn *) methods_list;
+
     DA(Node_Impl *) impls_list;
+    HT(Trait_Implementation, Node_Impl *) implementations;
 
     Type ordering_type;
 

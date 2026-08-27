@@ -311,6 +311,8 @@ void check_nodes(Compiler *c) {
                     error_node(EK_ERROR, impl->trait, "Expected trait type, got %s", type_to_cstr(*trait));
                     exit(c, 1);
                 }
+
+                add_trait_implementation(c, *receiver, trait->spec.trait, impl);
                 continue;
             }
 

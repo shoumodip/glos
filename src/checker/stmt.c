@@ -252,7 +252,7 @@ static void prepare_impl_method_for_printing_type(Node_Impl *impl, Node_Fn *actu
 }
 
 void check_stmt_impl(Compiler *c, Node_Impl *impl) {
-    if (impl->methods_checked) {
+    if (impl->checked) {
         return;
     }
 
@@ -312,6 +312,7 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
 
                         found = true;
                         methods[i] = fn;
+                        define->node.token.as.integer = i;
                         break;
                     }
                 }
@@ -350,10 +351,6 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
                 if (!actual) {
                     errors[i] = UNDEFINED;
                     continue;
-                }
-
-                if (actual->polymorphs.count) {
-                    todo();
                 }
 
                 assert(expected->type.kind == TYPE_FN);
@@ -476,7 +473,7 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
         arena_reset(&temp_arena, methods);
     }
 
-    impl->methods_checked = true;
+    impl->checked = true;
 }
 
 void check_stmt_return(Compiler *c, Node_Return *returnn) {

@@ -187,6 +187,9 @@ void error_special_method_wrong_signature(Token name, const char *signature);
 void check_special_method_signature_args_count(
     Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature);
 
+Node_Impl *get_trait_implementation(Compiler *c, Type receiver, Type_Trait *trait, Node *n);
+void       add_trait_implementation(Compiler *c, Type receiver, Type_Trait *trait, Node_Impl *impl);
+
 // Monomorphizer ///////////////////////////////////////////////////////////////////////////////////
 void show_current_monomorphization(Compiler *c);
 

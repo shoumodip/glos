@@ -10,10 +10,13 @@ Array :: struct($T: Type, $N: s64) {
     items: [N]T
 }
 
-display :: (this: Array($T, $N)) {
-    println(this.items)
+impl Array($T, $N) for Display {
+    display :: (this: Self) {
+        println(this.items)
+    }
 }
 
 main :: () {
     display(Array(s64, 2) {{69, 420}})
+    display(Array(string, 3) {{"Suck", "ma", "ballz"}})
 }

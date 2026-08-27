@@ -1024,14 +1024,14 @@ typedef struct {
 typedef struct {
     Node  node;
     Node *receiver;
+
     Node *trait;
-
     Nodes methods;
-    bool  methods_checked;
 
-    Token end;
-
+    Token      end;
     Polymorphs polymorphs;
+
+    bool checked;
 } Node_Impl;
 
 typedef struct {
