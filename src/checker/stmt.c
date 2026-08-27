@@ -267,10 +267,28 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
     if (impl->trait) {
         assert(type_kind_eq(impl->trait->type, TYPE_TRAIT));
         Type_Trait *trait = impl->trait->type.spec.trait;
-        if (trait->polymorph) {
-            todo();
-        }
         Type_Trait *trait_save = trait;
+        if (trait->polymorph) {
+            ht_clear(&c->monomorph_replacements);
+
+            const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
+            c->monomorph_parameters.begin = c->monomorph_parameters.count;
+
+            const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
+            c->monomorphizing_site.expr = impl->receiver;
+            c->monomorphizing_site.node = impl->receiver;
+
+            add_monomorph_parameter(
+                c, trait->polymorph, impl->receiver->type, const_value_type(impl->receiver->type), NULL);
+            Node *node = monomorphize(c, (Node *) trait->original_definition, impl->receiver);
+
+            c->monomorph_parameters.count = c->monomorph_parameters.begin;
+            c->monomorph_parameters.begin = monomorph_parameters_begin_save;
+            c->monomorphizing_site = monomorphizing_site_save;
+
+            assert(type_meta_kind_eq(node->type, TYPE_TRAIT));
+            trait = node->type.spec.trait;
+        }
 
         Node_Fn **methods = arena_alloc(&temp_arena, trait->methods_count * sizeof(*methods));
 
@@ -299,7 +317,12 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
                 }
 
                 if (!found) {
-                    error_undefined(c, &define->name->token, "trait method", true);
+                    error_token(
+                        EK_ERROR,
+                        define->name->token,
+                        "Method '" SV_Fmt "' is not a requirement of %s",
+                        SV_Arg(define->name->token.sv),
+                        type_to_cstr(impl->trait->type));
                     ok = false;
                 }
             }

@@ -199,6 +199,7 @@ bool is_arithmetic_operator_overload_trait(Compiler *c, Type_Trait *trait) {
            trait == c->mod_trait || trait == c->neg_trait || trait == c->equal_trait || trait == c->ordered_trait;
 }
 
+// TODO: This prints gibberish if receiver is a meta type
 Type_Trait_Impl *
 check_type_satisfies_trait_old(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) //
 {

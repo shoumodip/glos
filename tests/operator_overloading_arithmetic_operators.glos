@@ -1,3 +1,69 @@
+Int32 :: struct {
+    x: s32
+}
+
+impl Int32 for Add {
+    add :: (lhs: Self, rhs: Self) -> Self {
+        lhs.x += rhs.x
+        return lhs
+    }
+}
+
+impl Int32 for Sub {
+    sub :: (lhs: Self, rhs: Self) -> Self {
+        lhs.x -= rhs.x
+        return lhs
+    }
+}
+
+impl Int32 for Mul {
+    mul :: (lhs: Self, rhs: Self) -> Self {
+        lhs.x *= rhs.x
+        return lhs
+    }
+}
+
+impl Int32 for Div {
+    div :: (lhs: Self, rhs: Self) -> Self {
+        lhs.x /= rhs.x
+        return lhs
+    }
+}
+
+impl Int32 for Mod {
+    mod :: (lhs: Self, rhs: Self) -> Self {
+        lhs.x %= rhs.x
+        return lhs
+    }
+}
+
+impl Int32 for Neg {
+    neg :: (lhs: Self) -> Self {
+        lhs.x = -lhs.x
+        return lhs
+    }
+}
+
+impl Int32 for Equal {
+    equal :: (lhs: Self, rhs: Self) -> bool {
+        return lhs.x == rhs.x
+    }
+}
+
+impl Int32 for Ordered {
+    order :: (lhs: Self, rhs: Self) -> Ordering {
+        if lhs.x < rhs.x {
+            return .LT
+        }
+
+        if lhs.x > rhs.x {
+            return .GT
+        }
+
+        return .EQ
+    }
+}
+
 main :: () {
     a := Int32 {10}
     b := Int32 {3}
@@ -40,54 +106,4 @@ main :: () {
 
     println(a <= a)
     println(a >= a)
-}
-
-Int32 :: struct {
-    x: s32
-}
-
-add :: (this: Int32, that: Int32) -> Int32 {
-    this.x += that.x
-    return this
-}
-
-sub :: (this: Int32, that: Int32) -> Int32 {
-    this.x -= that.x
-    return this
-}
-
-mul :: (this: Int32, that: Int32) -> Int32 {
-    this.x *= that.x
-    return this
-}
-
-div :: (this: Int32, that: Int32) -> Int32 {
-    this.x /= that.x
-    return this
-}
-
-mod :: (this: Int32, that: Int32) -> Int32 {
-    this.x %= that.x
-    return this
-}
-
-neg :: (this: Int32) -> Int32 {
-    this.x = -this.x
-    return this
-}
-
-equal :: (this: Int32, that: Int32) -> bool {
-    return this.x == that.x
-}
-
-order :: (this: Int32, that: Int32) -> Ordering {
-    if this.x < that.x {
-        return .LT
-    }
-
-    if this.x > that.x {
-        return .GT
-    }
-
-    return .EQ
 }
