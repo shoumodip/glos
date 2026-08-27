@@ -1,2 +1,5 @@
 Foo :: distinct s64
-index :: (this: Foo, key: s64, assign: bool) -> bool {}
+
+impl Foo {
+    index :: (this: Self, key: s64, assign: bool) -> bool {}
+}

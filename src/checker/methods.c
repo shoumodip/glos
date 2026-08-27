@@ -328,6 +328,11 @@ Node_Impl *get_trait_implementation(Compiler *c, Type receiver, Type_Trait *trai
     Method_Spec spec = {0};
     assert(get_method_spec(c, n, type_without_ref(receiver), (SV) {0}, &spec, NULL, NULL));
 
+    if (trait->definition != trait->original_definition) {
+        assert(type_meta_kind_eq(trait->original_definition->node.type, TYPE_TRAIT));
+        trait = trait->original_definition->node.type.spec.trait;
+    }
+
     Trait_Implementation key = {
         .trait = trait,
         .receiver = spec.uid,
@@ -341,10 +346,14 @@ void add_trait_implementation(Compiler *c, Type receiver, Type_Trait *trait, Nod
     Method_Spec spec = {0};
     assert(get_method_spec(c, (Node *) impl, type_without_ref(receiver), (SV) {0}, &spec, impl->node.module, NULL));
 
+    if (trait->definition != trait->original_definition) {
+        assert(type_meta_kind_eq(trait->original_definition->node.type, TYPE_TRAIT));
+        trait = trait->original_definition->node.type.spec.trait;
+    }
+
     Trait_Implementation key = {
         .trait = trait,
         .receiver = spec.uid,
     };
-
     ht_set(&c->implementations, key, impl);
 }

@@ -1,2 +1,5 @@
 Foo :: distinct s64
-range :: (this: Foo, a: s64) {}
+
+impl Foo {
+    range :: (this: Self, a: s64) {}
+}

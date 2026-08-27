@@ -1,10 +1,10 @@
 EXIT 1
 STDOUT 0
 
-STDERR 553
-tests/error_operator_overloading_index_method_too_few_arguments.glos:2:1: Error: The method 'index' is special because it implements an operator overload
+STDERR 555
+tests/error_operator_overloading_index_method_too_few_arguments.glos:4:5: Error: The method 'index' is special because it implements an operator overload
 
-    index :: (this: Foo, key: s64) {}
+    index :: (this: Self, key: s64) {}
 
     It should have this signature:
 
@@ -12,8 +12,8 @@ tests/error_operator_overloading_index_method_too_few_arguments.glos:2:1: Error:
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_index_method_too_few_arguments.glos:2:30: Note: Expected at least 3 arguments, got 2
+tests/error_operator_overloading_index_method_too_few_arguments.glos:4:35: Note: Expected at least 3 arguments, got 2
 
-    index :: (this: Foo, key: s64) {}
+    index :: (this: Self, key: s64) {}
 
 

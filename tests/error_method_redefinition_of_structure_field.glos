@@ -2,4 +2,6 @@ Foo :: struct {
     bar: string
 }
 
-bar :: (this: Foo) {}
+impl Foo {
+    bar :: (this: Self) {}
+}

@@ -1,1 +1,1 @@
-foo :: (this: s32) {}
+impl s32 {}

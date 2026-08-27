@@ -1,10 +1,10 @@
 EXIT 1
 STDOUT 0
 
-STDERR 214
-tests/error_method_redefinition_of_enum_value.glos:6:1: Error: Redefinition of 'Baz'
+STDERR 215
+tests/error_method_redefinition_of_enum_value.glos:7:5: Error: Redefinition of 'Baz'
 
-    Baz :: (this: Foo) {}
+    Baz :: (this: Self) {}
 
 tests/error_method_redefinition_of_enum_value.glos:3:5: Note: Here is the first definition
 

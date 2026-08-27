@@ -6,6 +6,8 @@ main :: () {
     Vec2 {69, 420}.show()
 }
 
-show :: (this: Vec2) {
-    println(this)
+impl Vec2 {
+    show :: (v: Self) {
+        println(v)
+    }
 }

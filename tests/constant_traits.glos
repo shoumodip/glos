@@ -22,7 +22,13 @@ Foo :: trait {
 }
 
 A   :: distinct s64
-foo :: (this: A) { println("A: ", this) }
+
+impl A {
+    foo :: (a: Self) { println("A: ", a) }
+}
 
 B   :: distinct string
-foo :: (this: B) { println("B: ", this) }
+
+impl B {
+    foo :: (b: Self) { println("B: ", b) }
+}

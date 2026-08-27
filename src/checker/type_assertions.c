@@ -236,6 +236,8 @@ check_type_satisfies_trait_old(Compiler *c, Type receiver, Type_Trait *trait, No
     Node_Impl *impl = get_trait_implementation(c, receiver, trait, n);
     if (impl) {
         check_stmt_impl(c, impl);
+
+        Type impl_receiver = impl->receiver->type;
         if (impl->polymorphs.count) {
             trait_impl.methods = arena_alloc(&default_arena, trait->methods_count * sizeof(*trait_impl.methods));
             trait_impl.methods_count = trait->methods_count;
@@ -260,6 +262,46 @@ check_type_satisfies_trait_old(Compiler *c, Type receiver, Type_Trait *trait, No
 
                 trait_impl.methods[it->token.as.integer].fn = (Node_Fn *) cc.fn;
             }
+
+            // TODO: I don't know how correct this. Try checking this
+            impl_receiver = type_with_ref(receiver, impl_receiver.ref);
+        }
+
+        if (!type_eq(impl_receiver, receiver)) {
+            const Type expected = {.kind = TYPE_TRAIT, .spec.trait = trait};
+            if (group_index == -1) {
+                error_node(
+                    EK_ERROR, n, "Type %s does not implement %s", type_to_cstr(receiver), type_to_cstr(expected));
+            } else {
+                error_node_begin(EK_ERROR, n);
+                fprintf(
+                    stderr,
+                    "The %zd%s value of this expression has type %s, which does not implement %s",
+                    group_index + 1,
+                    order_postfix(group_index + 1),
+                    type_to_cstr(receiver),
+                    type_to_cstr(expected));
+
+                if (!type_kind_eq(n->type, TYPE_VOID)) {
+                    fprintf(stderr, ". The type of this entire expression is %s", type_to_cstr(n->type));
+                }
+                error_finalize();
+            }
+
+            error_token_range_begin(EK_NOTE, impl->node.token, get_rightmost_token_of_node(impl->trait));
+            fprintf(
+                stderr,
+                "The trait is implemented for %s, not %s",
+                type_to_cstr(impl->receiver->type),
+                type_to_cstr(receiver));
+
+            if (type_eq(type_without_ref(impl_receiver), type_without_ref(receiver))) {
+                fprintf(
+                    stderr, ". Perhaps try %s?", impl_receiver.ref > receiver.ref ? "referencing" : "dereferencing");
+            }
+
+            error_finalize();
+            exit(c, 1);
         }
     } else {
         const Type expected = {.kind = TYPE_TRAIT, .spec.trait = trait};
@@ -379,16 +421,19 @@ check_type_satisfies_trait_old(Compiler *c, Type receiver, Type_Trait *trait, No
                                 type_to_cstr(receiver),
                                 type_to_cstr(expected));
                         } else {
-                            const char *postfix = order_postfix(group_index + 1);
-                            error_node(
-                                EK_ERROR,
-                                n,
-                                "The %zd%s value of this expression has type %s, which does not implement %s. The type of this entire expression is %s",
+                            error_node_begin(EK_ERROR, n);
+                            fprintf(
+                                stderr,
+                                "The %zd%s value of this expression has type %s, which does not implement %s",
                                 group_index + 1,
-                                postfix,
+                                order_postfix(group_index + 1),
                                 type_to_cstr(receiver),
-                                type_to_cstr(expected),
-                                type_to_cstr(n->type));
+                                type_to_cstr(expected));
+
+                            if (!type_kind_eq(n->type, TYPE_VOID)) {
+                                fprintf(stderr, ". The type of this entire expression is %s", type_to_cstr(n->type));
+                            }
+                            error_finalize();
                         }
                     }
 
@@ -473,9 +518,9 @@ check_type_satisfies_trait_old(Compiler *c, Type receiver, Type_Trait *trait, No
         }
     }
 
+    trait_impl.trait = trait;
+    trait = trait_save;
     if (!impl || impl->polymorphs.count) {
-        trait_impl.trait = trait;
-        trait = trait_save;
         trait_impl.next = trait->impls.head;
         trait->impls.head = arena_clone(&default_arena, &trait_impl, sizeof(trait_impl));
     }

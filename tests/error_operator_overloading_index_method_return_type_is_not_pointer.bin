@@ -1,10 +1,10 @@
 EXIT 1
 STDOUT 0
 
-STDERR 619
-tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:2:1: Error: The method 'index' is special because it implements an operator overload
+STDERR 621
+tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:4:5: Error: The method 'index' is special because it implements an operator overload
 
-    index :: (this: Foo, key: s64, assign: bool) -> bool {}
+    index :: (this: Self, key: s64, assign: bool) -> bool {}
 
     It should have this signature:
 
@@ -12,8 +12,8 @@ tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:2:
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:2:49: Note: Expected to return a pointer, got 'bool'
+tests/error_operator_overloading_index_method_return_type_is_not_pointer.glos:4:54: Note: Expected to return a pointer, got 'bool'
 
-    index :: (this: Foo, key: s64, assign: bool) -> bool {}
+    index :: (this: Self, key: s64, assign: bool) -> bool {}
 
 

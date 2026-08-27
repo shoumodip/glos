@@ -13,29 +13,31 @@ main :: () {
     println(xs["Bar"])
 }
 
-index :: (this: &Table, key: string, assign: bool, location := #caller_location) -> &s64 {
-    for i := 0; i < this.count; i += 1 {
-        it := &this.items[i]
-        if it.key == key {
-            return &it.value
+impl Table {
+    index :: (t: &Self, key: string, assign: bool, location := #caller_location) -> &s64 {
+        for i := 0; i < t.count; i += 1 {
+            it := &t.items[i]
+            if it.key == key {
+                return &it.value
+            }
         }
+
+        if !assign {
+            eprintln("\{location} Key '\{key}' does not exist")
+            os.exit(1)
+        }
+
+        if t.count >= t.items.count {
+            eprintln("\{location} Table is out of memory")
+            os.exit(1)
+        }
+
+        it := &t.items[t.count]
+        t.count += 1
+
+        it.key = key
+        return &it.value
+
+        os :: #import "os"
     }
-
-    if !assign {
-        eprintln("\{location} Key '\{key}' does not exist")
-        os.exit(1)
-    }
-
-    if this.count >= this.items.count {
-        eprintln("\{location} Table is out of memory")
-        os.exit(1)
-    }
-
-    it := &this.items[this.count]
-    this.count += 1
-
-    it.key = key
-    return &it.value
-
-    os :: #import "os"
 }

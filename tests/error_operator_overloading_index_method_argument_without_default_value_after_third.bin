@@ -1,10 +1,10 @@
 EXIT 1
 STDOUT 0
 
-STDERR 682
-tests/error_operator_overloading_index_method_argument_without_default_value_after_third.glos:2:1: Error: The method 'index' is special because it implements an operator overload
+STDERR 684
+tests/error_operator_overloading_index_method_argument_without_default_value_after_third.glos:4:5: Error: The method 'index' is special because it implements an operator overload
 
-    index :: (this: Foo, index: s64, assign: bool, other: string) {}
+    index :: (this: Self, index: s64, assign: bool, other: string) {}
 
     It should have this signature:
 
@@ -12,8 +12,8 @@ tests/error_operator_overloading_index_method_argument_without_default_value_aft
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_index_method_argument_without_default_value_after_third.glos:2:48: Note: All arguments after the 3rd argument must be optional
+tests/error_operator_overloading_index_method_argument_without_default_value_after_third.glos:4:53: Note: All arguments after the 3rd argument must be optional
 
-    index :: (this: Foo, index: s64, assign: bool, other: string) {}
+    index :: (this: Self, index: s64, assign: bool, other: string) {}
 
 

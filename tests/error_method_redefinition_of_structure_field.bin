@@ -1,10 +1,10 @@
 EXIT 1
 STDOUT 0
 
-STDERR 232
-tests/error_method_redefinition_of_structure_field.glos:5:1: Error: Redefinition of 'bar'
+STDERR 233
+tests/error_method_redefinition_of_structure_field.glos:6:5: Error: Redefinition of 'bar'
 
-    bar :: (this: Foo) {}
+    bar :: (this: Self) {}
 
 tests/error_method_redefinition_of_structure_field.glos:2:5: Note: Here is the first definition
 

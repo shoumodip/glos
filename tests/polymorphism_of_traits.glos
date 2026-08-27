@@ -10,12 +10,16 @@ Bar :: struct {
     x: string
 }
 
-my_method :: (this: Foo, that: Foo) -> Foo {
-    return this
+impl Foo {
+    my_method :: (this: Self, that: Foo) -> Foo {
+        return this
+    }
 }
 
-my_method :: (this: Bar, that: Bar) -> Bar {
-    return this
+impl Bar {
+    my_method :: (this: Self, that: Bar) -> Bar {
+        return this
+    }
 }
 
 main :: () {

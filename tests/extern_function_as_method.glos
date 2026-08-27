@@ -1,7 +1,9 @@
 Cstring :: distinct &char
 
 extern {
-    puts :: (this: Cstring)
+    impl Cstring {
+        puts :: (this: Self)
+    }
 }
 
 main :: () {

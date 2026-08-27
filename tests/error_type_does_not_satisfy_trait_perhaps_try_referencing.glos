@@ -9,5 +9,7 @@ main :: () {
     Foo(Bar(0))
 }
 
-a :: (this: &Bar) {}
-b :: (this: &Bar) {}
+impl &Bar for Foo {
+    a :: (_: Self) {}
+    b :: (_: Self) {}
+}

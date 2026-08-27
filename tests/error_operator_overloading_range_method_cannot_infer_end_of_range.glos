@@ -1,7 +1,9 @@
 Foo :: distinct s64
 
-range :: (this: Foo, a := 0, b: s64) -> bool {
-    return true
+impl Foo {
+    range :: (f: Self, a := 0, b: s64) -> bool {
+        return true
+    }
 }
 
 main :: () {

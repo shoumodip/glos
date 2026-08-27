@@ -3,4 +3,6 @@ Foo :: enum {
     Baz
 }
 
-Baz :: (this: Foo) {}
+impl Foo {
+    Baz :: (this: Self) {}
+}

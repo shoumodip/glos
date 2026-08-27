@@ -1,38 +1,50 @@
 EXIT 1
 STDOUT 0
 
-STDERR 941
-tests/error_type_does_not_satisfy_trait.glos:12:9: Error: Type 'Bar' does not implement 'Foo'
+STDERR 1318
+tests/error_type_does_not_satisfy_trait.glos:15:1: Error: This implementation of 'Bar' does not satisfy 'Foo'
 
-    Foo(Bar(69))
+    impl Bar for Foo {
 
-tests/error_type_does_not_satisfy_trait.glos:2:5: Note: The method 'a' is not defined for type 'Bar'
+tests/error_type_does_not_satisfy_trait.glos:2:5: Note: The trait method 'a' is not implemented
 
     a: ()           // Undefined
 
-tests/error_type_does_not_satisfy_trait.glos:15:6: Note: The method 'b' has wrong signature
+    Expected: (this: Self)
 
-    b :: (this: Bar) {}
+tests/error_type_does_not_satisfy_trait.glos:16:10: Note: The trait method 'b' has wrong signature
 
-    Expected: (this: Bar, _: s32)
-    Actual:   (this: Bar)
+    b :: (this: Self) {}
 
-tests/error_type_does_not_satisfy_trait.glos:16:6: Note: The method 'c' has wrong signature
+    Expected: (this: Self, _: s32)
+    Actual:   (this: Self)
 
-    c :: (this: Bar, _: string) {}
+tests/error_type_does_not_satisfy_trait.glos:17:10: Note: The trait method 'c' has wrong signature
 
-    Expected: (this: Bar, _: bool)
-    Actual:   (this: Bar, _: string)
+    c :: (this: Self, _: string) {}
 
-tests/error_type_does_not_satisfy_trait.glos:17:6: Note: The method 'd' has wrong signature
+    Expected: (this: Self, _: bool)
+    Actual:   (this: Self, _: string)
 
-    d :: (this: Bar) {}
+tests/error_type_does_not_satisfy_trait.glos:18:10: Note: The trait method 'd' has wrong signature
 
-    Expected: (this: Bar) -> string
-    Actual:   (this: Bar)
+    d :: (this: Self) {}
 
-tests/error_type_does_not_satisfy_trait.glos:18:7: Note: The method 'e' has receiver '&Bar', not 'Bar'
+    Expected: (this: Self) -> string
+    Actual:   (this: Self)
 
-    e :: (this: &Bar) {}
+tests/error_type_does_not_satisfy_trait.glos:19:11: Note: The trait method 'e' has receiver '&Self', not 'Self'
+
+    e :: (this: &Self) {}
+
+tests/error_type_does_not_satisfy_trait.glos:1:8: Note: Trait defined here
+
+    Foo :: trait {
+        a: ()           // Undefined
+        b: (_: s32)     // Wrong number of arguments
+        c: (_: bool)    // Wrong argument type
+        d: () -> string // Wrong Return type
+    ...
+    }
 
 

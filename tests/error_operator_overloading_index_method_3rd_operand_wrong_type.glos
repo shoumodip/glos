@@ -1,2 +1,5 @@
 Foo :: distinct s64
-index :: (this: Foo, index: s64, assign: s64) {}
+
+impl Foo {
+    index :: (this: Self, index: s64, assign: s64) {}
+}

@@ -8,30 +8,32 @@ main :: () {
     println(xs[..3])
 }
 
-index :: (this: &Array, index: s64, assign: bool, location := #caller_location) -> &s64 {
-    assert(
-        index < this.items.count,
-        "Index \{index} is out of bounds in Array of length of \{this.items.count}",
-        location = location
-    )
-    return &this.items[index]
-}
-
-range :: (this: &Array, begin := 0, end := -1, location := #caller_location) -> []s64 {
-    if end == -1 {
-        end = this.items.count
+impl Array {
+    index :: (a: &Self, index: s64, assign: bool, location := #caller_location) -> &s64 {
+        assert(
+            index < a.items.count,
+            "Index \{index} is out of bounds in Array of length of \{a.items.count}",
+            location = location
+        )
+        return &a.items[index]
     }
 
-    assert(
-        begin <= end,
-        "Range (\{begin}..\{end}) is invalid: Beginning of range is more than end",
-        location = location
-    )
+    range :: (a: &Self, begin := 0, end := -1, location := #caller_location) -> []s64 {
+        if end == -1 {
+            end = a.items.count
+        }
 
-    assert(
-        end <= this.items.count,
-        "Range (\{begin}..\{end}) is out of bounds in Array of length \{this.items.count}",
-        location = location
-    )
-    return this.items[begin..end]
+        assert(
+            begin <= end,
+            "Range (\{begin}..\{end}) is invalid: Beginning of range is more than end",
+            location = location
+        )
+
+        assert(
+            end <= a.items.count,
+            "Range (\{begin}..\{end}) is out of bounds in Array of length \{a.items.count}",
+            location = location
+        )
+        return a.items[begin..end]
+    }
 }

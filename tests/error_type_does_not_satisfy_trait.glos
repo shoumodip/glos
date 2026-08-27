@@ -12,7 +12,9 @@ main :: () {
     Foo(Bar(69))
 }
 
-b :: (this: Bar) {}
-c :: (this: Bar, _: string) {}
-d :: (this: Bar) {}
-e :: (this: &Bar) {}
+impl Bar for Foo {
+    b :: (this: Self) {}
+    c :: (this: Self, _: string) {}
+    d :: (this: Self) {}
+    e :: (this: &Self) {}
+}

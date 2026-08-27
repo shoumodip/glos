@@ -2,8 +2,10 @@ Foo :: struct {
     x: s32
 }
 
-bar :: (this: Foo, that: $T) {
-    println(this, that)
+impl Foo {
+    bar :: (this: Self, that: $T) {
+        println(this, that)
+    }
 }
 
 main :: () {

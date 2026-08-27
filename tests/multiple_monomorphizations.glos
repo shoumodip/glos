@@ -2,9 +2,11 @@ Array :: struct($T: Type, $N: s64) {
     items: [N]T
 }
 
-index :: (this: &Array($T, $N), n: s64, assign: bool) -> &T {
-    assert(n < this.items.count)
-    return &this.items[n]
+impl &Array($T, $N) {
+    index :: (a: Self, n: s64, assign: bool) -> &T {
+        assert(n < a.items.count)
+        return &a.items[n]
+    }
 }
 
 main :: () {

@@ -10,7 +10,13 @@ Foo :: trait {
 }
 
 A   :: distinct s64
-foo :: (this: A) {}
+
+impl A for Foo {
+    foo :: (a: Self) {}
+}
 
 B   :: distinct s64
-foo :: (this: B) {}
+
+impl B for Foo {
+    foo :: (b: Self) {}
+}

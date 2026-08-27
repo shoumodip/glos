@@ -37,6 +37,7 @@ void error_number_of_values_mismatch(
     exit(1);
 }
 
+// TODO: The syntax is outdated, but that's fine. This will become irrelevant anyway
 void show_explanation_about_polymorphic_traits(void) {
     afprintf(
         stderr,
@@ -544,7 +545,6 @@ static Node *parse_define(
     Token   token,
     bool    groups_allowed,
     bool    spread_allowed,
-    bool    name_can_be_this,
     bool    is_static) //
 {
     Polymorphs_Builder *pb_save = p->state.pb;
@@ -556,53 +556,6 @@ static Node *parse_define(
         define->name_polymorph->is_type = false;
         name = (Node *) define->name_polymorph->name;
         spread_allowed = false;
-    }
-
-    if (!name_can_be_this && sv_match(name->token.sv, "this")) {
-        error_node(
-            EK_ERROR,
-            name,
-            "The name 'this' is reserved for the receiver argument of a method, and therefore cannot be defined here");
-
-        if (define->name_polymorph) {
-            assert(p->state.pb);
-            if (p->state.pb->is_fn && define->name_polymorph->arg_index == 0) {
-                // Show a good error message for this case because why not?
-                //
-                // Implementing the code generation of the compiler is the easy part. The actual point of difference
-                // between a regular compiler and a great compiler is the ability to display errors to the user in such
-                // a manner that:
-                //
-                //   - It is descriptive
-                //   - It does not have unnecessary noise
-                //   - It is cognitively easy to understand
-                //   - It shows any necessary context so that the user does not need to find that themselves
-                //   - It shows examples for small errors that the user might make
-                //   - It shows the correct thing to to be done (If that is possible to infer)
-                afprintf(
-                    stderr,
-                    ANSI_COLOR_YELLOW | ANSI_BOLD,
-                    "    This is the first argument in what looks to be a function. Normally this is perfectly valid and would define\n"
-                    "    the function as a method. However, this argument seems to be directly polymorphic, which is not allowed.\n"
-                    "\n"
-                    "    The receiver can have a polymorphic type, but the argument itself cannot be polymorphic.\n"
-                    "\n"
-                    "        foo :: (this: Foo(");
-                afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
-                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "T)) {}    ");
-                afprintf(stderr, ANSI_COLOR_GREEN | ANSI_BOLD, "// This is allowed\n");
-
-                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "        bar :: (");
-                afprintf(stderr, ANSI_COLOR_BLUE | ANSI_BOLD, "$");
-                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "this: Bar)    {}    ");
-                afprintf(
-                    stderr,
-                    ANSI_COLOR_RED | ANSI_BOLD,
-                    "// This is not (Notice the difference in the position of the '$')\n");
-                afprintf(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD, "\n");
-            }
-        }
-        exit(1);
     }
 
     if (spread_allowed && peek_token(p).kind == TOKEN_SPREAD) {
@@ -875,7 +828,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             p->state.in_extern = false;
 
             node = parse_expr(p, POWER_DOT, false, true, NULL);
-            node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false, false);
+            node = parse_define(p, node, expect_token(p, TOKEN_COLON), false, true, false);
         } else {
             p->state.allow_methods_without_body = allow_methods_without_body; // '(EXPR)' == 'EXPR' semantically
             node = parse_expr(p, POWER_SET, false, true, NULL);
@@ -892,7 +845,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 p->state.fn_current = fn;
                 p->state.in_extern = false;
 
-                node = parse_define(p, node, next_token(p), false, true, true, false);
+                node = parse_define(p, node, next_token(p), false, true, false);
             } else {
                 expect_token(p, TOKEN_RPAREN);
             }
@@ -901,26 +854,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         if (fn) {
             Node *arg = node;
             node = (Node *) fn;
-
-            if (arg) {
-                Node_Define *define = (Node_Define *) arg;
-                assert(define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
-
-                if (sv_match(define->name->token.sv, "this")) {
-                    if (define->has_spread) {
-                        error_token(EK_ERROR, define->spread_token, "The receiver of a method cannot be variadic");
-                        exit(1);
-                    }
-
-                    if (define->expr) {
-                        error_node(EK_ERROR, define->expr, "The receiver of a method cannot have a default value");
-                        exit(1);
-                    }
-
-                    fn->is_method = true;
-                }
-            }
-
             Node *typed_variadics = NULL;
 
             size_t args_iota = 1;
@@ -968,13 +901,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 }
 
                 if (read_token(p, TOKEN_SPREAD)) {
-                    if (fn->is_method) {
-                        assert(p->state.ahead.kind == TOKEN_SPREAD);
-                        error_token(EK_ERROR, p->state.ahead, "Methods cannot have untyped variadics");
-                        // TODO: This should only apply to traits, not all methods
-                        exit(1);
-                    }
-
                     fn->variadics_kind = VARIADICS_UNTYPED;
                     fn->args_end_token = expect_token(p, TOKEN_RPAREN);
                     break;
@@ -1004,7 +930,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     unreachable();
                 }
 
-                arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false, false);
+                arg = parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false);
             }
             p->state.pb = pb_save;
 
@@ -1025,28 +951,12 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
                 fn->body = parse_block(p, next_token(p));
             } else {
-                if (fn->is_method && !allow_methods_without_body && !p->state.in_extern) {
-                    Node_Define *define = (Node_Define *) fn->args.head;
-                    assert(define && define->name->kind == NODE_ATOM && define->name->token.kind == TOKEN_IDENT);
-                    error_node(EK_ERROR, (Node *) fn, "A method must have a body");
-                    error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                    exit(1);
-                }
-
                 if (fn->polymorphs.count) {
                     error_node(EK_ERROR, (Node *) fn, "A polymorphic function must have a body");
                     exit(1);
                 }
 
                 fn->is_type = true;
-            }
-
-            if (fn->is_method && fn->outer_fn) {
-                assert(fn->args.head);
-                Node_Define *define = (Node_Define *) fn->args.head;
-                error_node(EK_ERROR, (Node *) fn, "Local function cannot be a method");
-                error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
-                exit(1);
             }
 
             p->state.fn_current = fn->outer_fn;
@@ -1136,7 +1046,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 Node *name = parse_expr(p, POWER_DOT, false, false, NULL);
 
                 Node_Define *define =
-                    (Node_Define *) parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
+                    (Node_Define *) parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false);
                 if (define->expr) {
                     error_node(EK_ERROR, define->expr, "Polymorphic trait parameters cannot have default values");
                     show_explanation_about_polymorphic_traits();
@@ -1162,7 +1072,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 exit(1);
             }
 
-            Node *method = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
+            Node *method = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false);
 
             Node_Define *define = (Node_Define *) method;
             if (define->is_const) {
@@ -1228,7 +1138,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             while (!read_token(p, TOKEN_RPAREN)) {
                 buffer_token(p, expect_token(p, TOKEN_DOLLAR));
                 Node *name = parse_expr(p, POWER_SET, false, true, NULL);
-                parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false, false);
+                parse_define(p, name, expect_token(p, TOKEN_COLON), false, true, false);
 
                 if (expect_token(p, TOKEN_COMMA, TOKEN_RPAREN).kind != TOKEN_COMMA) {
                     break;
@@ -1374,7 +1284,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         } break;
 
         case TOKEN_COLON:
-            return parse_define(p, node, token, groups_allowed, false, false, false);
+            return parse_define(p, node, token, groups_allowed, false, false);
 
         case TOKEN_COMMA: {
             if (!groups_allowed) {
@@ -1715,7 +1625,7 @@ static Node *parse_stmt(Parser *p) {
 
             const size_t self_nodes_count_save = p->self_nodes.count;
             Node_Define *define =
-                (Node_Define *) parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
+                (Node_Define *) parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false);
 
             if (!define->is_const) {
                 error_node(EK_ERROR, define->name, "Expected constant definition of method, got variable instead");
@@ -1811,7 +1721,6 @@ static Node *parse_stmt(Parser *p) {
 
                 if (!fn->body && !p->state.in_extern) {
                     error_node(EK_ERROR, (Node *) fn, "A method must have a body");
-                    error_node(EK_NOTE, receiver->name, "This argument is taken to be the receiver");
                     exit(1);
                 }
 

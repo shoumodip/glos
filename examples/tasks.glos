@@ -4,45 +4,47 @@ App :: struct {
     tasks: [..]string
 }
 
-init :: (this: &App) {
-    contents, _ := os.read_entire_file(TASKS_PATH)
-    contents := string(contents)
-    for contents.count != 0 {
-        lhs, rhs, _ := strings.split(contents, '\n')
-        if lhs != "" {
-            this.tasks.push(lhs)
-        }
-        contents = rhs
-    }
-}
-
-free :: (this: &App) {
-    this.tasks.free()
-}
-
-save :: (this: &App) {
-    f, ok := os.open(TASKS_PATH, false)
-    if !ok {
-        eprintln("Error: Could not save tasks to '\{TASKS_PATH}'")
-        os.exit(1)
-    }
-    defer f.close()
-
-    for i := 0; i < this.tasks.count; i += 1 {
-        wprintln(f, this.tasks[i])
-    }
-}
-
-list :: (this: App, query := "") {
-    for i := 0; i < this.tasks.count; i += 1 {
-        it := this.tasks[i]
-        if query != "" {
-            _, found := strings.find(it, query)
-            if !found {
-                continue
+impl App {
+    init :: (a: &Self) {
+        contents, _ := os.read_entire_file(TASKS_PATH)
+        contents := string(contents)
+        for contents.count != 0 {
+            lhs, rhs, _ := strings.split(contents, '\n')
+            if lhs != "" {
+                a.tasks.push(lhs)
             }
+            contents = rhs
         }
-        println("\{i}: \{it}")
+    }
+
+    free :: (a: &Self) {
+        a.tasks.free()
+    }
+
+    save :: (a: &Self) {
+        f, ok := os.open(TASKS_PATH, false)
+        if !ok {
+            eprintln("Error: Could not save tasks to '\{TASKS_PATH}'")
+            os.exit(1)
+        }
+        defer f.close()
+
+        for i := 0; i < a.tasks.count; i += 1 {
+            wprintln(f, a.tasks[i])
+        }
+    }
+
+    list :: (a: Self, query := "") {
+        for i := 0; i < a.tasks.count; i += 1 {
+            it := a.tasks[i]
+            if query != "" {
+                _, found := strings.find(it, query)
+                if !found {
+                    continue
+                }
+            }
+            println("\{i}: \{it}")
+        }
     }
 }
 

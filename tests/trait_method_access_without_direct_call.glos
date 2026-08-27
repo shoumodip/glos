@@ -18,6 +18,8 @@ Show :: trait {
 
 Int :: distinct s64
 
-show :: (this: Int) {
-    println(this)
+impl Int for Show {
+    show :: (self: Self) {
+        println(self)
+    }
 }
