@@ -194,12 +194,14 @@ void type_assert_type_or_Type(Compiler *c, const Node *n) {
     exit(c, 1);
 }
 
-static bool is_arithmetic_operator_overload_trait(Compiler *c, Type_Trait *trait) {
+bool is_arithmetic_operator_overload_trait(Compiler *c, Type_Trait *trait) {
     return trait == c->add_trait || trait == c->sub_trait || trait == c->mul_trait || trait == c->div_trait ||
            trait == c->mod_trait || trait == c->neg_trait || trait == c->equal_trait || trait == c->ordered_trait;
 }
 
-Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) {
+Type_Trait_Impl *
+check_type_satisfies_trait_old(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) //
+{
     const Type receiver_without_ref = type_without_ref(receiver);
     ll_foreach(it, &trait->impls) {
         if (type_eq(it->type, receiver_without_ref)) {

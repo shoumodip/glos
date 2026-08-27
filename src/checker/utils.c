@@ -604,7 +604,7 @@ bool try_auto_cast(Compiler *c, Node *n, Type expected, i64 group_index) {
         }
         finalize_untyped_type(c, n);
 
-        Type_Trait_Impl *impl = check_type_satisfies_trait(c, actual, expected.spec.trait, n, group_index);
+        Type_Trait_Impl *impl = check_type_satisfies_trait_old(c, actual, expected.spec.trait, n, group_index);
         set_auto_cast(c, n, group_index, AUTO_CAST_TO_TRAIT, actual, expected);
         n->auto_casts[group_index == -1 ? 0 : group_index].trait_impl = impl;
         return true;

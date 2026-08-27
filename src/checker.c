@@ -300,6 +300,20 @@ void check_nodes(Compiler *c) {
                 exit(c, 1);
             }
 
+            if (impl->trait) {
+                check_expr(c, impl->trait, REF_NONE);
+                type_assert_type(c, impl->trait);
+
+                Type *trait = &impl->trait->type;
+                trait->is_meta = false;
+
+                if (!type_kind_eq(*trait, TYPE_TRAIT)) {
+                    error_node(EK_ERROR, impl->trait, "Expected trait type, got %s", type_to_cstr(*trait));
+                    exit(c, 1);
+                }
+                continue;
+            }
+
             ll_foreach(it, &impl->methods) {
                 assert(it->kind == NODE_DEFINE);
                 Node_Define *define = (Node_Define *) it;

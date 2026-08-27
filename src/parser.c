@@ -1703,8 +1703,13 @@ static Node *parse_stmt(Parser *p) {
         impl->receiver = parse_expr(p, POWER_SET, false, false, NULL);
         p->state.pb = pb_save;
 
+        token = expect_token(p, TOKEN_LBRACE, TOKEN_FOR);
+        if (token.kind == TOKEN_FOR) {
+            impl->trait = parse_expr(p, POWER_SET, false, false, NULL);
+            token = expect_token(p, TOKEN_LBRACE);
+        }
+
         p->state.impl_current = impl;
-        expect_token(p, TOKEN_LBRACE);
         while (!read_token(p, TOKEN_RBRACE)) {
             Node *name = node_alloc(p->module_current, NODE_ATOM, expect_token(p, TOKEN_IDENT));
 
@@ -1752,6 +1757,14 @@ static Node *parse_stmt(Parser *p) {
                     exit(1);
                 }
 
+                if (fn->polymorphs.head && impl->trait) {
+                    error_node(
+                        EK_ERROR,
+                        (Node *) fn->polymorphs.head,
+                        "Methods implementing traits cannot have polymorphic parameters");
+                    exit(1);
+                }
+
                 {
                     Node **self = &receiver->type;
                     while ((*self)->kind == NODE_UNARY && (*self)->token.kind == TOKEN_BAND) {
@@ -1760,7 +1773,7 @@ static Node *parse_stmt(Parser *p) {
 
                     if ((*self)->kind != NODE_SELF) {
                         error_node(
-                            EK_ERROR, receiver->type, "The type of the receiver must be 'Self' or pointer to 'Self'");
+                            EK_ERROR, receiver->type, "The type of the receiver must be 'Self' or a pointer to 'Self'");
                         exit(1);
                     }
 

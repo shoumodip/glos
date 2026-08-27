@@ -265,7 +265,7 @@ Node_Fn *get_operator_overload_old(Compiler *c, const char *operator, Node *rece
 }
 
 Node_Fn *get_operator_overload(Compiler *c, Type_Trait *trait, Node *receiver, Node *op, i64 group_index) {
-    Type_Trait_Impl *impl = check_type_satisfies_trait(c, receiver->type, trait, op, group_index);
+    Type_Trait_Impl *impl = check_type_satisfies_trait_old(c, receiver->type, trait, op, group_index);
     assert(impl->methods_count == 1);
     return impl->methods[0].fn;
 }

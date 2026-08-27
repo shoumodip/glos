@@ -39,7 +39,7 @@ Const_Value check_switch_pred(Compiler *c, Node_Switch *sw, Node *pred, size_t *
         } else {
             type_assert_type(c, pred);
             const Type type = type_without_meta(pred->type);
-            check_type_satisfies_trait(c, type, sw->trait->node.type.spec.trait, pred, -1);
+            check_type_satisfies_trait_old(c, type, sw->trait->node.type.spec.trait, pred, -1);
             value = const_value_type(type);
         }
     } else if (sw->unionn) {
@@ -230,6 +230,233 @@ void check_stmt_switch(Compiler *c, Node_Switch *sw) {
     }
 }
 
+static void prepare_impl_method_for_printing_type(Node_Impl *impl, Node_Fn *actual, Type_Trait_Method *expected) {
+    assert(expected->type.kind == TYPE_FN);
+    Type_Fn *spec = expected->type.spec.fn;
+    assert(spec->args_count);
+
+    Type type = impl->receiver->type;
+    type.distinct = (Node_Atom *) node_alloc(impl->node.module, NODE_ATOM, (Token) {.sv = sv_from_cstr("Self")});
+    // This allocation per method might be a bit wasteful, but we are gonna die anyways, so who cares...
+
+    spec->args[0].type = type;
+    if (actual) {
+        actual->body = NULL;
+
+        assert(actual->node.type.kind == TYPE_FN);
+        Type_Fn *spec = actual->node.type.spec.fn;
+        assert(spec->args_count);
+
+        spec->args[0].type = type_with_ref(type, spec->args[0].type.ref);
+    }
+}
+
+void check_stmt_impl(Compiler *c, Node_Impl *impl) {
+    if (impl->methods_checked) {
+        return;
+    }
+
+    ll_foreach(it, &impl->methods) {
+        assert(it->kind == NODE_DEFINE);
+        Node_Define *define = (Node_Define *) it;
+
+        assert(define->expr->kind == NODE_FN);
+        check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, false, false);
+    }
+
+    if (impl->trait) {
+        assert(type_kind_eq(impl->trait->type, TYPE_TRAIT));
+        Type_Trait *trait = impl->trait->type.spec.trait;
+        if (trait->polymorph) {
+            todo();
+        }
+        Type_Trait *trait_save = trait;
+
+        Node_Fn **methods = arena_alloc(&temp_arena, trait->methods_count * sizeof(*methods));
+
+        // Collect the methods from the impl block into an array by the index of the trait method
+        {
+            bool ok = true;
+            ll_foreach(it, &impl->methods) {
+                assert(it->kind == NODE_DEFINE);
+                Node_Define *define = (Node_Define *) it;
+
+                assert(define->expr->kind == NODE_FN);
+                Node_Fn *fn = (Node_Fn *) define->expr;
+
+                bool found = false;
+                for (size_t i = 0; i < trait->methods_count; i++) {
+                    Type_Trait_Method *it = &trait->methods[i];
+                    if (sv_eq(it->name, define->name->token.sv)) {
+                        if (methods[i]) {
+                            error_redefinition(c, define->name, &methods[i]->defined_as->node.token.pos);
+                        }
+
+                        found = true;
+                        methods[i] = fn;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    error_undefined(c, &define->name->token, "trait method", true);
+                    ok = false;
+                }
+            }
+
+            if (!ok) {
+                error_node(EK_NOTE, (Node *) trait->definition, "Trait defined here");
+                exit(c, 1);
+            }
+        }
+
+        typedef enum {
+            OK,
+            UNDEFINED,
+            WRONG_RECEIVER,
+            WRONG_SIGNATURE,
+        } Error;
+
+        Error *errors = arena_alloc(&temp_arena, trait->methods_count * sizeof(*errors));
+
+        {
+            for (size_t i = 0; i < trait->methods_count; i++) {
+                const Type_Trait_Method *expected = &trait->methods[i];
+
+                Node_Fn *actual = methods[i];
+                if (!actual) {
+                    errors[i] = UNDEFINED;
+                    continue;
+                }
+
+                if (actual->polymorphs.count) {
+                    todo();
+                }
+
+                assert(expected->type.kind == TYPE_FN);
+                const Type_Fn *expected_spec = expected->type.spec.fn;
+
+                assert(actual->node.type.kind == TYPE_FN);
+                const Type_Fn *actual_spec = actual->node.type.spec.fn;
+
+                if (expected_spec->args_count != actual_spec->args_count) {
+                    errors[i] = WRONG_SIGNATURE;
+                    continue;
+                }
+
+                for (size_t j = 1; j < actual_spec->args_count; j++) {
+                    if (!type_eq(actual_spec->args[j].type, expected_spec->args[j].type)) {
+                        errors[i] = WRONG_SIGNATURE;
+                        continue;
+                    }
+                }
+
+                if (!type_eq(*actual_spec->return_type, *expected_spec->return_type)) {
+                    errors[i] = WRONG_SIGNATURE;
+                    continue;
+                }
+
+                if (!type_eq(actual_spec->args[0].type, impl->receiver->type)) {
+                    errors[i] = WRONG_RECEIVER;
+                    continue;
+                }
+            }
+
+            bool ok = true;
+            for (size_t i = 0; i < trait->methods_count; i++) {
+                const Error it = errors[i];
+                if (it == OK) {
+                    continue;
+                }
+
+                if (ok) {
+                    error_token(
+                        EK_ERROR,
+                        impl->node.token,
+                        "This implementation of %s does not satisfy %s",
+                        type_to_cstr(impl->receiver->type),
+                        type_to_cstr(impl->trait->type));
+                    ok = false;
+                }
+
+                Node_Fn           *actual = methods[i];
+                Type_Trait_Method *expected = &trait->methods[i];
+                switch (it) {
+                case UNDEFINED:
+                    prepare_impl_method_for_printing_type(impl, actual, expected);
+                    error_parts(
+                        EK_NOTE,
+                        expected->name,
+                        expected->pos,
+                        "The trait method '" SV_Fmt "' is not implemented",
+                        SV_Arg(expected->name));
+
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    Expected: %s\n\n",
+                        type_to_cstr_raw(expected->type));
+                    break;
+
+                case WRONG_RECEIVER:
+                    actual->body = NULL;
+                    error_node(
+                        EK_NOTE,
+                        actual->args.head,
+                        "The trait method '" SV_Fmt "' has receiver %s, not %s",
+                        SV_Arg(actual->defined_as->node.token.sv),
+                        type_to_cstr(actual->node.type.spec.fn->args[0].type),
+                        type_to_cstr(impl->receiver->type));
+                    break;
+
+                case WRONG_SIGNATURE:
+                    prepare_impl_method_for_printing_type(impl, actual, expected);
+                    error_node(
+                        EK_NOTE,
+                        (Node *) actual,
+                        "The trait method '" SV_Fmt "' has wrong signature",
+                        SV_Arg(actual->defined_as->node.token.sv));
+
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    Expected: %s\n"
+                        "    Actual:   %s\n\n",
+                        type_to_cstr_raw(expected->type),
+                        type_to_cstr_raw(actual->node.type));
+                    break;
+
+                case OK:
+                    break;
+                }
+            }
+
+            if (!ok) {
+                error_node(EK_NOTE, (Node *) trait->definition, "Trait defined here");
+                exit(c, 1);
+            }
+        }
+
+        Type_Trait_Impl trait_impl = {0};
+        trait_impl.type = type_without_ref(impl->receiver->type);
+        trait_impl.trait = trait;
+
+        trait_impl.methods = arena_alloc(&default_arena, trait->methods_count * sizeof(*trait_impl.methods));
+        trait_impl.methods_count = trait->methods_count;
+        for (size_t i = 0; i < trait_impl.methods_count; i++) {
+            trait_impl.methods[i].fn = methods[i];
+        }
+
+        trait = trait_save;
+        trait_impl.next = trait->impls.head;
+        trait->impls.head = arena_clone(&default_arena, &trait_impl, sizeof(trait_impl));
+
+        arena_reset(&temp_arena, methods);
+    }
+
+    impl->methods_checked = true;
+}
+
 void check_stmt_return(Compiler *c, Node_Return *returnn) {
     Node          *n = (Node *) returnn;
     const Type_Fn *fn_type = c->context.fn->fn->node.type.spec.fn;
@@ -295,16 +522,9 @@ void check_stmt(Compiler *c, Node *n) {
         check_stmt_switch(c, (Node_Switch *) n);
         break;
 
-    case NODE_IMPL: {
-        Node_Impl *impl = (Node_Impl *) n;
-        ll_foreach(it, &impl->methods) {
-            assert(it->kind == NODE_DEFINE);
-            Node_Define *define = (Node_Define *) it;
-
-            assert(define->expr->kind == NODE_FN);
-            check_fn(c, (Node_Fn *) define->expr, REF_NONE, NULL, false, false);
-        }
-    } break;
+    case NODE_IMPL:
+        check_stmt_impl(c, (Node_Impl *) n);
+        break;
 
     case NODE_JUMP:
         // Pass

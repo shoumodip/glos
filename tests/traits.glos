@@ -8,12 +8,14 @@ greet :: (w: Writer) {
 
 File :: distinct os.File
 
-main :: () {
-    greet(File(os.stdout))
+impl File for Writer {
+    write :: (this: Self, bytes: []char) {
+        C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), os.File(this))
+    }
 }
 
-write :: (this: File, bytes: []char) {
-    C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), os.File(this))
+main :: () {
+    greet(File(os.stdout))
 }
 
 C  :: #import "C"

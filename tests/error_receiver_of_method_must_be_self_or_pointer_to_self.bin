@@ -1,8 +1,8 @@
 EXIT 1
 STDOUT 0
 
-STDERR 166
-tests/error_receiver_of_method_must_be_self_or_pointer_to_self.glos:2:16: Error: The type of the receiver must be 'Self' or pointer to 'Self'
+STDERR 168
+tests/error_receiver_of_method_must_be_self_or_pointer_to_self.glos:2:16: Error: The type of the receiver must be 'Self' or a pointer to 'Self'
 
     foo :: (x: s64) {
 
