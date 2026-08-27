@@ -171,7 +171,7 @@ void add_monomorph_parameter_default_value(
         Const_Value_Struct *structure = &location.as.structt;
         assert(structure->spec->fields_count == 3);
 
-        const Pos pos = get_leftmost_point_of_node(default_value_as_caller_location);
+        const Pos pos = get_leftmost_pos_of_node(default_value_as_caller_location);
         structure->fields[0] = const_value_string(sv_from_cstr(pos.path));
         structure->fields[1] = const_value_u64(pos.row + 1);
         structure->fields[2] = const_value_u64(pos.col + 1);

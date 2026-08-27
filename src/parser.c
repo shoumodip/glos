@@ -1782,6 +1782,8 @@ static Node *parse_stmt(Parser *p) {
                         ht_clear(&p->monomorph_replacements);
                         monomorphize_node(&p->monomorph_replacements, &from, true);
                         monomorphize_node(&p->monomorph_replacements, &from, false);
+
+                        from->parser_monomorphized_from = *self;
                         *self = from;
 
                         for (size_t i = self_nodes_count_save; i < p->self_nodes.count; i++) {

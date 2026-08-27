@@ -370,9 +370,10 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
                 }
 
                 if (ok) {
-                    error_token(
+                    error_token_range(
                         EK_ERROR,
                         impl->node.token,
+                        get_rightmost_token_of_node(impl->trait),
                         "This implementation of %s does not satisfy %s",
                         type_to_cstr(impl->receiver->type),
                         type_to_cstr(impl->trait->type));
@@ -381,9 +382,10 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
 
                 Node_Fn           *actual = methods[i];
                 Type_Trait_Method *expected = &trait->methods[i];
+                prepare_impl_method_for_printing_type(impl, actual, expected);
+
                 switch (it) {
                 case UNDEFINED:
-                    prepare_impl_method_for_printing_type(impl, actual, expected);
                     error_parts(
                         EK_NOTE,
                         expected->name,
@@ -399,18 +401,15 @@ void check_stmt_impl(Compiler *c, Node_Impl *impl) {
                     break;
 
                 case WRONG_RECEIVER:
-                    actual->body = NULL;
                     error_node(
                         EK_NOTE,
                         actual->args.head,
-                        "The trait method '" SV_Fmt "' has receiver %s, not %s",
+                        "The trait method '" SV_Fmt "' has receiver %s, not 'Self'",
                         SV_Arg(actual->defined_as->node.token.sv),
-                        type_to_cstr(actual->node.type.spec.fn->args[0].type),
-                        type_to_cstr(impl->receiver->type));
+                        type_to_cstr(actual->node.type.spec.fn->args[0].type));
                     break;
 
                 case WRONG_SIGNATURE:
-                    prepare_impl_method_for_printing_type(impl, actual, expected);
                     error_node(
                         EK_NOTE,
                         (Node *) actual,

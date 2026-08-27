@@ -70,6 +70,11 @@ static void range_apply_node(Range *r, const Node *n) {
         return;
     }
 
+    if (n->parser_monomorphized_from) {
+        range_apply_node(r, n->parser_monomorphized_from);
+        return;
+    }
+
     if (n->kind == NODE_FN) {
         Node_Fn *fn = (Node_Fn *) n;
         if (fn->wrapper_signature) {
@@ -267,10 +272,22 @@ static const char *get_end_from_parts(SV sv, Pos pos) {
     return line_end;
 }
 
-Pos get_leftmost_point_of_node(const Node *n) {
+Pos get_leftmost_pos_of_node(const Node *n) {
     Range r = {.begin = n->token, .end = n->token};
     range_apply_node(&r, n);
     return r.begin.pos;
+}
+
+Token get_leftmost_token_of_node(const Node *n) {
+    Range r = {.begin = n->token, .end = n->token};
+    range_apply_node(&r, n);
+    return r.begin;
+}
+
+Token get_rightmost_token_of_node(const Node *n) {
+    Range r = {.begin = n->token, .end = n->token};
+    range_apply_node(&r, n);
+    return r.end;
 }
 
 void error_node_begin(Error_Kind kind, const Node *n) {

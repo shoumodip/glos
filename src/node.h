@@ -518,6 +518,8 @@ struct Node {
     Type      *auto_casts_group;
 
     Module *module;
+
+    Node *parser_monomorphized_from;
 };
 
 // The size of the Node* object
