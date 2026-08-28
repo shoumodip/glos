@@ -1,0 +1,19 @@
+EXIT 1
+STDOUT 0
+
+STDERR 586
+tests/error_operator_overloading_binary_arithmetic_method_no_return.glos:2:1: Error: The method 'div' is special because it implements an operator overload
+
+    div :: (this: Foo, that: Foo) {}
+
+    It should have this signature:
+
+        div :: (this: T, that: T) -> T
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_operator_overloading_binary_arithmetic_method_no_return.glos:2:31: Note: Operand types and return type must be same: Expected to return 'Foo', got nothing
+
+    div :: (this: Foo, that: Foo) {}
+
+

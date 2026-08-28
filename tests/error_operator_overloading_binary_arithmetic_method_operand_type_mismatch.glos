@@ -1,0 +1,2 @@
+Foo :: distinct s64
+mul :: (this: Foo, that: s64) {}

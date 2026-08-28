@@ -1,0 +1,23 @@
+Int :: struct {
+    v: s64
+}
+
+add :: (this: Int, that: Int, location := #caller_location) -> Int {
+    print("\{location} ")
+    this.v += that.v
+    return this
+}
+
+neg :: (this: Int, location := #caller_location) -> Int {
+    print("\{location} ")
+    this.v = -this.v
+    return this
+}
+
+main :: () {
+    a := Int {34}
+    b := Int {35}
+    c := a + b
+    println(c)
+    println(-c)
+}

@@ -81,6 +81,7 @@ typedef struct {
     DA(Node_Fn *) methods_list;
 
     Type ordering_type;
+    Type equivalence_type;
 
     Node *current_comptime_conditional_stmt;
 
@@ -93,19 +94,10 @@ typedef struct {
     } monomorph_parameters;
     DA(Monomorphization) monomorphization_stack;
 
-    Monomorphizing_Site monomorphizing_site; // Before the monomorphization begins, aka, during the parameter inference
+    // Before the monomorphization begins, aka, during the parameter inference
+    Monomorphizing_Site monomorphizing_site;
 
     bool dont_allow_polymorphs;
-
-    // Operator overloads
-    Type_Trait *add_trait;
-    Type_Trait *sub_trait;
-    Type_Trait *mul_trait;
-    Type_Trait *div_trait;
-    Type_Trait *mod_trait;
-    Type_Trait *neg_trait;
-    Type_Trait *equal_trait;
-    Type_Trait *ordered_trait;
 
     // These are used both by the analyzer and the compiler
     Context context;

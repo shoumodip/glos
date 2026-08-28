@@ -1,7 +1,7 @@
 EXIT 1
 STDOUT 0
 
-STDERR 941
+STDERR 911
 tests/error_type_does_not_satisfy_trait.glos:12:9: Error: Type 'Bar' does not implement 'Foo'
 
     Foo(Bar(69))
@@ -10,28 +10,19 @@ tests/error_type_does_not_satisfy_trait.glos:2:5: Note: The method 'a' is not de
 
     a: ()           // Undefined
 
-tests/error_type_does_not_satisfy_trait.glos:15:6: Note: The method 'b' has wrong signature
+tests/error_type_does_not_satisfy_trait.glos:15:1: Note: The method 'b' has wrong signature. Expected '(this: Bar, _: s32)', got '(this: Bar)'
 
     b :: (this: Bar) {}
 
-    Expected: (this: Bar, _: s32)
-    Actual:   (this: Bar)
-
-tests/error_type_does_not_satisfy_trait.glos:16:6: Note: The method 'c' has wrong signature
+tests/error_type_does_not_satisfy_trait.glos:16:1: Note: The method 'c' has wrong signature. Expected '(this: Bar, _: bool)', got '(this: Bar, _: string)'
 
     c :: (this: Bar, _: string) {}
 
-    Expected: (this: Bar, _: bool)
-    Actual:   (this: Bar, _: string)
-
-tests/error_type_does_not_satisfy_trait.glos:17:6: Note: The method 'd' has wrong signature
+tests/error_type_does_not_satisfy_trait.glos:17:1: Note: The method 'd' has wrong signature. Expected '(this: Bar) -> string', got '(this: Bar)'
 
     d :: (this: Bar) {}
 
-    Expected: (this: Bar) -> string
-    Actual:   (this: Bar)
-
-tests/error_type_does_not_satisfy_trait.glos:18:7: Note: The method 'e' has receiver '&Bar', not 'Bar'
+tests/error_type_does_not_satisfy_trait.glos:18:1: Note: The method 'e' has receiver '&Bar', not 'Bar'
 
     e :: (this: &Bar) {}
 

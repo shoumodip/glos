@@ -166,7 +166,6 @@ void        show_note_about_the_function_being_called(Node *fn, bool is_method, 
 
 // Methods /////////////////////////////////////////////////////////////////////////////////////////
 const char *operator_method_name_from_token_kind(Token_Kind kind);
-Type_Trait *operator_trait_from_token_kind(Compiler *c, Token_Kind kind);
 void        check_that_methods_can_be_accessed(Compiler *c, Node *receiver, Module *definition);
 
 bool get_method_spec(
@@ -177,14 +176,12 @@ bool get_method_spec(
     Method_Spec *spec,
     Module      *defining_in_module,
     bool        *is_named);
-
 Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module);
-Node_Fn *get_operator_overload_old(Compiler *c, const char *operator, Node * receiver, Node *op, Module *module);
-Node_Fn *get_operator_overload(Compiler *c, Type_Trait *trait, Node *receiver, Node *op, i64 group_index);
+Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node * receiver, Node *op, Module *module);
 
-void error_special_method_wrong_signature(Token name, const char *signature);
+void error_special_method_wrong_signature(Token name, const char *signature, const char *note);
 void check_special_method_signature_args_count(
-    Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature);
+    Compiler *c, Node_Fn *fn, const size_t args_count, const char *signature, const char *note);
 
 // Monomorphizer ///////////////////////////////////////////////////////////////////////////////////
 void show_current_monomorphization(Compiler *c);

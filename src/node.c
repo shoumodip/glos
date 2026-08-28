@@ -369,12 +369,8 @@ const char *type_to_cstr(Type type) {
 }
 
 static bool type_trait_eq(Type_Trait *a, Type_Trait *b) {
-    if (a->definition == b->definition) {
-        return true;
-    }
-
-    if (a->definition->defined_as != b->definition->defined_as) {
-        return false;
+    if (a->definition->defined_as || b->definition->defined_as) {
+        return a->definition->defined_as == b->definition->defined_as;
     }
 
     if (a->definition->methods_count != b->definition->methods_count) {
@@ -395,12 +391,8 @@ static bool type_trait_eq(Type_Trait *a, Type_Trait *b) {
 }
 
 static bool type_union_eq(Type_Union *a, Type_Union *b) {
-    if (a->definition == b->definition) {
-        return true;
-    }
-
-    if (a->definition->defined_as != b->definition->defined_as) {
-        return false;
+    if (a->definition->defined_as || b->definition->defined_as) {
+        return a->definition->defined_as == b->definition->defined_as;
     }
 
     if (a->variants_count != b->variants_count) {
@@ -1192,7 +1184,6 @@ static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label
     case NODE_TRAIT: {
         Node_Trait *trait = (Node_Trait *) n;
         fprintf(f, "Trait {\n");
-        polymorphs_debug_impl(f, trait->polymorphs, depth + 1, "Polymorphs");
         nodes_debug_impl(f, trait->methods, depth + 1, "Methods");
         fprintf(f, Indent_Fmt "}\n", Indent_Arg(depth));
     } break;

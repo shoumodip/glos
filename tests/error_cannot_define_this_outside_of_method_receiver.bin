@@ -1,9 +1,0 @@
-EXIT 1
-STDOUT 0
-
-STDERR 196
-tests/error_cannot_define_this_outside_of_method_receiver.glos:1:1: Error: The name 'this' is reserved for the receiver argument of a method, and therefore cannot be defined here
-
-    this := 69
-
-

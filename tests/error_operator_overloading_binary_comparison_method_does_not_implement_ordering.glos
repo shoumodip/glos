@@ -1,0 +1,11 @@
+Foo :: struct {}
+
+compare :: (this: Foo, that: Foo) -> Equivalence {
+    return .EQ
+}
+
+main :: () {
+    a: Foo
+    b: Foo
+    println(a < b)
+}

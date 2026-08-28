@@ -153,12 +153,9 @@ typedef struct {
         Type_Trait_Impl *head; // Who cares about direction...
     } impls;
 
-    Node_Trait *definition;
-    Node_Trait *original_definition;
-
-    Node_Polymorph *polymorph;
-
     LLVMMetadataRef debug;
+
+    Node_Trait *definition;
 } Type_Trait;
 
 typedef struct {
@@ -761,6 +758,10 @@ struct Node_Fn {
     // }
     Node_Fn *wrapper_signature;
 
+    // compare :: (this: $T, that: T) -> bool       // Partial, only implements equality
+    // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
+    bool is_compare_operator_complete;
+
     Node_Fn *outer_fn;
 
     bool             checked_fully;
@@ -808,9 +809,6 @@ struct Node_Trait {
     Node   node;
     Nodes  methods;
     size_t methods_count; // Calculated at parse time
-
-    Polymorphs polymorphs;
-    Polymorphs monomorphs;
 
     Node_Atom *defined_as;
     size_t     defined_as_anon_iota;
@@ -1043,4 +1041,4 @@ Node_Fn *create_trait_method_wrapper(Arena *a, Node_Fn *fn, Type_Trait *trait, s
 
 #endif // NODE_H
 
-// TODO: Remove the individual `module` fields present in specific node types
+// Remove the individual `module` fields present in specific node types

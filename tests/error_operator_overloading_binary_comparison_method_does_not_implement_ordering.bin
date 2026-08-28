@@ -1,0 +1,13 @@
+EXIT 1
+STDOUT 0
+
+STDERR 446
+tests/error_operator_overloading_binary_comparison_method_does_not_implement_ordering.glos:10:13: Error: Type 'Foo' does not implement ordered comparisons
+
+    println(a < b)
+
+tests/error_operator_overloading_binary_comparison_method_does_not_implement_ordering.glos:3:38: Note: The method 'compare' only implements equality checking since its return type is 'Equivalence', not 'Ordering'
+
+    compare :: (this: Foo, that: Foo) -> Equivalence {
+
+
