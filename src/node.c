@@ -47,18 +47,28 @@ Type type_without_meta(Type t) {
 static void sb_push_polymorph(SB *sb, Node_Polymorph *p) {
     sb_push_sv(sb, p->name->node.token.sv);
     if (p->constraints.head) {
-        sb_push(sb, '/');
         if (p->constraints.head->next) {
-            sb_push(sb, '{');
-            ll_foreach(it, &p->constraints) {
-                sb_push_type(sb, it->type);
-                if (it->next) {
-                    sb_push_cstr(sb, ", ");
-                }
-            }
-            sb_push(sb, '}');
+            sb_push_cstr(sb, "/{");
         } else {
-            sb_push_type(sb, p->constraints.head->type);
+            sb_push(sb, '/');
+        }
+
+        ll_foreach(it, &p->constraints) {
+            if (it->kind == NODE_UNARY && it->token.kind == TOKEN_OPERATOR) {
+                Node_Unary *unary = (Node_Unary *) it;
+                assert(unary->value->kind == NODE_ATOM && unary->value->token.kind == TOKEN_IDENT);
+                sb_sprintf(sb, "operator " SV_Fmt, SV_Arg(unary->value->token.sv));
+            } else {
+                sb_push_type(sb, it->type);
+            }
+
+            if (it->next) {
+                sb_push_cstr(sb, ", ");
+            }
+        }
+
+        if (p->constraints.head->next) {
+            sb_push(sb, '}');
         }
     }
 }

@@ -1,42 +1,6 @@
 #include "../error.h"
 #include "checker.h"
 
-static_assert(COUNT_TOKENS == 83, "");
-const char *operator_method_name_from_token_kind(Token_Kind kind) {
-    switch (kind) {
-    case TOKEN_ADD:
-    case TOKEN_ADD_SET:
-        return OPERATOR_BINARY_ADD;
-
-    case TOKEN_SUB:
-    case TOKEN_SUB_SET:
-        return OPERATOR_BINARY_SUB;
-
-    case TOKEN_MUL:
-    case TOKEN_MUL_SET:
-        return OPERATOR_BINARY_MUL;
-
-    case TOKEN_DIV:
-    case TOKEN_DIV_SET:
-        return OPERATOR_BINARY_DIV;
-
-    case TOKEN_MOD:
-    case TOKEN_MOD_SET:
-        return OPERATOR_BINARY_MOD;
-
-    case TOKEN_GT:
-    case TOKEN_GE:
-    case TOKEN_LT:
-    case TOKEN_LE:
-    case TOKEN_EQ:
-    case TOKEN_NE:
-        return OPERATOR_CMP;
-
-    default:
-        unreachable();
-    }
-}
-
 void check_that_methods_can_be_accessed(Compiler *c, Node *receiver) {
     if (c->methods_list.count && !type_kind_eq(receiver->type, TYPE_MODULE)) {
         error_node(EK_ERROR, receiver, "Cannot access methods at this stage of compilation yet");
@@ -230,28 +194,24 @@ static void pretty_print_oms(SV name, OMS oms, const Type *receiver) {
 }
 
 Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
+    return get_operator_overload_ex(c, operator, receiver->type, op, module, true, receiver, -1);
+}
+
+Node_Fn *get_operator_overload_ex(
+    Compiler   *c,
+    const char *operator,
+    Type        receiver,
+    Node       *op,
+    Module     *module,
+    bool        monomorphize_if_needed,
+    Node       *n,
+    i64         group_index) //
+{
     Method_Spec spec = {0};
-    if (get_method_spec(c, receiver, receiver->type, sv_from_cstr(operator), &spec, NULL, NULL)) {
+    if (get_method_spec(c, n, receiver, sv_from_cstr(operator), &spec, NULL, NULL)) {
         Node_Fn *method = get_method(c, spec, module);
         if (method) {
-            const Type_Fn *method_spec = method->node.type.spec.fn;
-
-            const Type receiver_type = method_spec->args[0].type;
-            if ((receiver_type.ref > receiver->type.ref + 1) ||
-                (receiver_type.ref > receiver->type.ref && !receiver->is_memory)) //
-            {
-                error_node(EK_ERROR, op, "Too many levels of pointer indirection in method call");
-                error_node(
-                    EK_NOTE,
-                    receiver,
-                    "This is of type %s, but the receiver is expected to be %s",
-                    type_to_cstr(receiver->type),
-                    type_to_cstr(receiver_type));
-                error_node(EK_NOTE, (Node *) method->defined_as, "This is the overload used");
-                exit(c, 1);
-            }
-
-            if (method->polymorphs.count) {
+            if (method->polymorphs.count && monomorphize_if_needed) {
                 Call_Checker cc = {0};
                 cc.expr = op;
                 cc.fn_source = op;
@@ -259,7 +219,7 @@ Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver
                 cc.end = op->token;
 
                 cc.is_method = true;
-                cc.receiver = receiver;
+                cc.receiver = n;
                 cc.is_polymorph = true;
 
                 check_call_arguments(c, &cc, false);
@@ -271,7 +231,7 @@ Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver
         }
     }
 
-    check_that_type_is_known(c, receiver);
+    check_that_type_is_known(c, n);
     error_node_begin(EK_ERROR, op);
 
     OMS         oms = 0;
@@ -316,11 +276,22 @@ Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver
         unreachable();
     }
 
-    fprintf(stderr, " is not defined for %s", type_to_cstr(receiver->type));
+    fprintf(stderr, " is not defined for %s", type_to_cstr(receiver));
+
+    if (group_index != -1) {
+        const char *postfix = order_postfix(group_index + 1);
+        fprintf(
+            stderr,
+            ", which is the %zd%s value of this expression. The type of the entire expression is %s.",
+            group_index + 1,
+            postfix,
+            type_to_cstr(n->type));
+    }
+
     error_finalize();
     ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
     fprintf(stderr, "    Implement this:\n\n");
-    pretty_print_oms(sv_from_cstr(name), oms, &receiver->type);
+    pretty_print_oms(sv_from_cstr(name), oms, &receiver);
     exit(c, 1);
 }
 
@@ -362,6 +333,7 @@ static void check_operator_method_signature_args_count(
     }
 }
 
+// TODO: Consider transforming `-V` into `{0} - V`. That way we don't have this confusion...
 bool check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec, bool can_be_unary) {
     const Type *receiver = &fn_spec->args[0].type;
 

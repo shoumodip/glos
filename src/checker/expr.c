@@ -35,8 +35,7 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
     case TOKEN_ADD_SET:
     case TOKEN_SUB_SET:
         if (!type_is_numeric(n->type) && !type_is_pointer(n->type)) {
-            return get_operator_overload(
-                c, operator_method_name_from_token_kind(op), n, (Node *) binary, binary->module);
+            return get_operator_overload(c, token_kind_to_operator_method_name(op), n, (Node *) binary, binary->module);
         }
         break;
 
@@ -50,8 +49,7 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
         }
 
         if (!type_is_numeric(n->type)) {
-            return get_operator_overload(
-                c, operator_method_name_from_token_kind(op), n, (Node *) binary, binary->module);
+            return get_operator_overload(c, token_kind_to_operator_method_name(op), n, (Node *) binary, binary->module);
         }
         break;
 
@@ -290,7 +288,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
 
         if (!type_is_numeric(binary->lhs->type) && !type_is_pointer(binary->lhs->type)) {
             binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+                c, token_kind_to_operator_method_name(n->token.kind), binary->lhs, n, binary->module);
         }
         n->type = binary->lhs->type;
         break;
@@ -312,7 +310,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
 
         if (!type_is_numeric(binary->lhs->type)) {
             binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+                c, token_kind_to_operator_method_name(n->token.kind), binary->lhs, n, binary->module);
         }
         n->type = binary->lhs->type;
         break;
@@ -358,7 +356,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
         type_assert_node(c, binary->rhs, binary->lhs);
         if (!type_is_numeric(binary->lhs->type) && !type_is_pointer(binary->lhs->type)) {
             binary->overload = get_operator_overload(
-                c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+                c, token_kind_to_operator_method_name(n->token.kind), binary->lhs, n, binary->module);
 
             if (!binary->overload->is_compare_operator_complete) {
                 assert(binary->overload->returns.head);
@@ -419,7 +417,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
                 assert(try_auto_cast_type_to_rtti(c, binary->rhs, c->type_info_pointer_type));
             } else if (!type_is_scalar(binary->lhs->type)) {
                 binary->overload = get_operator_overload(
-                    c, operator_method_name_from_token_kind(n->token.kind), binary->lhs, n, binary->module);
+                    c, token_kind_to_operator_method_name(n->token.kind), binary->lhs, n, binary->module);
             }
         }
         n->type = (Type) {.kind = TYPE_BOOL};
@@ -850,13 +848,15 @@ void check_expr_union(Compiler *c, Node_Union *unionn) {
 
 static void check_polymorph(Compiler *c, Node_Polymorph *p) {
     ll_foreach(it, &p->constraints) {
-        check_expr(c, it, REF_NONE);
-        if (!type_meta_kind_eq(it->type, TYPE_TRAIT)) {
-            error_node(
-                EK_ERROR, it, "Expected polymorph constraint to be a trait type, got %s", type_to_cstr(it->type));
-            exit(c, 1);
+        if (it->kind != NODE_UNARY || it->token.kind != TOKEN_OPERATOR) {
+            check_expr(c, it, REF_NONE);
+            if (!type_meta_kind_eq(it->type, TYPE_TRAIT)) {
+                error_node(
+                    EK_ERROR, it, "Expected polymorph constraint to be a trait type, got %s", type_to_cstr(it->type));
+                exit(c, 1);
+            }
+            it->type.is_meta = false;
         }
-        it->type.is_meta = false;
     }
     p->node.type = p->name->node.type;
 }

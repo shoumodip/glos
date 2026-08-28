@@ -190,7 +190,7 @@ const char *token_kind_to_cstr(Token_Kind kind) {
     case TOKEN_OPERATOR_INDEX:
         return "'[]'";
 
-    case TOKEN_OPERATOR_RANGE:
+    case TOKEN_OPERATOR_SLICE:
         return "'[..]'";
 
     case TOKEN_DIRECTIVE_IF:
@@ -315,5 +315,50 @@ Power token_kind_to_power(Token_Kind kind) {
 
     default:
         return POWER_NIL;
+    }
+}
+
+static_assert(COUNT_TOKENS == 83, "");
+const char *token_kind_to_operator_method_name(Token_Kind kind) {
+    switch (kind) {
+    case TOKEN_ADD:
+    case TOKEN_ADD_SET:
+        return OPERATOR_BINARY_ADD;
+
+    case TOKEN_SUB:
+    case TOKEN_SUB_SET:
+        return OPERATOR_BINARY_SUB;
+
+    case TOKEN_MUL:
+    case TOKEN_MUL_SET:
+        return OPERATOR_BINARY_MUL;
+
+    case TOKEN_DIV:
+    case TOKEN_DIV_SET:
+        return OPERATOR_BINARY_DIV;
+
+    case TOKEN_MOD:
+    case TOKEN_MOD_SET:
+        return OPERATOR_BINARY_MOD;
+
+    case TOKEN_GT:
+    case TOKEN_GE:
+    case TOKEN_LT:
+    case TOKEN_LE:
+    case TOKEN_EQ:
+    case TOKEN_NE:
+        return OPERATOR_CMP;
+
+    case TOKEN_OPERATOR_CMP:
+        return OPERATOR_CMP;
+
+    case TOKEN_OPERATOR_INDEX:
+        return OPERATOR_INDEX;
+
+    case TOKEN_OPERATOR_SLICE:
+        return OPERATOR_SLICE;
+
+    default:
+        unreachable();
     }
 }

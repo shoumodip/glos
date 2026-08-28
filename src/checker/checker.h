@@ -165,8 +165,7 @@ const char *fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn
 void        show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec);
 
 // Methods /////////////////////////////////////////////////////////////////////////////////////////
-const char *operator_method_name_from_token_kind(Token_Kind kind);
-void        check_that_methods_can_be_accessed(Compiler *c, Node *receiver);
+void check_that_methods_can_be_accessed(Compiler *c, Node *receiver);
 
 bool get_method_spec(
     Compiler    *c,
@@ -179,22 +178,20 @@ bool get_method_spec(
 
 Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module);
 Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node * receiver, Node *op, Module *module);
+Node_Fn *get_operator_overload_ex(
+    Compiler *c,
+    const char *operator,
+    Type    receiver,
+    Node   *op,
+    Module *module,
+    bool    monomorphize_if_needed,
+    Node   *n,
+    i64     group_index);
 
 bool check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec, bool can_be_unary);
 void check_signature_of_binary_comparison_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec);
 void check_signature_of_index_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec);
 void check_signature_of_slice_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec);
-
-#define OPERATOR_UNARY_SUB  "unary -"
-#define OPERATOR_BINARY_ADD "binary +"
-#define OPERATOR_BINARY_SUB "binary -"
-#define OPERATOR_BINARY_MUL "binary *"
-#define OPERATOR_BINARY_DIV "binary /"
-#define OPERATOR_BINARY_MOD "binary %"
-
-#define OPERATOR_CMP   "<=>"
-#define OPERATOR_INDEX "[]"
-#define OPERATOR_SLICE "[..]"
 
 // Monomorphizer ///////////////////////////////////////////////////////////////////////////////////
 void show_current_monomorphization(Compiler *c);

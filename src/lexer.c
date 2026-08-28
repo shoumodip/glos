@@ -407,7 +407,7 @@ Token lexer_iter(Lexer *l) {
             } else if (sv_has_prefix(l->sv, sv_from_cstr("..]"))) {
                 sv_drop_mut(&l->sv, 3);
                 l->pos.col += 3;
-                token.kind = TOKEN_OPERATOR_RANGE;
+                token.kind = TOKEN_OPERATOR_SLICE;
             }
             l->after_operator_keyword = false;
         }

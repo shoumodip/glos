@@ -728,16 +728,19 @@ static Node *parse_operator_into_atom(Parser *p) {
         TOKEN_MOD,
         TOKEN_OPERATOR_CMP,
         TOKEN_OPERATOR_INDEX,
-        TOKEN_OPERATOR_RANGE);
+        TOKEN_OPERATOR_SLICE);
 
+    token.as.string = sv_from_cstr(token_kind_to_operator_method_name(token.kind));
     token.kind = TOKEN_IDENT;
     return node_alloc(p->module_current, NODE_ATOM, token);
 }
 
 static Node *parse_polymorph_constraint(Parser *p) {
-    if (read_token(p, TOKEN_OPERATOR)) {
-        todo();
-        return parse_operator_into_atom(p);
+    const Token token = peek_token(p);
+    if (token.kind == TOKEN_OPERATOR) {
+        Node_Unary *unary = (Node_Unary *) node_alloc(p->module_current, NODE_UNARY, next_token(p));
+        unary->value = parse_operator_into_atom(p);
+        return (Node *) unary;
     } else {
         return parse_expr(p, POWER_REF, false, false, NULL);
     }
