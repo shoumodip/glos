@@ -484,8 +484,9 @@ void compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_
         }
 
         Type_Fn_Arg *arg = &fn_spec->args[i];
-        compile_type(c, &arg->type);
+        assert(arg->has_default_value);
 
+        compile_type(c, &arg->type);
         LLVMValueRef value = NULL;
         if (arg->default_value_is_caller_location) {
             LLVMValueRef memory = compile_alloca(c, arg->type.llvm);
@@ -615,12 +616,16 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
 
             const Type_Fn    *fn_spec = fn.type->spec.fn;
             Typed_LLVM_Value *args = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*args));
-            if (fn_spec->args[0].type.ref > unary->value->type.ref) {
-                value = undo_load(value);
-            }
+            args[0].value = LLVMConstNull(fn_spec->args[0].type.llvm);
 
-            args[0].value = value;
+            // TODO: Try to optimize the call generator
+            args[0].value = compile_const_value_into_memory(c, args[0].value);
+            args[0].value = LLVMBuildLoad2(c->llvm_builder, fn_spec->args[0].type.llvm, args[0].value, "");
+
             args[0].type = &fn_spec->args[0].type;
+
+            args[1].value = value;
+            args[1].type = &fn_spec->args[1].type;
 
             compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node(n).pos);
             LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);

@@ -151,17 +151,4 @@ typedef enum {
 
 Power token_kind_to_power(Token_Kind kind);
 
-#define OPERATOR_UNARY_SUB  "unary-"
-#define OPERATOR_BINARY_ADD "binary+"
-#define OPERATOR_BINARY_SUB "binary-"
-#define OPERATOR_BINARY_MUL "binary*"
-#define OPERATOR_BINARY_DIV "binary/"
-#define OPERATOR_BINARY_MOD "binary%"
-
-#define OPERATOR_CMP   "<=>"
-#define OPERATOR_INDEX "[]"
-#define OPERATOR_SLICE "[..]"
-
-const char *token_kind_to_operator_method_name(Token_Kind kind);
-
 #endif // TOKEN_H

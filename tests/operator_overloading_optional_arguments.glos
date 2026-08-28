@@ -8,9 +8,9 @@ operator + :: (this: Int, that: Int, location := #caller_location) -> Int {
     return this
 }
 
-operator - :: (this: Int, location := #caller_location) -> Int {
+operator - :: (this: Int, that: Int, location := #caller_location) -> Int {
     print("\{location} ")
-    this.v = -this.v
+    this.v -= that.v
     return this
 }
 

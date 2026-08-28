@@ -71,11 +71,6 @@ operator % :: (this: Int32, that: Int32) -> Int32 {
     return this
 }
 
-operator - :: (this: Int32) -> Int32 {
-    this.x = -this.x
-    return this
-}
-
 operator <=> :: (this: Int32, that: Int32) -> Ordering {
     if this.x < that.x {
         return .LT

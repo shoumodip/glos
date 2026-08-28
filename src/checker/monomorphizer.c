@@ -126,9 +126,7 @@ static void add_monomorph_parameter_ex(
             if (it->kind == NODE_UNARY && it->token.kind == TOKEN_OPERATOR) {
                 Node_Unary *unary = (Node_Unary *) it;
                 assert(unary->value->kind == NODE_ATOM && unary->value->token.kind == TOKEN_IDENT);
-                assert(unary->value->token.as.string.data); // Parser already stores this
-                get_operator_overload_ex(
-                    c, unary->value->token.as.string.data, *t, n, n->module, false, n, group_index);
+                get_operator_overload_ex(c, unary->value->token.sv, *t, n, n->module, false, n, group_index);
             } else {
                 assert(type_kind_eq(it->type, TYPE_TRAIT));
                 check_type_satisfies_trait(c, *t, it->type.spec.trait, n, group_index);

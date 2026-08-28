@@ -165,6 +165,18 @@ const char *fn_type_to_cstr_but_excluding_receiver_if_required(const Type_Fn *fn
 void        show_note_about_the_function_being_called(Node *fn, bool is_method, const Type_Fn *fn_spec);
 
 // Methods /////////////////////////////////////////////////////////////////////////////////////////
+#define OPERATOR_ADD SV_Lit("+")
+#define OPERATOR_SUB SV_Lit("-")
+#define OPERATOR_MUL SV_Lit("*")
+#define OPERATOR_DIV SV_Lit("/")
+#define OPERATOR_MOD SV_Lit("%")
+
+#define OPERATOR_CMP   SV_Lit("<=>")
+#define OPERATOR_INDEX SV_Lit("[]")
+#define OPERATOR_SLICE SV_Lit("[..]")
+
+SV token_kind_to_operator_method_name(Token_Kind kind);
+
 void check_that_methods_can_be_accessed(Compiler *c, Node *receiver);
 
 bool get_method_spec(
@@ -177,10 +189,10 @@ bool get_method_spec(
     bool        *is_named);
 
 Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module);
-Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node * receiver, Node *op, Module *module);
+Node_Fn *get_operator_overload(Compiler *c, SV operator, Node * receiver, Node *op, Module *module);
 Node_Fn *get_operator_overload_ex(
     Compiler *c,
-    const char *operator,
+    SV operator,
     Type    receiver,
     Node   *op,
     Module *module,
@@ -188,7 +200,7 @@ Node_Fn *get_operator_overload_ex(
     Node   *n,
     i64     group_index);
 
-bool check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec, bool can_be_unary);
+void check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec);
 void check_signature_of_binary_comparison_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec);
 void check_signature_of_index_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec);
 void check_signature_of_slice_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec);

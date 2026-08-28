@@ -7,7 +7,7 @@ static bool is_indexable(Compiler *c, Node *n, Type type, Module *module) {
     }
 
     Method_Spec spec = {0};
-    if (get_method_spec(c, n, type, sv_from_cstr(OPERATOR_INDEX), &spec, NULL, NULL)) {
+    if (get_method_spec(c, n, type, OPERATOR_INDEX, &spec, NULL, NULL)) {
         return get_method(c, spec, module) != NULL;
     }
 
@@ -207,7 +207,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
         if (!type_is_numeric(unary->value->type) && !type_is_pointer(unary->value->type)) {
-            unary->overload = get_operator_overload(c, OPERATOR_UNARY_SUB, unary->value, n, unary->module);
+            unary->overload = get_operator_overload(c, OPERATOR_SUB, unary->value, n, unary->module);
         }
         n->type = unary->value->type;
         break;
@@ -1654,8 +1654,8 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                     EK_ERROR,
                     fn_spec->args[1].name,
                     fn_spec->args[1].pos,
-                    "The method '%s' does not have a default value for its beginning argument",
-                    OPERATOR_SLICE);
+                    "The method '" SV_Fmt "' does not have a default value for its beginning argument",
+                    SV_Arg(OPERATOR_SLICE));
                 exit(c, 1);
             }
 
@@ -1668,8 +1668,8 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                     EK_ERROR,
                     fn_spec->args[2].name,
                     fn_spec->args[2].pos,
-                    "The method '%s' does not have a default value for its end argument",
-                    OPERATOR_SLICE);
+                    "The method '" SV_Fmt "' does not have a default value for its end argument",
+                    SV_Arg(OPERATOR_SLICE));
                 exit(c, 1);
             }
 
@@ -2213,34 +2213,17 @@ void check_fn(
 
         assert(fn->defined_as);
         const SV name = fn->defined_as->node.token.sv;
-        if (sv_match(name, "+")) {
-            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
-            fn->operator_name = OPERATOR_BINARY_ADD;
-        } else if (sv_match(name, "-")) {
-            if (check_signature_of_arithmetic_operator(c, fn, fn_spec, true)) {
-                fn->operator_name = OPERATOR_UNARY_SUB;
-            } else {
-                fn->operator_name = OPERATOR_BINARY_SUB;
-            }
-        } else if (sv_match(name, "*")) {
-            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
-            fn->operator_name = OPERATOR_BINARY_MUL;
-        } else if (sv_match(name, "/")) {
-            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
-            fn->operator_name = OPERATOR_BINARY_DIV;
-        } else if (sv_match(name, "%")) {
-            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
-            fn->operator_name = OPERATOR_BINARY_MOD;
+        if (sv_match(name, "+") || sv_match(name, "-") || sv_match(name, "*") || sv_match(name, "/") ||
+            sv_match(name, "%")) //
+        {
+            check_signature_of_arithmetic_operator(c, fn, fn_spec);
         } else if (sv_match(name, "<=>")) {
             check_signature_of_binary_comparison_operator(c, fn, fn_spec);
-            fn->operator_name = OPERATOR_CMP;
             fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->ordering_type);
         } else if (sv_match(name, "[]")) {
             check_signature_of_index_operator(c, fn, fn_spec);
-            fn->operator_name = OPERATOR_INDEX;
         } else if (sv_match(name, "[..]")) {
             check_signature_of_slice_operator(c, fn, fn_spec);
-            fn->operator_name = OPERATOR_SLICE;
         }
     }
     fn->checked_signature = true;

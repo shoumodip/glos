@@ -730,7 +730,6 @@ static Node *parse_operator_into_atom(Parser *p) {
         TOKEN_OPERATOR_INDEX,
         TOKEN_OPERATOR_SLICE);
 
-    token.as.string = sv_from_cstr(token_kind_to_operator_method_name(token.kind));
     token.kind = TOKEN_IDENT;
     return node_alloc(p->module_current, NODE_ATOM, token);
 }

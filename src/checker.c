@@ -236,15 +236,11 @@ void check_nodes(Compiler *c) {
                     }
                 }
 
-                if (spec.name.count && !is_ident(*spec.name.data)) {
-                    da_push(&c->operator_methods_list, ((Operator_Method) {.fn = fn, .spec = spec}));
-                } else {
-                    Node_Fn **previous = ht_get(&c->methods_table, spec);
-                    if (previous) {
-                        error_redefinition(c, (Node *) fn->defined_as, &(*previous)->defined_as->node.token.pos);
-                    }
-                    ht_set(&c->methods_table, spec, fn);
+                Node_Fn **previous = ht_get(&c->methods_table, spec);
+                if (previous) {
+                    error_redefinition(c, (Node *) fn->defined_as, &(*previous)->defined_as->node.token.pos);
                 }
+                ht_set(&c->methods_table, spec, fn);
             } else {
                 error_node(EK_ERROR, define->type, "Can only define methods on types defined in the same module");
                 error_node(EK_NOTE, define->name, "This argument is taken to be the receiver");
@@ -252,22 +248,7 @@ void check_nodes(Compiler *c) {
             }
         }
 
-        for (size_t i = 0; i < c->operator_methods_list.count; i++) {
-            Operator_Method it = c->operator_methods_list.data[i];
-            check_fn(c, it.fn, REF_NONE, NULL, false, true);
-
-            assert(it.fn->operator_name);
-            it.spec.name = sv_from_cstr(it.fn->operator_name);
-
-            Node_Fn **previous = ht_get(&c->methods_table, it.spec);
-            if (previous) {
-                error_redefinition(c, (Node *) it.fn->defined_as, &(*previous)->defined_as->node.token.pos);
-            }
-            ht_set(&c->methods_table, it.spec, it.fn);
-        }
-
         c->methods_list.count = 0;
-        c->operator_methods_list.count = 0;
     }
 
     for (Module *m = c->modules->head; m; m = m->next) {

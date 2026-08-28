@@ -1,6 +1,51 @@
 #include "../error.h"
 #include "checker.h"
 
+static_assert(COUNT_TOKENS == 83, "");
+SV token_kind_to_operator_method_name(Token_Kind kind) {
+    switch (kind) {
+    case TOKEN_ADD:
+    case TOKEN_ADD_SET:
+        return OPERATOR_ADD;
+
+    case TOKEN_SUB:
+    case TOKEN_SUB_SET:
+        return OPERATOR_SUB;
+
+    case TOKEN_MUL:
+    case TOKEN_MUL_SET:
+        return OPERATOR_MUL;
+
+    case TOKEN_DIV:
+    case TOKEN_DIV_SET:
+        return OPERATOR_DIV;
+
+    case TOKEN_MOD:
+    case TOKEN_MOD_SET:
+        return OPERATOR_MOD;
+
+    case TOKEN_GT:
+    case TOKEN_GE:
+    case TOKEN_LT:
+    case TOKEN_LE:
+    case TOKEN_EQ:
+    case TOKEN_NE:
+        return OPERATOR_CMP;
+
+    case TOKEN_OPERATOR_CMP:
+        return OPERATOR_CMP;
+
+    case TOKEN_OPERATOR_INDEX:
+        return OPERATOR_INDEX;
+
+    case TOKEN_OPERATOR_SLICE:
+        return OPERATOR_SLICE;
+
+    default:
+        unreachable();
+    }
+}
+
 void check_that_methods_can_be_accessed(Compiler *c, Node *receiver) {
     if (c->methods_list.count && !type_kind_eq(receiver->type, TYPE_MODULE)) {
         error_node(EK_ERROR, receiver, "Cannot access methods at this stage of compilation yet");
@@ -139,8 +184,7 @@ Node_Fn *get_method(Compiler *c, Method_Spec spec, Module *module) {
 }
 
 typedef enum {
-    OMS_UNARY_ARITH = 1,
-    OMS_BINARY_ARITH,
+    OMS_ARITH = 1,
     OMS_CMP,
     OMS_INDEX,
     OMS_SLICE,
@@ -151,12 +195,7 @@ static void pretty_print_oms(SV name, OMS oms, const Type *receiver) {
 
     const char *T = NULL;
     switch (oms) {
-    case OMS_UNARY_ARITH:
-        T = type_to_cstr_raw(type_without_ref(*receiver));
-        fprintf(stderr, "(this: %s) -> %s", T, T);
-        break;
-
-    case OMS_BINARY_ARITH:
+    case OMS_ARITH:
         T = type_to_cstr_raw(type_without_ref(*receiver));
         fprintf(stderr, "(this: %s, that: %s) -> %s", T, T, T);
         break;
@@ -193,22 +232,22 @@ static void pretty_print_oms(SV name, OMS oms, const Type *receiver) {
     ansi_reset(stderr);
 }
 
-Node_Fn *get_operator_overload(Compiler *c, const char *operator, Node *receiver, Node *op, Module *module) {
+Node_Fn *get_operator_overload(Compiler *c, SV operator, Node *receiver, Node *op, Module *module) {
     return get_operator_overload_ex(c, operator, receiver->type, op, module, true, receiver, -1);
 }
 
 Node_Fn *get_operator_overload_ex(
-    Compiler   *c,
-    const char *operator,
-    Type        receiver,
-    Node       *op,
-    Module     *module,
-    bool        monomorphize_if_needed,
-    Node       *n,
-    i64         group_index) //
+    Compiler *c,
+    SV        operator,
+    Type      receiver,
+    Node     *op,
+    Module   *module,
+    bool      monomorphize_if_needed,
+    Node     *n,
+    i64       group_index) //
 {
     Method_Spec spec = {0};
-    if (get_method_spec(c, n, receiver, sv_from_cstr(operator), &spec, NULL, NULL)) {
+    if (get_method_spec(c, n, receiver, operator, &spec, NULL, NULL)) {
         Node_Fn *method = get_method(c, spec, module);
         if (method) {
             if (method->polymorphs.count && monomorphize_if_needed) {
@@ -234,49 +273,27 @@ Node_Fn *get_operator_overload_ex(
     check_that_type_is_known(c, n);
     error_node_begin(EK_ERROR, op);
 
-    OMS         oms = 0;
-    const char *name = NULL;
-    if (sv_match(spec.name, OPERATOR_UNARY_SUB)) {
-        fprintf(stderr, "Unary operator '-'");
-        oms = OMS_UNARY_ARITH;
-        name = "-";
-    } else if (sv_match(spec.name, OPERATOR_BINARY_ADD)) {
-        fprintf(stderr, "Binary operator '+'");
-        oms = OMS_BINARY_ARITH;
-        name = "+";
-    } else if (sv_match(spec.name, OPERATOR_BINARY_SUB)) {
-        fprintf(stderr, "Binary operator '-'");
-        oms = OMS_BINARY_ARITH;
-        name = "-";
-    } else if (sv_match(spec.name, OPERATOR_BINARY_MUL)) {
-        fprintf(stderr, "Binary operator '*'");
-        oms = OMS_BINARY_ARITH;
-        name = "*";
-    } else if (sv_match(spec.name, OPERATOR_BINARY_DIV)) {
-        fprintf(stderr, "Binary operator '/'");
-        oms = OMS_BINARY_ARITH;
-        name = "/";
-    } else if (sv_match(spec.name, OPERATOR_BINARY_MOD)) {
-        fprintf(stderr, "Binary operator '%%'");
-        oms = OMS_BINARY_ARITH;
-        name = "%";
-    } else if (sv_match(spec.name, OPERATOR_CMP)) {
-        fprintf(stderr, "Operator '<=>'");
+    OMS oms = 0;
+    if (sv_eq(spec.name, OPERATOR_ADD)) {
+        oms = OMS_ARITH;
+    } else if (sv_eq(spec.name, OPERATOR_SUB)) {
+        oms = OMS_ARITH;
+    } else if (sv_eq(spec.name, OPERATOR_MUL)) {
+        oms = OMS_ARITH;
+    } else if (sv_eq(spec.name, OPERATOR_DIV)) {
+        oms = OMS_ARITH;
+    } else if (sv_eq(spec.name, OPERATOR_MOD)) {
+        oms = OMS_ARITH;
+    } else if (sv_eq(spec.name, OPERATOR_CMP)) {
         oms = OMS_CMP;
-        name = "<=>";
-    } else if (sv_match(spec.name, OPERATOR_INDEX)) {
-        fprintf(stderr, "Operator '[]'");
+    } else if (sv_eq(spec.name, OPERATOR_INDEX)) {
         oms = OMS_INDEX;
-        name = "[]";
-    } else if (sv_match(spec.name, OPERATOR_SLICE)) {
-        fprintf(stderr, "Operator '[..]'");
+    } else if (sv_eq(spec.name, OPERATOR_SLICE)) {
         oms = OMS_SLICE;
-        name = "[..]";
     } else {
         unreachable();
     }
-
-    fprintf(stderr, " is not defined for %s", type_to_cstr(receiver));
+    fprintf(stderr, "Operator '" SV_Fmt "' is not defined for %s", SV_Arg(spec.name), type_to_cstr(receiver));
 
     if (group_index != -1) {
         const char *postfix = order_postfix(group_index + 1);
@@ -291,7 +308,7 @@ Node_Fn *get_operator_overload_ex(
     error_finalize();
     ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
     fprintf(stderr, "    Implement this:\n\n");
-    pretty_print_oms(sv_from_cstr(name), oms, &receiver);
+    pretty_print_oms(spec.name, oms, &receiver);
     exit(c, 1);
 }
 
@@ -333,19 +350,11 @@ static void check_operator_method_signature_args_count(
     }
 }
 
-// TODO: Consider transforming `-V` into `{0} - V`. That way we don't have this confusion...
-bool check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec, bool can_be_unary) {
+void check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec) {
     const Type *receiver = &fn_spec->args[0].type;
 
-    OMS  oms = OMS_BINARY_ARITH;
-    bool is_unary = false;
-    if (can_be_unary && fn->args_count_min == 1) {
-        is_unary = true;
-        oms = OMS_UNARY_ARITH;
-        check_operator_method_signature_args_count(c, fn, fn_spec, 1, oms);
-    } else {
-        check_operator_method_signature_args_count(c, fn, fn_spec, 2, oms);
-    }
+    const OMS oms = OMS_ARITH;
+    check_operator_method_signature_args_count(c, fn, fn_spec, 2, oms);
 
     const Type lhs_type = fn_spec->args[0].type;
     if (lhs_type.ref) {
@@ -359,19 +368,17 @@ bool check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type
         exit(c, 1);
     }
 
-    if (!is_unary) {
-        const Type rhs_type = fn_spec->args[1].type;
-        if (!type_eq(rhs_type, lhs_type)) {
-            error_operator_method_wrong_signature(fn->defined_as->node.token, oms, receiver);
-            error_parts(
-                EK_NOTE,
-                fn_spec->args[1].name,
-                fn_spec->args[1].pos,
-                "Operand types must be same: Expected %s, got %s",
-                type_to_cstr(lhs_type),
-                type_to_cstr(rhs_type));
-            exit(c, 1);
-        }
+    const Type rhs_type = fn_spec->args[1].type;
+    if (!type_eq(rhs_type, lhs_type)) {
+        error_operator_method_wrong_signature(fn->defined_as->node.token, oms, receiver);
+        error_parts(
+            EK_NOTE,
+            fn_spec->args[1].name,
+            fn_spec->args[1].pos,
+            "Operand types must be same: Expected %s, got %s",
+            type_to_cstr(lhs_type),
+            type_to_cstr(rhs_type));
+        exit(c, 1);
     }
 
     if (!type_eq(*fn_spec->return_type, lhs_type)) {
@@ -384,8 +391,6 @@ bool check_signature_of_arithmetic_operator(Compiler *c, Node_Fn *fn, const Type
             fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
         exit(c, 1);
     }
-
-    return is_unary;
 }
 
 void check_signature_of_binary_comparison_operator(Compiler *c, Node_Fn *fn, const Type_Fn *fn_spec) {

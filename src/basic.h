@@ -279,6 +279,7 @@ typedef struct {
 
 #define SV_Fmt    "%.*s"
 #define SV_Arg(s) (int) ((s).count), ((s).data)
+#define SV_Lit(s) ((SV) {.data = (s), .count = sizeof(s) - 1})
 
 SV sv_from_cstr(const char *cstr);
 SV sv_strip_suffix(SV a, SV b);
