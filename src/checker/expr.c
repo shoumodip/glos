@@ -848,6 +848,19 @@ void check_expr_union(Compiler *c, Node_Union *unionn) {
     }
 }
 
+static void check_polymorph(Compiler *c, Node_Polymorph *p) {
+    ll_foreach(it, &p->constraints) {
+        check_expr(c, it, REF_NONE);
+        if (!type_meta_kind_eq(it->type, TYPE_TRAIT)) {
+            error_node(
+                EK_ERROR, it, "Expected polymorph constraint to be a trait type, got %s", type_to_cstr(it->type));
+            exit(c, 1);
+        }
+        it->type.is_meta = false;
+    }
+    p->node.type = p->name->node.type;
+}
+
 void check_expr_struct(Compiler *c, Node_Struct *structt) {
     Node *n = (Node *) structt;
 
@@ -870,36 +883,35 @@ void check_expr_struct(Compiler *c, Node_Struct *structt) {
                 }
             }
 
-            if (it->name->definition_spec) {
-                Node_Define *define = it->name->definition_spec->definition_node;
+            assert(it->name->definition_spec);
+            Node_Define *define = it->name->definition_spec->definition_node;
 
+            if (define->type) {
+                check_expr(c, define->type, REF_NONE);
+                it->name->node.type = type_without_meta(type_assert_type(c, define->type));
+            }
+
+            if (define->expr) {
+                check_expr(c, define->expr, REF_NONE);
                 if (define->type) {
-                    check_expr(c, define->type, REF_NONE);
-                    it->name->node.type = type_without_meta(type_assert_type(c, define->type));
-                }
-
-                if (define->expr) {
-                    check_expr(c, define->expr, REF_NONE);
-                    if (define->type) {
-                        type_assert(c, define->expr, it->name->node.type);
-                    } else {
-                        if (define->expr->type.is_meta) {
-                            it->name->node.type = c->type_info_pointer_type;
-                        } else {
-                            it->name->node.type = define->expr->type;
-                        }
-                    }
-
-                    it->name->definition_spec->const_value = eval_const_expr(c, define->expr, false);
-                    it->name->definition_spec->is_const_value_evaluated = true;
+                    type_assert(c, define->expr, it->name->node.type);
                 } else {
-                    spec->polymorphs_count_min++;
+                    if (define->expr->type.is_meta) {
+                        it->name->node.type = c->type_info_pointer_type;
+                    } else {
+                        it->name->node.type = define->expr->type;
+                    }
                 }
 
-                it->node.type = it->name->node.type;
-                if (type_eq(it->node.type, c->type_info_pointer_type)) {
-                    it->is_type = true;
-                }
+                it->name->definition_spec->const_value = eval_const_expr(c, define->expr, false);
+                it->name->definition_spec->is_const_value_evaluated = true;
+            } else {
+                spec->polymorphs_count_min++;
+            }
+
+            check_polymorph(c, it);
+            if (type_eq(it->node.type, c->type_info_pointer_type)) {
+                it->is_type = true;
             }
         }
 
@@ -1184,8 +1196,6 @@ void check_expr_call(Compiler *c, Node_Call *call) {
         }
 
         if (call->is_monomorphization_of_polymorphic_type) {
-            ht_clear(&c->monomorph_replacements);
-
             const size_t monomorph_parameters_begin_save = c->monomorph_parameters.begin;
             c->monomorph_parameters.begin = c->monomorph_parameters.count;
 
@@ -2039,7 +2049,7 @@ void check_fn(
                 .is_meta = true,
             };
 
-            it->node.type = it->name->node.type;
+            check_polymorph(c, it);
             fn_spec->polymorphs[fn_spec->polymorphs_count++] = it;
         }
     } else {

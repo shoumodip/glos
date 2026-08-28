@@ -1,0 +1,7 @@
+greet :: (w: $T/Writer) {
+    wprintln(w, "Hello, world!")
+}
+
+main :: () {
+    greet("Urmom")
+}

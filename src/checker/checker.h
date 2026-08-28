@@ -207,7 +207,7 @@ void add_monomorph_parameter_default_value(
     Type            type,
     Const_Value    *default_value,
     Node           *default_value_as_caller_location);
-bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const Type *expected);
+void infer_monomorph_parameters(Compiler *c, const Type *actual, const Type *expected, Node *n, i64 group_index);
 
 Node *monomorphize(Compiler *c, Node *n, Node *site);
 

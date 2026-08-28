@@ -125,6 +125,13 @@ static void range_apply_node(Range *r, const Node *n) {
     case NODE_POLYMORPH: {
         Node_Polymorph *polymorph = (Node_Polymorph *) n;
         range_apply_node(r, (Node *) polymorph->name);
+        if (polymorph->constraints.head) {
+            if (polymorph->constraints.head->next) {
+                range_apply_token(r, polymorph->constraints_end_token);
+            } else {
+                range_apply_node(r, polymorph->constraints.head);
+            }
+        }
     } break;
 
     case NODE_DISTINCT: {
@@ -261,10 +268,16 @@ static const char *get_end_from_parts(SV sv, Pos pos) {
     return line_end;
 }
 
-Pos get_leftmost_point_of_node(const Node *n) {
+Token get_leftmost_token_of_node(const Node *n) {
     Range r = {.begin = n->token, .end = n->token};
     range_apply_node(&r, n);
-    return r.begin.pos;
+    return r.begin;
+}
+
+Token get_rightmost_token_of_node(const Node *n) {
+    Range r = {.begin = n->token, .end = n->token};
+    range_apply_node(&r, n);
+    return r.end;
 }
 
 void error_node_begin(Error_Kind kind, const Node *n) {

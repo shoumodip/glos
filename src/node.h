@@ -686,7 +686,11 @@ struct Node_Import {
 struct Node_Polymorph {
     Node       node;
     Node_Atom *name;
-    size_t     arg_index;
+
+    Nodes constraints;
+    Token constraints_end_token;
+
+    size_t arg_index;
 
     // `$A: B`    => true
     // `A:  $B`   => false

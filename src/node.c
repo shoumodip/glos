@@ -44,6 +44,25 @@ Type type_without_meta(Type t) {
     return t;
 }
 
+static void sb_push_polymorph(SB *sb, Node_Polymorph *p) {
+    sb_push_sv(sb, p->name->node.token.sv);
+    if (p->constraints.head) {
+        sb_push(sb, '/');
+        if (p->constraints.head->next) {
+            sb_push(sb, '{');
+            ll_foreach(it, &p->constraints) {
+                sb_push_type(sb, it->type);
+                if (it->next) {
+                    sb_push_cstr(sb, ", ");
+                }
+            }
+            sb_push(sb, '}');
+        } else {
+            sb_push_type(sb, p->constraints.head->type);
+        }
+    }
+}
+
 static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
     sb_push(sb, '(');
     ll_foreach(it, &ps) {
@@ -52,7 +71,7 @@ static void sb_push_polymorphs(SB *sb, Polymorphs ps) {
             sb_push_const_value(sb, monomorph->monomorphization_type, monomorph->monomorphization_value);
         } else {
             sb_push(sb, '$');
-            sb_push_sv(sb, monomorph->name->node.token.sv);
+            sb_push_polymorph(sb, monomorph);
         }
 
         if (it->next) {
@@ -316,7 +335,7 @@ void sb_push_type(SB *sb, Type type) {
         if (spec.is_definition) {
             sb_push(sb, '$');
         }
-        sb_push_sv(sb, spec.definition->name->node.token.sv);
+        sb_push_polymorph(sb, spec.definition);
     } break;
 
     case TYPE_GROUP:
@@ -851,8 +870,7 @@ static void sb_push_const_value_impl(SB *sb, Type type, Const_Value v, bool raw)
             if (v.as.polymorph.is_definition) {
                 sb_push(sb, '$');
             }
-
-            sb_push_sv(sb, v.as.polymorph.polymorph->name->node.token.sv);
+            sb_push_polymorph(sb, v.as.polymorph.polymorph);
         }
     } break;
 
