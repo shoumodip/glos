@@ -657,7 +657,7 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
     case TOKEN_LNOT:
         value = compile_expr(c, unary->value, false);
         set_debug_pos(c, n->token.pos);
-        return LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, value, LLVMConstNull(n->type.llvm), "");
+        return LLVMBuildXor(c->llvm_builder, value, LLVMConstInt(n->type.llvm, true, false), "");
 
     case TOKEN_SIZEOF:
         return LLVMConstInt(n->type.llvm, compile_sizeof(c, &unary->value->type), false);
