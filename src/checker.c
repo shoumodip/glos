@@ -262,7 +262,3 @@ void check_nodes(Compiler *c) {
 
     get_main(c);
 }
-
-// TODO: Apply the type restriction of special methods into traits
-//       -> Or rather should we move from "special" methods into particular traits?
-//       -> Perhaps after compile time polymorphism is implemented?

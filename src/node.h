@@ -728,6 +728,7 @@ struct Node_Fn {
     Token  args_end_token;
 
     Variadics_Kind variadics_kind;
+    Token          variadics_spread_token;
 
     Nodes  returns;
     size_t returns_count;

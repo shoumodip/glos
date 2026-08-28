@@ -912,6 +912,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                     }
 
                     fn->variadics_kind = VARIADICS_TYPED;
+                    fn->variadics_spread_token = define->spread_token;
                     typed_variadics = arg;
                 } else if (!define->expr && fn->variadics_kind == VARIADICS_TYPED) {
                     error_node(
@@ -941,14 +942,9 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 }
 
                 if (read_token(p, TOKEN_SPREAD)) {
-                    if (fn->is_method) {
-                        assert(p->state.ahead.kind == TOKEN_SPREAD);
-                        error_token(EK_ERROR, p->state.ahead, "Methods cannot have untyped variadics");
-                        // TODO: This should only apply to traits, not all methods
-                        exit(1);
-                    }
-
+                    assert(p->state.ahead.kind == TOKEN_SPREAD);
                     fn->variadics_kind = VARIADICS_UNTYPED;
+                    fn->variadics_spread_token = p->state.ahead;
                     fn->args_end_token = expect_token(p, TOKEN_RPAREN);
                     break;
                 }
@@ -1122,6 +1118,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
             Node_Fn *fn = (Node_Fn *) define->type;
             fn->trait_method = trait;
+
+            if (fn->variadics_kind == VARIADICS_UNTYPED) {
+                error_token(EK_ERROR, fn->variadics_spread_token, "Trait methods cannot have untyped variadics");
+                exit(1);
+            }
 
             nodes_push(&trait->methods, method);
             trait->methods_count++;
