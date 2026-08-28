@@ -1422,7 +1422,8 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                 check_call_arity(c, call->fn, call->args_count, call->end, false, 1, 1, excess_argument);
             }
 
-            Type *from_type = &call->args.head->type;
+            Node *from = call->args.head;
+            Type *from_type = &from->type;
             Type *to_type = &n->type;
 
             bool same = false;
@@ -1459,14 +1460,19 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                 if (to_any) {
                     // Pass
                 } else if (to_trait) {
-                    finalize_untyped_type(c, call->args.head);
+                    finalize_untyped_type(c, from);
                     call->type_cast_trait_impl =
-                        check_type_satisfies_trait(c, *from_type, to_type->spec.trait, call->args.head, -1);
+                        check_type_satisfies_trait(c, *from_type, to_type->spec.trait, from, -1);
                 } else if (to_union) {
-                    finalize_untyped_type(c, call->args.head);
-                    call->type_cast_union_index = get_union_type_index(c, call->args.head, *to_type);
+                    finalize_untyped_type(c, from);
+                    call->type_cast_union_index = get_union_type_index(c, from, *to_type);
+                } else if (type_eq_without_distinct(*to_type, c->type_info_pointer_type) && from_type->is_meta) {
+                    from->emit_type_info = arena_clone(&default_arena, &from->type, sizeof(from->type));
+                    from->emit_type_info->is_meta = false;
+                    from->type = c->type_info_pointer_type;
+                    same = true;
                 } else if (type_is_scalar(*to_type)) {
-                    type_assert_scalar(c, call->args.head);
+                    type_assert_scalar(c, from);
 
                     bool ok = true;
                     if (type_kind_eq(*from_type, TYPE_FN) && !from_type->ref) {
@@ -1499,7 +1505,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                         type_kind_eq(*from_type, TYPE_INT) &&
                         (type_is_integer(*to_type) || type_kind_eq(*to_type, TYPE_ENUM))) //
                     {
-                        ok = try_auto_cast_untyped(c, call->args.head, n->type);
+                        ok = try_auto_cast_untyped(c, from, n->type);
                         same = true;
                     }
 

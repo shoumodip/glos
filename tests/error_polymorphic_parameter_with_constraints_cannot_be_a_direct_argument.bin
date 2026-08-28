@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 196
+tests/error_polymorphic_parameter_with_constraints_cannot_be_a_direct_argument.glos:1:9: Error: A polymorphic parameter with constraints cannot be a direct argument
+
+    foo :: ($T/Any: Type) {}
+
+

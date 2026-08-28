@@ -1,0 +1,10 @@
+EXIT 1
+STDOUT 0
+
+STDERR 106
+tests/error_unterminated_comment.glos:1:1: Error: Unterminated comment
+
+    /*
+     /* Nested comment */
+
+

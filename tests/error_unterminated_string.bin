@@ -1,0 +1,10 @@
+EXIT 1
+STDOUT 0
+
+STDERR 96
+tests/error_unterminated_string.glos:2:10: Error: Unterminated string
+
+    x := "Deez
+    Nuts
+
+

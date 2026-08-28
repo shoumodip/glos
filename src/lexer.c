@@ -67,6 +67,11 @@ static bool match_char(Lexer *l, char ch) {
     return false;
 }
 
+static void error_unterminated(Lexer *l, Pos begin, const char *label) {
+    error_range(EK_ERROR, begin, l->pos, "Unterminated %s", label);
+    exit(1);
+}
+
 static void skip_whitespace(Lexer *l) {
     l->newline = false;
     while (l->sv.count) {
@@ -97,6 +102,30 @@ static void skip_whitespace(Lexer *l) {
                 while (l->sv.count && *l->sv.data != '\n') {
                     next_char(l);
                 }
+            } else if (peek_char(l, 1) == '*') {
+                const Pos begin = l->pos;
+
+                size_t depth = 0;
+                while (l->sv.count >= 2) {
+                    if (l->sv.data[0] == '/' && l->sv.data[1] == '*') {
+                        depth++;
+                    } else if (l->sv.data[0] == '*' && l->sv.data[1] == '/') {
+                        depth--;
+                        if (!depth) {
+                            break;
+                        }
+                    }
+
+                    next_char(l);
+                }
+
+                if (depth) {
+                    error_unterminated(l, begin, "comment");
+                }
+
+                // Skip the '*/'
+                next_char(l);
+                next_char(l);
             } else {
                 return;
             }
@@ -118,11 +147,6 @@ static void error_invalid(Pos pos, SV sv, const char *label) {
         fprintf(stderr, " (The byte is 0x%X)", (uint8_t) *sv.data);
     }
     error_finalize();
-    exit(1);
-}
-
-static void error_unterminated(Lexer *l, Pos begin, const char *label) {
-    error_range(EK_ERROR, begin, l->pos, "Unterminated %s", label);
     exit(1);
 }
 

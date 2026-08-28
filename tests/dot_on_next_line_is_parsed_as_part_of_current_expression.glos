@@ -1,0 +1,20 @@
+main :: () {
+    // It helps in doing builder patterns like this
+    Builder {}
+    .add(34)
+    .add(35)
+    .show()
+}
+
+Builder :: struct {
+    x: s32
+}
+
+add :: (this: &Builder, x: s32) -> &Builder {
+    this.x += x
+    return this
+}
+
+show :: (this: Builder) {
+    println(this.x)
+}

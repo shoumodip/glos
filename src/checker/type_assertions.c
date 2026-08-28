@@ -200,6 +200,11 @@ void type_assert_type_or_Type(Compiler *c, const Node *n) {
 // Writer(s64)
 // ```
 Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) {
+    if (receiver.is_meta) {
+        error_node(EK_ERROR, n, "A type cannot implement traits");
+        exit(c, 1);
+    }
+
     if (trait->methods_count) {
         check_that_methods_can_be_accessed(c, n);
     }

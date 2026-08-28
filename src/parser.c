@@ -1330,7 +1330,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
     while (true) {
         token = peek_token(p);
-        if (token.newline) { // TODO: Allow dots to be on next line
+        if (token.newline && token.kind != TOKEN_DOT) {
             break;
         }
 
