@@ -675,10 +675,12 @@ void compile_stmt(Compiler *c, Node *n) {
         }
     } break;
 
-    default: {
-        const size_t group_values_count_save = c->group_values.count;
-        compile_expr(c, n, false);
-        c->group_values.count = group_values_count_save;
-    } break;
+    default:
+        if (!n->type.is_meta) {
+            const size_t group_values_count_save = c->group_values.count;
+            compile_expr(c, n, false);
+            c->group_values.count = group_values_count_save;
+        }
+        break;
     }
 }

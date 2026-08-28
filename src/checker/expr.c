@@ -443,6 +443,23 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     }
 }
 
+static void error_undefined_in(Compiler *c, const Token *token, const Type *type, const char *label) {
+    error_token(
+        EK_ERROR,
+        *token,
+        "Undefined %s '" SV_Fmt "' in type %s",
+        label,
+        SV_Arg(token->sv),
+        type_to_cstr(type_without_meta(*type)));
+
+    if (type->kind == TYPE_TRAIT) {
+        error_node(EK_NOTE, (Node *) type->spec.trait->definition, "Trait defined here");
+    } else if (type->kind == TYPE_STRUCT) {
+        error_node(EK_NOTE, (Node *) type->spec.structt->definition, "Structure defined here");
+    }
+    exit(c, 1);
+}
+
 void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_ref_valid) {
     Node *n = (Node *) member;
     if (member->lhs) {
@@ -556,7 +573,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     }
 
                     if (!ok) {
-                        error_undefined(c, &n->token, "field or method", false);
+                        error_undefined_in(c, &n->token, &member->lhs->type, "field or method");
                     }
                 }
             } else if (type_kind_eq(member->lhs->type, TYPE_UNION)) {
@@ -571,7 +588,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                         n->type = (Type) {.kind = TYPE_S64};
                         member->field_index = 0;
                     } else {
-                        error_undefined(c, &n->token, "field or method", false);
+                        error_undefined_in(c, &n->token, &member->lhs->type, "field or method");
                     }
                 }
             } else if (type_kind_eq(member->lhs->type, TYPE_STRUCT)) {
@@ -589,9 +606,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                 }
 
                 if (!definition) {
-                    error_undefined(c, &n->token, "field or method", true);
-                    error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
-                    exit(c, 1);
+                    error_undefined_in(c, &n->token, &member->lhs->type, "field or method");
                 }
 
                 n->type = definition->type;
@@ -605,7 +620,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
-                    error_undefined(c, &n->token, "field", false);
+                    error_undefined_in(c, &n->token, &member->lhs->type, "field");
                 }
             } else if (type_kind_eq(member->lhs->type, TYPE_DYNAMIC_ARRAY)) {
                 check_whether_member_access_is_valid(c, member);
@@ -620,7 +635,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 2;
                 } else {
-                    error_undefined(c, &n->token, "field", false);
+                    error_undefined_in(c, &n->token, &member->lhs->type, "field");
                 }
             } else if (type_kind_eq(member->lhs->type, TYPE_SLICE)) {
                 check_whether_member_access_is_valid(c, member);
@@ -632,7 +647,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
-                    error_undefined(c, &n->token, "field", false);
+                    error_undefined_in(c, &n->token, &member->lhs->type, "field");
                 }
             } else if (type_kind_eq(member->lhs->type, TYPE_STRING)) {
                 check_whether_member_access_is_valid(c, member);
@@ -643,7 +658,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                     n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
                 } else {
-                    error_undefined(c, &n->token, "field", false);
+                    error_undefined_in(c, &n->token, &member->lhs->type, "field");
                 }
             } else if (type_kind_eq(member->lhs->type, TYPE_MODULE)) {
                 check_whether_member_access_is_valid(c, member);
@@ -660,7 +675,7 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                             ok = true;
                             n->type = member->method->node.type;
                         } else {
-                            error_undefined(c, &n->token, "method", false);
+                            error_undefined_in(c, &n->token, &member->lhs->type, "method");
                         }
                     } else {
                         error_node(EK_ERROR, n, "There are no methods defined on %s", type_to_cstr(receiver));
@@ -1065,9 +1080,7 @@ void check_expr_compound(Compiler *c, Node_Compound *compound) {
                 }
 
                 if (!ok) {
-                    error_undefined(c, &it_field_name->node.token, "field", true);
-                    error_node(EK_NOTE, (Node *) struct_spec->definition, "Structure defined here");
-                    exit(c, 1);
+                    error_undefined_in(c, &it_field_name->node.token, &n->type, "field");
                 }
             } else if (n->type.kind == TYPE_ARRAY || n->type.kind == TYPE_SLICE) {
                 check_expr(c, it_binary->lhs, REF_NONE);
@@ -1209,9 +1222,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                         }
 
                         if (!ok) {
-                            error_undefined(c, &it_name->token, "polymorphic parameter", true);
-                            error_node(EK_NOTE, (Node *) spec->definition, "Structure defined here");
-                            exit(c, 1);
+                            error_undefined_in(c, &it_name->token, fn_type, "polymorphic parameter");
                         }
 
                         arg->token.as.integer = it_index;
@@ -1530,7 +1541,7 @@ void check_expr_call(Compiler *c, Node_Call *call) {
         if (call->fn->kind == NODE_MEMBER) {
             Node_Member *member = (Node_Member *) call->fn;
             cc.is_trait = member->is_trait;
-            cc.is_method = member->method != NULL;
+            cc.is_method = member->method != NULL && !member->lhs->type.is_meta;
             if (cc.is_method || cc.is_trait) {
                 cc.receiver = member->lhs;
             }

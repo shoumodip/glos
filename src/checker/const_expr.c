@@ -690,6 +690,10 @@ Const_Value eval_const_expr_compound(Compiler *c, Node_Compound *compound) {
 
 Const_Value eval_const_expr_call(Compiler *c, Node_Call *call) {
     Node *n = (Node *) call;
+    if (call->is_monomorphization_of_polymorphic_type) {
+        return const_value_type(n->type);
+    }
+
     if (!call->is_type_cast) {
         error_node(EK_ERROR, call->fn_source, "Cannot call functions in a constant expression");
         exit(c, 1);

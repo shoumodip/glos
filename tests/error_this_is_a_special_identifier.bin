@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 176
+tests/error_this_is_a_special_identifier.glos:1:1: Error: The name 'this' is reserved for the receiver argument of a method, and therefore cannot be used here
+
+    this := 69
+
+

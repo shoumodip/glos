@@ -1,0 +1,12 @@
+Box :: struct($T: Type) {
+    v: T
+}
+
+show :: (b: Box(Box($T))) {
+    println(b.v.v)
+}
+
+main :: () {
+    b := Box(Box(string)) {{"Urmom"}}
+    show(b)
+}

@@ -703,6 +703,65 @@ static void monomorphize_node(Compiler *c, Node **np, bool first) {
     }
 }
 
+static_assert(COUNT_TYPES == 30, "");
+static bool type_is_polymorphic(Type type) {
+    switch (type.kind) {
+    case TYPE_FN: {
+        const Type_Fn *spec = type.spec.fn;
+        for (size_t i = 0; i < spec->args_count; i++) {
+            if (type_is_polymorphic(spec->args[i].type)) {
+                return true;
+            }
+        }
+
+        return type_is_polymorphic(*spec->return_type);
+    }
+
+    case TYPE_TRAIT:
+        return false;
+
+    case TYPE_STRUCT:
+        return type.spec.structt->polymorphs_count != 0;
+
+    case TYPE_ARRAY:
+        return type.spec.array.count_polymorph != NULL || type_is_polymorphic(*type.spec.array.element);
+
+    case TYPE_DYNAMIC_ARRAY:
+        return type_is_polymorphic(*type.spec.dynamic_array.element);
+
+    case TYPE_SLICE:
+        return type_is_polymorphic(*type.spec.slice.element);
+
+    case TYPE_POLYMORPH: {
+        Node_Polymorph *polymorph = type.spec.polymorph.definition;
+        if (!polymorph->is_monomorphized) {
+            return true;
+        }
+
+        if (polymorph->is_type) {
+            assert(polymorph->monomorphization_value.kind == CONST_VALUE_TYPE);
+            return type_is_polymorphic(polymorph->monomorphization_value.as.type);
+        }
+
+        return type_is_polymorphic(polymorph->monomorphization_type);
+    }
+
+    case TYPE_GROUP: {
+        const Type_Group *spec = &type.spec.group;
+        for (size_t i = 0; i < spec->count; i++) {
+            if (type_is_polymorphic(spec->data[i])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    default:
+        return false;
+    }
+}
+
 Node *monomorphize(Compiler *c, Node *n, Node *site) {
     const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
     memset(&c->monomorphizing_site, 0, sizeof(c->monomorphizing_site));
@@ -737,6 +796,11 @@ Node *monomorphize(Compiler *c, Node *n, Node *site) {
             }
 
             if (it.value.kind == CONST_VALUE_POLYMORPH && !it.value.as.polymorph.polymorph->is_monomorphized) {
+                is_complete = false;
+                break;
+            }
+
+            if (it.value.kind == CONST_VALUE_TYPE && type_is_polymorphic(it.value.as.type)) {
                 is_complete = false;
                 break;
             }

@@ -197,6 +197,10 @@ void type_assert_type_or_Type(Compiler *c, const Node *n) {
 Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) {
     const Type receiver_without_ref = type_without_ref(receiver);
     ll_foreach(it, &trait->impls) {
+        if (!trait->methods_count) {
+            return it;
+        }
+
         if (type_eq(it->type, receiver_without_ref)) {
             return it;
         }
@@ -367,7 +371,7 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                     it.fn->body = NULL;
                     error_node(
                         EK_NOTE,
-                        (Node *) it.fn->defined_as->definition_spec->definition_node,
+                        it.fn->args.head,
                         "The method '" SV_Fmt "' has receiver %s, not %s",
                         SV_Arg(it.fn->defined_as->node.token.sv),
                         type_to_cstr(it.fn->node.type.spec.fn->args[0].type),
@@ -387,11 +391,17 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                     it.fn->body = NULL;
                     error_node(
                         EK_NOTE,
-                        (Node *) it.fn->defined_as->definition_spec->definition_node,
-                        "The method '" SV_Fmt "' has wrong signature. Expected %s, got %s",
-                        SV_Arg(it.fn->defined_as->node.token.sv),
-                        type_to_cstr(trait->methods[i].type),
-                        type_to_cstr(it.fn->node.type));
+                        (Node *) it.fn,
+                        "The method '" SV_Fmt "' has wrong signature",
+                        SV_Arg(it.fn->defined_as->node.token.sv));
+
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    Expected: %s\n"
+                        "    Actual:   %s\n\n",
+                        type_to_cstr_raw(trait->methods[i].type),
+                        type_to_cstr_raw(it.fn->node.type));
 
                     spec->args[0].type = arg0_save;
                 } break;

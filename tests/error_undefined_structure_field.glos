@@ -1,0 +1,8 @@
+Vec2 :: struct {
+    x, y: f32
+}
+
+main :: () {
+    v: Vec2
+    v.z
+}

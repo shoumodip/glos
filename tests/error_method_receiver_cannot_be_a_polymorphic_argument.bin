@@ -1,0 +1,17 @@
+EXIT 1
+STDOUT 0
+
+STDERR 686
+tests/error_method_receiver_cannot_be_a_polymorphic_argument.glos:1:10: Error: The name 'this' is reserved for the receiver argument of a method, and therefore cannot be used here
+
+    foo :: ($this: Foo) {}
+
+    This is the first argument in what looks to be a function. Normally this is perfectly valid and would define
+    the function as a method. However, this argument seems to be directly polymorphic, which is not allowed.
+
+    The receiver can have a polymorphic type, but the argument itself cannot be polymorphic.
+
+        foo :: (this: Foo($T)) {}    // This is allowed
+        bar :: ($this: Bar)    {}    // This is not (Notice the difference in the position of the '$')
+
+

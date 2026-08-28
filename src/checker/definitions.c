@@ -772,7 +772,20 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
     }
 
     Node_Atom *definition = NULL;
-    if (atom) {
+    if (c->monomorphization_stack.count) {
+        const Monomorphization m = c->monomorphization_stack.data[c->monomorphization_stack.count - 1];
+        if (m.into->kind == NODE_STRUCT) {
+            Node_Struct *structt = (Node_Struct *) m.into;
+            ll_foreach(it, &structt->monomorphs) {
+                if (sv_eq(it->name->node.token.sv, n->token.sv)) {
+                    definition = it->name;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!definition && atom) {
         if (atom->definition) {
             definition = atom->definition;
         } else {
@@ -802,19 +815,6 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
                         error_node(EK_NOTE, (Node *) definition, "Here is the variable being used");
                         exit(c, 1);
                     }
-                }
-            }
-        }
-    }
-
-    if (!definition && c->monomorphization_stack.count) {
-        const Monomorphization m = c->monomorphization_stack.data[c->monomorphization_stack.count - 1];
-        if (m.into->kind == NODE_STRUCT) {
-            Node_Struct *structt = (Node_Struct *) m.into;
-            ll_foreach(it, &structt->monomorphs) {
-                if (sv_eq(it->name->node.token.sv, n->token.sv)) {
-                    definition = it->name;
-                    break;
                 }
             }
         }

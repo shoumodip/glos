@@ -1,0 +1,15 @@
+EXIT 1
+STDOUT 0
+
+STDERR 234
+tests/error_undefined_structure_field.glos:7:7: Error: Undefined field or method 'z' in type 'Vec2'
+
+    v.z
+
+tests/error_undefined_structure_field.glos:1:9: Note: Structure defined here
+
+    Vec2 :: struct {
+        x, y: f32
+    }
+
+
