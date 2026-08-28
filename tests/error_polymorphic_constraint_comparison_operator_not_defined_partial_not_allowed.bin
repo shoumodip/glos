@@ -1,0 +1,23 @@
+EXIT 1
+STDOUT 0
+
+STDERR 737
+tests/error_polymorphic_constraint_comparison_operator_not_defined_partial_not_allowed.glos:7:9: Error: Operator '<=>' is not defined for 'Foo'
+
+    foo(Foo {})
+
+    Implement this:
+
+        operator <=> :: (this: Foo, that: Foo) -> Ordering {}
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_polymorphic_constraint_comparison_operator_not_defined_partial_not_allowed.glos:7:5: Note: While attempting to monomorphize this
+
+    foo(Foo {})
+
+tests/error_polymorphic_constraint_comparison_operator_not_defined_partial_not_allowed.glos:1:8: Note: The function being called has signature '(x: $T/operator <=> -> Ordering)'
+
+    foo :: (x: $T/operator <=> Ordering) {
+
+

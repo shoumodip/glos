@@ -1,0 +1,8 @@
+foo :: (x: $T/operator <=> Equivalence) {
+}
+
+Foo :: struct {}
+
+main :: () {
+    foo(Foo {})
+}

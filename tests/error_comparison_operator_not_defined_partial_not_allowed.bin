@@ -1,0 +1,15 @@
+EXIT 1
+STDOUT 0
+
+STDERR 336
+tests/error_comparison_operator_not_defined_partial_not_allowed.glos:4:5: Error: Operator '<=>' is not defined for 'Foo'
+
+    Foo {} > Foo {}
+
+    Implement this:
+
+        operator <=> :: (this: Foo, that: Foo) -> Ordering {}
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+

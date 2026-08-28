@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define DONT_DEFINE_EXIT_WRAPPER
+#include "checker/checker.h"
+
 #ifndef PLATFORM_X86_64_WINDOWS
 #include <dirent.h>
 #include <errno.h>
@@ -719,7 +722,9 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
 
 static Node *parse_operator_into_atom(Parser *p) {
     p->state.lexer.after_operator_keyword = true;
-    Token token = expect_token(
+
+    Token token;
+    token = expect_token(
         p,
         TOKEN_ADD,
         TOKEN_SUB,
@@ -737,9 +742,14 @@ static Node *parse_operator_into_atom(Parser *p) {
 static Node *parse_polymorph_constraint(Parser *p) {
     const Token token = peek_token(p);
     if (token.kind == TOKEN_OPERATOR) {
-        Node_Unary *unary = (Node_Unary *) node_alloc(p->module_current, NODE_UNARY, next_token(p));
-        unary->value = parse_operator_into_atom(p);
-        return (Node *) unary;
+        Node_Binary *binary = (Node_Binary *) node_alloc(p->module_current, NODE_BINARY, next_token(p));
+        binary->lhs = parse_operator_into_atom(p);
+
+        assert(binary->lhs->kind == NODE_ATOM && binary->lhs->token.kind == TOKEN_IDENT);
+        if (sv_eq(binary->lhs->token.sv, OPERATOR_CMP)) {
+            binary->rhs = parse_expr(p, POWER_REF, false, false, NULL);
+        }
+        return (Node *) binary;
     } else {
         return parse_expr(p, POWER_REF, false, false, NULL);
     }

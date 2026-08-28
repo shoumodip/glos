@@ -1,0 +1,18 @@
+EXIT 1
+STDOUT 0
+
+STDERR 584
+tests/error_comparison_operator_not_defined_partial_allowed.glos:4:5: Error: Operator '<=>' is not defined for 'Foo'
+
+    Foo {} == Foo {}
+
+    Implement this:
+
+        operator <=> :: (this: Foo, that: Foo) -> Ordering | Equivalence {}
+
+    Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.
+    Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+

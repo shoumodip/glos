@@ -118,18 +118,27 @@ static void add_monomorph_parameter_ex(
 
     if (n) {
         ll_foreach(it, &polymorph->constraints) {
-            Type *t = &type;
+            Type t = type;
             if (value.kind == CONST_VALUE_TYPE) {
-                t = &value.as.type;
+                t = value.as.type;
             }
 
-            if (it->kind == NODE_UNARY && it->token.kind == TOKEN_OPERATOR) {
-                Node_Unary *unary = (Node_Unary *) it;
-                assert(unary->value->kind == NODE_ATOM && unary->value->token.kind == TOKEN_IDENT);
-                get_operator_overload_ex(c, unary->value->token.sv, *t, n, n->module, false, n, group_index);
+            if (it->kind == NODE_BINARY && it->token.kind == TOKEN_OPERATOR) {
+                Node_Binary *binary = (Node_Binary *) it;
+                assert(binary->lhs->kind == NODE_ATOM && binary->lhs->token.kind == TOKEN_IDENT);
+
+                bool partial_comparison_acceptable = true;
+                if (binary->rhs && binary->lhs->token.as.integer) {
+                    partial_comparison_acceptable = false;
+                }
+
+                get_operator_overload_ex(
+                    c, binary->lhs->token.sv, t, n, n->module, false, partial_comparison_acceptable, n, group_index);
+
+                // TODO: Builtin types
             } else {
                 assert(type_kind_eq(it->type, TYPE_TRAIT));
-                check_type_satisfies_trait(c, *t, it->type.spec.trait, n, group_index);
+                check_type_satisfies_trait(c, t, it->type.spec.trait, n, group_index);
             }
         }
     }

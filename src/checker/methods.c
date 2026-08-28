@@ -190,7 +190,7 @@ typedef enum {
     OMS_SLICE,
 } OMS;
 
-static void pretty_print_oms(SV name, OMS oms, const Type *receiver) {
+static void pretty_print_oms(SV name, OMS oms, const Type *receiver, bool partial_comparison_acceptable) {
     fprintf(stderr, "        operator " SV_Fmt " :: ", SV_Arg(name));
 
     const char *T = NULL;
@@ -202,7 +202,11 @@ static void pretty_print_oms(SV name, OMS oms, const Type *receiver) {
 
     case OMS_CMP:
         T = type_to_cstr_raw(type_without_ref(*receiver));
-        fprintf(stderr, "(this: %s, that: %s) -> Ordering | Equivalence", T, T);
+        if (partial_comparison_acceptable) {
+            fprintf(stderr, "(this: %s, that: %s) -> Ordering | Equivalence", T, T);
+        } else {
+            fprintf(stderr, "(this: %s, that: %s) -> Ordering", T, T);
+        }
         break;
 
     case OMS_INDEX:
@@ -217,7 +221,7 @@ static void pretty_print_oms(SV name, OMS oms, const Type *receiver) {
     }
     fprintf(stderr, " {}\n\n");
 
-    if (oms == OMS_CMP) {
+    if (oms == OMS_CMP && partial_comparison_acceptable) {
         fprintf(
             stderr,
             "    Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.\n"
@@ -233,7 +237,7 @@ static void pretty_print_oms(SV name, OMS oms, const Type *receiver) {
 }
 
 Node_Fn *get_operator_overload(Compiler *c, SV operator, Node *receiver, Node *op, Module *module) {
-    return get_operator_overload_ex(c, operator, receiver->type, op, module, true, receiver, -1);
+    return get_operator_overload_ex(c, operator, receiver->type, op, module, true, true, receiver, -1);
 }
 
 Node_Fn *get_operator_overload_ex(
@@ -243,9 +247,11 @@ Node_Fn *get_operator_overload_ex(
     Node     *op,
     Module   *module,
     bool      monomorphize_if_needed,
+    bool      partial_comparison_acceptable,
     Node     *n,
     i64       group_index) //
 {
+    unused(partial_comparison_acceptable);
     Method_Spec spec = {0};
     if (get_method_spec(c, n, receiver, operator, &spec, NULL, NULL)) {
         Node_Fn *method = get_method(c, spec, module);
@@ -265,6 +271,21 @@ Node_Fn *get_operator_overload_ex(
                 assert(cc.fn->kind == NODE_FN);
 
                 method = (Node_Fn *) cc.fn;
+            }
+
+            if (sv_eq(spec.name, OPERATOR_CMP)) {
+                if (!partial_comparison_acceptable && !method->is_compare_operator_complete) {
+                    assert(method->returns.head);
+                    error_node(EK_ERROR, n, "Type %s does not implement ordered comparisons", type_to_cstr(receiver));
+                    error_node(
+                        EK_NOTE,
+                        method->returns.head,
+                        "The method '" SV_Fmt "' only implements equality checking since its return type is %s, not %s",
+                        SV_Arg(method->defined_as->node.token.sv),
+                        type_to_cstr(c->equivalence_type),
+                        type_to_cstr(c->ordering_type));
+                    exit(c, 1);
+                }
             }
             return method;
         }
@@ -308,7 +329,7 @@ Node_Fn *get_operator_overload_ex(
     error_finalize();
     ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
     fprintf(stderr, "    Implement this:\n\n");
-    pretty_print_oms(spec.name, oms, &receiver);
+    pretty_print_oms(spec.name, oms, &receiver, partial_comparison_acceptable);
     exit(c, 1);
 }
 
@@ -321,7 +342,7 @@ static void error_operator_method_wrong_signature(Token name, OMS oms, const Typ
 
     ansi_set(stderr, ANSI_COLOR_YELLOW | ANSI_BOLD);
     fprintf(stderr, "    It should have this signature:\n\n");
-    pretty_print_oms(name.sv, oms, receiver);
+    pretty_print_oms(name.sv, oms, receiver, true);
 }
 
 static void check_operator_method_signature_args_count(

@@ -1,0 +1,8 @@
+foo :: (x: $T/operator <=> Ordering) {
+}
+
+Foo :: struct {}
+
+main :: () {
+    foo(Foo {})
+}

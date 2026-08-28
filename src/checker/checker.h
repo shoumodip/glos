@@ -197,6 +197,7 @@ Node_Fn *get_operator_overload_ex(
     Node   *op,
     Module *module,
     bool    monomorphize_if_needed,
+    bool    partial_comparison_acceptable,
     Node   *n,
     i64     group_index);
 
