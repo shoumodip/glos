@@ -525,6 +525,11 @@ static Node *parse_define(
     Node_Define *define = (Node_Define *) node_alloc(p->module_current, NODE_DEFINE, token);
     if (name->kind == NODE_POLYMORPH) {
         define->name_polymorph = (Node_Polymorph *) name;
+        if (define->name_polymorph->constraints.head) {
+            error_node(EK_ERROR, name, "A polymorphic parameter with constraints cannot be a direct argument");
+            exit(1);
+        }
+
         define->name_polymorph->is_arg = true;
         define->name_polymorph->is_type = false;
         name = (Node *) define->name_polymorph->name;
@@ -712,6 +717,34 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
+static Node *parse_operator_into_atom(Parser *p) {
+    p->state.lexer.after_operator_keyword = true;
+    Token token = expect_token(
+        p,
+        TOKEN_ADD,
+        TOKEN_SUB,
+        TOKEN_MUL,
+        TOKEN_DIV,
+        TOKEN_MOD,
+        TOKEN_OPERATOR_CMP,
+        TOKEN_OPERATOR_INDEX,
+        TOKEN_OPERATOR_SLICE);
+
+    token.kind = TOKEN_IDENT;
+    return node_alloc(p->module_current, NODE_ATOM, token);
+}
+
+static Node *parse_polymorph_constraint(Parser *p) {
+    const Token token = peek_token(p);
+    if (token.kind == TOKEN_OPERATOR) {
+        Node_Unary *unary = (Node_Unary *) node_alloc(p->module_current, NODE_UNARY, next_token(p));
+        unary->value = parse_operator_into_atom(p);
+        return (Node *) unary;
+    } else {
+        return parse_expr(p, POWER_REF, false, false, NULL);
+    }
+}
+
 static_assert(COUNT_TOKENS == 83, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
@@ -751,6 +784,22 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         polymorph->name->polymorph = polymorph;
         polymorph->arg_index = p->state.pb->arg_index;
         polymorph->is_type = true;
+
+        if (read_token(p, TOKEN_DIV)) {
+            if (read_token(p, TOKEN_LBRACE)) {
+                while (!read_token(p, TOKEN_RBRACE)) {
+                    nodes_push(&polymorph->constraints, parse_polymorph_constraint(p));
+                    if (expect_token(p, TOKEN_COMMA, TOKEN_RBRACE).kind != TOKEN_COMMA) {
+                        break;
+                    }
+                }
+
+                assert(p->state.ahead.kind == TOKEN_RBRACE);
+                polymorph->constraints_end_token = p->state.ahead;
+            } else {
+                nodes_push(&polymorph->constraints, parse_polymorph_constraint(p));
+            }
+        }
     } break;
 
     case TOKEN_ISTRING: {
@@ -938,6 +987,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 token = expect_token(p, TOKEN_COMMA, TOKEN_RPAREN);
                 if (token.kind != TOKEN_COMMA) {
                     fn->args_end_token = token;
+                    break;
+                }
+
+                // Don't be annoying like C. Allow this to be valid: '(a: A, ) {}'
+                if (read_token(p, TOKEN_RPAREN)) {
                     break;
                 }
 
@@ -1276,7 +1330,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
     while (true) {
         token = peek_token(p);
-        if (token.newline) {
+        if (token.newline) { // TODO: Allow dots to be on next line
             break;
         }
 
@@ -1470,20 +1524,7 @@ static Node *parse_stmt(Parser *p) {
     case TOKEN_OPERATOR: {
         local_assert(p, false, token, NULL);
 
-        p->state.lexer.after_operator_keyword = true;
-        token = expect_token(
-            p,
-            TOKEN_ADD,
-            TOKEN_SUB,
-            TOKEN_MUL,
-            TOKEN_DIV,
-            TOKEN_MOD,
-            TOKEN_OPERATOR_CMP,
-            TOKEN_OPERATOR_INDEX,
-            TOKEN_OPERATOR_RANGE);
-
-        token.kind = TOKEN_IDENT;
-        Node *name = node_alloc(p->module_current, NODE_ATOM, token);
+        Node *name = parse_operator_into_atom(p);
         node = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
 
         Node_Define *define = (Node_Define *) node;

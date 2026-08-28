@@ -410,7 +410,7 @@ void compile_stmt_switch(Compiler *c, Node_Switch *sw) {
                     args[1].value = value;
                     args[1].type = &fn_spec->args[1].type;
 
-                    compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node(pred));
+                    compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node(pred).pos);
                     LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
 
                     arena_reset(&temp_arena, checkpoint);

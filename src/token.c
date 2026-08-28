@@ -190,7 +190,7 @@ const char *token_kind_to_cstr(Token_Kind kind) {
     case TOKEN_OPERATOR_INDEX:
         return "'[]'";
 
-    case TOKEN_OPERATOR_RANGE:
+    case TOKEN_OPERATOR_SLICE:
         return "'[..]'";
 
     case TOKEN_DIRECTIVE_IF:

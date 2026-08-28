@@ -88,7 +88,7 @@ typedef enum {
     TOKEN_OPERATOR,
     TOKEN_OPERATOR_CMP,   // '<=>'
     TOKEN_OPERATOR_INDEX, // '[]'
-    TOKEN_OPERATOR_RANGE, // '[..]'
+    TOKEN_OPERATOR_SLICE, // '[..]'
 
     TOKEN_DIRECTIVE_IF,
     TOKEN_DIRECTIVE_ASSERT,

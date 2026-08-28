@@ -10,7 +10,8 @@ typedef enum {
     EK_BLANK,
 } Error_Kind;
 
-Pos get_leftmost_point_of_node(const Node *n);
+Token get_leftmost_token_of_node(const Node *n);
+Token get_rightmost_token_of_node(const Node *n);
 
 void error_node_begin(Error_Kind kind, const Node *n);
 void error_parts_begin(Error_Kind kind, SV sv, Pos pos);

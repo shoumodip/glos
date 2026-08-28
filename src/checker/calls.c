@@ -130,7 +130,6 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
     const size_t              monomorph_parameters_begin_save = c->monomorph_parameters.begin;
     const Monomorphizing_Site monomorphizing_site_save = c->monomorphizing_site;
     if (cc->is_polymorph) {
-        ht_clear(&c->monomorph_replacements);
         c->monomorph_parameters.begin = c->monomorph_parameters.count;
 
         c->monomorphizing_site.expr = cc->expr;
@@ -366,9 +365,7 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
     if (cc->is_polymorph) {
         if (cc->is_method) {
             const Type expected = type_with_ref(fn_spec->args[0].type, cc->receiver->type.ref);
-            if (!infer_monomorph_parameters(c, cc->receiver, &cc->receiver->type, &expected)) {
-                exit(c, 1);
-            }
+            infer_monomorph_parameters(c, &cc->receiver->type, &expected, cc->receiver, -1);
         }
 
         Nodes  final_args = {0};
@@ -391,13 +388,15 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
 
             Type  *types = &it->type;
             size_t count = 1;
+            i64    group_index = -1;
             if (type_kind_eq(it->type, TYPE_GROUP)) {
                 Type_Group *group = &it->type.spec.group;
                 types = group->data;
                 count = group->count;
+                group_index = 0;
             }
 
-            for (size_t i = 0; i < count; i++, it_index++) {
+            for (size_t i = 0; i < count; i++, it_index++, group_index++) {
                 Type_Fn_Arg *argument = it_index < fn_spec->args_count ? &fn_spec->args[it_index] : NULL;
                 bool         add_to_final_args = true;
                 if (argument && argument->polymorph) {
@@ -431,9 +430,7 @@ void check_call_arguments(Compiler *c, Call_Checker *cc, bool check_arguments_pr
                         expected = expected->spec.slice.element;
                     }
 
-                    if (!infer_monomorph_parameters(c, it, &types[i], expected)) {
-                        exit(c, 1);
-                    }
+                    infer_monomorph_parameters(c, &types[i], expected, it, group_index);
                 }
 
                 if (add_to_final_args) {

@@ -1,0 +1,23 @@
+EXIT 1
+STDOUT 0
+
+STDERR 668
+tests/error_value_does_not_satisfy_polymorphic_operator_constraints.glos:6:11: Error: Operator '+' is not defined for 'string'
+
+    greet("Urmom")
+
+    Implement this:
+
+        operator + :: (this: string, that: string) -> string {}
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
+
+tests/error_value_does_not_satisfy_polymorphic_operator_constraints.glos:6:5: Note: While attempting to monomorphize this
+
+    greet("Urmom")
+
+tests/error_value_does_not_satisfy_polymorphic_operator_constraints.glos:1:10: Note: The function being called has signature '(w: $T/operator +)'
+
+    greet :: (w: $T/operator +) {
+
+

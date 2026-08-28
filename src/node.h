@@ -686,7 +686,11 @@ struct Node_Import {
 struct Node_Polymorph {
     Node       node;
     Node_Atom *name;
-    size_t     arg_index;
+
+    Nodes constraints;
+    Token constraints_end_token;
+
+    size_t arg_index;
 
     // `$A: B`    => true
     // `A:  $B`   => false
@@ -758,9 +762,6 @@ struct Node_Fn {
     //     foo: () // <- Refers to this
     // }
     Node_Fn *wrapper_signature;
-
-    // From the OPERATOR_* macros. Used for operator definitions
-    const char *operator_name;
 
     // <=> :: (this: $T, that: T) -> bool       // Partial, only implements equality
     // <=> :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering

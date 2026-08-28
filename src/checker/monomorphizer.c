@@ -96,8 +96,14 @@ void show_current_monomorphization(Compiler *c) {
     }
 }
 
-void add_monomorph_parameter(
-    Compiler *c, Node_Polymorph *polymorph, Type type, Const_Value value, Node_Polymorph *to_polymorph) //
+static void add_monomorph_parameter_ex(
+    Compiler       *c,
+    Node_Polymorph *polymorph,
+    Type            type,
+    Const_Value     value,
+    Node_Polymorph *to_polymorph,
+    Node           *n,
+    i64             group_index) //
 {
     if (value.kind == CONST_VALUE_POLYMORPH && value.as.polymorph.polymorph->is_monomorphized) {
         type = value.as.polymorph.polymorph->monomorphization_type;
@@ -107,6 +113,24 @@ void add_monomorph_parameter(
     for (size_t i = c->monomorph_parameters.begin; i < c->monomorph_parameters.count; i++) {
         if (c->monomorph_parameters.data[i].from == polymorph) {
             return;
+        }
+    }
+
+    if (n) {
+        ll_foreach(it, &polymorph->constraints) {
+            Type *t = &type;
+            if (value.kind == CONST_VALUE_TYPE) {
+                t = &value.as.type;
+            }
+
+            if (it->kind == NODE_UNARY && it->token.kind == TOKEN_OPERATOR) {
+                Node_Unary *unary = (Node_Unary *) it;
+                assert(unary->value->kind == NODE_ATOM && unary->value->token.kind == TOKEN_IDENT);
+                get_operator_overload_ex(c, unary->value->token.sv, *t, n, n->module, false, n, group_index);
+            } else {
+                assert(type_kind_eq(it->type, TYPE_TRAIT));
+                check_type_satisfies_trait(c, *t, it->type.spec.trait, n, group_index);
+            }
         }
     }
 
@@ -132,6 +156,12 @@ void add_monomorph_parameter(
     da_push(&c->monomorph_parameters, mp);
 }
 
+void add_monomorph_parameter(
+    Compiler *c, Node_Polymorph *polymorph, Type type, Const_Value value, Node_Polymorph *to_polymorph) //
+{
+    add_monomorph_parameter_ex(c, polymorph, type, value, to_polymorph, NULL, -1);
+}
+
 void add_monomorph_parameter_default_value(
     Compiler       *c,
     Node_Polymorph *polymorph,
@@ -148,7 +178,7 @@ void add_monomorph_parameter_default_value(
         Const_Value_Struct *structure = &location.as.structt;
         assert(structure->spec->fields_count == 3);
 
-        const Pos pos = get_leftmost_point_of_node(default_value_as_caller_location);
+        const Pos pos = get_leftmost_token_of_node(default_value_as_caller_location).pos;
         structure->fields[0] = const_value_string(sv_from_cstr(pos.path));
         structure->fields[1] = const_value_u64(pos.row + 1);
         structure->fields[2] = const_value_u64(pos.col + 1);
@@ -158,12 +188,10 @@ void add_monomorph_parameter_default_value(
     }
 }
 
-// The return type just indicates whether the inference was done against a known type.
-// It DOES NOT INDICATE TYPE VALIDITY. That is the responsibility of the pre-monomorphization analysis.
 static_assert(COUNT_TYPES == 30, "");
-bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const Type *expected) {
+void infer_monomorph_parameters(Compiler *c, const Type *actual, const Type *expected, Node *n, i64 group_index) {
     if (actual->ref < expected->ref) {
-        return true;
+        return;
     }
 
     switch (expected->kind) {
@@ -173,15 +201,11 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
             const Type_Fn *es = expected->spec.fn;
             if (as->args_count == es->args_count && as->returns_count == es->returns_count) {
                 for (size_t i = 0; i < as->args_count; i++) {
-                    if (!infer_monomorph_parameters(c, n, &as->args[i].type, &es->args[i].type)) {
-                        return false;
-                    }
+                    infer_monomorph_parameters(c, &as->args[i].type, &es->args[i].type, n, group_index);
                 }
 
                 for (size_t i = 0; i < as->returns_count; i++) {
-                    if (!infer_monomorph_parameters(c, n, &as->returns[i], &es->returns[i])) {
-                        return false;
-                    }
+                    infer_monomorph_parameters(c, &as->returns[i], &es->returns[i], n, group_index);
                 }
             }
         }
@@ -198,12 +222,12 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
             const Type_Struct *as = actual->spec.structt;
 
             if (as->definition->defined_as != es->definition->defined_as) {
-                return true;
+                return;
             }
 
             assert(!as->definition->polymorphs.count);
             if (as->definition->monomorphs.count != es->polymorphs_count) {
-                return true;
+                return;
             }
 
             size_t it_index = 0;
@@ -223,17 +247,13 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
                         type_to_cstr(et));
 #endif // MONOMORPHIZATION_LOG
 
-                    if (!infer_monomorph_parameters(c, n, &at, &et)) {
-                        return false;
-                    }
+                    infer_monomorph_parameters(c, &at, &et, n, group_index);
                 } else {
                     assert(!ap->is_type);
                     assert(type_meta_kind_eq(ep->node.type, TYPE_POLYMORPH));
                     const Type_Polymorph et = ep->node.type.spec.polymorph;
                     if (et.is_definition) {
-                        if (!check_that_type_is_known_noexit(n)) {
-                            return false;
-                        }
+                        check_that_type_is_known_noexit(n);
                         finalize_untyped_type(c, n);
 
 #ifdef MONOMORPHIZATION_LOG
@@ -244,8 +264,14 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
                         ansi_reset(stderr);
 #endif // MONOMORPHIZATION_LOG
 
-                        add_monomorph_parameter(
-                            c, et.definition, ap->monomorphization_type, ap->monomorphization_value, NULL);
+                        add_monomorph_parameter_ex(
+                            c,
+                            et.definition,
+                            ap->monomorphization_type,
+                            ap->monomorphization_value,
+                            NULL,
+                            n,
+                            group_index);
                     }
                 }
             }
@@ -267,16 +293,14 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
                 ansi_reset(stderr);
 #endif // MONOMORPHIZATION_LOG
 
-                add_monomorph_parameter(
-                    c, es.count_polymorph, (Type) {.kind = TYPE_S64}, const_value_u64(as.count), NULL);
+                add_monomorph_parameter_ex(
+                    c, es.count_polymorph, (Type) {.kind = TYPE_S64}, const_value_u64(as.count), NULL, n, group_index);
 
                 es.count = as.count;
             }
 
             if (as.count == es.count) {
-                if (!infer_monomorph_parameters(c, n, as.element, es.element)) {
-                    return false;
-                }
+                infer_monomorph_parameters(c, as.element, es.element, n, group_index);
             }
         }
         break;
@@ -285,9 +309,7 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
         if (type_kind_eq(*actual, expected->kind) && actual->ref == expected->ref) {
             Type *ae = actual->spec.dynamic_array.element;
             Type *ee = expected->spec.dynamic_array.element;
-            if (!infer_monomorph_parameters(c, n, ae, ee)) {
-                return false;
-            }
+            infer_monomorph_parameters(c, ae, ee, n, group_index);
         }
         break;
 
@@ -303,18 +325,14 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
             }
 
             if (element) {
-                if (!infer_monomorph_parameters(c, n, element, expected->spec.slice.element)) {
-                    return false;
-                }
+                infer_monomorph_parameters(c, element, expected->spec.slice.element, n, group_index);
             }
         }
         break;
 
     case TYPE_POLYMORPH:
         if (expected->spec.polymorph.is_definition) {
-            if (!check_that_type_is_known_noexit(n)) {
-                return false;
-            }
+            check_that_type_is_known(c, n);
             finalize_untyped_type(c, n);
 
             if (actual->is_meta) {
@@ -331,7 +349,7 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
             error_node(EK_NOTE, (Node *) polymorph, "Infer to be %s", type_to_cstr(type));
 #endif // MONOMORPHIZATION_LOG
 
-            add_monomorph_parameter(c, polymorph, type, const_value_type(type), NULL);
+            add_monomorph_parameter_ex(c, polymorph, type, const_value_type(type), NULL, n, group_index);
         }
         break;
 
@@ -339,8 +357,6 @@ bool infer_monomorph_parameters(Compiler *c, Node *n, const Type *actual, const 
         // Pass
         break;
     }
-
-    return true;
 }
 
 // TODO: Use a custom hasher instead of just operating on the raw bytes
@@ -972,5 +988,6 @@ end:
 
     c->monomorphizing_site = monomorphizing_site_save;
     c->monomorphizing_site.node = n;
+    ht_clear(&c->monomorph_replacements);
     return n;
 }

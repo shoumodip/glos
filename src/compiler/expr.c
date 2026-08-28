@@ -484,8 +484,9 @@ void compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_
         }
 
         Type_Fn_Arg *arg = &fn_spec->args[i];
-        compile_type(c, &arg->type);
+        assert(arg->has_default_value);
 
+        compile_type(c, &arg->type);
         LLVMValueRef value = NULL;
         if (arg->default_value_is_caller_location) {
             LLVMValueRef memory = compile_alloca(c, arg->type.llvm);
@@ -615,14 +616,18 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
 
             const Type_Fn    *fn_spec = fn.type->spec.fn;
             Typed_LLVM_Value *args = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*args));
-            if (fn_spec->args[0].type.ref > unary->value->type.ref) {
-                value = undo_load(value);
-            }
+            args[0].value = LLVMConstNull(fn_spec->args[0].type.llvm);
 
-            args[0].value = value;
+            // TODO: Try to optimize the call generator
+            args[0].value = compile_const_value_into_memory(c, args[0].value);
+            args[0].value = LLVMBuildLoad2(c->llvm_builder, fn_spec->args[0].type.llvm, args[0].value, "");
+
             args[0].type = &fn_spec->args[0].type;
 
-            compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node(n));
+            args[1].value = value;
+            args[1].type = &fn_spec->args[1].type;
+
+            compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node(n).pos);
             LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
 
             arena_reset(&temp_arena, checkpoint);
@@ -690,7 +695,7 @@ static LLVMValueRef compile_binary_with_overloaded_operator(
     args[1].value = rhs;
     args[1].type = &fn_spec->args[1].type;
 
-    compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node((Node *) binary));
+    compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node((Node *) binary).pos);
     LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
 
     arena_reset(&temp_arena, checkpoint);
@@ -1086,7 +1091,7 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
             // Failure
             LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
             compile_panic_v2(
-                c, get_leftmost_point_of_node(n), CONTRACT_PANIC_NULL_TRAIT_METHOD_ACCESS, NULL, NULL, NULL);
+                c, get_leftmost_token_of_node(n).pos, CONTRACT_PANIC_NULL_TRAIT_METHOD_ACCESS, NULL, NULL, NULL);
 
             // Success
             LLVMPositionBuilderAtEnd(c->llvm_builder, success);
@@ -1459,7 +1464,7 @@ LLVMValueRef compile_expr_call(Compiler *c, Node_Call *call, bool ref) {
         c->group_values.count = group_values_count_save;
     }
 
-    compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node((Node *) call));
+    compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node((Node *) call).pos);
 
     const bool   is_group = n->type.kind == TYPE_GROUP;
     LLVMValueRef result = compile_call(c, fn, args, args_count, is_trait_call, ref || is_group);
@@ -1515,7 +1520,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
             args[2].type = &fn_spec->args[2].type;
         }
 
-        compile_optional_arguments(c, args, fn_spec, get_leftmost_point_of_node(n));
+        compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node(n).pos);
         if (index->is_ranged) {
             LLVMValueRef value = compile_call(c, fn, args, fn_spec->args_count, false, ref);
             arena_reset(&temp_arena, checkpoint);

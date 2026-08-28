@@ -20,7 +20,7 @@ void check_switch_expr_and_alloc_preds(Compiler *c, Node_Switch *sw) {
     } else if (type_eq(sw->expr->type, c->type_info_pointer_type)) {
         sw->is_expr_type_info = true;
     } else if (!type_is_scalar(sw->expr->type)) {
-        sw->compare_overload = get_operator_overload(c, "<=>", sw->expr, sw->expr, sw->node.module);
+        sw->compare_overload = get_operator_overload(c, SV_Lit("<=>"), sw->expr, sw->expr, sw->node.module);
     }
 
     if (!sw->preds) {
