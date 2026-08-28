@@ -2,7 +2,9 @@
 #include "checker.h"
 
 static bool is_indexable(Compiler *c, Node *n, Type type, Module *module) {
-    if (type_kind_eq(type, TYPE_ARRAY) || type_kind_eq(type, TYPE_SLICE) || type_kind_eq(type, TYPE_STRING)) {
+    if (type_kind_eq(type, TYPE_ARRAY) || type_kind_eq(type, TYPE_DYNAMIC_ARRAY) || //
+        type_kind_eq(type, TYPE_SLICE) || type_kind_eq(type, TYPE_STRING))          //
+    {
         return true;
     }
 

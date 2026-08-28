@@ -254,6 +254,29 @@ Node_Fn *get_operator_overload_ex(
     unused(partial_comparison_acceptable);
     Method_Spec spec = {0};
     if (get_method_spec(c, n, receiver, operator, &spec, NULL, NULL)) {
+        if (sv_eq(operator, OPERATOR_MUL) || sv_eq(operator, OPERATOR_DIV) || sv_eq(operator, OPERATOR_MOD)) {
+            if (type_is_pointer(receiver)) {
+                error_node(EK_ERROR, n, "The operator '" SV_Fmt "' is not valid for pointers", SV_Arg(operator));
+                if (group_index == -1) {
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    The value is of type %s\n\n",
+                        type_to_cstr(receiver));
+                } else {
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    The %zu%s value of this expression has type %s. The type of this entire expression is %s\n\n",
+                        group_index + 1,
+                        order_postfix(group_index + 1),
+                        type_to_cstr(receiver),
+                        type_to_cstr(n->type));
+                }
+                exit(c, 1);
+            }
+        }
+
         Node_Fn *method = get_method(c, spec, module);
         if (method) {
             if (method->polymorphs.count && monomorphize_if_needed) {

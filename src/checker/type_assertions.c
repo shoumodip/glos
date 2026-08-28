@@ -194,11 +194,6 @@ void type_assert_type_or_Type(Compiler *c, const Node *n) {
     exit(c, 1);
 }
 
-// TODO: Print a better diagnostic if receiver is a type
-//
-// ```
-// Writer(s64)
-// ```
 Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Trait *trait, Node *n, i64 group_index) {
     if (receiver.is_meta) {
         error_node(EK_ERROR, n, "A type cannot implement traits");

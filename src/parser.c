@@ -1271,7 +1271,6 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 }
 
                 if (define->expr) {
-                    // TODO: Default struct values
                     error_node(EK_ERROR, define->expr, "Field definition cannot have assignment");
                     exit(1);
                 }

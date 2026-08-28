@@ -616,16 +616,13 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
 
             const Type_Fn    *fn_spec = fn.type->spec.fn;
             Typed_LLVM_Value *args = arena_alloc(&temp_arena, fn_spec->args_count * sizeof(*args));
-            args[0].value = LLVMConstNull(fn_spec->args[0].type.llvm);
-
-            // TODO: Try to optimize the call generator
-            args[0].value = compile_const_value_into_memory(c, args[0].value);
-            args[0].value = LLVMBuildLoad2(c->llvm_builder, fn_spec->args[0].type.llvm, args[0].value, "");
-
             args[0].type = &fn_spec->args[0].type;
+            args[0].value = compile_alloca(c, args[0].type->llvm);
+            LLVMBuildStore(c->llvm_builder, LLVMConstNull(args[0].type->llvm), args[0].value);
+            args[0].value = LLVMBuildLoad2(c->llvm_builder, args[0].type->llvm, args[0].value, "");
 
-            args[1].value = value;
             args[1].type = &fn_spec->args[1].type;
+            args[1].value = value;
 
             compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node(n).pos);
             LLVMValueRef result = compile_call(c, fn, args, fn_spec->args_count, false, false);
