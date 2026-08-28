@@ -84,6 +84,12 @@ typedef enum {
     TOKEN_INLINE,
     TOKEN_DISTINCT,
 
+    // The '[]', '[..]' and '<=>' are only generated after an 'operator' keyword, not anywhere else
+    TOKEN_OPERATOR,
+    TOKEN_OPERATOR_CMP,   // '<=>'
+    TOKEN_OPERATOR_INDEX, // '[]'
+    TOKEN_OPERATOR_RANGE, // '[..]'
+
     TOKEN_DIRECTIVE_IF,
     TOKEN_DIRECTIVE_ASSERT,
 

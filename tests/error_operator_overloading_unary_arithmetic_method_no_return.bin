@@ -1,19 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 552
-tests/error_operator_overloading_unary_arithmetic_method_no_return.glos:2:1: Error: The method 'neg' is special because it implements an operator overload
+STDERR 580
+tests/error_operator_overloading_unary_arithmetic_method_no_return.glos:2:10: Error: The method '-' is special because it implements an operator overload
 
-    neg :: (this: Foo) {}
+    operator - :: (this: Foo) {}
 
     It should have this signature:
 
-        neg :: (this: T) -> T
+        operator - :: (this: Foo) -> Foo {}
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_unary_arithmetic_method_no_return.glos:2:20: Note: Operand type and return type must be same: Expected to return 'Foo', got nothing
+tests/error_operator_overloading_unary_arithmetic_method_no_return.glos:2:27: Note: Operand types and return type must be same: Expected to return 'Foo', got nothing
 
-    neg :: (this: Foo) {}
+    operator - :: (this: Foo) {}
 
 

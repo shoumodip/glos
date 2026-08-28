@@ -13,7 +13,7 @@ main :: () {
     println(xs["Bar"])
 }
 
-index :: (this: &Table, key: string, assign: bool, location := #caller_location) -> &s64 {
+operator [] :: (this: &Table, key: string, assign: bool, location := #caller_location) -> &s64 {
     for i := 0; i < this.count; i += 1 {
         it := &this.items[i]
         if it.key == key {

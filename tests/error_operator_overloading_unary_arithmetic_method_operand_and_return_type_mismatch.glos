@@ -1,2 +1,2 @@
 Foo :: distinct s64
-neg :: (this: Foo) -> bool {}
+operator - :: (this: Foo) -> bool {}

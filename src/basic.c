@@ -499,6 +499,10 @@ void sb_push_cstr(SB *sb, const char *cstr) {
 SB default_sb;
 
 // Characters
+bool is_ident(char ch) {
+    return isalnum(ch) || ch == '_';
+}
+
 bool is_space(char ch) {
     return isspace(ch);
 }

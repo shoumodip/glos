@@ -1,6 +1,6 @@
 #include "token.h"
 
-static_assert(COUNT_TOKENS == 79, "");
+static_assert(COUNT_TOKENS == 83, "");
 const char *token_kind_to_cstr(Token_Kind kind) {
     switch (kind) {
     case TOKEN_EOF:
@@ -181,6 +181,18 @@ const char *token_kind_to_cstr(Token_Kind kind) {
     case TOKEN_DISTINCT:
         return "'distinct'";
 
+    case TOKEN_OPERATOR:
+        return "'operator'";
+
+    case TOKEN_OPERATOR_CMP:
+        return "'<=>'";
+
+    case TOKEN_OPERATOR_INDEX:
+        return "'[]'";
+
+    case TOKEN_OPERATOR_RANGE:
+        return "'[..]'";
+
     case TOKEN_DIRECTIVE_IF:
         return "'#if'";
 
@@ -243,7 +255,7 @@ const char *token_kind_to_cstr(Token_Kind kind) {
     }
 }
 
-static_assert(COUNT_TOKENS == 79, "");
+static_assert(COUNT_TOKENS == 83, "");
 Power token_kind_to_power(Token_Kind kind) {
     switch (kind) {
     case TOKEN_DOT:

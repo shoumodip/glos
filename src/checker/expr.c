@@ -7,7 +7,7 @@ static bool is_indexable(Compiler *c, Node *n, Type type, Module *module) {
     }
 
     Method_Spec spec = {0};
-    if (get_method_spec(c, n, type, sv_from_cstr("index"), &spec, NULL, NULL)) {
+    if (get_method_spec(c, n, type, sv_from_cstr(OPERATOR_INDEX), &spec, NULL, NULL)) {
         return get_method(c, spec, module) != NULL;
     }
 
@@ -116,7 +116,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 79, "");
+    static_assert(COUNT_TOKENS == 83, "");
     switch (n->token.kind) {
     case TOKEN_INT:
         n->type = (Type) {.kind = TYPE_INT};
@@ -204,12 +204,12 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     Node *n = (Node *) unary;
-    static_assert(COUNT_TOKENS == 79, "");
+    static_assert(COUNT_TOKENS == 83, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
         if (!type_is_numeric(unary->value->type) && !type_is_pointer(unary->value->type)) {
-            unary->overload = get_operator_overload(c, "neg", unary->value, n, unary->module);
+            unary->overload = get_operator_overload(c, OPERATOR_UNARY_SUB, unary->value, n, unary->module);
         }
         n->type = unary->value->type;
         break;
@@ -278,7 +278,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
 
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     Node *n = (Node *) binary;
-    static_assert(COUNT_TOKENS == 79, "");
+    static_assert(COUNT_TOKENS == 83, "");
     switch (n->token.kind) {
     case TOKEN_ADD:
     case TOKEN_SUB:
@@ -1631,7 +1631,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                 n->type.kind = TYPE_SLICE;
             }
         } else {
-            index->overload = get_operator_overload(c, "range", index->lhs, n, index->module);
+            index->overload = get_operator_overload(c, OPERATOR_SLICE, index->lhs, n, index->module);
             assert(index->overload->node.type.kind == TYPE_FN);
             const Type_Fn *fn_spec = index->overload->node.type.spec.fn;
 
@@ -1644,7 +1644,8 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                     EK_ERROR,
                     fn_spec->args[1].name,
                     fn_spec->args[1].pos,
-                    "The method 'range' does not have a default value for its beginning argument");
+                    "The method '%s' does not have a default value for its beginning argument",
+                    OPERATOR_SLICE);
                 exit(c, 1);
             }
 
@@ -1657,7 +1658,8 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                     EK_ERROR,
                     fn_spec->args[2].name,
                     fn_spec->args[2].pos,
-                    "The method 'range' does not have a default value for its end argument");
+                    "The method '%s' does not have a default value for its end argument",
+                    OPERATOR_SLICE);
                 exit(c, 1);
             }
 
@@ -1696,7 +1698,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                 exit(c, 1);
             }
 
-            index->overload = get_operator_overload(c, "index", index->lhs, n, index->module);
+            index->overload = get_operator_overload(c, OPERATOR_INDEX, index->lhs, n, index->module);
 
             assert(index->overload->node.type.kind == TYPE_FN);
             const Type_Fn *fn_spec = index->overload->node.type.spec.fn;
@@ -2201,177 +2203,34 @@ void check_fn(
 
         assert(fn->defined_as);
         const SV name = fn->defined_as->node.token.sv;
-        if (sv_match(name, "add") || sv_match(name, "sub") || sv_match(name, "mul") || sv_match(name, "div") ||
-            sv_match(name, "mod")) //
-        {
-            const char *signature = "(this: T, that: T) -> T";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 2, signature, note);
-
-            const Type lhs_type = fn_spec->args[0].type;
-            if (lhs_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[0].name,
-                    fn_spec->args[0].pos,
-                    "Operand cannot be a pointer. (Provided type is %s)",
-                    type_to_cstr(lhs_type));
-                exit(c, 1);
+        if (sv_match(name, "+")) {
+            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
+            fn->operator_name = OPERATOR_BINARY_ADD;
+        } else if (sv_match(name, "-")) {
+            if (check_signature_of_arithmetic_operator(c, fn, fn_spec, true)) {
+                fn->operator_name = OPERATOR_UNARY_SUB;
+            } else {
+                fn->operator_name = OPERATOR_BINARY_SUB;
             }
-
-            const Type rhs_type = fn_spec->args[1].type;
-            if (!type_eq(rhs_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[1].name,
-                    fn_spec->args[1].pos,
-                    "Operand types must be same: Expected %s, got %s",
-                    type_to_cstr(lhs_type),
-                    type_to_cstr(rhs_type));
-                exit(c, 1);
-            }
-
-            if (!type_eq(*fn_spec->return_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Operand types and return type must be same: Expected to return %s, got %s",
-                    type_to_cstr(lhs_type),
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-        } else if (sv_match(name, "neg")) {
-            const char *signature = "(this: T) -> T";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 1, signature, note);
-
-            const Type operand_type = fn_spec->args[0].type;
-            if (operand_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[0].name,
-                    fn_spec->args[0].pos,
-                    "Operand cannot be a pointer. (Provided type is %s)",
-                    type_to_cstr(operand_type));
-                exit(c, 1);
-            }
-
-            if (!type_eq(*fn_spec->return_type, operand_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Operand type and return type must be same: Expected to return %s, got %s",
-                    type_to_cstr(operand_type),
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-        } else if (sv_match(name, "compare")) {
-            const char *signature = "(this: T, that: T) -> Ordering | Equivalence";
-            const char *note =
-                "Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.\n"
-                "Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.\n";
-            check_special_method_signature_args_count(c, fn, 2, signature, note);
-
-            const Type lhs_type = fn_spec->args[0].type;
-            if (lhs_type.ref) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[0].name,
-                    fn_spec->args[0].pos,
-                    "Operand cannot be a pointer. (Provided type is %s)",
-                    type_to_cstr(lhs_type));
-                exit(c, 1);
-            }
-
-            const Type rhs_type = fn_spec->args[1].type;
-            if (!type_eq(rhs_type, lhs_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[1].name,
-                    fn_spec->args[1].pos,
-                    "Operand types must be same: Expected %s, got %s",
-                    type_to_cstr(lhs_type),
-                    type_to_cstr(rhs_type));
-                exit(c, 1);
-            }
-
-            if (!type_eq(*fn_spec->return_type, c->equivalence_type) &&
-                !type_eq(*fn_spec->return_type, c->ordering_type)) //
-            {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Expected to return %s or %s, got %s",
-                    type_to_cstr(c->equivalence_type),
-                    type_to_cstr(c->ordering_type),
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-
+        } else if (sv_match(name, "*")) {
+            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
+            fn->operator_name = OPERATOR_BINARY_MUL;
+        } else if (sv_match(name, "/")) {
+            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
+            fn->operator_name = OPERATOR_BINARY_DIV;
+        } else if (sv_match(name, "%")) {
+            check_signature_of_arithmetic_operator(c, fn, fn_spec, false);
+            fn->operator_name = OPERATOR_BINARY_MOD;
+        } else if (sv_match(name, "<=>")) {
+            check_signature_of_binary_comparison_operator(c, fn, fn_spec);
+            fn->operator_name = OPERATOR_CMP;
             fn->is_compare_operator_complete = type_eq(*fn_spec->return_type, c->ordering_type);
-        } else if (sv_match(name, "index")) {
-            const char *signature = "(this: T, key: K, assign: bool) -> &V";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 3, signature, note);
-
-            const Type assign_type = fn_spec->args[2].type;
-            if (!type_eq(assign_type, (Type) {.kind = TYPE_BOOL})) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[2].name,
-                    fn_spec->args[2].pos,
-                    "Expected the third argument to be %s, got %s",
-                    type_to_cstr((Type) {.kind = TYPE_BOOL}),
-                    type_to_cstr(assign_type));
-                exit(c, 1);
-            }
-
-            if (!type_is_pointer(*fn_spec->return_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "Expected to return a pointer, got %s",
-                    fn_spec->returns_count ? type_to_cstr(*fn_spec->return_type) : "nothing");
-                exit(c, 1);
-            }
-        } else if (sv_match(name, "range")) {
-            const char *signature = "(this: T, begin: A, end: A) -> V";
-            const char *note = NULL;
-            check_special_method_signature_args_count(c, fn, 3, signature, note);
-
-            const Type begin_type = fn_spec->args[1].type;
-            const Type end_type = fn_spec->args[2].type;
-            if (!type_eq(end_type, begin_type)) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_parts(
-                    EK_NOTE,
-                    fn_spec->args[2].name,
-                    fn_spec->args[2].pos,
-                    "Types of range beginning and end must be same: Expected %s, got %s",
-                    type_to_cstr(begin_type),
-                    type_to_cstr(end_type));
-                exit(c, 1);
-            }
-
-            if (fn_spec->returns_count != 1) {
-                error_special_method_wrong_signature(fn->defined_as->node.token, signature, note);
-                error_token(
-                    EK_NOTE,
-                    fn->returns.head ? fn->returns.head->token : fn->body->token,
-                    "The range operator cannot return %zu values",
-                    fn_spec->returns_count);
-                exit(c, 1);
-            }
+        } else if (sv_match(name, "[]")) {
+            check_signature_of_index_operator(c, fn, fn_spec);
+            fn->operator_name = OPERATOR_INDEX;
+        } else if (sv_match(name, "[..]")) {
+            check_signature_of_slice_operator(c, fn, fn_spec);
+            fn->operator_name = OPERATOR_SLICE;
         }
     }
     fn->checked_signature = true;

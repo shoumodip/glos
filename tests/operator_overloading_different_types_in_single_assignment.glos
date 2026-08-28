@@ -17,13 +17,13 @@ Vec3 :: struct {
     x, y, z: s32
 }
 
-add :: (this: Vec2, that: Vec2) -> Vec2 {
+operator + :: (this: Vec2, that: Vec2) -> Vec2 {
     this.x += that.x
     this.y += that.y
     return this
 }
 
-add :: (this: Vec3, that: Vec3) -> Vec3 {
+operator + :: (this: Vec3, that: Vec3) -> Vec3 {
     this.x += that.x
     this.y += that.y
     this.z += that.z

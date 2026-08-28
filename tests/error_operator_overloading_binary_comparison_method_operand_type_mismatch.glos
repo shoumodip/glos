@@ -1,2 +1,2 @@
 Foo :: distinct s64
-compare :: (this: Foo, that: s64) {}
+operator <=> :: (this: Foo, that: s64) {}

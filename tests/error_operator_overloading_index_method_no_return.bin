@@ -1,19 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 570
-tests/error_operator_overloading_index_method_no_return.glos:2:1: Error: The method 'index' is special because it implements an operator overload
+STDERR 591
+tests/error_operator_overloading_index_method_no_return.glos:2:10: Error: The method '[]' is special because it implements an operator overload
 
-    index :: (this: Foo, key: s64, assign: bool) {}
+    operator [] :: (this: Foo, key: s64, assign: bool) {}
 
     It should have this signature:
 
-        index :: (this: T, key: K, assign: bool) -> &V
+        operator [] :: (this: Foo, key: K, assign: bool) -> &V {}
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_index_method_no_return.glos:2:46: Note: Expected to return a pointer, got nothing
+tests/error_operator_overloading_index_method_no_return.glos:2:52: Note: Expected to return a pointer, got nothing
 
-    index :: (this: Foo, key: s64, assign: bool) {}
+    operator [] :: (this: Foo, key: s64, assign: bool) {}
 
 

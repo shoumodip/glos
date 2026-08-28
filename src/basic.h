@@ -316,6 +316,7 @@ void sb_push_cstr(SB *sb, const char *cstr);
 extern SB default_sb;
 
 // Characters
+bool is_ident(char ch);
 bool is_space(char ch);
 void print_char_safe(FILE *f, char ch);
 void sb_push_quoted_char(SB *sb, char ch, char quote);

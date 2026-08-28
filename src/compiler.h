@@ -57,6 +57,11 @@ typedef struct {
     bool  is_method;
 } Monomorphizing_Site;
 
+typedef struct {
+    Node_Fn    *fn;
+    Method_Spec spec;
+} Operator_Method;
+
 typedef enum {
     O0,
     O1,
@@ -79,6 +84,7 @@ typedef struct {
 
     HT(Method_Spec, Node_Fn *) methods_table;
     DA(Node_Fn *) methods_list;
+    DA(Operator_Method) operator_methods_list;
 
     Type ordering_type;
     Type equivalence_type;

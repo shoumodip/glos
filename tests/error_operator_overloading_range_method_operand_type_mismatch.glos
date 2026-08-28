@@ -1,2 +1,2 @@
 Foo :: distinct s64
-range :: (this: Foo, a: s64, b: s32) {}
+operator [..] :: (this: Foo, a: s64, b: s32) {}

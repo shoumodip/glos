@@ -7,6 +7,7 @@ typedef struct {
     Pos  pos;
     SV   sv;
     bool newline;
+    bool after_operator_keyword;
 } Lexer;
 
 bool lexer_open(Lexer *l, const char *path);

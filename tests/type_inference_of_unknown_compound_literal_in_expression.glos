@@ -3,7 +3,7 @@ Vec2 :: struct {
     y: s32
 }
 
-add :: (this: Vec2, that: Vec2) -> Vec2 {
+operator + :: (this: Vec2, that: Vec2) -> Vec2 {
     return { this.x + that.x, this.y + that.y }
 }
 

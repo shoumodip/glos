@@ -166,7 +166,7 @@ Const_Value const_value_of_var(Compiler *c, Node_Atom *var) {
 Const_Value eval_const_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     Node *n = (Node *) atom;
 
-    static_assert(COUNT_TOKENS == 79, "");
+    static_assert(COUNT_TOKENS == 83, "");
     switch (n->token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
@@ -260,7 +260,7 @@ Const_Value eval_const_expr_unary(Compiler *c, Node_Unary *unary) {
 
     Const_Value value = {0};
 
-    static_assert(COUNT_TOKENS == 79, "");
+    static_assert(COUNT_TOKENS == 83, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         value = eval_const_expr(c, unary->value, false);
@@ -402,7 +402,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
             double (*f)(double lhs, double rhs);
         } Op;
 
-        static_assert(COUNT_TOKENS == 79, "");
+        static_assert(COUNT_TOKENS == 83, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_ADD] = {.i = int128_add, .f = fadd},
             [TOKEN_SUB] = {.i = int128_sub, .f = fsub},
@@ -441,7 +441,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
             bool (*f)(double lhs, double rhs);
         } Op;
 
-        static_assert(COUNT_TOKENS == 79, "");
+        static_assert(COUNT_TOKENS == 83, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_GT] = {.i = int128_gt, .f = fgt},
             [TOKEN_GE] = {.i = int128_ge, .f = fge},
@@ -463,7 +463,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
         }
     }
 
-    static_assert(COUNT_TOKENS == 79, "");
+    static_assert(COUNT_TOKENS == 83, "");
     switch (n->token.kind) {
     case TOKEN_LOR:
         lhs = eval_const_expr(c, binary->lhs, false);

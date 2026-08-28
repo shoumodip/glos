@@ -1,19 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 544
-tests/error_operator_overloading_range_method_too_few_arguments.glos:2:1: Error: The method 'range' is special because it implements an operator overload
+STDERR 573
+tests/error_operator_overloading_range_method_too_few_arguments.glos:2:10: Error: The method '[..]' is special because it implements an operator overload
 
-    range :: (this: Foo, a: s64) {}
+    operator [..] :: (this: Foo, a: s64) {}
 
     It should have this signature:
 
-        range :: (this: T, begin: A, end: A) -> V
+        operator [..] :: (this: Foo, begin: A, end: A) -> V {}
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_range_method_too_few_arguments.glos:2:28: Note: Expected at least 3 arguments, got 2
+tests/error_operator_overloading_range_method_too_few_arguments.glos:2:36: Note: Expected at least 3 arguments, got 2
 
-    range :: (this: Foo, a: s64) {}
+    operator [..] :: (this: Foo, a: s64) {}
 
 

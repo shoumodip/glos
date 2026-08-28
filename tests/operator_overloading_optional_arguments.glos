@@ -2,13 +2,13 @@ Int :: struct {
     v: s64
 }
 
-add :: (this: Int, that: Int, location := #caller_location) -> Int {
+operator + :: (this: Int, that: Int, location := #caller_location) -> Int {
     print("\{location} ")
     this.v += that.v
     return this
 }
 
-neg :: (this: Int, location := #caller_location) -> Int {
+operator - :: (this: Int, location := #caller_location) -> Int {
     print("\{location} ")
     this.v = -this.v
     return this

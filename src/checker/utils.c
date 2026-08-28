@@ -372,7 +372,7 @@ static_assert(COUNT_NODES == 29, "");
 void cast_untyped(Compiler *c, Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM: {
-        static_assert(COUNT_TOKENS == 79, "");
+        static_assert(COUNT_TOKENS == 83, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = expected;
@@ -400,7 +400,7 @@ void cast_untyped(Compiler *c, Node *n, Type expected) {
             cast_untyped(c, unary->value, expected);
             if (n->token.kind == TOKEN_SUB) {
                 if (!type_is_numeric(n->type) && !type_is_pointer(n->type)) {
-                    unary->overload = get_operator_overload(c, "neg", unary->value, n, unary->module);
+                    unary->overload = get_operator_overload(c, OPERATOR_UNARY_SUB, unary->value, n, unary->module);
                 }
             }
         }

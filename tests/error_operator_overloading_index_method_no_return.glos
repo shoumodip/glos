@@ -1,2 +1,2 @@
 Foo :: distinct s64
-index :: (this: Foo, key: s64, assign: bool) {}
+operator [] :: (this: Foo, key: s64, assign: bool) {}

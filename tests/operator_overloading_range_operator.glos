@@ -8,7 +8,7 @@ main :: () {
     println(xs[..3])
 }
 
-index :: (this: &Array, index: s64, assign: bool, location := #caller_location) -> &s64 {
+operator [] :: (this: &Array, index: s64, assign: bool, location := #caller_location) -> &s64 {
     assert(
         index < this.items.count,
         "Index \{index} is out of bounds in Array of length of \{this.items.count}",
@@ -17,7 +17,7 @@ index :: (this: &Array, index: s64, assign: bool, location := #caller_location) 
     return &this.items[index]
 }
 
-range :: (this: &Array, begin := 0, end := -1, location := #caller_location) -> []s64 {
+operator [..] :: (this: &Array, begin := 0, end := -1, location := #caller_location) -> []s64 {
     if end == -1 {
         end = this.items.count
     }

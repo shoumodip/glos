@@ -1,6 +1,6 @@
 Foo :: struct {}
 
-compare :: (this: Foo, that: Foo) -> Equivalence {
+operator <=> :: (this: Foo, that: Foo) -> Equivalence {
     return .EQ
 }
 

@@ -1,9 +1,15 @@
 EXIT 1
 STDOUT 0
 
-STDERR 116
-tests/error_cannot_index_into_non_slice_type.glos:2:5: Error: Method 'index' is not defined for 's64'
+STDERR 312
+tests/error_cannot_index_into_non_slice_type.glos:2:5: Error: Operator '[]' is not defined for 's64'
 
     69[420]
+
+    Implement this:
+
+        operator [] :: (this: s64, key: K, assign: bool) -> &V {}
+
+    It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
 

@@ -1,19 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 582
-tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:1: Error: The method 'mul' is special because it implements an operator overload
+STDERR 611
+tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:10: Error: The method '*' is special because it implements an operator overload
 
-    mul :: (this: Foo, that: s64) {}
+    operator * :: (this: Foo, that: s64) {}
 
     It should have this signature:
 
-        mul :: (this: T, that: T) -> T
+        operator * :: (this: Foo, that: Foo) -> Foo {}
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:20: Note: Operand types must be same: Expected 'Foo', got 's64'
+tests/error_operator_overloading_binary_arithmetic_method_operand_type_mismatch.glos:2:27: Note: Operand types must be same: Expected 'Foo', got 's64'
 
-    mul :: (this: Foo, that: s64) {}
+    operator * :: (this: Foo, that: s64) {}
 
 

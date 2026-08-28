@@ -22,10 +22,6 @@ bool lexer_open(Lexer *l, const char *path) {
     return true;
 }
 
-static bool isident(char ch) {
-    return isalnum(ch) || ch == '_';
-}
-
 static void next_char(Lexer *l) {
     if (*l->sv.data == '\n') {
 #ifdef PROFILING
@@ -228,7 +224,7 @@ Token lexer_get_string(Lexer *l, Pos pos, Pos start) {
     return token;
 }
 
-static_assert(COUNT_TOKENS == 79, "");
+static_assert(COUNT_TOKENS == 83, "");
 Token lexer_iter(Lexer *l) {
     skip_whitespace(l);
 
@@ -269,7 +265,7 @@ Token lexer_iter(Lexer *l) {
         }
         token.sv.count -= l->sv.count;
 
-        if (l->sv.count && isident(*l->sv.data)) {
+        if (l->sv.count && is_ident(*l->sv.data)) {
             error_invalid(l->pos, l->sv, "digit");
         }
 
@@ -301,8 +297,8 @@ Token lexer_iter(Lexer *l) {
         exit(1);
     }
 
-    if (isident(*l->sv.data)) {
-        while (l->sv.count > 0 && isident(*l->sv.data)) {
+    if (is_ident(*l->sv.data)) {
+        while (l->sv.count > 0 && is_ident(*l->sv.data)) {
             next_char(l);
         }
         token.sv.count -= l->sv.count;
@@ -331,6 +327,8 @@ Token lexer_iter(Lexer *l) {
             token.kind = TOKEN_INLINE;
         } else if (sv_match(token.sv, "distinct")) {
             token.kind = TOKEN_DISTINCT;
+        } else if (sv_match(token.sv, "operator")) {
+            token.kind = TOKEN_OPERATOR;
         } else if (sv_match(token.sv, "if")) {
             token.kind = TOKEN_IF;
         } else if (sv_match(token.sv, "else")) {
@@ -403,6 +401,16 @@ Token lexer_iter(Lexer *l) {
 
     case '[':
         token.kind = TOKEN_LBRACKET;
+        if (l->after_operator_keyword) {
+            if (match_char(l, ']')) {
+                token.kind = TOKEN_OPERATOR_INDEX;
+            } else if (sv_has_prefix(l->sv, sv_from_cstr("..]"))) {
+                sv_drop_mut(&l->sv, 3);
+                l->pos.col += 3;
+                token.kind = TOKEN_OPERATOR_RANGE;
+            }
+            l->after_operator_keyword = false;
+        }
         break;
 
     case ']':
@@ -512,6 +520,12 @@ Token lexer_iter(Lexer *l) {
             }
         } else if (match_char(l, '=')) {
             token.kind = TOKEN_LE;
+            if (l->after_operator_keyword) {
+                if (match_char(l, '>')) {
+                    token.kind = TOKEN_OPERATOR_CMP;
+                }
+                l->after_operator_keyword = false;
+            }
         } else {
             token.kind = TOKEN_LT;
         }
@@ -526,7 +540,7 @@ Token lexer_iter(Lexer *l) {
         break;
 
     case '#':
-        while (l->sv.count > 0 && isident(*l->sv.data)) {
+        while (l->sv.count > 0 && is_ident(*l->sv.data)) {
             next_char(l);
         }
         token.sv.count -= l->sv.count;

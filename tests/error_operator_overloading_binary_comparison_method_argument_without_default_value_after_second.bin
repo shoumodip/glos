@@ -1,22 +1,22 @@
 EXIT 1
 STDOUT 0
 
-STDERR 926
-tests/error_operator_overloading_binary_comparison_method_argument_without_default_value_after_second.glos:2:1: Error: The method 'compare' is special because it implements an operator overload
+STDERR 954
+tests/error_operator_overloading_binary_comparison_method_argument_without_default_value_after_second.glos:2:10: Error: The method '<=>' is special because it implements an operator overload
 
-    compare :: (this: Foo, that: Foo, other: bool) {}
+    operator <=> :: (this: Foo, that: Foo, other: bool) {}
 
     It should have this signature:
 
-        compare :: (this: T, that: T) -> Ordering | Equivalence
+        operator <=> :: (this: Foo, that: Foo) -> Ordering | Equivalence {}
 
     Return 'Ordering' if you want this method to implement both equality checking as well as ordered comparisons.
     Otherwise return 'Equivalence' to implement just equality checking. Do NOT return 'Ordering | Equivalence' literally.
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_comparison_method_argument_without_default_value_after_second.glos:2:35: Note: All arguments after the 2nd argument must be optional
+tests/error_operator_overloading_binary_comparison_method_argument_without_default_value_after_second.glos:2:40: Note: All arguments after the 2nd argument must have a default value
 
-    compare :: (this: Foo, that: Foo, other: bool) {}
+    operator <=> :: (this: Foo, that: Foo, other: bool) {}
 
 

@@ -712,7 +712,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 79, "");
+static_assert(COUNT_TOKENS == 83, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -1467,6 +1467,55 @@ static Node *parse_stmt(Parser *p) {
 
     Token token = next_token(p);
     switch (token.kind) {
+    case TOKEN_OPERATOR: {
+        local_assert(p, false, token, NULL);
+
+        p->state.lexer.after_operator_keyword = true;
+        token = expect_token(
+            p,
+            TOKEN_ADD,
+            TOKEN_SUB,
+            TOKEN_MUL,
+            TOKEN_DIV,
+            TOKEN_MOD,
+            TOKEN_OPERATOR_CMP,
+            TOKEN_OPERATOR_INDEX,
+            TOKEN_OPERATOR_RANGE);
+
+        token.kind = TOKEN_IDENT;
+        Node *name = node_alloc(p->module_current, NODE_ATOM, token);
+        node = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
+
+        Node_Define *define = (Node_Define *) node;
+        if (!define->is_const || define->expr->kind != NODE_FN) {
+            error_node(EK_ERROR, node, "Operator definition must be a constant method literal");
+            afprintf(
+                stderr,
+                ANSI_COLOR_YELLOW | ANSI_BOLD,
+                "    Try something like this:\n"
+                "\n"
+                "        operator " SV_Fmt " :: (this: T) {}\n"
+                "\n"
+                "    Of course, you can add more arguments and returns, but this is the basic construction.\n\n",
+                SV_Arg(name->token.sv));
+            exit(1);
+        }
+
+        if (!((Node_Fn *) define->expr)->is_method) {
+            error_node(EK_ERROR, define->expr, "Operator definition must be a method literal");
+            afprintf(
+                stderr,
+                ANSI_COLOR_YELLOW | ANSI_BOLD,
+                "    The first argument of a method must be named 'this'. Try something like this:\n"
+                "\n"
+                "        operator " SV_Fmt " :: (this: T) {}\n"
+                "\n"
+                "    Of course, you can add more arguments and returns, but this is the basic construction.\n\n",
+                SV_Arg(name->token.sv));
+            exit(1);
+        }
+    } break;
+
     case TOKEN_DIRECTIVE_ASSERT: {
         node = node_alloc(p->module_current, NODE_ASSERT, token);
         Node_Assert *assertt = (Node_Assert *) node;

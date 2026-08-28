@@ -1,19 +1,19 @@
 EXIT 1
 STDOUT 0
 
-STDERR 647
-tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:1: Error: The method 'mod' is special because it implements an operator overload
+STDERR 676
+tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:10: Error: The method '%' is special because it implements an operator overload
 
-    mod :: (this: Foo, that: Foo) -> bool {}
+    operator % :: (this: Foo, that: Foo) -> bool {}
 
     It should have this signature:
 
-        mod :: (this: T, that: T) -> T
+        operator % :: (this: Foo, that: Foo) -> Foo {}
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:34: Note: Operand types and return type must be same: Expected to return 'Foo', got 'bool'
+tests/error_operator_overloading_binary_arithmetic_method_operand_and_return_type_mismatch.glos:2:41: Note: Operand types and return type must be same: Expected to return 'Foo', got 'bool'
 
-    mod :: (this: Foo, that: Foo) -> bool {}
+    operator % :: (this: Foo, that: Foo) -> bool {}
 
 

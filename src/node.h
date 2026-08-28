@@ -759,8 +759,11 @@ struct Node_Fn {
     // }
     Node_Fn *wrapper_signature;
 
-    // compare :: (this: $T, that: T) -> bool       // Partial, only implements equality
-    // compare :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
+    // From the OPERATOR_* macros. Used for operator definitions
+    const char *operator_name;
+
+    // <=> :: (this: $T, that: T) -> bool       // Partial, only implements equality
+    // <=> :: (this: $T, that: T) -> Comparison // Complete, implements equality AND ordering
     bool is_compare_operator_complete;
 
     Node_Fn *outer_fn;

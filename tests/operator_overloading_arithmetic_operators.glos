@@ -46,37 +46,37 @@ Int32 :: struct {
     x: s32
 }
 
-add :: (this: Int32, that: Int32) -> Int32 {
+operator + :: (this: Int32, that: Int32) -> Int32 {
     this.x += that.x
     return this
 }
 
-sub :: (this: Int32, that: Int32) -> Int32 {
+operator - :: (this: Int32, that: Int32) -> Int32 {
     this.x -= that.x
     return this
 }
 
-mul :: (this: Int32, that: Int32) -> Int32 {
+operator * :: (this: Int32, that: Int32) -> Int32 {
     this.x *= that.x
     return this
 }
 
-div :: (this: Int32, that: Int32) -> Int32 {
+operator / :: (this: Int32, that: Int32) -> Int32 {
     this.x /= that.x
     return this
 }
 
-mod :: (this: Int32, that: Int32) -> Int32 {
+operator % :: (this: Int32, that: Int32) -> Int32 {
     this.x %= that.x
     return this
 }
 
-neg :: (this: Int32) -> Int32 {
+operator - :: (this: Int32) -> Int32 {
     this.x = -this.x
     return this
 }
 
-compare :: (this: Int32, that: Int32) -> Ordering {
+operator <=> :: (this: Int32, that: Int32) -> Ordering {
     if this.x < that.x {
         return .LT
     }

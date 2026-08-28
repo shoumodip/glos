@@ -2,7 +2,7 @@ Array :: struct($T: Type, $N: s64) {
     items: [N]T
 }
 
-index :: (this: &Array($T, $N), n: s64, assign: bool) -> &T {
+operator [] :: (this: &Array($T, $N), n: s64, assign: bool) -> &T {
     assert(n < this.items.count)
     return &this.items[n]
 }

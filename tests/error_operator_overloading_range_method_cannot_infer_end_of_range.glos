@@ -1,6 +1,6 @@
 Foo :: distinct s64
 
-range :: (this: Foo, a := 0, b: s64) -> bool {
+operator [..] :: (this: Foo, a := 0, b: s64) -> bool {
     return true
 }
 
