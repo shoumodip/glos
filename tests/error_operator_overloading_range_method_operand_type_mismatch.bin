@@ -12,7 +12,7 @@ tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:10: E
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:38: Note: Types of range beginning and end must be same: Expected 's64', got 's32'
+tests/error_operator_overloading_range_method_operand_type_mismatch.glos:2:38: Note: Types of slice beginning and end must be same: Expected 's64', got 's32'
 
     operator [..] :: (this: Foo, a: s64, b: s32) {}
 

@@ -276,6 +276,11 @@ Type_Trait_Impl *check_type_satisfies_trait(Compiler *c, Type receiver, Type_Tra
                 assert(fn->node.type.kind == TYPE_FN);
                 const Type_Fn *actual_spec = fn->node.type.spec.fn;
 
+                if (actual_spec->is_noreturn != expected_spec->is_noreturn) {
+                    errors[i] = (Error) {.kind = WRONG_SIGNATURE, .fn = fn};
+                    goto next;
+                }
+
                 if (!type_eq(actual_spec->args[0].type, receiver)) {
                     errors[i] = (Error) {.kind = WRONG_RECEIVER, .fn = fn};
                     goto next;

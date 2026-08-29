@@ -459,7 +459,12 @@ LLVMValueRef compile_fn(Compiler *c, Node_Fn *fn) {
             if (!fn_type_spec->returns_count) {
                 compile_defers(c, c->defers_start, true);
                 set_debug_pos(c, block->end.pos);
-                LLVMBuildRetVoid(c->llvm_builder);
+
+                if (fn->is_noreturn && c->optimization_level != O3) {
+                    compile_panic(c, block->end.pos, CONTRACT_PANIC_UNREACHABLE, NULL, NULL, NULL);
+                } else {
+                    LLVMBuildRetVoid(c->llvm_builder);
+                }
             } else {
                 // The semantic analyzer has already determined that the function returns in all execution paths.
                 // No need to compile defers here, as this is unreachable.
@@ -545,7 +550,7 @@ void compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_
 
 LLVMValueRef compile_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 87, "");
+    static_assert(COUNT_TOKENS == 88, "");
     switch (n->token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
@@ -601,7 +606,7 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
     Node *n = (Node *) unary;
 
     LLVMValueRef value = NULL;
-    static_assert(COUNT_TOKENS == 87, "");
+    static_assert(COUNT_TOKENS == 88, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         value = compile_expr(c, unary->value, false);
@@ -735,7 +740,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             LLVMValueRef (*f)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
         } Op;
 
-        static_assert(COUNT_TOKENS == 87, "");
+        static_assert(COUNT_TOKENS == 88, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_ADD] = {.i = LLVMBuildAdd, .f = LLVMBuildFAdd},
             [TOKEN_SUB] = {.i = LLVMBuildSub, .f = LLVMBuildFSub},
@@ -793,7 +798,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             LLVMRealPredicate f;
         } Op;
 
-        static_assert(COUNT_TOKENS == 87, "");
+        static_assert(COUNT_TOKENS == 88, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_GT] = {.i = LLVMIntSGT, .u = LLVMIntUGT, .f = LLVMRealOGT},
             [TOKEN_GE] = {.i = LLVMIntSGE, .u = LLVMIntUGE, .f = LLVMRealOGE},
@@ -835,7 +840,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             LLVMValueRef (*f)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
         } Op;
 
-        static_assert(COUNT_TOKENS == 87, "");
+        static_assert(COUNT_TOKENS == 88, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_ADD_SET] = {.i = LLVMBuildAdd, .f = LLVMBuildFAdd},
             [TOKEN_SUB_SET] = {.i = LLVMBuildSub, .f = LLVMBuildFSub},
@@ -952,7 +957,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
         }
     }
 
-    static_assert(COUNT_TOKENS == 87, "");
+    static_assert(COUNT_TOKENS == 88, "");
     switch (n->token.kind) {
     case TOKEN_SET: {
         const size_t group_values_count_save = c->group_values.count;
@@ -1090,7 +1095,7 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
 
             // Failure
             LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-            compile_panic_v2(
+            compile_panic(
                 c, get_leftmost_token_of_node(n).pos, CONTRACT_PANIC_NULL_TRAIT_METHOD_ACCESS, NULL, NULL, NULL);
 
             // Success
@@ -1142,7 +1147,7 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
 
                 // Failure
                 LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-                compile_panic_v2(
+                compile_panic(
                     c,
                     member->dot.pos,
                     CONTRACT_PANIC_TRAIT_TYPE_MISMATCH,
@@ -1158,7 +1163,7 @@ LLVMValueRef compile_expr_member(Compiler *c, Node_Member *member, bool ref) {
 
                 // Failure
                 LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-                compile_panic_v2(
+                compile_panic(
                     c,
                     member->dot.pos,
                     CONTRACT_PANIC_UNION_TYPE_MISMATCH,
@@ -1622,7 +1627,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
             // Failure
             LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-            compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_RANGE_BEGIN_MORE_THAN_END, a, b, NULL);
+            compile_panic(c, n->token.pos, CONTRACT_PANIC_RANGE_BEGIN_MORE_THAN_END, a, b, NULL);
 
             // Success
             LLVMPositionBuilderAtEnd(c->llvm_builder, success);
@@ -1649,7 +1654,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
                 // Failure
                 LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-                compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_RANGE_OUT_OF_BOUNDS, a, b, count);
+                compile_panic(c, n->token.pos, CONTRACT_PANIC_RANGE_OUT_OF_BOUNDS, a, b, count);
 
                 // Success
                 LLVMPositionBuilderAtEnd(c->llvm_builder, success);
@@ -1700,7 +1705,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
 
         // Failure
         LLVMPositionBuilderAtEnd(c->llvm_builder, failure);
-        compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_INDEX_OUT_OF_BOUNDS, a, count, NULL);
+        compile_panic(c, n->token.pos, CONTRACT_PANIC_INDEX_OUT_OF_BOUNDS, a, count, NULL);
 
         // Success
         LLVMPositionBuilderAtEnd(c->llvm_builder, success);

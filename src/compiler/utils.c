@@ -1,5 +1,4 @@
 #include "../checker.h"
-#include "../error.h"
 #include "compiler.h"
 
 static_assert(COUNT_TYPES == 30, "");
@@ -192,7 +191,7 @@ Typed_LLVM_Value get_builtin_func(Compiler *c, SV name) {
     return result;
 }
 
-void compile_panic_v2(Compiler *c, Pos pos, Contract_Panic panic, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3) {
+void compile_panic(Compiler *c, Pos pos, Contract_Panic panic, LLVMValueRef v1, LLVMValueRef v2, LLVMValueRef v3) {
     Typed_LLVM_Value fn = get_builtin_func(c, sv_from_cstr("runtime_panic"));
 
     LLVMTypeRef  i64 = LLVMInt64TypeInContext(c->llvm_context);

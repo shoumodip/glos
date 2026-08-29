@@ -496,10 +496,10 @@ void compile_stmt_switch(Compiler *c, Node_Switch *sw) {
     } else if (sw->enumeration) {
         if (c->optimization_level != O3) {
             set_debug_pos(c, n->token.pos);
-            compile_panic_v2(
+            compile_panic(
                 c,
                 n->token.pos,
-                CONTRACT_PANIC_INVALID_ENUM_VALUE,
+                CONTRACT_PANIC_UNREACHABLE_INVALID_ENUM_VALUE,
                 expr,
                 LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), type_is_signed(sw->expr->type), true),
                 NULL);
@@ -508,7 +508,7 @@ void compile_stmt_switch(Compiler *c, Node_Switch *sw) {
     } else if (sw->unionn) {
         if (c->optimization_level != O3) {
             set_debug_pos(c, n->token.pos);
-            compile_panic_v2(c, n->token.pos, CONTRACT_PANIC_INVALID_UNION_TAG, expr, NULL, NULL);
+            compile_panic(c, n->token.pos, CONTRACT_PANIC_UNREACHABLE_INVALID_UNION_TAG, expr, NULL, NULL);
             jump_to_end = false;
         }
     }

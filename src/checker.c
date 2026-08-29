@@ -104,7 +104,7 @@ void check_nodes(Compiler *c) {
 
         const Type panic = type_without_meta(value.as.type);
         assert(panic.kind == TYPE_ENUM);
-        assert(panic.spec.enumm.definition->values_count == 8);
+        assert(panic.spec.enumm.definition->values_count == 9);
     }
 
     // Type info

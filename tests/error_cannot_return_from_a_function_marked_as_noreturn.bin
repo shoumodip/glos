@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 140
+tests/error_cannot_return_from_a_function_marked_as_noreturn.glos:2:5: Error: Cannot return from a function marked as noreturn
+
+    return
+
+

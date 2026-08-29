@@ -1,4 +1,4 @@
-panic :: (message: ...Any, location := #caller_location) {
+panic :: noreturn (message: ...Any, location := #caller_location) {
     if message.count == 0 {
         eprintln("\{location}")
     } else {
@@ -26,7 +26,7 @@ assert :: (cond: bool, message: ...Any, location := #caller_location) {
     }
 }
 
-todo :: (message: ...Any, location := #caller_location) {
+todo :: noreturn (message: ...Any, location := #caller_location) {
     if message.count == 0 {
         eprintln("\{location} TODO")
     } else {
@@ -39,7 +39,7 @@ todo :: (message: ...Any, location := #caller_location) {
     C.abort()
 }
 
-unreachable :: (message: ...Any, location := #caller_location) {
+unreachable :: noreturn (message: ...Any, location := #caller_location) {
     if message.count == 0 {
         eprintln("\{location} Unreachable")
     } else {

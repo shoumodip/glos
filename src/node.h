@@ -137,6 +137,8 @@ typedef struct {
     size_t returns_count;
     Type  *return_type;
 
+    bool is_noreturn;
+
     LLVMTypeRef llvm;
 } Type_Fn;
 
@@ -745,9 +747,11 @@ struct Node_Fn {
     bool is_type;
     bool is_extern;
     bool is_method;
+    bool is_inline;
+    bool is_noreturn;
 
-    bool  is_inline;
     Token inline_token;
+    Token noreturn_token;
 
     // Foo :: trait {
     //     foo: () // <- This function is a trait method type

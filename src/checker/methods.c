@@ -1,7 +1,7 @@
 #include "../error.h"
 #include "checker.h"
 
-static_assert(COUNT_TOKENS == 87, "");
+static_assert(COUNT_TOKENS == 88, "");
 SV token_kind_to_operator_method_name(Token_Kind kind) {
     switch (kind) {
     case TOKEN_ADD:
@@ -526,7 +526,7 @@ void check_signature_of_slice_operator(Compiler *c, Node_Fn *fn, const Type_Fn *
             EK_NOTE,
             fn_spec->args[2].name,
             fn_spec->args[2].pos,
-            "Types of range beginning and end must be same: Expected %s, got %s",
+            "Types of slice beginning and end must be same: Expected %s, got %s",
             type_to_cstr(begin_type),
             type_to_cstr(end_type));
         exit(c, 1);
@@ -534,11 +534,17 @@ void check_signature_of_slice_operator(Compiler *c, Node_Fn *fn, const Type_Fn *
 
     if (fn_spec->returns_count != 1) {
         error_operator_method_wrong_signature(fn->defined_as->node.token, oms, receiver);
-        error_token(
-            EK_NOTE,
-            fn->returns.head ? fn->returns.head->token : fn->body->token,
-            "The range operator cannot return %zu values",
-            fn_spec->returns_count);
+        if (fn->returns.head) {
+            error_node_range(
+                EK_NOTE,
+                fn->returns.head,
+                fn->returns.tail,
+                "The slice operator cannot return %zu values",
+                fn_spec->returns_count);
+        } else {
+            error_token(
+                EK_NOTE, fn->body->token, "The slice operator cannot return %zu values", fn_spec->returns_count);
+        }
         exit(c, 1);
     }
 }

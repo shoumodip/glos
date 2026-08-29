@@ -5,7 +5,7 @@ extern {
     snprintf :: (out: &char, size: u64, fmt: &char, ...) -> s32
     fwrite :: (ptr: rawptr, size: u64, count: u64, f: os.File)
     fflush :: (f: os.File)
-    abort :: ()
+    abort :: noreturn ()
     memcmp :: (a: rawptr, b: rawptr, n: u64) -> s32
     free :: (ptr: rawptr)
     malloc :: (size: u64) -> rawptr

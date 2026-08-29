@@ -151,6 +151,10 @@ static void range_apply_node(Range *r, const Node *n) {
             range_apply_token(r, fn->inline_token);
         }
 
+        if (fn->is_noreturn) {
+            range_apply_token(r, fn->noreturn_token);
+        }
+
         range_apply_token(r, fn->args_end_token);
         range_apply_node(r, fn->returns.tail);
         range_apply_node(r, fn->body);
@@ -283,6 +287,22 @@ Token get_rightmost_token_of_node(const Node *n) {
 void error_node_begin(Error_Kind kind, const Node *n) {
     Range r = {0};
     range_apply_node(&r, n);
+
+    view_error_begin = r.begin.sv.data;
+    view_error_end = r.end.sv.data + r.end.sv.count;
+
+    view_sv.data = r.begin.pos.line.data;
+    view_sv.count = get_end_from_parts(r.end.sv, r.end.pos) - view_sv.data;
+    view_pos = r.begin.pos;
+    error_begin(kind);
+}
+
+void error_node_range_begin(Error_Kind kind, const Node *begin, const Node *end) {
+    Range r = {0};
+    range_apply_node(&r, begin);
+    if (end != begin) {
+        range_apply_node(&r, end);
+    }
 
     view_error_begin = r.begin.sv.data;
     view_error_end = r.end.sv.data + r.end.sv.count;
@@ -433,6 +453,15 @@ void error_finalize(void) {
 
 void error_node(Error_Kind kind, const Node *n, const char *fmt, ...) {
     error_node_begin(kind, n);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    error_finalize();
+}
+
+void error_node_range(Error_Kind kind, const Node *begin, const Node *end, const char *fmt, ...) {
+    error_node_range_begin(kind, begin, end);
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);

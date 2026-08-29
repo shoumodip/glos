@@ -85,6 +85,7 @@ typedef enum {
     TOKEN_TYPEOF,
 
     TOKEN_INLINE,
+    TOKEN_NORETURN,
     TOKEN_DISTINCT,
 
     // The '[]', '[..]' and '<=>' are only generated after an 'operator' keyword, not anywhere else
@@ -119,7 +120,7 @@ typedef enum {
 
     TOKEN_EXTERN,
     COUNT_TOKENS
-} Token_Kind; // TODO: XOR
+} Token_Kind;
 
 const char *token_kind_to_cstr(Token_Kind kind);
 

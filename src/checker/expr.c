@@ -31,7 +31,7 @@ static void check_whether_member_access_is_valid(Compiler *c, Node_Member *m) {
     }
 }
 
-static_assert(COUNT_TOKENS == 87, "");
+static_assert(COUNT_TOKENS == 88, "");
 static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *binary, Node *n) {
     const Token_Kind op = binary->node.token.kind;
     switch (op) {
@@ -118,7 +118,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 87, "");
+    static_assert(COUNT_TOKENS == 88, "");
     switch (n->token.kind) {
     case TOKEN_INT:
         n->type = (Type) {.kind = TYPE_INT};
@@ -206,7 +206,7 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     Node *n = (Node *) unary;
-    static_assert(COUNT_TOKENS == 87, "");
+    static_assert(COUNT_TOKENS == 88, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
@@ -278,7 +278,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
 
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     Node *n = (Node *) binary;
-    static_assert(COUNT_TOKENS == 87, "");
+    static_assert(COUNT_TOKENS == 88, "");
     switch (n->token.kind) {
     case TOKEN_ADD:
     case TOKEN_SUB:
@@ -2050,6 +2050,7 @@ void check_fn(
     if (!fn_spec) {
         fn_spec = arena_alloc(&default_arena, sizeof(*fn_spec));
         fn_spec->polymorphs = arena_alloc(&default_arena, fn->polymorphs.count * sizeof(*fn_spec->polymorphs));
+        fn_spec->is_noreturn = fn->is_noreturn;
 
         ll_foreach(it, &fn->polymorphs) {
             assert(!it->is_monomorphized);

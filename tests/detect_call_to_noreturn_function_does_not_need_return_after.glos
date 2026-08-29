@@ -1,0 +1,13 @@
+foo :: noreturn () {
+    C.abort()
+    C :: #import "C"
+}
+
+bar :: () -> s64 {
+    foo()
+
+    // foo() never returns, therefore there is no need to have a return here.
+}
+
+main :: () {
+}

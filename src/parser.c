@@ -752,7 +752,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 87, "");
+static_assert(COUNT_TOKENS == 88, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -1180,6 +1180,11 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
             Node_Fn *fn = (Node_Fn *) define->type;
             fn->trait_method = trait;
 
+            if (fn->is_inline) {
+                error_token(EK_ERROR, fn->variadics_spread_token, "Trait methods cannot be inline");
+                exit(1);
+            }
+
             if (fn->variadics_kind == VARIADICS_UNTYPED) {
                 error_token(EK_ERROR, fn->variadics_spread_token, "Trait methods cannot have untyped variadics");
                 exit(1);
@@ -1327,6 +1332,28 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
         fn->is_inline = true;
         fn->inline_token = token;
+    } break;
+
+    case TOKEN_NORETURN: {
+        node = parse_expr(p, POWER_DOT, false, compounds_allowed, NULL);
+        if (node->kind != NODE_FN) {
+            error_node(EK_ERROR, node, "Expected function literal after %s", token_kind_to_cstr(token.kind));
+            exit(1);
+        }
+
+        Node_Fn *fn = (Node_Fn *) node;
+        if (fn->returns.head) {
+            error_node_range(
+                EK_ERROR,
+                fn->returns.head,
+                fn->returns.tail,
+                "The %s keyword can only be applied to a function that returns nothing",
+                token_kind_to_cstr(token.kind));
+            exit(1);
+        }
+
+        fn->is_noreturn = true;
+        fn->noreturn_token = token;
     } break;
 
     default:

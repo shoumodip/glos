@@ -173,11 +173,15 @@ void sb_push_type(SB *sb, Type type) {
         sb_push_cstr(sb, "rawptr");
         break;
 
-    case TYPE_FN:
-        sb_push_cstr(sb, "(");
+    case TYPE_FN: {
+        const Type_Fn *spec = type.spec.fn;
+        if (spec->is_noreturn) {
+            sb_push_cstr(sb, "noreturn ");
+        }
 
-        for (size_t i = 0; i < type.spec.fn->args_count; i++) {
-            Type_Fn_Arg it = type.spec.fn->args[i];
+        sb_push(sb, '(');
+        for (size_t i = 0; i < spec->args_count; i++) {
+            Type_Fn_Arg it = spec->args[i];
             if (i) {
                 sb_push_cstr(sb, ", ");
             }
@@ -188,7 +192,7 @@ void sb_push_type(SB *sb, Type type) {
             sb_sprintf(sb, SV_Fmt ": ", SV_Arg(it.name));
 
             Type it_type = it.type;
-            if (type.spec.fn->variadics_kind == VARIADICS_TYPED && i == type.spec.fn->variadics_index) {
+            if (spec->variadics_kind == VARIADICS_TYPED && i == spec->variadics_index) {
                 sb_push_cstr(sb, "...");
                 assert(it_type.kind == TYPE_SLICE);
                 it_type = *it_type.spec.slice.element;
@@ -196,16 +200,16 @@ void sb_push_type(SB *sb, Type type) {
             sb_push_type(sb, it_type);
         }
 
-        if (type.spec.fn->variadics_kind == VARIADICS_UNTYPED) {
+        if (spec->variadics_kind == VARIADICS_UNTYPED) {
             sb_push_cstr(sb, ", ...");
         }
         sb_push_cstr(sb, ")");
 
-        if (type.spec.fn->returns_count) {
+        if (spec->returns_count) {
             sb_push_cstr(sb, " -> ");
-            sb_push_type(sb, *type.spec.fn->return_type);
+            sb_push_type(sb, *spec->return_type);
         }
-        break;
+    } break;
 
     case TYPE_ENUM: {
         assert(type.spec.enumm.definition);
@@ -490,6 +494,10 @@ bool type_eq(Type a, Type b) {
         const Type_Fn *bs = b.spec.fn;
         if (as->args == bs->args && as->return_type == bs->return_type) {
             return true;
+        }
+
+        if (as->is_noreturn != bs->is_noreturn) {
+            return false;
         }
 
         if (as->args_count != bs->args_count || as->returns_count != bs->returns_count) {

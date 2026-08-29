@@ -12,7 +12,7 @@ tests/error_operator_overloading_range_method_zero_returns.glos:2:10: Error: The
 
     It may have other optional arguments at the end, but this is the bare minimum that must be implemented.
 
-tests/error_operator_overloading_range_method_zero_returns.glos:2:46: Note: The range operator cannot return 0 values
+tests/error_operator_overloading_range_method_zero_returns.glos:2:46: Note: The slice operator cannot return 0 values
 
     operator [..] :: (this: Foo, a: s64, b: s64) {}
 

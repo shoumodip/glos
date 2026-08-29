@@ -1,7 +1,7 @@
 args: []string
 
 extern {
-    exit :: (code: s32)
+    exit :: noreturn (code: s32)
 }
 
 C       :: #import "C"

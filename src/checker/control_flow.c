@@ -143,6 +143,14 @@ bool always_returns(Node *n) {
     case NODE_RETURN:
         return true;
 
+    case NODE_CALL: {
+        Node_Call *call = (Node_Call *) n;
+        if (type_kind_eq(call->fn->type, TYPE_FN)) {
+            return call->fn->type.spec.fn->is_noreturn;
+        }
+        return false;
+    }
+
     default:
         return false;
     }

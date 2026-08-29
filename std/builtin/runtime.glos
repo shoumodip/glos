@@ -1,6 +1,6 @@
 #private...
 
-runtime_panic :: (p: Panic, a: s64, b: s64, c: s64, location: &Source_Code_Location) {
+runtime_panic :: noreturn (p: Panic, a: s64, b: s64, c: s64, location: &Source_Code_Location) {
     if p == {
     case .INDEX_OUT_OF_BOUNDS
         panic("Bounds Check Failed: Index \{a} is invalid since length is \{b}", location = *location)
@@ -34,14 +34,17 @@ runtime_panic :: (p: Panic, a: s64, b: s64, c: s64, location: &Source_Code_Locat
             panic("Type Mismatch: Accessing '\{expected}', but real type is '\{vs[a - 1]}'", location = *location)
         }
 
-    case .INVALID_ENUM_VALUE
+    case .UNREACHABLE
+        panic("Unreachable", location = *location)
+
+    case .UNREACHABLE_INVALID_ENUM_VALUE
         if bool(b) {
             panic("Unreachable: Invalid enum value: \{a}", location = *location)
         } else {
             panic("Unreachable: Invalid enum value: \{u64(a)}", location = *location)
         }
 
-    case .INVALID_UNION_TAG
+    case .UNREACHABLE_INVALID_UNION_TAG
         panic("Unreachable: Invalid union tag: \{a}", location = *location)
     }
 }

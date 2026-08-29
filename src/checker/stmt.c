@@ -230,7 +230,12 @@ void check_stmt_switch(Compiler *c, Node_Switch *sw) {
 }
 
 void check_stmt_return(Compiler *c, Node_Return *returnn) {
-    Node          *n = (Node *) returnn;
+    Node *n = (Node *) returnn;
+    if (c->context.fn && c->context.fn->fn->is_noreturn) {
+        error_node(EK_ERROR, n, "Cannot return from a function marked as noreturn");
+        exit(c, 1);
+    }
+
     const Type_Fn *fn_type = c->context.fn->fn->node.type.spec.fn;
     if (returnn->value) {
         check_expr(c, returnn->value, REF_NONE);
