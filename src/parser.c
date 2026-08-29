@@ -167,7 +167,13 @@ static Node *parse_block(Parser *p, Token token) {
     return (Node *) block;
 }
 
-static Node *parse_if(Parser *p, Token token, bool is_compile_time, bool is_using_then) {
+typedef enum {
+    ITS_UNKNOWN,
+    ITS_YES,
+    ITS_NO,
+} If_Then_Status;
+
+static Node *parse_if(Parser *p, Token token, bool is_compile_time, If_Then_Status its) {
     Node *node = NULL;
 
     const bool in_compile_time_condition_save = p->state.in_compile_time_condition;
@@ -232,16 +238,17 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time, bool is_usin
         iff->condition = expr;
         iff->is_compile_time = is_compile_time;
 
-        token = expect_token(p, TOKEN_LBRACE, TOKEN_THEN);
+        if (its == ITS_NO) {
+            token = expect_token(p, TOKEN_LBRACE);
+        } else {
+            token = expect_token(p, TOKEN_LBRACE, TOKEN_THEN);
+        }
+
         if (token.kind == TOKEN_LBRACE) {
+            its = ITS_NO;
             iff->consequence = parse_block(p, token);
         } else {
-            if (is_compile_time) {
-                error_token(EK_ERROR, token, "Cannot have 'if ... then' constructs in compile time conditionals");
-                exit(1);
-            }
-
-            is_using_then = true;
+            its = ITS_YES;
             token = peek_token(p);
             if (token.kind == TOKEN_LBRACE) {
                 error_token(EK_ERROR, token, "Cannot have '{' in an 'if ... then' construct");
@@ -251,9 +258,9 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time, bool is_usin
         }
 
         if (read_token(p, TOKEN_ELSE)) {
-            if (is_using_then) {
+            if (its == ITS_YES) {
                 if (read_token(p, TOKEN_IF)) {
-                    iff->antecedence = parse_if(p, token, is_compile_time, is_using_then);
+                    iff->antecedence = parse_if(p, token, is_compile_time, its);
                 } else {
                     token = peek_token(p);
                     if (token.kind == TOKEN_LBRACE) {
@@ -272,7 +279,7 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time, bool is_usin
                 if (token.kind == TOKEN_LBRACE) {
                     iff->antecedence = parse_block(p, token);
                 } else {
-                    iff->antecedence = parse_if(p, token, is_compile_time, is_using_then);
+                    iff->antecedence = parse_if(p, token, is_compile_time, its);
                 }
             }
         }
@@ -1705,12 +1712,12 @@ static Node *parse_stmt(Parser *p) {
     case TOKEN_IF:
         not_in_extern_assert(p, token);
         local_assert(p, true, token, NULL);
-        node = parse_if(p, token, false, false);
+        node = parse_if(p, token, false, ITS_UNKNOWN);
         break;
 
     case TOKEN_DIRECTIVE_IF: {
         const bool after_private_save = p->state.after_private;
-        node = parse_if(p, token, true, false);
+        node = parse_if(p, token, true, ITS_NO);
         p->state.after_private = after_private_save;
     } break;
 
