@@ -1730,7 +1730,7 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                         "        slice := pointer[begin..end]\n"
                         "        slice[index]\n"
                         "\n"
-                        "    If you omit the beginning of the slice, it will default to 0. But the end must be provided\n\n");
+                        "    If you omit the beginning of the slice, it will default to 0. But the end must be provided.\n\n");
                 }
                 exit(c, 1);
             }
@@ -2263,10 +2263,16 @@ void check_fn(
         }
     } else if (fn->body && !fn->polymorphs.count && !only_check_signature) {
         check_stmt(c, fn->body);
-        if (fn_spec->returns_count && !always_returns(fn->body)) {
+
+        if ((fn_spec->is_noreturn || fn_spec->returns_count) && !always_returns(fn->body)) {
             assert(fn->body->kind == NODE_BLOCK);
-            error_token(
-                EK_ERROR, ((Node_Block *) fn->body)->end, "Expected to return %s", type_to_cstr(*fn_spec->return_type));
+            Node_Block *block = (Node_Block *) fn->body;
+            if (fn_spec->is_noreturn) {
+                error_token(
+                    EK_ERROR, block->end, "This function is marked as 'noreturn', but control flow reaches here");
+            } else {
+                error_token(EK_ERROR, block->end, "Expected to return %s", type_to_cstr(*fn_spec->return_type));
+            }
             exit(c, 1);
         }
     }

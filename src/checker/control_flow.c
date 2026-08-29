@@ -137,6 +137,10 @@ bool always_returns(Node *n) {
                 return false;
             }
         }
+
+        if (sw->unionn || sw->enumeration) {
+            return true;
+        }
         return sw->fallback != NULL;
     }
 

@@ -1,6 +1,7 @@
 EXIT 134
-STDOUT 0
+STDOUT 6
+foo()
 
 STDERR 75
-tests/error_end_of_noreturn_function_is_unreachable.glos:1:21: Unreachable
+tests/error_end_of_noreturn_function_is_unreachable.glos:13:1: Unreachable
 
