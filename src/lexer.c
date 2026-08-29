@@ -248,7 +248,7 @@ Token lexer_get_string(Lexer *l, Pos pos, Pos start) {
     return token;
 }
 
-static_assert(COUNT_TOKENS == 86, "");
+static_assert(COUNT_TOKENS == 87, "");
 Token lexer_iter(Lexer *l) {
     skip_whitespace(l);
 
@@ -355,6 +355,8 @@ Token lexer_iter(Lexer *l) {
             token.kind = TOKEN_OPERATOR;
         } else if (sv_match(token.sv, "if")) {
             token.kind = TOKEN_IF;
+        } else if (sv_match(token.sv, "then")) {
+            token.kind = TOKEN_THEN;
         } else if (sv_match(token.sv, "else")) {
             token.kind = TOKEN_ELSE;
         } else if (sv_match(token.sv, "for")) {

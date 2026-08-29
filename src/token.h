@@ -107,6 +107,7 @@ typedef enum {
     TOKEN_DIRECTIVE_CALLER_LOCATION,
 
     TOKEN_IF,
+    TOKEN_THEN,
     TOKEN_ELSE,
     TOKEN_FOR,
     TOKEN_CASE,

@@ -170,7 +170,7 @@ static Node *parse_block(Parser *p, Token token) {
     return (Node *) block;
 }
 
-static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
+static Node *parse_if(Parser *p, Token token, bool is_compile_time, bool is_using_then) {
     Node *node = NULL;
 
     const bool in_compile_time_condition_save = p->state.in_compile_time_condition;
@@ -235,20 +235,48 @@ static Node *parse_if(Parser *p, Token token, bool is_compile_time) {
         iff->condition = expr;
         iff->is_compile_time = is_compile_time;
 
-        token = expect_token(p, TOKEN_LBRACE);
-        iff->consequence = parse_block(p, token);
-
-        if (read_token(p, TOKEN_ELSE)) {
+        token = expect_token(p, TOKEN_LBRACE, TOKEN_THEN);
+        if (token.kind == TOKEN_LBRACE) {
+            iff->consequence = parse_block(p, token);
+        } else {
             if (is_compile_time) {
-                token = expect_token(p, TOKEN_LBRACE, TOKEN_IF, TOKEN_DIRECTIVE_IF);
-            } else {
-                token = expect_token(p, TOKEN_LBRACE, TOKEN_IF);
+                error_token(EK_ERROR, token, "Cannot have 'if ... then' constructs in compile time conditionals");
+                exit(1);
             }
 
+            is_using_then = true;
+            token = peek_token(p);
             if (token.kind == TOKEN_LBRACE) {
-                iff->antecedence = parse_block(p, token);
+                error_token(EK_ERROR, token, "Cannot have '{' in an 'if ... then' construct");
+                exit(1);
+            }
+            iff->consequence = parse_stmt(p);
+        }
+
+        if (read_token(p, TOKEN_ELSE)) {
+            if (is_using_then) {
+                if (read_token(p, TOKEN_IF)) {
+                    iff->antecedence = parse_if(p, token, is_compile_time, is_using_then);
+                } else {
+                    token = peek_token(p);
+                    if (token.kind == TOKEN_LBRACE) {
+                        error_token(EK_ERROR, token, "Cannot have '{' in an 'if ... then' construct");
+                        exit(1);
+                    }
+                    iff->antecedence = parse_stmt(p);
+                }
             } else {
-                iff->antecedence = parse_if(p, token, is_compile_time);
+                if (is_compile_time) {
+                    token = expect_token(p, TOKEN_LBRACE, TOKEN_IF, TOKEN_DIRECTIVE_IF);
+                } else {
+                    token = expect_token(p, TOKEN_LBRACE, TOKEN_IF);
+                }
+
+                if (token.kind == TOKEN_LBRACE) {
+                    iff->antecedence = parse_block(p, token);
+                } else {
+                    iff->antecedence = parse_if(p, token, is_compile_time, is_using_then);
+                }
             }
         }
 
@@ -755,7 +783,7 @@ static Node *parse_polymorph_constraint(Parser *p) {
     }
 }
 
-static_assert(COUNT_TOKENS == 86, "");
+static_assert(COUNT_TOKENS == 87, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -1702,12 +1730,12 @@ static Node *parse_stmt(Parser *p) {
     case TOKEN_IF:
         not_in_extern_assert(p, token);
         local_assert(p, true, token, NULL);
-        node = parse_if(p, token, false);
+        node = parse_if(p, token, false, false);
         break;
 
     case TOKEN_DIRECTIVE_IF: {
         const bool after_private_save = p->state.after_private;
-        node = parse_if(p, token, true);
+        node = parse_if(p, token, true, false);
         p->state.after_private = after_private_save;
     } break;
 
@@ -1758,9 +1786,12 @@ static Node *parse_stmt(Parser *p) {
         }
 
         node = node_alloc(p->module_current, NODE_RETURN, token);
-
         Node_Return *returnn = (Node_Return *) node;
-        if (!peek_token(p).newline) {
+
+        token = peek_token(p);
+        if (token.newline || token.kind == TOKEN_EOL || token.kind == TOKEN_RBRACE || token.kind == TOKEN_ELSE) {
+            // Return the mbappe special
+        } else {
             returnn->value = parse_expr(p, POWER_SET, true, true, NULL);
         }
     } break;

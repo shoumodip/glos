@@ -1,0 +1,5 @@
+main :: () {
+    if false then println(69) else println(420)
+    if true  then return
+    println(1337)
+}
