@@ -1,8 +1,4 @@
 main :: () {
-    foo()
-}
-
-foo :: noreturn () {
     extern {
         // Wrongly describing 'puts' to not return. This is needed to trick the control flow analyzer
         // and trigger the runtime panic.

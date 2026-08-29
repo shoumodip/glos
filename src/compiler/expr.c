@@ -1469,10 +1469,16 @@ LLVMValueRef compile_expr_call(Compiler *c, Node_Call *call, bool ref) {
         c->group_values.count = group_values_count_save;
     }
 
-    compile_optional_arguments(c, args, fn_spec, get_leftmost_token_of_node((Node *) call).pos);
+    const Pos location = get_leftmost_token_of_node((Node *) call).pos;
+    compile_optional_arguments(c, args, fn_spec, location);
 
     const bool   is_group = n->type.kind == TYPE_GROUP;
     LLVMValueRef result = compile_call(c, fn, args, args_count, is_trait_call, ref || is_group);
+    if (fn_spec->is_noreturn && c->optimization_level != O3) {
+        compile_panic(c, location, CONTRACT_PANIC_UNREACHABLE, NULL, NULL, NULL);
+        LLVMPositionBuilderAtEnd(c->llvm_builder, LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, ""));
+    }
+
     if (is_group) {
         assert(!ref);
         compile_type(c, &n->type);
