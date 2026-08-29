@@ -60,19 +60,7 @@ static void sb_push_polymorph(SB *sb, Node_Polymorph *p) {
         }
 
         ll_foreach(it, &p->constraints) {
-            if (it->kind == NODE_BINARY && it->token.kind == TOKEN_OPERATOR) {
-                Node_Binary *binary = (Node_Binary *) it;
-                assert(binary->lhs->kind == NODE_ATOM && binary->lhs->token.kind == TOKEN_IDENT);
-                sb_sprintf(sb, "operator " SV_Fmt, SV_Arg(binary->lhs->token.sv));
-
-                if (binary->rhs) {
-                    sb_push_cstr(sb, " -> ");
-                    sb_push_type(sb, binary->rhs->type);
-                }
-            } else {
-                sb_push_type(sb, it->type);
-            }
-
+            sb_push_type(sb, it->type);
             if (it->next) {
                 sb_push_cstr(sb, ", ");
             }

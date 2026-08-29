@@ -123,42 +123,8 @@ static void add_monomorph_parameter_ex(
                 t = value.as.type;
             }
 
-            if (it->kind == NODE_BINARY && it->token.kind == TOKEN_OPERATOR) {
-                Node_Binary *binary = (Node_Binary *) it;
-                assert(binary->lhs->kind == NODE_ATOM && binary->lhs->token.kind == TOKEN_IDENT);
-                const SV operator = binary->lhs->token.sv;
-
-                bool defined = false;
-                if (sv_eq(operator, OPERATOR_ADD) || sv_eq(operator, OPERATOR_SUB)) {
-                    defined = type_is_integer(t) || type_is_float(t) || type_is_pointer(t);
-                } else if (
-                    sv_eq(operator, OPERATOR_MUL) || sv_eq(operator, OPERATOR_DIV) || sv_eq(operator, OPERATOR_MOD)) //
-                {
-                    defined = type_is_integer(t) || type_is_float(t);
-                } else if (sv_eq(operator, OPERATOR_CMP)) {
-                    defined = type_is_scalar(t);
-                } else if (sv_eq(operator, OPERATOR_INDEX)) {
-                    defined = type_kind_eq(t, TYPE_ARRAY) || type_kind_eq(t, TYPE_DYNAMIC_ARRAY) || //
-                              type_kind_eq(t, TYPE_SLICE) || type_kind_eq(t, TYPE_STRING);          //
-                } else if (sv_eq(operator, OPERATOR_SLICE)) {
-                    defined = type_kind_eq(t, TYPE_ARRAY) || type_kind_eq(t, TYPE_DYNAMIC_ARRAY) || //
-                              type_kind_eq(t, TYPE_SLICE) || type_kind_eq(t, TYPE_STRING) ||        //
-                              (!t.is_meta && t.ref);
-                }
-
-                if (!defined) {
-                    bool partial_comparison_acceptable = true;
-                    if (binary->rhs && binary->lhs->token.as.integer) {
-                        partial_comparison_acceptable = false;
-                    }
-
-                    get_operator_overload_ex(
-                        c, operator, t, n, n->module, false, partial_comparison_acceptable, n, group_index);
-                }
-            } else {
-                assert(type_kind_eq(it->type, TYPE_TRAIT));
-                check_type_satisfies_trait(c, t, it->type.spec.trait, n, group_index);
-            }
+            assert(type_kind_eq(it->type, TYPE_TRAIT));
+            check_type_satisfies_trait(c, t, it->type.spec.trait, n, group_index);
         }
     }
 

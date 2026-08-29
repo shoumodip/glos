@@ -8,9 +8,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DONT_DEFINE_EXIT_WRAPPER
-#include "checker/checker.h"
-
 #ifndef PLATFORM_X86_64_WINDOWS
 #include <dirent.h>
 #include <errno.h>
@@ -748,41 +745,6 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static Node *parse_operator_into_atom(Parser *p) {
-    p->state.lexer.after_operator_keyword = true;
-
-    Token token;
-    token = expect_token(
-        p,
-        TOKEN_ADD,
-        TOKEN_SUB,
-        TOKEN_MUL,
-        TOKEN_DIV,
-        TOKEN_MOD,
-        TOKEN_OPERATOR_CMP,
-        TOKEN_OPERATOR_INDEX,
-        TOKEN_OPERATOR_SLICE);
-
-    token.kind = TOKEN_IDENT;
-    return node_alloc(p->module_current, NODE_ATOM, token);
-}
-
-static Node *parse_polymorph_constraint(Parser *p) {
-    const Token token = peek_token(p);
-    if (token.kind == TOKEN_OPERATOR) {
-        Node_Binary *binary = (Node_Binary *) node_alloc(p->module_current, NODE_BINARY, next_token(p));
-        binary->lhs = parse_operator_into_atom(p);
-
-        assert(binary->lhs->kind == NODE_ATOM && binary->lhs->token.kind == TOKEN_IDENT);
-        if (sv_eq(binary->lhs->token.sv, OPERATOR_CMP)) {
-            binary->rhs = parse_expr(p, POWER_REF, false, false, NULL);
-        }
-        return (Node *) binary;
-    } else {
-        return parse_expr(p, POWER_REF, false, false, NULL);
-    }
-}
-
 static_assert(COUNT_TOKENS == 87, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
@@ -826,7 +788,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         if (read_token(p, TOKEN_DIV)) {
             if (read_token(p, TOKEN_LBRACE)) {
                 while (!read_token(p, TOKEN_RBRACE)) {
-                    nodes_push(&polymorph->constraints, parse_polymorph_constraint(p));
+                    nodes_push(&polymorph->constraints, parse_expr(p, POWER_REF, false, false, NULL));
                     if (expect_token(p, TOKEN_COMMA, TOKEN_RBRACE).kind != TOKEN_COMMA) {
                         break;
                     }
@@ -835,7 +797,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 assert(p->state.ahead.kind == TOKEN_RBRACE);
                 polymorph->constraints_end_token = p->state.ahead;
             } else {
-                nodes_push(&polymorph->constraints, parse_polymorph_constraint(p));
+                nodes_push(&polymorph->constraints, parse_expr(p, POWER_REF, false, false, NULL));
             }
         }
     } break;
@@ -1561,9 +1523,22 @@ static Node *parse_stmt(Parser *p) {
     case TOKEN_OPERATOR: {
         local_assert(p, false, token, NULL);
 
-        Node *name = parse_operator_into_atom(p);
-        node = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
+        p->state.lexer.after_operator_keyword = true;
+        token = expect_token(
+            p,
+            TOKEN_ADD,
+            TOKEN_SUB,
+            TOKEN_MUL,
+            TOKEN_DIV,
+            TOKEN_MOD,
+            TOKEN_OPERATOR_CMP,
+            TOKEN_OPERATOR_INDEX,
+            TOKEN_OPERATOR_SLICE);
 
+        token.kind = TOKEN_IDENT;
+        Node *name = node_alloc(p->module_current, NODE_ATOM, token);
+
+        node = parse_define(p, name, expect_token(p, TOKEN_COLON), false, false, false, false);
         Node_Define *define = (Node_Define *) node;
         if (!define->is_const || define->expr->kind != NODE_FN) {
             error_node(EK_ERROR, node, "Operator definition must be a constant method literal");

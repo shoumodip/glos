@@ -861,39 +861,13 @@ void check_expr_union(Compiler *c, Node_Union *unionn) {
 
 static void check_polymorph(Compiler *c, Node_Polymorph *p) {
     ll_foreach(it, &p->constraints) {
-        if (it->kind == NODE_BINARY && it->token.kind == TOKEN_OPERATOR) {
-            Node_Binary *binary = (Node_Binary *) it;
-            if (binary->rhs) {
-                assert(sv_eq(binary->lhs->token.sv, OPERATOR_CMP));
-                check_expr(c, binary->rhs, REF_NONE);
-                type_assert_type(c, binary->rhs);
-                binary->rhs->type.is_meta = false;
-
-                if (type_eq(binary->rhs->type, c->equivalence_type)) {
-                    binary->lhs->token.as.integer = false;
-                } else if (type_eq(binary->rhs->type, c->ordering_type)) {
-                    binary->lhs->token.as.integer = true;
-                } else {
-                    error_node(
-                        EK_ERROR,
-                        binary->rhs,
-                        "Expected the result of the '" SV_Fmt "' operator to be %s or %s, got %s",
-                        SV_Arg(binary->lhs->token.sv),
-                        type_to_cstr(c->equivalence_type),
-                        type_to_cstr(c->ordering_type),
-                        type_to_cstr(binary->rhs->type));
-                    exit(c, 1);
-                }
-            }
-        } else {
-            check_expr(c, it, REF_NONE);
-            if (!type_meta_kind_eq(it->type, TYPE_TRAIT)) {
-                error_node(
-                    EK_ERROR, it, "Expected polymorph constraint to be a trait type, got %s", type_to_cstr(it->type));
-                exit(c, 1);
-            }
-            it->type.is_meta = false;
+        check_expr(c, it, REF_NONE);
+        if (!type_meta_kind_eq(it->type, TYPE_TRAIT)) {
+            error_node(
+                EK_ERROR, it, "Expected polymorph constraint to be a trait type, got %s", type_to_cstr(it->type));
+            exit(c, 1);
         }
+        it->type.is_meta = false;
     }
     p->node.type = p->name->node.type;
 }
