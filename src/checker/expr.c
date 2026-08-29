@@ -1721,6 +1721,16 @@ void check_expr_index(Compiler *c, Node_Index *index, Ref_Kind ref, bool *is_ref
                         ANSI_COLOR_YELLOW | ANSI_BOLD,
                         "    Here the value is %s. Perhaps it was meant to be dereferenced before indexing?\n",
                         type_to_cstr(index->lhs->type));
+                } else {
+                    afprintf(
+                        stderr,
+                        ANSI_COLOR_YELLOW | ANSI_BOLD,
+                        "    A slice can be constructed from a pointer like this:\n"
+                        "\n"
+                        "        slice := pointer[begin..end]\n"
+                        "        slice[index]\n"
+                        "\n"
+                        "    If you omit the beginning of the slice, it will default to 0. But the end must be provided\n\n");
                 }
                 exit(c, 1);
             }
