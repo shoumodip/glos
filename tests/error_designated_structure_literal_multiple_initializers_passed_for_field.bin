@@ -1,0 +1,13 @@
+EXIT 1
+STDOUT 0
+
+STDERR 330
+tests/error_designated_structure_literal_multiple_initializers_passed_for_field.glos:5:21: Error: Multiple initializers passed for field 'x'
+
+    v := Vec2 { x = 69, x = 420 }
+
+tests/error_designated_structure_literal_multiple_initializers_passed_for_field.glos:5:13: Note: Passed here already
+
+    v := Vec2 { x = 69, x = 420 }
+
+

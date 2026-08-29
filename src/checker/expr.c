@@ -1077,6 +1077,8 @@ void check_expr_compound(Compiler *c, Node_Compound *compound) {
 
     size_t array_count = 0;
     size_t ordered_iota = 0;
+
+    const size_t designated_initializers_count_save = c->designated_initializers.count;
     for (Node *iter = compound->children.head; iter; iter = iter->next) {
         size_t it_iota = 0;
         if (!compound->is_designated) {
@@ -1134,6 +1136,31 @@ void check_expr_compound(Compiler *c, Node_Compound *compound) {
                 unreachable();
             }
 
+            if (n->type.kind == TYPE_STRUCT || n->type.kind == TYPE_ARRAY || n->type.kind == TYPE_SLICE) {
+                for (size_t i = designated_initializers_count_save; i < c->designated_initializers.count; i++) {
+                    const size_t it_index = it->token.as.integer;
+
+                    Node *previous = c->designated_initializers.data[i];
+                    if (previous->token.as.integer == it_index) {
+                        if (n->type.kind == TYPE_STRUCT) {
+                            error_node(
+                                EK_ERROR,
+                                it,
+                                "Multiple initializers passed for field '" SV_Fmt "'",
+                                SV_Arg(struct_spec->fields[it_index].name));
+                        } else if (n->type.kind == TYPE_ARRAY || n->type.kind == TYPE_SLICE) {
+                            error_node(EK_ERROR, it, "Multiple initializers passed for index %zu", it_index);
+                        } else {
+                            unreachable();
+                        }
+
+                        error_node(EK_NOTE, previous, "Passed here already");
+                        exit(c, 1);
+                    }
+                }
+                da_push(&c->designated_initializers, it);
+            }
+
             it_iota = it->token.as.integer;
             it = it_binary->rhs;
         } else {
@@ -1184,8 +1211,9 @@ void check_expr_compound(Compiler *c, Node_Compound *compound) {
             type_assert(c, it, *it_type);
         }
     }
-    compound->are_children_checked = true;
+    c->designated_initializers.count = designated_initializers_count_save;
 
+    compound->are_children_checked = true;
     if (n->type.kind == TYPE_SLICE) {
         Type *element = n->type.spec.slice.element;
         n->type.spec.array.element = element;

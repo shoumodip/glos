@@ -72,6 +72,8 @@ typedef struct {
     Type main_fn_type;
     DA(Type_Struct_Field) struct_fields;
 
+    DA(Node *) designated_initializers;
+
     Type interpolation_type;
     Type interpolation_marker_type;
 

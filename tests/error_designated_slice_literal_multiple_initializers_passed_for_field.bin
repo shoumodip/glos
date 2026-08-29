@@ -1,0 +1,13 @@
+EXIT 1
+STDOUT 0
+
+STDERR 346
+tests/error_designated_slice_literal_multiple_initializers_passed_for_field.glos:1:28: Error: Multiple initializers passed for index 2
+
+    x := []string { 2 = "Foo", 4 - 2 = "Bar" }
+
+tests/error_designated_slice_literal_multiple_initializers_passed_for_field.glos:1:17: Note: Passed here already
+
+    x := []string { 2 = "Foo", 4 - 2 = "Bar" }
+
+

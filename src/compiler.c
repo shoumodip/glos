@@ -251,6 +251,8 @@ void compiler_build(Compiler *c, const char *output_path) {
     da_free(&c->context.imports);
 
     da_free(&c->struct_fields);
+    da_free(&c->designated_initializers);
+
     da_free(&c->arg_values);
     da_free(&c->group_values);
     da_free(&c->defers);

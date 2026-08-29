@@ -1,0 +1,13 @@
+EXIT 1
+STDOUT 0
+
+STDERR 326
+tests/error_designated_array_literal_multiple_initializers_passed_for_field.glos:1:24: Error: Multiple initializers passed for index 1
+
+    x := [10]s64 { 1 = 69, 1 = 420 }
+
+tests/error_designated_array_literal_multiple_initializers_passed_for_field.glos:1:16: Note: Passed here already
+
+    x := [10]s64 { 1 = 69, 1 = 420 }
+
+

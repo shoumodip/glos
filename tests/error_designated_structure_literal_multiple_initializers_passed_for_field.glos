@@ -1,0 +1,5 @@
+Vec2 :: struct {
+    x, y: s32
+}
+
+v := Vec2 { x = 69, x = 420 }
