@@ -360,6 +360,7 @@ void compile_stmt_switch(Compiler *c, Node_Switch *sw) {
     LLVMValueRef expr = compile_expr(c, sw->expr, false);
 
     bool chain = false;
+    bool floating = false;
     if (sw->trait) {
         expr = undo_load(expr);
         expr = LLVMBuildLoad2(c->llvm_builder, ptr_type, expr, "");
@@ -369,6 +370,9 @@ void compile_stmt_switch(Compiler *c, Node_Switch *sw) {
         expr = LLVMBuildLoad2(c->llvm_builder, i64_type, expr, "");
     } else if (type_is_pointer(sw->expr->type) || sw->is_expr_type_info || sw->compare_overload) {
         chain = true;
+    } else if (type_is_float(sw->expr->type)) {
+        chain = true;
+        floating = true;
     }
 
     if (chain) {
@@ -420,6 +424,8 @@ void compile_stmt_switch(Compiler *c, Node_Switch *sw) {
                         // The call compilation erased this load
                         expr = LLVMBuildLoad2(c->llvm_builder, sw->expr->type.llvm, expr_load_ptr, "");
                     }
+                } else if (floating) {
+                    match = LLVMBuildFCmp(c->llvm_builder, LLVMRealOEQ, expr, value, "");
                 } else {
                     match = LLVMBuildICmp(c->llvm_builder, LLVMIntEQ, expr, value, "");
                 }

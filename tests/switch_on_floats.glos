@@ -1,0 +1,7 @@
+main :: () {
+    if 6.9 == {
+    case 4.2;        println("A")
+    case 6.9, 13.37; println("B")
+    case;            println("C")
+    }
+}
