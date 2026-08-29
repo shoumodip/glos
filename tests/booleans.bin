@@ -1,5 +1,5 @@
 EXIT 0
-STDOUT 106
+STDOUT 128
 true
 false
 false
@@ -23,6 +23,10 @@ true
 true
 69
 420
+false
+false
+true
+true
 false
 
 STDERR 0

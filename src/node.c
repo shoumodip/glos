@@ -26,11 +26,17 @@ void modules_free(Modules *ms) {
 
 Type type_with_ref(Type t, size_t ref) {
     t.ref = ref;
+    if (t.distinct && t.ref < t.distinct->node.type.ref) {
+        t.distinct = NULL;
+    }
     return t;
 }
 
 Type type_without_ref(Type t) {
     t.ref = 0;
+    if (t.distinct && t.ref < t.distinct->node.type.ref) {
+        t.distinct = NULL;
+    }
     return t;
 }
 

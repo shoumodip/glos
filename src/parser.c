@@ -755,7 +755,7 @@ static Node *parse_polymorph_constraint(Parser *p) {
     }
 }
 
-static_assert(COUNT_TOKENS == 83, "");
+static_assert(COUNT_TOKENS == 86, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;

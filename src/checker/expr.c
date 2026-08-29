@@ -31,6 +31,7 @@ static void check_whether_member_access_is_valid(Compiler *c, Node_Member *m) {
     }
 }
 
+static_assert(COUNT_TOKENS == 86, "");
 static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *binary, Node *n) {
     const Token_Kind op = binary->node.token.kind;
     switch (op) {
@@ -59,6 +60,7 @@ static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *b
     case TOKEN_SHR_SET:
     case TOKEN_BOR_SET:
     case TOKEN_BAND_SET:
+    case TOKEN_BXOR_SET:
         if (type_is_pointer(n->type)) {
             error_node(EK_ERROR, (Node *) binary, "This operation is not valid for pointers");
             error_node(EK_NOTE, n, "The operands are of type %s", type_to_cstr(n->type));
@@ -116,7 +118,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 83, "");
+    static_assert(COUNT_TOKENS == 86, "");
     switch (n->token.kind) {
     case TOKEN_INT:
         n->type = (Type) {.kind = TYPE_INT};
@@ -204,7 +206,7 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     Node *n = (Node *) unary;
-    static_assert(COUNT_TOKENS == 83, "");
+    static_assert(COUNT_TOKENS == 86, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
@@ -265,10 +267,8 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     case TOKEN_TYPEOF:
         check_expr(c, unary->value, REF_NONE);
         check_that_type_is_known(c, unary->value);
-        n->type = unary->value->type;
-
-        finalize_untyped_type(c, n);
-        n->type.is_meta = true;
+        finalize_untyped_type(c, unary->value);
+        n->type = type_with_meta(unary->value->type);
         break;
 
     default:
@@ -278,7 +278,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
 
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     Node *n = (Node *) binary;
-    static_assert(COUNT_TOKENS == 83, "");
+    static_assert(COUNT_TOKENS == 86, "");
     switch (n->token.kind) {
     case TOKEN_ADD:
     case TOKEN_SUB:
@@ -321,6 +321,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     case TOKEN_SHR:
     case TOKEN_BOR:
     case TOKEN_BAND:
+    case TOKEN_BXOR:
         if (check_children) {
             check_expr(c, binary->lhs, REF_NONE);
             check_expr(c, binary->rhs, REF_NONE);
@@ -340,6 +341,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
 
     case TOKEN_LOR:
     case TOKEN_LAND:
+    case TOKEN_LXOR:
         if (check_children) {
             check_expr(c, binary->lhs, REF_NONE);
             check_expr(c, binary->rhs, REF_NONE);
@@ -443,6 +445,7 @@ void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     case TOKEN_SHR_SET:
     case TOKEN_BOR_SET:
     case TOKEN_BAND_SET:
+    case TOKEN_BXOR_SET:
         check_assignment(c, binary);
         break;
 

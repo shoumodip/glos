@@ -14,6 +14,7 @@ main :: () {
     println(160 | 260)
     println(77 & 103)
     println(~-419 + 10 & 3)
+    println(69 ^ 1404)
 
     // Comparisons
     println(2 > 1)

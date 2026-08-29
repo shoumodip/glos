@@ -1,6 +1,6 @@
 #include "token.h"
 
-static_assert(COUNT_TOKENS == 83, "");
+static_assert(COUNT_TOKENS == 86, "");
 const char *token_kind_to_cstr(Token_Kind kind) {
     switch (kind) {
     case TOKEN_EOF:
@@ -97,6 +97,9 @@ const char *token_kind_to_cstr(Token_Kind kind) {
     case TOKEN_BAND:
         return "'&'";
 
+    case TOKEN_BXOR:
+        return "'^'";
+
     case TOKEN_BNOT:
         return "'~'";
 
@@ -130,11 +133,17 @@ const char *token_kind_to_cstr(Token_Kind kind) {
     case TOKEN_BAND_SET:
         return "'&='";
 
+    case TOKEN_BXOR_SET:
+        return "'^='";
+
     case TOKEN_LOR:
         return "'||'";
 
     case TOKEN_LAND:
         return "'&&'";
+
+    case TOKEN_LXOR:
+        return "'^^'";
 
     case TOKEN_LNOT:
         return "'!'";
@@ -255,7 +264,7 @@ const char *token_kind_to_cstr(Token_Kind kind) {
     }
 }
 
-static_assert(COUNT_TOKENS == 83, "");
+static_assert(COUNT_TOKENS == 86, "");
 Power token_kind_to_power(Token_Kind kind) {
     switch (kind) {
     case TOKEN_DOT:
@@ -287,10 +296,12 @@ Power token_kind_to_power(Token_Kind kind) {
 
     case TOKEN_BOR:
     case TOKEN_BAND:
+    case TOKEN_BXOR:
         return POWER_BOR;
 
     case TOKEN_LOR:
     case TOKEN_LAND:
+    case TOKEN_LXOR:
         return POWER_LOR;
 
     case TOKEN_SET:
@@ -303,6 +314,7 @@ Power token_kind_to_power(Token_Kind kind) {
     case TOKEN_SHR_SET:
     case TOKEN_BOR_SET:
     case TOKEN_BAND_SET:
+    case TOKEN_BXOR_SET:
         return POWER_SET;
 
     case TOKEN_GT:

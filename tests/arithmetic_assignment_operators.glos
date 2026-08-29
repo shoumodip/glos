@@ -28,6 +28,9 @@ main :: () {
         acc &= 15
         println(acc)
 
+        acc ^= 9
+        println(acc)
+
         acc %= 4
         println(acc)
     }

@@ -249,6 +249,14 @@ Int128 int128_shr(Int128 x, Int128 b, bool is_signed) {
     return r;
 }
 
+Int128 int128_or(Int128 a, Int128 b, bool is_signed) {
+    unused(is_signed);
+    Int128 r;
+    r.low = a.low | b.low;
+    r.high = a.high | b.high;
+    return r;
+}
+
 Int128 int128_and(Int128 a, Int128 b, bool is_signed) {
     unused(is_signed);
     Int128 r;
@@ -257,11 +265,11 @@ Int128 int128_and(Int128 a, Int128 b, bool is_signed) {
     return r;
 }
 
-Int128 int128_or(Int128 a, Int128 b, bool is_signed) {
+Int128 int128_xor(Int128 a, Int128 b, bool is_signed) {
     unused(is_signed);
     Int128 r;
-    r.low = a.low | b.low;
-    r.high = a.high | b.high;
+    r.low = a.low ^ b.low;
+    r.high = a.high ^ b.high;
     return r;
 }
 

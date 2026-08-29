@@ -14,6 +14,11 @@ main :: () {
     println(foo(true)  || bar(false))
     println(foo(false) || bar(true))
     println(foo(false) || bar(false))
+
+    println(true  ^^ true)
+    println(true  ^^ false)
+    println(false ^^ true)
+    println(false ^^ false)
 }
 
 foo :: (x: bool) -> bool {

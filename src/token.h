@@ -50,6 +50,7 @@ typedef enum {
     TOKEN_SHR,
     TOKEN_BOR,
     TOKEN_BAND,
+    TOKEN_BXOR,
     TOKEN_BNOT,
 
     TOKEN_SET,
@@ -62,9 +63,11 @@ typedef enum {
     TOKEN_SHR_SET,
     TOKEN_BOR_SET,
     TOKEN_BAND_SET,
+    TOKEN_BXOR_SET,
 
     TOKEN_LOR,
     TOKEN_LAND,
+    TOKEN_LXOR,
     TOKEN_LNOT,
 
     TOKEN_GT,
@@ -115,7 +118,7 @@ typedef enum {
 
     TOKEN_EXTERN,
     COUNT_TOKENS
-} Token_Kind;
+} Token_Kind; // TODO: XOR
 
 const char *token_kind_to_cstr(Token_Kind kind);
 

@@ -29,8 +29,9 @@ void int128_divmod(Int128 a, Int128 b, bool is_signed, Int128 *out_quotient, Int
 Int128 int128_shl(Int128 a, Int128 b, bool is_signed);
 Int128 int128_shr(Int128 a, Int128 b, bool is_signed);
 
-Int128 int128_and(Int128 a, Int128 b, bool is_signed);
 Int128 int128_or(Int128 a, Int128 b, bool is_signed);
+Int128 int128_and(Int128 a, Int128 b, bool is_signed);
+Int128 int128_xor(Int128 a, Int128 b, bool is_signed);
 Int128 int128_not(Int128 x);
 
 bool int128_gt(Int128 a, Int128 b, bool is_signed);
