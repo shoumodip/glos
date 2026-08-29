@@ -264,11 +264,11 @@ Const_Value eval_const_expr_unary(Compiler *c, Node_Unary *unary) {
     switch (n->token.kind) {
     case TOKEN_SUB:
         value = eval_const_expr(c, unary->value, false);
-        if (type_is_integer(n->type) || type_is_pointer(n->type)) {
-            return const_value_int(int128_neg(value.as.integer));
-        } else {
+        if (type_is_float(n->type)) {
             value.as.real = -value.as.real;
             return value;
+        } else {
+            return const_value_int(int128_neg(value.as.integer));
         }
 
     case TOKEN_MUL:

@@ -636,13 +636,11 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
             return result;
         }
 
-        if (type_is_integer(n->type) || type_is_pointer(n->type)) {
-            return LLVMBuildNeg(c->llvm_builder, value, "");
-        } else if (type_is_float(n->type)) {
+        if (type_is_float(n->type)) {
             return LLVMBuildFNeg(c->llvm_builder, value, "");
+        } else {
+            return LLVMBuildNeg(c->llvm_builder, value, "");
         }
-
-        unreachable();
 
     case TOKEN_MUL:
         value = compile_expr(c, unary->value, false);

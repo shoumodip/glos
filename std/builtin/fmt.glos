@@ -166,16 +166,16 @@ write_value :: (w: Writer, a: Any, nested: bool) {
         return
     }
 
-    if a.type == Interpolation {
+    if a.type == Interpolation && !nested {
         a := *&Interpolation(a.data)
         if a == {
         case []Any
             for i := 0; i < a.count; i += 1 {
-                write_value(w, a[i], nested)
+                write_value(w, a[i], false)
             }
 
         case string
-            write_value(w, a, nested)
+            write_value(w, a, false)
 
         case
             unreachable()
