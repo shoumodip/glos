@@ -1,5 +1,13 @@
 File :: distinct rawptr
 
+read :: (this: File, buffer: []char) -> s64, bool {
+    count := C.fread(rawptr(buffer.data), 1, u64(buffer.count), this)
+    if C.ferror(this) != 0 {
+        return 0, false
+    }
+    return s64(count), true
+}
+
 write :: (this: File, bytes: []char) {
     C.fwrite(rawptr(bytes.data), sizeof(char), u64(bytes.count), this);
 }

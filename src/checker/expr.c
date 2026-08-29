@@ -630,6 +630,9 @@ void check_expr_member(Compiler *c, Node_Member *member, Ref_Kind ref, bool *is_
                 } else if (sv_match(n->token.sv, "count")) {
                     n->type = (Type) {.kind = TYPE_S64};
                     member->field_index = 1;
+
+                    n->is_memory = false;
+                    *is_ref_valid = ref == REF_NONE;
                 } else {
                     error_undefined_in(c, &n->token, &member->lhs->type, "field");
                 }
