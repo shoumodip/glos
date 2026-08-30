@@ -1,0 +1,46 @@
+// Let's face it. To write useful software, at the end of the day, we need to interface
+// with C code. This file will go over the mechanisms provided by Glos to do so.
+main :: () {
+    // You can define external variables and functions inside 'extern' blocks.
+    extern {
+        stdout: rawptr
+        printf :: (fmt: &char, ...) -> s32 // Notice how there is no function body
+
+        // You can provide custom link names using the '#link' directive
+        #link "operator"
+        my_operator :: () -> s64
+
+        #link "stderr"
+        standard_error: rawptr
+
+        // You can use the '#library' directive to add libraries to the linker
+        // #library "raylib" // For example
+
+        // An enumeration 'Platform' is defined in the builtin standard module like this:
+        //
+        //     Platform :: enum {
+        //         LINUX
+        //         MACOS
+        //         WINDOWS
+        //     }
+        //
+        // And a constant 'PLATFORM' is also defined of this type, which is evaluted to the actual platform.
+        // You can use these when interfacing with external C code.
+
+        #if PLATFORM == {
+        case .LINUX
+            timerfd_create :: (clockid: s32, flags: s32) -> s32
+
+        case .MACOS
+            _NSGetExecutablePath :: (buffer: &char, size: &u32) -> s32
+
+        case .WINDOWS
+            MessageBoxA :: (hWnd: rawptr, lpText: &char, lpCaption: &char, uType: u32) -> s32
+            #library "user32"
+        }
+    }
+
+    printf("Hello, %zd\n", 69)
+}
+
+// BTW, Glos uses the C ABI, so you don't need to worry about compatibility. It Just Works™.

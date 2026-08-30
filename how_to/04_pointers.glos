@@ -1,0 +1,80 @@
+// The purpose of this file is to describe the syntax and semantics regarding pointer operations
+// in Glos. This is NOT a tutorial for pointers themselves. Terminology will be used in this file
+// to describe the behaviour and usage, assumming the reader already knows what pointers are.
+
+main :: () {
+    x: s64
+
+    // '&s64' is a pointer to 's64'
+    p: &s64
+
+    // We take a pointer to 'x' by using the '&' operator
+    p = &x
+
+    // '*' is the dereference operator
+    *p = -69
+    println(*p)
+
+    // Pointers can be casted to other pointers explicitly
+    q := &u64(p)
+    println(*q)
+
+    // Pointer arithmetic is NOT like C. In glos, addition or subtracting of pointers do
+    // not scale according to the underlying type. Rather it is just a simple arithmetic
+    // operation.
+    println("p     = \{p}")
+    println("p + 1 = \{p + &s64(1)}")
+
+    // Pointers cannot be indexed directly. The following line is erroneous.
+    // p[0]
+
+    // They must be first converted into a slice. Slices will be described in detail later.
+    // For now, just the immediately applicable concepts are introduced.
+    //
+    // The syntax for construcing a slice is:
+    //
+    //     from [ begin .. end ]
+    //
+    // The beginning is inclusive, but the end is exclusive. So if you slice from A to B,
+    // then you can index from A to (B - 1).
+    //
+    // The beginning and end of the slice can be inferred depending on the context, and can be
+    // omitted accordingly.
+    //
+    // For pointers, the beginning defaults to 0 if omitted. But the end is not inferred.
+    slice := p[0..1]
+    slice  = p[ ..1] // This expression and the one above are equivalent
+
+    // Now can you index into the memory
+    slice[0] = 420
+    println(slice[0])
+
+    // Indexing is bounds checked at runtime unless '-O3' is provided
+    // slice[1] = 1337 // Uncomment this line and see what happens
+
+    // Raw pointers do not have any underlying type. They are like 'void *' in C.
+    x: rawptr
+
+    // You cannot dereference raw pointers
+    // *x // This is an error
+
+    // Nor can you construct slices from them
+    // xs[0..1] // This is also an error
+
+    // You can cast a raw pointer into a typed one, and perform all the dereference or
+    // slice operations you want on that.
+    println(&s64(x))
+
+    // The reverse is also true. You can cast typed pointers into raw pointers.
+    y := rawptr(&p) // '&p' used to be '&&s64'
+
+    // The 'null' literal. It is, well, null.
+    y = null
+
+    // The literal 'null' can be automatically casted to any pointer type.
+    p = null // Here it auto casts to '&s64'
+
+    // It defaults to 'rawptr'
+    another := null
+    println("typeof(another) = \{typeof(another)}")
+}

@@ -1,0 +1,7 @@
+nice :: () {
+    println(69)
+}
+
+shadowed :: () {
+    println(420)
+}

@@ -1,0 +1,79 @@
+main :: () {
+    Fruit :: enum {
+        MANGO
+        APPLE
+        ORANGE
+    }
+
+    f: Fruit
+
+    // Enum values are accessed like this.
+    f = Fruit.MANGO
+
+    // In places where the enum type is obvious, the prefix can be omitted.
+    f = .APPLE
+
+    // The standard printing functions display enumerations by their names.
+    println(f)
+
+    // However, enumerations are represented at runtime by integer values.
+    println("Fruit.MANGO  = \{s64(Fruit.MANGO)}")
+    println("Fruit.APPLE  = \{s64(Fruit.APPLE)}")
+    println("Fruit.ORANGE = \{s64(Fruit.ORANGE)}")
+
+    // The default underlying type of an enum is 's64', but it can be manually specified as well
+    v: enum u32 {
+        SPINACH
+        BROCOLLI
+
+        // BTW, you can just directly use types without first defining the type as a constant. Like here.
+    }
+
+    println("typeof(v) = \{typeof(v)}")
+    // v = -1 // This is an error, as -1 is invalid for 'u32'
+
+    // You can assign custom values to enumeration items
+    Custom :: enum {
+        A = 69
+        B = 420
+        C = 1337
+        D // This will be the previous value + 1
+    }
+
+    println("Custom.A = \{s64(Custom.A)}")
+    println("Custom.B = \{s64(Custom.B)}")
+    println("Custom.C = \{s64(Custom.C)}")
+    println("Custom.D = \{s64(Custom.D)}")
+
+    // Switch statements on enumerations are exhaustive at compile time.
+    if Custom.A == {
+    case .A
+    case .B
+    case .C
+    case .D // Uncomment any of these cases and see the compiler errors.
+    }
+
+    // There is also a runtime verification if the optimization level is not '-O3'.
+    //
+    // For example, in the below commented code, the switch statements tries to fit for an invalid
+    // enum value. The integer 5 is NOT associated with the enumeration type 'Custom', but at
+    // compile time, the statement is determined to be complete, since all the cases are met.
+    //
+    // Therefore, for such complete enum switches, the compiler automatically generates a fallback
+    // panic which triggers at runtime. Comment this out and see the result for yourself.
+    //
+    // if Custom(5) == { case .A, .B, .C, .D }
+
+    // Of course, you are allowed to provide a fallback case yourself. Then the switch will be
+    // considered complete even if you have not provided all the items.
+    if Custom.A == {
+    case .A
+    case;   // Even though B, C, D are not provided, the compiler is still satisfied with this.
+    }
+
+    // While this escape hatch is provided, it is still recommended to not use a fallback case when
+    // working with enumerations as it reduces the amount of help the compiler can provide you while
+    // refactoring. In C it is a necessity because even if you provide the complete set of cases, the
+    // switch can still be performed on invalid memory, which does not fail immediately. But that is
+    // not the case in Glos. So it might be wise to provide each case manually.
+}

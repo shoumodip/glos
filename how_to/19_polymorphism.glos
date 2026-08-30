@@ -1,0 +1,240 @@
+main :: () {
+    // The '$' denotes a polymorphic parameter. So here 'x' is an argument whose type is polymorphic.
+    foo :: (x: $T) {
+        println("typeof(x) = \{typeof(x)}")
+        println("x = \{x}")
+    }
+
+    foo(69)
+    foo("Urmom")
+    foo([]f32 {4.2, 6.9})
+    println()
+
+    // Anything can be polymorphic, not just types. For example, here, the argument 'xs' is an array
+    // whose element type and size are polymorphic.
+    bar :: (xs: [$N]$T) {
+        println("xs = \{xs}")
+        println("typeof(xs) = \{typeof(xs)}")
+        println("N = \{N}")
+        println("typeof(N) = \{typeof(N)}")
+        println("T = \{T}")
+        println()
+    }
+
+    bar([]string {"Foo", "Bar"})
+    bar([]char {'L', 'i', 'g', 'm', 'a'})
+
+    // Now let's look at polymorphic arguments.
+    baz :: ($N: s64) {
+        // As you can see, the name of this argument has the '$', not the type.
+        // Here we define the polymorphic argument 'N' to have the type 's64'.
+
+        // The argument 'N' is known at compile time since it is polymorphic.
+        // Therefore we can use in compile time contexts, like array size for example.
+        xs: [N]bool
+        println(xs)
+        println("N = \{N}")
+        println()
+    }
+
+    baz(2)
+    baz(3)
+
+    // The difference between 'x: $T' and '$X: s64' is the following:
+    //
+    //     'x: $T' => The value of the polymorphic parameter 'T' is inferred from the type of 'x'.
+    //                The argument 'x' is allowed to be a runtime value.
+    //
+    //     '$X: s64' => The polymorphic parameter 'X' is directly passed as the argument itself.
+    //                  So, the argument '$X' must be a compile time constant.
+    //
+
+    x := 69
+    foo(x) // The runtime value 'x' is accepted as the argument to 'x: $T'
+
+    // However the following line will throw an error if uncommented, as 'x' is not a compile time constant.
+    // baz(x)
+
+    println()
+
+    // Let's look at another example.
+    Array :: ($T: Type, $N: s64) -> [N]T {
+        println("Creating an array of element type \{T} and size \{N}")
+
+        // Here it takes two polymorphic arguments: a 'Type' and a 's64'.
+        // And it constructs an array based on those arguments.
+        return [N]T {}
+
+        // I mean you also just do this:
+        //
+        //     return {}
+        //
+        // The compiler is perfectly capable of inferring the type. But that is not good for demonstration purposes.
+    }
+
+    println(Array(s32, 3))
+    println(Array(string, 2))
+    println()
+
+    // BTW, you can have non polymorphic arguments in polymorphic functions.
+    make_zero_and_print_label :: (x: & $T, label: string) {
+        // The argument 'label' is not polymorphic. It is just a normal runtime value.
+        println(label)
+
+        C.memset(rawptr(x), 0, sizeof(T))
+        C :: #import "C"
+    }
+
+    a := "Foo"
+    b := 69
+    println("a = '\{a}'; b = \{b}")
+
+    make_zero_and_print_label(&a, "First")
+    make_zero_and_print_label(&b, "Second")
+    println("a = '\{a}'; b = \{b}")
+    println()
+
+    // You can have default values for polymorphic arguments.
+    allocate :: ($T: Type, $N := 1) -> &T {
+        println("Allocating a memory region of \{N} element(s) of type \{T}")
+        return &T(C.calloc(u64(N), sizeof(T)))
+        C :: #import "C"
+    }
+
+    println(allocate(s64))
+    println(allocate(string, 3))
+    println()
+
+    // One restriction of polymorphic functions is that they are not first class. You cannot do the following:
+    //
+    // f := allocate // Uncomment this line and see the error.
+    //
+    // The reason is that polymorphic functions do not exist at runtime. When you call a polymorphic function, it
+    // gets monomorphized with the supplied and inferred polymorphic parameters, and the resultant function is
+    // compiled. But the original function is not.
+
+    // Now let's take a look at polymorphic methods.
+    polymorphic_methods()
+}
+
+Foo :: struct {
+    message: string
+}
+
+// You can have polymorphic methods. As mentioned before, methods are just syntax sugar and scoping rules.
+// Their is no difference other than that from a function.
+foo :: (this: Foo, that: $T) {
+    println(this)
+    println(that)
+    println("T = \{T}")
+    println()
+}
+
+polymorphic_methods :: () {
+    f := Foo {"Hehe"}
+    f.foo(69)
+    f.foo("Yo!")
+
+    // Now let's take a look at polymorphic structures.
+    polymorphic_structures()
+}
+
+// You define a polymorphic structure like this.
+Box :: struct($T: Type) {
+    v: T
+    // Note that you must define a polymorphic structure to a constant. You cannot use it directly.
+}
+
+// You can have polymorphic methods over polymorphic structures
+show :: (this: Box($T)) {
+    println("T = \{T}")
+    println(this.v)
+    println()
+}
+
+// The method can have as many polymorphic parameters as you want
+more_show :: (this: Box($A), that: $B, another: string) {
+    println("A = \{A}")
+    println(this.v)
+    println("B = \{B}")
+    println(that)
+    println("another = \{another}")
+    println()
+}
+
+// You can monomorphize the receiver if you want.
+// This method will be only applicable to 'Box(s32)'. You cannot invoke it for 'Box(string)' for example.
+s32_show :: (this: Box(s32)) {
+    println("s32_show: \{this.v}")
+}
+
+polymorphic_structures :: () {
+    a: Box(s32)
+    println(a)
+    a.show()
+
+    b := Box(string) {"Hello!"}
+    println(b)
+    b.show()
+
+    a.more_show(69, "Urmom")
+    b.more_show([]f64 {4.2, 6.9}, "Noice!")
+
+    a.s32_show()
+    // b.s32_show() // This is an error, as 'b' is 'Box(string)', not 'Box(s32)'
+
+    // Needless to say, you can defined polymorphic functions over polymorphic structures
+    box_set :: (b: &Box($T), v: T) {
+        b.v = v
+    }
+
+    box_set(&a, 69)
+    println(a)
+    println()
+
+    // Now let's take a look at trait constraints for polymorphic parameters.
+    polymorphic_parameter_constraints()
+}
+
+// First let's set up some bureaucracy for the demonstration.
+Trait_A :: trait {
+    a: () -> string
+}
+
+Trait_B :: trait {
+    b: (x: string)
+}
+
+My_Type :: struct {
+    x: string
+}
+
+a :: (this: My_Type) -> string {
+    return this.x
+}
+
+b :: (this: &My_Type, x: string) {
+    this.x = x
+}
+
+polymorphic_parameter_constraints :: () {
+    // We put a constraint on the polymorphic parameter using the ' / Trait' syntax.
+    foo :: (x: $T/Trait_A) {
+        println("foo: \{x.a()}")
+    }
+
+    foo(My_Type {"Hello"})
+    println()
+    // foo(69) // This line is an error since 's64' does not implement 'Trait_A'
+
+    // We can apply multiple constraints to a parameter
+    bar :: (into: $T/{Trait_A, Trait_B}, x: string) {
+        println("bar: \{into.a()}")
+        into.b(x)
+        println("bar: \{into.a()}")
+    }
+
+    bar(&My_Type {"Noice"}, "Hehe")
+}
+
+// And that's it!

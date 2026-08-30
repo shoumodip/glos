@@ -1,0 +1,231 @@
+if_statements :: () {
+    // This is the basic construction found in most programming languages
+    if true {
+        println("This is executed")
+    }
+
+    if false {
+        println("This is not")
+    }
+
+    if true {
+        println("A")
+    } else {
+        println("B")
+    }
+
+    if false {
+        println("A")
+    } else if true {
+        println("B")
+    } else {
+        println("C")
+    }
+
+    // There exists a shorthand
+    if true then println("Yes") else println("No")
+
+    // In the shorthand, you are not allowed to have blocks.
+    // if true then {} // This is an error
+}
+
+compile_time_if_statements :: () {
+    // '#if' is evalated at compile time
+    #if true {
+        A :: 69
+    }
+
+    #if false {
+        // This is not checked.
+        // Try to set the condition of this statement to 'true', and see what happens.
+        A :: 69
+    } else {
+        // This is checked.
+        B :: 420
+    }
+
+    #if false {
+        A :: 69
+    } else if false {
+        B :: 420
+    } else {
+        C :: 1337
+    }
+
+    println(A)
+    println(B)
+    println(C)
+}
+
+// You can have '#if' statements at the toplevel
+#if true {
+    main :: () {
+        if_statements()
+        compile_time_if_statements()
+        loops()
+        switch_statements()
+        compile_time_switch_statements()
+        defer_statements()
+    }
+}
+
+loops :: () {
+    i := 0
+    for i < 3 { // Loop with a condition
+        println(i)
+        i += 1
+    }
+
+    for j := 3; j >= 0; j -= 1 { // Loop with an init statement, condition, and update expression
+        println(j)
+    }
+
+    j := 0
+    for { // Infinite loop
+        j += 1
+
+        // The standard loop control statements can be used
+        if j == 3 then continue
+        if j == 5 then break
+
+        println(j)
+    }
+}
+
+switch_statements :: () {
+    x := 69
+    if x == {
+    case 42; println("I mean it's alright, like overrated as f*ck")
+
+    case 69, 420
+        // Multiple case predicates are separated by commas. There is no fallthrough.
+        // This branch will active for both the values of 69 and 420.
+        message := "That's why he's the GOAT, the GOAT!!!"
+        println(message)
+
+    case
+        // A case with no value is the default case
+        println("Ayo")
+
+        // The scope of each case is limited to itself. The variable 'message' defined in the previous
+        // case is undefined here.
+        // println(message) // Try uncommenting this.
+
+    case 1337
+        // You can have regular cases after a default case. It's not syntactically forbidden.
+        // In fact, if 'x' were 1337, then this branch would activate.
+        //
+        // Try it out! Change 'x' to 1337 and run this program.
+        println("Hey that's pretty good!")
+    }
+
+    s := "Foo"
+    if s == { // You can switch on strings
+    case "Foo"
+        println("Yay!")
+
+    case "Bar", "Baz"
+        println("OK")
+    }
+
+    // In fact, any type that implements the '==' operator can be switched. This will be described
+    // in detail later along with operator overloading.
+}
+
+#if 6.9 == {
+case 4.2
+    compile_time_switch_statements :: "Urmom"
+
+case 6.9
+    compile_time_switch_statements :: () {
+        X :: "Foo"
+        #if X == {
+        case "Foo"
+            println("Foo!")
+            println("This is the one!!")
+
+        case "Bar", "Baz"
+            println("No!")
+
+        case; println("What?")
+        }
+
+        println("================================================================================")
+    }
+}
+
+// You can defer statements to execute at the end of the current scope
+defer_statements :: () {
+    defer {
+        println("This will be executed last...")
+
+        // You can get quite creative with the deferred logic
+        if true {
+            println("...as it was encountered first")
+            for i := 0; i < 3; i += 1 {
+                println("defer: \{i}")
+            }
+        }
+    }
+
+    {
+        defer println("This will end at the end of this block")
+        println("This will print first")
+    }
+
+    println("This will print second")
+
+    for i := 0; i < 3; i += 1 {
+        // The end of the scope is each iteration of the loop
+        defer println("At end of loop")
+
+        println(i)
+    }
+
+    println("================================================================================")
+    defer_real_world_example()
+}
+
+// In this example, we will use read some bytes from a file.
+defer_real_world_example :: () {
+    PATH :: "07_control_flow.glos"
+
+    // Import the "os" module from the standard library. Modules will be described later.
+    os :: #import "os"
+
+    f, ok := os.open(PATH, true)
+    defer f.close() // Just like that, we don't have to worry about this file handle anymore.
+
+    if !ok {
+        eprintln("Error: Could not open file '\{PATH}'")
+        os.exit(1)
+    }
+
+    buffer: [64]char
+    n, ok := f.read(buffer)
+    if !ok {
+        eprintln("Error: Could not read file '\{PATH}'")
+        os.exit(1)
+    }
+
+    println("Read \{n} bytes from '\{PATH}':")
+    println("```")
+    println(string(buffer[..n]))
+    println("```")
+
+    // As you can see, throughout the extent of this function, we did not have to worry about
+    // releasing the file handle.
+    //
+    // Ultimately 'defer' is not a resource management system, but rather a control flow mechanism.
+    // This broadens the horizon of its capabilities much more than conventional specialized
+    // techniques. It can be applied anywhere where we want to have cleanup. Anywhere we want to
+    // have varied FILO mechanisms.
+}
+
+// Lastly, compile time assertions
+#assert(true)
+#assert(true, "You can provide a custom message")
+
+// Comment these out one at a time and see what happens
+// #assert(false)
+// #assert(false, "You can provide a custom message")

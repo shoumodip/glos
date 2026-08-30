@@ -1,0 +1,20 @@
+more :: () {
+    println("bar.more()")
+    a()
+    b()
+}
+
+// This marks everything below this as private to this module
+#private...
+
+a :: () {
+    println("bar.a")
+}
+
+b :: () {
+    println("bar.b")
+}
+
+c :: () {
+    println("bar.c")
+}

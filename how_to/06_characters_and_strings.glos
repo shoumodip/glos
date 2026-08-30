@@ -1,0 +1,100 @@
+main :: () {
+    // Characters are 1 byte values
+    println("sizeof(char) = \{sizeof(char)}")
+
+    ch: char = 'E'
+    print(ch)
+
+    // The typical special characters are supported: '\e', '\n', '\r', '\t', '\0', '\'', '\"', '\\'
+    ch = '\n'
+    print(ch)
+
+    // This is a string
+    s: string = "Hello, world!"
+    println(s)
+
+    // Strings are sized views in Glos, and are compiled to this compound value.
+    //
+    //     struct {
+    //         data:  &char
+    //         count: i64
+    //     }
+    //
+
+    // You can access the 'data' and 'count' fields
+    println("typeof(s.data) = \{typeof(s.data)}; s.data = \{s.data}")
+    println("typeof(s.count) = \{typeof(s.count)}; s.count = \{s.count}")
+
+    // You can modify the fields. This is a low level language.
+    s.count = 5
+    println(s)
+
+    // You can slice strings
+    println(s[1..4])
+
+    // The ends of the string can be automatically inferred
+    println(s[..4])
+    println(s[1..])
+    println(s[..])
+
+    // You can index into strings. The resultant value is of type 'char'
+    println("typeof(s[0]) = \{typeof(s[0])}; s[0] = \{s[0]}")
+
+    // Indexing and slicing are bounds checked at runtime, just like arrays and
+    // slices, unless '-O3' is used for compilation.
+    //
+    // s[69]        // Uncomment this and see what happens
+    // s[420..1337] // Uncomment this and see what happens
+    // s[1337..420] // Uncomment this and see what happens
+
+    // You can cast between strings and character slices.
+    chars := []char(s)
+    println(chars)
+
+    chars.count = 4
+    println(string(chars))
+
+    // Now let's address the elephant in the room: String interpolation.
+    println("Yes. this is \{"supported"}. In fact, arbitrary expressions are allowed like this: \{nice()}")
+    nice :: () -> s64 {
+        return 69
+    }
+
+    // String interpolations compile to temporary compound literals in local memory,
+    //
+    // The following two statements are identical in terms of memory management.
+    automatic := "\{nice()}. This is nice!"
+    manual    := []Any { nice(), ". This is nice!" }
+
+    // Although the memory semantics of the above two statements are similar, they actually have different
+    // types as far as the compiler is concerned. String interpolations are implemented as an 'union' type,
+    // which will be covered later. They are not '[]Any'.
+    //
+    // manual = automatic // Uncomment this and see the error
+
+    // C strings:
+    //
+    // No matter how superior the sized string view model of Glos is, at the end of the day,
+    // to write useful software we need to interact with C code. And for that we need the
+    // stinky NULL terminated '&char' values.
+
+    // Define an external function 'puts'
+    extern {
+        puts :: (s: &char) -> s32
+
+        // The C FFI mechanisms will be described in detail later
+    }
+
+    // String literals can be automatically casted to '&char'.
+    puts("Hello from Glos using C!")
+
+    // However, this will not work for variable string values.
+    // puts(s) // This is an error.
+
+    // You can try to access the 'data' field, but it will not behave correctly due to lacking a NULL terminator.
+    puts(s.data) // This prints "Hello, world!", and not "Hello"
+
+    // For runtime 'string' values, a helper function from the standard library can be used
+    strings :: #import "strings" // Modules and imports will be covered later
+    puts(strings.to_cstring(s))  // The 'to_cstring' allocates dynamic memory at runtime using the default allocator.
+}

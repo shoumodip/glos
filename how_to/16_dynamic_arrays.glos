@@ -1,0 +1,59 @@
+// Now that methods have been covered in the previous document, we can look at dynamic arrays.
+
+main :: () {
+    // The dynamic array type is like this:
+    //
+    //     [..]Element_Type
+    //
+    xs: [..]s64
+    defer xs.free() // Let us not worry about memory management
+
+    xs.push(69)
+    xs.push(420)
+    xs.push(1337)
+    println(xs)
+
+    // A dynamic array is represented at runtime like this:
+    //
+    //     struct {
+    //         data:     &Element_Type
+    //         count:    s64
+    //         capacity: s64
+    //     }
+    //
+    println("sizeof(xs)  = \{sizeof(xs)}")
+    println("xs.data     = \{xs.data}")
+    println("xs.count    = \{xs.count}")
+    println("xs.capacity = \{xs.capacity}")
+    //
+    // The underlying memory buffer (pointed to by the field 'data') is not grown every time a new
+    // element is pushed. Rather the field 'capacity' keeps track of the size of the current memory
+    // buffer, and whenever the number of elements (the field 'count') exceeds the capacity of the
+    // buffer, it doubles the capacity and reallocates the buffer. Therefore pushing to a dynamic
+    // array is O(1) amortized.
+
+    // You can index into dynamic arrays.
+    println(xs[0])
+
+    // You can slice them.
+    println(xs[1..2])
+
+    // The ends of the slice will be inferred if ommitted.
+    println(xs[..2])
+    println(xs[1..])
+    println(xs[..])
+
+    // Bounds checks occur at runtime if '-O3' is not provided. The following lines will all panic
+    // at runtime. You can try uncommenting them one by one to see the behaviour.
+    // xs[4]
+    // xs[6..7]
+    // xs[42..0]
+}
+
+// That is all there is to know regarding the syntax and semantics of dynamic arrays. It's a simple
+// concept really, nothing much to say.
+//
+// For practical purposes, it is the API regarding dynamic arrays that is relevant. For that go
+// through the file "std/builtin/array.glos" to see the methods defined on dynamic arrays. You will
+// notice the use of '$T' in that file. Don't worry about that, that is just polymorphism, which
+// shall be covered in a later document.

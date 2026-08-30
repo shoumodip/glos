@@ -1,0 +1,95 @@
+// If you run the Glos compiler with no command line arguments, it will attempt to build the
+// module in the current working directory.
+//
+// What is a module? It is a folder containing '*.glos' files.
+
+// For this example, you can change your current directory inside this folder, and run glos.
+//
+//     $ glos
+//
+// Or
+//
+//     $ glos .
+//
+// You can pass the '-r' flag if you want. Just don't pass an input file.
+//
+// Another thing you can do, is stay in any other directory, and run glos providing the path
+// to this folder as the input.
+//
+// For example if you are in the root of this repo:
+//
+//     $ glos how_to/14_modules
+//
+// Again, you can pass the '-r' flag if you want. That is irrelevant to this discussion.
+
+main :: () {
+    // The function foo() is not defined here. However since you executed glos on the entire
+    // folder, therefore it will find its definition in the file 'foo.glos'.
+    //
+    // Since 'main.glos' and 'foo.glos' are present in the same folder, they are part of the
+    // same module, and shares definitions.
+    foo()
+
+    // If you execute glos as such:
+    //
+    //     glos -r main.glos
+    //
+    // Then 'foo()' will be defined, since the root module will contain only the file 'main.glos'
+    // and not the entire folder.
+
+    // Now we are going to import a module. As you can see, there is a subfolder 'bar' inside
+    // this directory. We are going to import that.
+    //
+    // Note: While it is allowed to pass a file as the input to the compiler from the CLI, you
+    //       can NOT import a file. You can only import folders.
+
+    bar :: #import "bar"
+    bar.bar()
+
+    // The following line is an error, since 'bar_impl' is not exported from module "bar"
+    // bar.bar_impl()
+
+    // You don't have to define an import as a constant to use it. If you want you can just use
+    // it directly.
+    #import "bar".more()
+    // However it's kinda ugly, so the constant definition is visually preferred.
+
+    // Now, let's talk about unqualified imports
+    #import "nice"
+    // That's it. Just import it as a statement.
+
+    nice() // Imported from module "nice"
+
+    // As a general rule of thumb though, qualified imports are always preferred over unqualified
+    // imports. It makes reasoning about code much easier. Also it prevents name collisons.
+
+    // If a name was defined in the current lexical scope which collides with an unqualified import,
+    // then the one defined in the scope will be used, not the import one.
+
+    // For example, the module "nice" defines a function 'shadowed' that prints 420. However we shall
+    // shadow that with our own definition of 'shadowed'
+    shadowed()
+
+    shadowed :: () {
+        println("Get rekt noob")
+        // If you comment this function out, then it will print 420. Try it out!
+    }
+
+    // However, if the collision occurs with a definition that is also from an unqualified import,
+    // then the compiler will throw a redefinition error.
+    //
+    // Uncomment this line and see the compiler errors. They are quite descriptive, showing where
+    // the names were imported from, to provide a good developer experience.
+    // #import "collision"
+}
+
+// Check out the files in the folder "bar" to get an idea about the '#private' directive.
+
+// You can apply '#private' to an entire 'extern' block. It would do exactly what you expect.
+#private extern {
+    foo :: ()
+    bar :: ()
+}
+
+// If the '#private ...' directive is used inside a '#if' branch, then it will only apply to that
+// branch, not the other ones, and not outside.

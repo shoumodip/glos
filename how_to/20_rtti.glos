@@ -1,0 +1,37 @@
+main :: () {
+    // 'Type' is a distinct alias to '&Type_Info', which stores the RTTI.
+    //
+    // You can see the definitions in "std/builtin/contract.glos"
+    T: Type
+
+    // When you assign a type to a variable, it becomes an RTTI pointer.
+    T = s64
+    println("T = \{T}")
+
+    T = []string
+    println("T = \{T}")
+
+    // You can inspect the RTTI structure by dereferencing the RTTI pointer.
+    println(*T)
+
+    // You can see the pointer to the RTTI structure by casting to '&Type_Info'.
+    // The then standard library printing functions will not format the type.
+    println(&Type_Info(T))
+
+    // The first field of trait values is a 'Type'. It is an RTTI pointer.
+    any: Any = 69
+    println("typeof(any.type) = \{typeof(any.type)}")
+    println("any.type = \{any.type}")
+    println("*any.type = \{*any.type}")
+
+    // It is guaranteed that the compiler will generate unique RTTIs. For example:
+    a := s64
+    b := s64
+    println(a == b)
+}
+
+// That is all there is to say about this. As mentioned before, see the definition
+// in "std/builtin/contract.glos" to get the specific implementation details.
+//
+// Also see "std/builtin/fmt.glos" for the 'write_type()' function that formats
+// a 'Type' value. It will serve an example of the usage of RTTI.

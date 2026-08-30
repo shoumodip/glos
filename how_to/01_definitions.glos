@@ -1,0 +1,104 @@
+// Single Line Comment
+
+/*
+    Multi
+    Line
+    Comments
+*/
+
+/*
+    Nested
+
+    /*
+        Multi
+        Line
+    */
+
+    Comments
+*/
+
+// Variables are defined like this:
+//
+//     name : type = value
+a: s64 = 69
+
+// The value can be omitted, in which case, it will be zeroed out by default.
+b: s64
+
+// The type can be omitted, in which case, it will be inferred from the value.
+c := 420
+
+// Constants are defined like this:
+//
+//     name : type : value
+D: s64 : 1337
+
+// The type can be omitted, but the value cannot
+E :: 800.85
+
+// As you can see, the 'main' function is just a constant definition to a function literal.
+//
+// Functions will be described in later examples.
+main :: () {
+
+    // String interpolation is supported, with no dynamic memory allocations! But more on that later.
+    println("a = \{a}")
+    println("b = \{b}")
+    println("c = \{c}")
+    println("D = \{D}")
+    println("E = \{E}")
+
+    // Assigning to a variable
+    b = 8008135
+    println()
+    println("b = \{b}")
+
+    // Constants are, well, constant. You cannot assign to them.
+    // E = 8008.135 // Try uncommenting this line. The compiler will throw an error
+
+    // You can define multiple things in the same statement.
+    //
+    // Another thing to see, definitions can be shadowed in local scope.
+    // Here, the previous definition of 'b' as a 's64' is being shadowed by this definition
+    // of 'b' as a 's32'. More on the integer types later.
+    a, b: s32
+
+    // Assign multiple things
+    a, b = 69, 420
+    b, a = a, b // The virgin "Swap values without intermediate variables" question V/S The Chad multiple values
+    println("a = \{a}; b = \{b}")
+
+    // When defining multiple things with assignment values, the types need not be similar
+    g, h := 69, "Nice!"
+    println("g = \{g}; h = \{h}")
+
+    // Constants and global variables can be used before the site of that definition, if they are in scope
+    println(TRUTH)
+    TRUTH :: "Messi is the GOAT"
+
+    // Constants are not allowed to shadow other constants defined in the same scope depth
+    // TRUTH :: "No, CR7 is the GOAT. Siuuuuuu!" // Uncomment this and see what happens
+
+    {
+        println(TRUTH)
+        TRUTH :: "Hail Dictator Mbappe!" // But you can shadow constants in nested scopes
+    }
+
+    iota :: () -> s64 {
+        // A static variable has the lifetime of the program itself instead of the local scope
+        //
+        // The value of this will persist across function calls
+        #static i := 0
+        i += 1
+        return i
+    }
+
+    println(iota())
+    println(iota())
+    println(iota())
+
+}
+
+// Custom link names can be set for variables and functions defined in Glos
+#link "foo" bar :: () {}
+#link "bar" foo: s64

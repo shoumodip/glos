@@ -1,0 +1,193 @@
+// This file will look into the mechanisms regarding runtime polymorphism.
+//
+// We have already encountered the trait 'Any' in previous documents. Hopefully, by
+// the end of this file, that will stop being a mystery.
+//
+// You probably already have encountered similar concepts in other languages before.
+// For example the 'interface' type of Go.
+
+// You define a trait like this:
+My_Trait :: trait {
+    foo: () -> string
+    bar: (x: s32) -> s32
+
+    // For a type to satisfy this trait, it must implement these methods here.
+}
+
+Int32 :: struct {
+    x: s32
+}
+
+foo :: (this: Int32) -> string {
+    return "Int32"
+}
+
+bar :: (this: Int32, x: s32) -> s32 {
+    return this.x + x
+}
+
+Float64 :: struct {
+    y: f64
+}
+
+foo :: (this: Float64) -> string {
+    return "Float64"
+}
+
+bar :: (this: Float64, x: s32) -> s32 {
+    return s32(this.y) + x
+}
+
+main :: () {
+    my_trait: My_Trait
+
+    my_trait = Int32 {34}
+    println(my_trait.foo())
+    println(my_trait.bar(35))
+
+    my_trait = Float64 {200.0}
+    println(my_trait.foo())
+    println(my_trait.bar(220))
+
+    indirection :: (m: My_Trait) {
+        println(m.foo())
+        println(m.bar(1))
+    }
+
+    indirection(Int32 {1336})
+    indirection(Float64 {80084.0})
+
+    // You can also construct traits in place: The syntax is like a type cast.
+    //
+    //     Trait_Type(value)
+    //
+    indirection(My_Trait(Int32 {8008134}))
+
+    // Like with unions, the compiler can do type narrowing
+    if my_trait == Float64 {
+        // Inside this branch, 'my_trait' is of type 'Float64'
+        println("typeof(my_trait) = \{typeof(my_trait)}")
+        println(my_trait.y)
+    } else {
+        // Here the type has not narrowed from 'My_Trait'
+        #assert(typeof(my_trait) == My_Trait)
+    }
+
+    my_trait = Int32 {34} // Get a different output for variety
+
+    // And for switch statements too.
+    if my_trait == {
+    case Int32
+        println("typeof(my_trait) = \{typeof(my_trait)}")
+        println("Int32: \{my_trait.x}")
+
+    case Float64
+        println("typeof(my_trait) = \{typeof(my_trait)}")
+        println("Float64: \{my_trait.y}")
+    }
+
+    // Like with unions, compiler cannot narrow types if it is absolutely not known
+    if my_trait == {
+    case Int32, Float64
+        println("typeof(my_trait) = \{typeof(my_trait)}")
+    }
+
+    // You can access types from a trait
+    println(my_trait.(Int32))
+
+    // The type is checked at runtime unless '-O3' is provided.
+    // println(my_trait.(Float64)) // Uncomment this and see the error.
+
+    // You can modify the value after accessing as well.
+    my_trait.(Int32) = Int32 {420}
+    println(my_trait)
+
+    my_trait.(Int32).x = 69
+    println(my_trait)
+
+    // Now let's look at the low level semanatics.
+    //
+    // Traits are compiled to something like this:
+    //
+    //     struct {
+    //         type: Type
+    //         data: rawptr
+    //         impl: rawptr
+    //     }
+    //
+
+    // The field 'type' contains a pointer to the RTTI structure of the currently assigned type.
+    //
+    // We will cover RTTI in a later document.
+    my_trait.type = Int32
+    println("my_trait.type = \{my_trait.type}")
+
+    my_trait.type = Float64
+    println("my_trait.type = \{my_trait.type}")
+
+    // By default it is 'null'.
+    {
+        default: My_Trait
+        println("default.type = \{default.type}")
+    }
+
+    // The field 'data' contains a pointer to the value. It is 'null' by default.
+    //
+    // When you assign a value to a trait, it creates a stack allocated memory buffer where
+    // it stores that value, and then assigns the pointer to that memory into this field.
+    println(my_trait.data)
+    // So the lesson here is that by default, the lifetime of a trait is tied to its lexical scope.
+
+    {
+        // Good news is that Glos is a low level language. So there's nothing stopping you from
+        // allocating the memory yourself.
+
+        // Let's create a new variable to demonstrate this in.
+        my_trait_in_heap: My_Trait
+        my_trait_in_heap = Int32 {} // You MUST assign a dummy value to setup the 'impl' field of that type
+
+        // New() is a function defined in the builtin standard module of Glos. It uses
+        // compile time polymorphism, which will be described in the next document.
+        //
+        // For now, just know that you should call this function providing a type as its argument.
+        // And it will allocate an object of that type on the heap (using the default arena) and
+        // return a pointer to that memory
+        int32_in_heap := New(Int32)
+        int32_in_heap.x = 69
+
+        // Now assign the memory.
+        my_trait_in_heap.data = rawptr(int32_in_heap)
+        // Congratulations. Now you have ownership of the memory and can extend its lifetime beyond
+        // that of this function.
+
+        println(my_trait_in_heap)
+        println(my_trait_in_heap.foo())
+        println(my_trait_in_heap.bar(351))
+    }
+
+    // Lastly the field 'impl' contains the table of methods that implement the trait.
+    //
+    // The schema is not exposed to the language so that changes can be made to the representation
+    // without breaking user code.
+
+    // Of course, it is needless to say that you cannot assign to a trait value, something that does
+    // not implement that trait.
+    //
+    // For example, the following line is an error as the type 's64' does not have the methods required
+    // by 'My_Trait'.
+    // my_trait = 69
+
+    // Finally let's look at 'Any'. It is defined like this:
+    //
+    //     Any :: trait {}
+    //
+    // Since it requires no methods, therefore it is implemented by any type.
+    any: Any
+    any: Any
+    any = 69
+    any = "Hi!"
+    any = true
+    any = []string {"Yee", "Haw"}
+    any = 13.37
+    any = null
+}

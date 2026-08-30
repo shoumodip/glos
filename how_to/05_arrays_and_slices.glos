@@ -1,0 +1,124 @@
+main :: () {
+    // This is an array of 's64' with 5 elements.
+    xs: [5]s64
+
+    // You can access the data pointer and the count.
+    println("xs.data  = \{xs.data}")
+    println("xs.count = \{xs.count}")
+
+    // At runtime, these fields do does exist. These are just compile time constants.
+    //
+    // This is an error. You cannot take pointer to 'xs.count' because it does not exist at runtime.
+    // println(&xs.count) // Uncomment this and see the compiler error
+
+    // Accessing 'data' is the same as taking a pointer to 'xs'
+    println("&xs = \{&xs}")
+
+    // The memory is owned by this array value itself.
+    println("sizeof(xs) = \{sizeof(xs)}")
+
+    // Arrays do NOT decay to pointers. This function will return 40 bytes of memory.
+    foo :: () -> [5]s64 {
+        return {1, 2, 3, 4, 5} // An array literal. These will be described a bit later in this file.
+    }
+
+    xs = foo()
+    println(xs)
+
+    // Likewise, arrays passed by arguments passes a copy, not a reference. Any changes made inside
+    // this function will not reflect outside.
+    bar :: (xs: [5]s64) {
+        xs[0] = 69
+        println("Inside bar(): xs = \{xs}")
+    }
+    bar(xs)
+
+    println("But outside bar(): xs = \{xs}")
+
+    // An array literal is constructed like this:
+    //
+    //     [ Optional_Count ] Type { Items }
+    //
+    println([]string {"Foo", "Bar"})
+
+    // Designated initializers are supported
+    println([]string {1 = "Bar", 0 = "Foo"})
+
+    // You can optionally pass the count as well in the literal
+    println([2]s64 {69})
+
+    // In places where the type of the array can be inferred, you can skip the '[N]Type' prefix.
+    // For example, here the LHS of the assignment 'xs' is known to be '[5]s64'. This helps the
+    // compiler to infer the type of the RHS to also be '[5]s64', thus leading to inference.
+    xs = {69, 420, 1337}
+
+    // You can index into arrays.
+    println(xs[0])
+
+    // Indexing is bounds checked at runtime unless '-O3' is provided.
+    // println(xs[69]) // Uncomment this line and see what happens
+
+    // You can slice arrays
+    //
+    // The syntax for construcing a slice is:
+    //
+    //     from [ begin .. end ]
+    //
+    // The beginning is inclusive, but the end is exclusive. So if you slice from A to B,
+    // then you can index from A to (B - 1).
+    println(xs[1..4])
+
+    // The beginning and end of the slice is automatically inferred if omitted.
+    println(xs[..4])
+    println(xs[1..])
+    println(xs[..])
+
+    // This brings us to our next topic: Slices
+    ys: []s64
+
+    // Slices are borrowed views into memory owned by some other entity, and are compiled to this
+    // compound value.
+    //
+    //     struct {
+    //         data:  &Element_Type
+    //         count: i64
+    //     }
+    //
+    // Unlike arrays, the fields 'data' and 'count' have real existence at runtime for slices.
+    println("ys.data  = \{ys.data}")
+    println("ys.count = \{ys.count}")
+
+    // Arrays are automatically casted into slices if the underlying element types are the same.
+    ys = xs
+    println("ys.data  = \{ys.data}")
+    println("ys.count = \{ys.count}")
+    println("ys = \{ys}")
+
+    // Array literals can automatically cast into slices.
+    zs: []f64
+    zs = {4.2, 6.9, 13.37}
+    println(zs)
+
+    // However, slices cannot cast into arrays.
+    // xs = ys // This is an error
+
+    // A slice is a borrow, therefore any changes done to it will reflect upon the underlying memory.
+    ys[0] = 69
+    println("ys = \{ys}")
+    println("xs = \{xs}")
+
+    baz :: (slice: []s64) {
+        slice[1] = 420
+        slice.count = 2
+        println("Inside bar(): \{slice}")
+    }
+
+    baz(ys)
+    println("Outside bar():")
+    println("    xs = \{xs}")
+    println("    ys = \{ys}")
+    // As you can see, modifying the elements of a slice modifies the underlying memory.
+    // However modifying the slice fields 'data' or 'count' does not.
+
+    // The same bounds check semantics apply for slices as in arrays, so we are not repeating all of that.
+}

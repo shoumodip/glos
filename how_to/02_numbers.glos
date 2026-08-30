@@ -1,0 +1,86 @@
+main :: () {
+    // There are 8 integer types, named according to their signedness and size.
+    //
+    //     Signed:   s8, s16, s32, s64
+    //     Unsigned: u8, u16, u32, u64
+    //
+    a: u8  = 69
+    b: u16 = 420
+    c: u32 = 0x10F2C           // Hexadecimal literals
+    d: u64 = 69_420_1337_80085 // You can put underscores in between the digits for readability
+
+    e: s8  = -69
+    f: s16 = -420
+    g: s32 = -1337_80085
+    h: s64 = -69_420_1337_80085
+
+    // By default, integer literals are 's64'
+    i := 34 + 35
+    println("typeof(i) = \{typeof(i)}")
+
+    // But they can be automatically casted to other types.
+    j: u8 = 69
+    println("typeof(j) = \{typeof(j)}")
+
+    // The compiler enforces range checks for these automatic conversions.
+    // a: u8 = 420 // This is a compile time error
+    // b: u8 = -1  // This is too
+
+    // However, this is only applicable to integer literals and untyped constants.
+    // Variables and typed constants WILL NOT automatically cast to other types.
+    // a = b // Try uncommenting this. The compiler will throw a type mismatch error.
+
+    // An explicit cast is required in this case.
+    a = u8(b)
+    println("a = \{a}. See how the value got truncated because we went from a bigger type to a smaller one.")
+
+    // Standard arithmetic and bitwise operations exist
+    println(34 + 35)
+    println(500 - 80)
+    println(23 * 3)
+    println(840 / 2)
+    println(209 % 70)
+    println(-420)
+
+    println(17.0 * 2.0 + 35.0)
+    println((900.0 - 60.0) / 2.0)
+    println((40.0 + 0.11) / 3.0)
+
+    println(276 >> 2)
+    println(105 << 2)
+    println(~-70)
+    println(160 | 260)
+    println(77 & 103)
+    println(~-419 + 10 & 3)
+    println(69 ^ 1404)
+
+    // There are 2 floating point types, named according to their size: f32, f64
+    k: f32 = 69.420
+    l: f64 = 1337.80085
+
+    // By default, floating point literals are 'f64', but can automatically cast to 'f32'.
+    m: f32 = 34.5 + 34.5
+
+    // The same rules about explicit casting are also applicable for floats.
+    l = f64(k)
+
+    // You can cast between floats and integers explicitly
+    a = u8(l)
+    println(a)
+
+    l = f64(b)
+    println(l)
+
+    // If the expression is constant, the the compiler will perform range checks.
+    // a = u8(2.0 - 3.6) // Try uncommenting this, and see what happens
+
+    // Bitwise operators are not defined for floats. The following line is an error.
+    // l | l
+
+    // These are the arithmetic assignment operators:
+    //
+    //    +=, -=, *=, /=, %=, <<=, >>=, |=, &=, ^=
+    //
+    b += 917
+    println(b)
+}

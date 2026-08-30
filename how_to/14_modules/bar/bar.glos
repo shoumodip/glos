@@ -1,0 +1,11 @@
+bar :: () {
+    bar_impl()
+}
+
+// Definitions marked as private will not be exported.
+// However they can be used within the module, and by all the files in that module.
+
+#private
+bar_impl :: () {
+    println("bar()")
+}

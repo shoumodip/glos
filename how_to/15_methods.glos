@@ -1,0 +1,79 @@
+Vec2 :: struct {
+    x, y: f32
+}
+
+// You define a method by naming the first argument as 'this'.
+// The type of that argument becomes the receiver of the method.
+length :: (this: Vec2) -> f32 {
+    return sqrtf(this.x * this.x + this.y * this.y)
+    extern {
+        sqrtf :: (x: f32) -> f32
+    }
+}
+
+// The pointer indirection of the receiver does not matter. The underlying type will be
+// considered.
+scale :: (this: &Vec2, s: f32) {
+    this.x *= s
+    this.y *= s
+    println(*this)
+}
+
+// You can only define methods on types defined in the current module.
+// foo :: (this: s64) {} // Uncomment this and see the compiler error
+
+// Regular type aliases are considered the same type, so the module of the original type is
+// considered.
+IntA :: s64
+
+// The type 'IntA' is the same as 's64', which is not defined in this module. Therefore
+// this method definition is not allowed.
+// foo  :: (this: IntA) {}
+
+// But distinct type aliases create a new type, therefore are considered part of the defining
+// module.
+IntB :: distinct s64
+
+// The type 'IntB' is a distinct type defined in the current module, therefore you can define
+// methods on this now.
+foo  :: (this: IntB) {
+    println(this)
+}
+
+main :: () {
+    v := Vec2 {3.0, 4.0}
+
+    // You call a method like in other language.
+    println(v.length())
+
+    // The method call syntax can automatically take reference to the receiver if possible.
+    v.scale(3.0)
+
+    // You can also call a method by accessing from the type instead of a receiver.
+    println(Vec2.length(v))
+
+    // Notice that you have to explicitly take reference to 'v' now, since we are not using
+    // the method call syntax anymore, but rather treating method as a function.
+    Vec2.scale(&v, 3.0)
+
+    // Methods are also first class values
+    f := Vec2.length
+    println(f(v))
+
+    g := Vec2.scale
+    g(&v, 3.0)
+
+    // Calling a method on a distinct type.
+    IntB(69).foo()
+
+    // Note that there is no "method type". What I mean by that is the following commented out line.
+    // f: (this: Vec2) // Uncomment this and see what happens.
+
+    // Ultimately methods are just compile time naming convenience and syntax sugar. They have no
+    // difference from functions at runtime, and therefore a separate "method type" does not exist.
+}
+
+// You can also define methods inside 'extern' blocks
+extern {
+    foobar :: (this: Vec2)
+}

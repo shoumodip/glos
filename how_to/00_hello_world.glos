@@ -1,0 +1,13 @@
+main :: () {
+    println("Hello, world!")
+}
+
+// To build this program:
+//
+//     $ glos 00_hello_world.glos
+//
+// To build and run:
+//
+//     $ glos -r 00_hello_world.glos
+//
+// See the output of 'glos -h' to learn how to use the compiler. It's short and to the point, I promise!

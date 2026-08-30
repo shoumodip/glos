@@ -1,0 +1,54 @@
+main :: () {
+    // Structures are defined like this
+    Vec2 :: struct {
+        x, y: f32
+    }
+
+    v: Vec2
+
+    // You access the fields of a structure as expected.
+    v.x = 69.0
+    v.y = 420.0
+    println(v)
+
+    // Structure literals
+    v = Vec2 { 13.37, 800.85 }
+    println(v)
+
+    // Designated initializers
+    v = Vec2 { y = 6.9, x = 4.2 }
+    println(v)
+
+    // Like with other compound literals, you can omit the type if it can be inferred
+    // from the surrounding context.
+    v = { x = 69.0, y = 420.0 }
+    println(v)
+
+    // There is auto dereference of structure fields
+    p := &v
+    p.x = 13.37
+    p.y = 80.085
+    println(v)
+
+    // You can also do this
+    Vec3 :: struct {
+        ...Vec2 // Put the fields of 'Vec2' into here
+        z: f32
+    }
+    println(Vec3 { x = 6.9, y = 13.37, z = 80.085 })
+
+    // Now let's take a look at structure distinctness.
+    A :: struct { x: s32 }
+    a: A
+
+    B :: struct { x: s32 }
+    b: B
+
+    // The following line is an error. Structures defined to a constant are distinct.
+    // a = b
+
+    // But this is not.
+    a: struct { x: s32 }
+    b: struct { x: s32 }
+    a = b // Anonymous structure types are considered equal if their fields have the same types.
+}

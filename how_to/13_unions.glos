@@ -1,0 +1,185 @@
+// Unions are tagged in Glos
+Value :: union {
+    string
+    s64
+}
+
+main :: () {
+    v: Value
+
+    // Types which are variants of the union are automatically casted to it
+    v = "Hello!"
+    println(v)
+
+    v = 69
+    println(v)
+
+    // The following line is an error since 'bool' is not a variant of 'Value'
+    // v = true
+
+    // You can check the type of a union like this:
+    println("Is s64:    \{v == s64}")
+    println("Is string: \{v == string}")
+
+    // If you check the type of a union variable in an if or switch statement, the compiler
+    // will attempt to "unwrap" it inside the branch if possible.
+    if v == s64 {
+        // Inside this branch, the compiler knows 'v' is a 's64', therefore it automatically narrows it.
+        //
+        // Note that this type narrowing occurs at compile time. You can see that is the case, since
+        // you can now use arithmetic operators on 'v', something which is not defined for 'Value'.
+        println(v * 6 + 6)
+        println("typeof(v) = \{typeof(v)}")
+
+        // No new variable is created. This is just high level syntactic convenience. At runtime,
+        // nothing changes.
+    } else {
+        // Here there is no such guarantee, therefore 'v' is of type 'Value'.
+        #assert(typeof(v) == Value)
+    }
+
+    v = "Urmom"
+
+    // This also works for switch statements
+    if v == {
+    case null
+        // This will be explained a bit later.
+        // For now, just know that you need a 'null' case to complete the switch statement.
+
+    case s64
+        println("typeof(v) = \{typeof(v)}")
+        println(v * 6 + 6) // v is s64 here.
+
+    case string
+        println("typeof(v) = \{typeof(v)}")
+        println([]char(v)) // v is string here.
+    }
+
+    // This will not work if you combine cases.
+    if v == {
+    case null
+
+    case s64, string
+        // Compiler does not know the type of 'v' here. Therefore it remains 'Value'.
+        println("typeof(v) = \{typeof(v)}")
+    }
+
+    // Now let's look at null unions
+    //
+    // Defining a fresh zero initialized variable of type 'Value'.
+    v: Value
+
+    // Since no value has been assigned to 'v', therefore it's type is currently 'null'.
+    // That is what it means.
+    if v == {
+    case null
+        println("Here") // This should activate
+
+    case s64, string
+        unreachable() // This is a function from the builtin standard module
+    }
+
+    // Unions are compiled to something like this:
+    //
+    //     struct {
+    //         type: s64
+    //         data: [MAX_VARIANT_SIZE]u8
+    //     }
+    //
+    // You can access the field 'type' from a union, but not 'data'.
+
+    println("For null, it is \{v.type}")   // The null trait has type 0
+
+    v = "Hi!"
+    println("For string, it is \{v.type}") // 'string' is the first variant of 'Value'. Therefore this is now 1.
+
+    v = 69
+    println("For s64, it is \{v.type}")    // 's64' is the second variant of 'Value'. Therefore this is now 2.
+
+    // You can get the underlying data by an explicit access:
+    println(v.(s64))
+
+    // Since unions are tagged, this can perform a check at runtime whether you are accessing
+    // the correct type or not, unless '-O3' is set.
+    //
+    // So the following line is a runtime panic. Comment it out see what happens.
+    // v.(string)
+
+    // You can modify the value after accessing as well.
+    v.(s64) = 420
+    println(v)
+
+    v = "Foobar"
+    println(v)
+
+    v.(string) = "Nice!!"
+    println(v)
+
+    v.(string).count = 4
+    println(v)
+
+    string_interpolation_explanation()
+}
+
+// We can now talk about how string interpolations are represented at runtime.
+string_interpolation_explanation :: () {
+    // There is this union defined in the builtin standard module:
+    //
+    //     Interpolation :: union {
+    //         []Any
+    //         string
+    //     }
+    //
+    // We have already looked at string. But what is 'Any'?
+    //
+    // It is a trait with no required methods. We will look into traits in a later document, but
+    // for now the relevant information is this:
+    any: Any
+    any = 69
+    any = "Hi!"
+    any = true
+    any = []string {"Yee", "Haw"}
+    any = 13.37
+    any = null
+
+    // As the name suggests, you can put a value of any type into 'Any'.
+    //
+    // You can probably now understand how string interpolation works for the most part.
+
+    // So this ...
+    auto := "\{70 - 1} beers on the wall. Isn't that \{420 == 500 - 80}"
+    // ... should get compiled to something like this.
+    //
+    //     []Any {70 - 1, " beers on the wall. Isn't that ", 420 == 500 - 80}
+    //
+
+    // Let us check.
+    println(auto.([]Any))
+    // That's absolutely correct!
+
+    // But then what about the variant 'string'?
+    //
+    // It is an optimization for constant string interpolations.
+    CONSTANT :: "Haha \{34 + 35}. Funny number."
+    println(CONSTANT.(string))
+
+    // Since we know exactly what the result of this interpolation is, therefore it makes sense
+    // to emit it as a 'string' directly.
+    //
+    // Thus the type 'Interpolation' is defined as a union. This way we can optimize behind the
+    // scenes without the user noticing any change.
+}
+
+V :: Value(69)
+
+// BTW, the type narrowing also works for compile time if statements.
+#if V == s64 {
+    A :: V * 6 + 6
+}
+
+// And for compile time switch statements too
+#if V == {
+case null;   A :: 69
+case string; A :: 420
+case s64;    B :: A * 3 + 77
+}

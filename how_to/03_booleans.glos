@@ -1,0 +1,46 @@
+main :: () {
+    // A boolean is a 1 byte value. None of those weird C++ bitwise shenanigans.
+    x: bool
+    println("sizeof(bool) = \{sizeof(x)}")
+
+    x = true
+    println("(Step 1) x = \{x}")
+
+    x = false
+    println("(Step 2) x = \{x}")
+
+    x = !x // Logical NOT
+    println("(Step 3) x = \{x}")
+
+    // The logical && and || operators behave as expected, with short circuiting behaviour.
+    //
+    // To see the short circuiting in action, let us use a function that create side effects.
+    println(func(true, "Lhs")  && func(true, "Rhs"))
+    println(func(true, "Lhs")  && func(false, "Rhs"))
+    println(func(false, "Lhs") && func(true, "Rhs"))
+    println(func(false, "Lhs") && func(false, "Rhs"))
+
+    println(func(true, "Lhs")  || func(true, "Rhs"))
+    println(func(true, "Lhs")  || func(false, "Rhs"))
+    println(func(false, "Lhs") || func(true, "Rhs"))
+    println(func(false, "Lhs") || func(false, "Rhs"))
+
+    // Functions will be covered later, so don't worry about it yet.
+    func :: (v: bool, label: string) -> bool {
+        print("\{label} ... ")
+        return v
+    }
+
+    // BTW, numbers can be compared against each other
+    println(69 > 420)
+    println(69 >= 420)
+    println(69 < 420)
+    println(69 <= 420)
+    println(69 == 420)
+    println(69 != 420)
+
+    // You can explicit cast from integers to booleans, and vice versa. But not with floats
+    x := u8(true)
+    y := bool(-1)
+    // z := bool(6.9) // This is an error
+}

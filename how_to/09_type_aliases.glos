@@ -1,0 +1,33 @@
+main :: () {
+    // Just define a type to a constant. It will act as a type alias.
+    Int64 :: s64
+
+    // In the following document files, you will see that this is the exact manner in which
+    // types like enumerations, structures, unions, and traits are defined. Keep in mind that
+    // you can always use a type without defining it first. The definition is just for syntactic
+    // convenience.
+
+    // 'Int64' and 's64' are the same type.
+    a: s64 = 69
+    b: Int64 = a
+    println(b)
+
+    // In fact, at runtime, the type alias 'Int64' no longer exists. It is now 's64'
+    println("typeof(b) = \{typeof(b)}")
+
+    // We can define a stronger alias using the 'distinct' keyword
+    Number :: distinct s64
+
+    c: s64 = 420
+    d: Number
+
+    // The following line is an error, since 'Number' is a distinct type.
+    // d = c
+
+    // You need an explicit cast now.
+    d = Number(c)
+    println(d)
+
+    // The distinct type alias is preserved at runtime
+    println("typeof(d) = \{typeof(d)}")
+}

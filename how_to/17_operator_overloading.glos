@@ -1,0 +1,262 @@
+// Operator overloading is a concept that divides a lot of people.
+//
+// Some rightfully say that it hides information too much, that it allows
+// the "addition operator to allocate memory and launch a nuke".
+//
+// Others say that without operator overloading, performing mathematical
+// operations on vectors, matrices, etc become cumbersome.
+//
+// Glos has chosen the middle ground. It allows operator overloading ONLY
+// for a select few operators:
+//
+//     1. The mathematical operators
+//
+//         +, -, *, /, %
+//         >, >=, <, <=, ==, !=
+//
+//     2. Indexing and Slicing
+//
+//         [], [..]
+//
+// That's all you are allowed to overload
+
+Vec2 :: struct {
+    x, y: f32
+}
+
+// Operator overloads are defined as methods.
+operator + :: (this: Vec2, that: Vec2) -> Vec2 {
+    return {this.x + that.x, this.y + that.y}
+}
+
+// This implements both binary subtraction and unary negation.
+//
+// For unary negation, this method will be called with the argument 'this' being
+// a zeroed out 'Vec2', and the argument 'that' being the operand of the negation.
+//
+// Mathematically there is no difference between 'null - A' and '-A'.
+operator - :: (this: Vec2, that: Vec2) -> Vec2 {
+    return {this.x - that.x, this.y - that.y}
+}
+
+// Covering the rest of the arithmetic operators for the sake of completeness
+operator * :: (this: Vec2, that: Vec2) -> Vec2 {
+    return {this.x * that.x, this.y * that.y}
+}
+
+operator / :: (this: Vec2, that: Vec2) -> Vec2 {
+    return {this.x / that.x, this.y / that.y}
+}
+
+// You are allowed to pass additional arguments to operator overload methods.
+// However they must have a default value.
+operator % :: (this: Vec2, that: Vec2, location := #caller_location) -> Vec2 {
+    println(location, "The operator '%' was called on 'Vec2' here.")
+    return {this.x % that.x, this.y % that.y}
+}
+
+// Implementing the comparison operator is a bit different. Defining all six comparators
+// one by one would be redundant and a waste of developer energy, therefore a single
+// overload is used to cover the domain of comparisons.
+//
+// There are two types of comparisons you can implement. One is Equivalence, and the other is
+// Ordering.
+//
+// Equivalence supports the operators == and != only.
+// Ordering supports all the comparison operators: >, >=, <, <=, ==, and !=
+
+// You overload comparisons using the '<=>' operator
+operator <=> :: (this: Vec2, that: Vec2) -> Equivalence {
+    // By choosing to return 'Equivalence' from this method, we declare that 'Vec2' supports
+    // the operators == and != only.
+    //
+    // Equivalence is an enumeration defined in the builtin standard module.
+    //
+    //     Equivalence :: enum {
+    //         EQ = 0
+    //         NE = 1
+    //     }
+    //
+
+    if this.x == that.x && this.y == that.y {
+        return .EQ
+    }
+    return .NE
+
+    // Note that this function returns zero when the operands are equal. Do NOT do something like this:
+    //
+    //     return Equivalence(this.x == that.x && this.y == that.y)
+    //
+}
+
+// Defining another type, so we can demonstrate the full comparison overload
+Integer :: struct {
+    x: s64
+}
+
+operator <=> :: (this: Integer, that: Integer) -> Ordering {
+    // By choosing to return 'Ordering' from this method, we declare that 'Integer' supports
+    // all the comparison operators: >, >=, <, <=, == and !=
+    //
+    // Ordering is an enumeration defined in the builtin standard module.
+    //
+    //     Ordering :: enum {
+    //         LT = -1
+    //         EQ =  0
+    //         GT =  1
+    //     }
+    //
+    // This function should return:
+    //
+    //     - 'LT' if 'this' is less than 'that'.
+    //     - 'GT' if 'this' is greater than 'that'.
+    //     - 'EQ' if 'this' and 'that' are equal.
+    //
+
+    if this.x < that.x {
+        return .LT
+    }
+
+    if this.x > that.x {
+        return .GT
+    }
+
+    return .EQ
+}
+
+main :: () {
+    a := Vec2 {1.0, 2.0}
+    b := Vec2 {3.0, 4.0}
+
+    // The basic arithmetic operations
+    println(a + b)
+    println(a - b)
+    println(a * b)
+    println(a / b)
+    println(a % b)
+    println(-a)
+
+    // Comparisons
+    println(a == b)
+    println(a != b)
+
+    // Since the comparison operator overload for 'Vec2' only implements Equivalence, therefore
+    // we cannot do the following:
+    //
+    // println(a > b)
+    // println(a >= b)
+    // println(a < b)
+    // println(a <= b)
+
+    a := Integer {1}
+    b := Integer {2}
+
+    // But since the overload for 'Integer' returns Ordering, it supports all the comparison operators.
+    println(a == b)
+    println(a != b)
+    println(a > b)
+    println(a >= b)
+    println(a < b)
+    println(a <= b)
+
+    showcase_index_and_slice_overloads()
+}
+
+Table :: struct {
+    items: [..]struct {
+        key:   string
+        value: s64
+    }
+
+    // Just a reminder that you can use types directly without defining them as constants first.
+    // Like we are using this 'struct { key: string; value: s64 }' type immediately.
+}
+
+// The operator overload for the index operator requires this signature:
+//
+//     operator [] :: (this: Receiver_Type, key: Key_Type, assign: bool) -> & Value_Type
+//
+// The argument 'assign' behaves like this:
+//
+//     table["foo"]      // assign = false
+//     table["foo"] = 69 // assign = true
+//
+// This method should return a pointer to the indexed value. It must NOT return null.
+operator [] :: (this: &Table, key: string, assign: bool, location := #caller_location) -> &s64 {
+    for i := 0; i < this.items.count; i += 1 {
+        it := &this.items[i]
+        if it.key == key {
+            return &it.value
+        }
+    }
+
+    if assign {
+        // Since we are assigning to a key, create a new entry and return a pointer to the value.
+        // This overload is not concerned with assigning the value. It only cares about
+        // returning the indexed pointer.
+        this.items.push({key = key})
+        return &this.items[this.items.count - 1].value
+
+        // Note that the receiver of this method is a pointer to 'Table'. If we take the receiver
+        // by value, then the assigning feature will not work.
+    }
+
+    // We are not assigning and the key does not exist. At this point just panic.
+    //
+    // The function 'panic' is defined in the builtin standard module of Glos.
+    panic(
+        "Key not found in table: \{key}",
+
+        // Pass the operator site to the panic so we can get a good runtime error message.
+        // This is not strictly necessary, but is recommended for good user experience.
+        location = location
+    )
+
+    // It's not a strict requirement to panic. You can not do that if you want. Here we are
+    // just doing it to showcase the purpose of the 'assign' argument.
+}
+
+// The operator overload for the slice operator requires this signature:
+//
+//     operator [..] :: (this: Receiver_Type, begin: Index_Type, end: Index_Type) -> Sliced_Type
+//
+// The return value of this method need not be a slice. You can return anything you want.
+// We are just return a slice here for a showcase.
+operator [..] :: (this: Table, begin: s64, end: s64, location := #caller_location) -> []struct { key: string; value: s64 } {
+    if begin > end || begin < 0 || begin > this.items.count || end < 0 || end > this.items.count {
+        panic(
+            "Invalid slice bounds \{begin} and \{end} to table containing \{this.items.count} item(s)",
+            location = location
+        )
+    }
+
+    return this.items[begin..end]
+}
+
+free :: (this: &Table) {
+    this.items.free()
+}
+
+showcase_index_and_slice_overloads :: () {
+    t: Table
+    defer t.free()
+
+    t["foo"] = 69
+    t["bar"] = 420
+    t["baz"] = 1337
+
+    println(t["foo"])
+    println(t["bar"])
+    println(t["baz"])
+
+    // This will be a runtime panic if you comment it out:
+    // println(t["ayo"])
+
+    // Slicing works as expected.
+    println(t[0..2])
+
+    // The following are runtime panics if uncommented:
+    // println(t[1..0])
+    // println(t[6..7])
+    // println(t[0..9])
+}

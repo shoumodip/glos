@@ -1,0 +1,159 @@
+// We have already seen function definitions and applications in previous examples.
+// This file will dive into the details.
+
+// '() {}' is a function that takes no arguments and returns nothing.
+//
+// The constant 'main' is defined to such a function.
+main :: () {
+    hello_world :: () {
+        println("Hello, world!")
+    }
+
+    hello_world() // Calling a function with no arguments
+
+    // The function arguments are placed within the parenthesis as variable definitions
+    print_s64 :: (x: s64) {
+        println(x)
+    }
+
+    print_s64(69)     // Calling a function with an argument
+    print_s64(x = 69) // Calling a function with the argument provided by name
+
+    // Function arguments can have default values
+    print_two_s64s :: (a: s64, b := 420) {
+        println(a, b)
+    }
+
+    print_two_s64s(69)
+    print_two_s64s(1337, 80085)
+    print_two_s64s(b = 420, a = 69)
+
+    // The function returns are placed after the parenthesis with a '->' denoting the return
+    nice :: () -> s64 {
+        return 69
+    }
+
+    println(nice())
+
+    // A function can return multiple things
+    get_two_nices :: () -> s64, u64 {
+        return 69, 420
+    }
+
+    println(get_two_nices())
+
+    // The semantics regarding multiple values are quite intuitive.
+    // For example, here the first return value will be assigned to 'a', and the second value to 'b'.
+    a, b := get_two_nices()
+    println(a, b)
+
+    a, b += get_two_nices()
+    println(a, b)
+
+    // A call to a function that returns nothing cannot be used as a value.
+    // a = hello_world() // Uncomment this and see what happens.
+
+    // Right now, two function attributes exist:
+    //
+    //     inline
+    //     noreturn
+    //
+
+    // 'inline' is a hint to the optimizer that the function is preferable to be inlined.
+    //
+    // Of course, it will only get inlined if it is possible to be inlined. If the function is
+    // recursive, then this attributes will do nothing
+    //
+    // It is important to note that the LLVM backend of the Glos compiler might decide to
+    // not inline a function even though you marked it as inline and it is not recursive.
+    // Ultimately this attribute should be thought of as a hint, not an absolute guarantee.
+    foo :: inline () {}
+    foo()
+
+    // The 'noreturn' marks the function to never return
+    //
+    // For example, this function enters an infinite loop can be safely said to never return
+    infinite :: noreturn () {
+        for {} // Infinite loop
+    }
+
+    supposed_to_return_but_actually_does_not :: () -> s64 {
+        infinite()
+
+        // Even though this function is supposed to return a 's64', it never returns the end of the function
+        // in the first place. Therefore the control flow analyzer will not complain about a missing return
+        // statement.
+        //
+        // If you comment out the 'infinite()' call, then the end of this function will be reachable, and the
+        // compiler will complain about it. Try it out if you want.
+    }
+
+    // You can have typed variadics
+    typed_variadic_function :: (xs: ...s64) {
+        // Inside this function, 'xs' will have the type '[]s64'
+        for i := 0; i < xs.count; i += 1 {
+            println(xs[i])
+        }
+    }
+
+    typed_variadic_function() // You can pass nothing if you want
+    typed_variadic_function(69)
+    typed_variadic_function(420, 1337, 80085)
+
+    wrapper :: (xs: ...s64) {
+        // You can spread typed variadic arguments into another variadic function.
+        typed_variadic_function(...xs)
+    }
+
+    wrapper(1, 2, 3)
+
+    // Like the name suggested, this is type chacked. The following line is an error.
+    // typed_variadic_function("You")
+
+    // You can also have untyped variadics for interfacing with C code.
+    //
+    // The C FFI will be described in detail later
+    extern {
+        // By omitting the type of the variadic argument, it becomes untyped
+        printf :: (fmt: &char, ...) -> s32
+    }
+
+    printf("Check this out: %zd %.14g\n", 69, 420.1337)
+
+    // You can have optional arguments after a typed variadic one.
+    python_like_print :: (vs: ...trait {}, sep := " ", end := "\n") {
+        // Don't worry about the 'trait'. We will cover that later.
+        // For now, just know that any type is valid for 'trait {}'
+
+        for i := 0; i < vs.count; i += 1 {
+            if i != 0 then print(sep)
+            print(vs[i])
+        }
+        print(end)
+    }
+
+    python_like_print("This", "is", 69)
+    python_like_print("Five", "Hundred", "Cigarettes", end = ".\n", sep = ". ")
+    python_like_print("Yes. \{"String"} interpolations are \{!false} greatness. Absolute \{2.3 * 3.0}!!")
+
+    // A function without a body is a type.
+    s64_printer: (_: s64)
+
+    // Functions are first class values.
+    s64_printer = print_s64
+    s64_printer(69)
+
+    s64_printer = (x: s64) {
+        println(x)
+    }
+    s64_printer(420)
+
+    // You can pass the caller location to a function via default arguments
+    where :: (location := #caller_location) {
+        println("\{location} Called here")
+    }
+
+    where()
+    where()
+    where()
+}
