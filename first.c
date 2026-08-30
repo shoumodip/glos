@@ -122,7 +122,7 @@ static SV run_cmd_and_read_stdout(Cmd *cmd) {
     }
 
     SV sv = {0};
-    if (!read_fp(out, &sv, &default_arena)) {
+    if (!read_fp(out, &sv, &default_arena, true)) {
         error("Could not read standard output of command '%s'", name);
         exit(1);
     }
@@ -138,7 +138,7 @@ static SV run_cmd_and_read_stdout(Cmd *cmd) {
 #ifdef PLATFORM_X86_64_WINDOWS
 static void filter_cl_exe_output(Proc proc) {
     SV sv = {0};
-    if (!read_fp(proc.out, &sv, &default_arena)) {
+    if (!read_fp(proc.out, &sv, &default_arena, true)) {
         error("Could not read standard output of 'cl.exe'");
         exit(1);
     }
@@ -624,7 +624,7 @@ static void tests_flush(
 
         Test_Info actual = {0};
         if (it->pout) {
-            if (!read_fp(it->pout, &actual.out, arena)) {
+            if (!read_fp(it->pout, &actual.out, arena, true)) {
                 error("Could not read standard output of test case '%s'", it->name);
                 exit(1);
             }
@@ -633,7 +633,7 @@ static void tests_flush(
         }
 
         if (it->perr) {
-            if (!read_fp(it->perr, &actual.err, arena)) {
+            if (!read_fp(it->perr, &actual.err, arena, true)) {
                 error("Could not read standard error of test case '%s'", it->name);
                 exit(1);
             }
@@ -789,7 +789,7 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive, const char *opt
     }
 
     SV contents = {0};
-    if (!read_file(TESTS_LIST_PATH, &contents, &default_arena)) {
+    if (!read_file(TESTS_LIST_PATH, &contents, &default_arena, true)) {
         error("Could not read file '%s'", TESTS_LIST_PATH);
         exit(1);
     }
@@ -808,7 +808,7 @@ static void run_tests(Cmd *cmd, size_t nprocs, bool interactive, const char *opt
         const char *record_path = temp_replace_suffix(test.name, ".glos", ".bin");
 
         SV         contents = {0};
-        const bool record_exists = read_file(record_path, &contents, &default_arena);
+        const bool record_exists = read_file(record_path, &contents, &default_arena, true);
 
         Test_Info expected = {0};
         if (record_exists) {
