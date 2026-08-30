@@ -122,7 +122,7 @@ Foo :: struct {
 }
 
 // You can have polymorphic methods. As mentioned before, methods are just syntax sugar and scoping rules.
-// Their is no difference other than that from a function.
+// There is no difference other than that from a function.
 foo :: (this: Foo, that: $T) {
     println(this)
     println(that)

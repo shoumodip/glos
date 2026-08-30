@@ -166,7 +166,7 @@ Const_Value const_value_of_var(Compiler *c, Node_Atom *var) {
 Const_Value eval_const_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     Node *n = (Node *) atom;
 
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
@@ -245,6 +245,20 @@ Const_Value eval_const_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     case TOKEN_DIRECTIVE_PLATFORM:
         return get_platform(c, NULL);
 
+    case TOKEN_DIRECTIVE_LOCATION: {
+        Const_Value_Struct structure = {0};
+        assert(type_kind_eq(c->source_code_location_type, TYPE_STRUCT));
+        structure.spec = c->source_code_location_type.spec.structt;
+
+        assert(structure.spec->fields_count == 3);
+        structure.fields = arena_alloc(&default_arena, 3 * sizeof(*structure.fields));
+
+        structure.fields[0] = const_value_string(sv_from_cstr(n->token.pos.path));
+        structure.fields[1] = const_value_u64(n->token.pos.row + 1);
+        structure.fields[2] = const_value_u64(n->token.pos.col + 1);
+        return const_value_struct(structure);
+    }
+
     default:
         unreachable();
     }
@@ -260,7 +274,7 @@ Const_Value eval_const_expr_unary(Compiler *c, Node_Unary *unary) {
 
     Const_Value value = {0};
 
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         value = eval_const_expr(c, unary->value, false);
@@ -402,7 +416,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
             double (*f)(double lhs, double rhs);
         } Op;
 
-        static_assert(COUNT_TOKENS == 88, "");
+        static_assert(COUNT_TOKENS == 90, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_ADD] = {.i = int128_add, .f = fadd},
             [TOKEN_SUB] = {.i = int128_sub, .f = fsub},
@@ -442,7 +456,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
             bool (*f)(double lhs, double rhs);
         } Op;
 
-        static_assert(COUNT_TOKENS == 88, "");
+        static_assert(COUNT_TOKENS == 90, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_GT] = {.i = int128_gt, .f = fgt},
             [TOKEN_GE] = {.i = int128_ge, .f = fge},
@@ -464,7 +478,7 @@ Const_Value eval_const_expr_binary(Compiler *c, Node_Binary *binary) {
         }
     }
 
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_LOR:
         lhs = eval_const_expr(c, binary->lhs, false);
@@ -952,7 +966,7 @@ Const_Value eval_const_expr_index(Compiler *c, Node_Index *index) {
     }
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     if (!n) {
         return (Const_Value) {0};
@@ -987,6 +1001,12 @@ Const_Value eval_const_expr_impl(Compiler *c, Node *n, bool ref) {
     switch (n->kind) {
     case NODE_ATOM:
         return eval_const_expr_atom(c, (Node_Atom *) n, ref);
+
+    case NODE_EMBED: {
+        Node_Embed *embed = (Node_Embed *) n;
+        assert(embed->read);
+        return const_value_string(embed->contents);
+    }
 
     case NODE_UNARY:
         return eval_const_expr_unary(c, (Node_Unary *) n);

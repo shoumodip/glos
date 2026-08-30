@@ -64,7 +64,7 @@ static void range_apply_token(Range *r, Token t) {
     }
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 static void range_apply_node(Range *r, const Node *n) {
     if (!n) {
         return;
@@ -83,6 +83,10 @@ static void range_apply_node(Range *r, const Node *n) {
     case NODE_ATOM:
         // Pass
         break;
+
+    case NODE_EMBED: {
+        range_apply_token(r, ((Node_Embed *) n)->path);
+    } break;
 
     case NODE_GROUP: {
         Node_Group *group = (Node_Group *) n;

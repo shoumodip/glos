@@ -15,6 +15,8 @@ typedef struct {
     bool        is_fn;
 } Polymorphs_Builder;
 
+typedef HT(SV, SV) Embed_Interns;
+
 typedef struct {
     Lexer lexer;
     Token ahead;
@@ -25,7 +27,6 @@ typedef struct {
     bool in_extern;
     bool in_compile_time_condition;
     bool allow_methods_without_body;
-
     bool after_private;
 
     Node_Fn            *fn_current;
@@ -43,6 +44,8 @@ typedef struct {
 
     Module  *module_current;
     Modules *modules;
+
+    Embed_Interns *embed_interns;
 } Parser;
 
 Module *module_get(Parser *p, const char *path); // `path` is absolute

@@ -439,6 +439,7 @@ void const_value_debug(FILE *f, Type type, Const_Value v);
 
 typedef enum {
     NODE_ATOM,
+    NODE_EMBED,
     NODE_GROUP,
     NODE_UNARY,
     NODE_BINARY,
@@ -605,6 +606,16 @@ struct Node_Atom {
     bool         is_ghost;
     LLVMValueRef ghost_llvm;
 };
+
+typedef struct {
+    Node  node;
+    Token path;
+
+    SV   contents;
+    bool read;
+
+    LLVMValueRef llvm;
+} Node_Embed;
 
 typedef struct {
     Node   node;

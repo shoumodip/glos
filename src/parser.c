@@ -752,7 +752,7 @@ static Node *parse_compound(Parser *p, Node *lhs, Token token) {
     return (Node *) compound;
 }
 
-static_assert(COUNT_TOKENS == 88, "");
+static_assert(COUNT_TOKENS == 90, "");
 static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compounds_allowed, bool *should_be_switch) {
     const bool allow_methods_without_body = p->state.allow_methods_without_body; // Only lasts a singular level
     p->state.allow_methods_without_body = false;
@@ -773,6 +773,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
     case TOKEN_STRING:
     case TOKEN_DIRECTIVE_MAIN:
     case TOKEN_DIRECTIVE_PLATFORM:
+    case TOKEN_DIRECTIVE_LOCATION:
     case TOKEN_DIRECTIVE_CALLER_LOCATION:
         node = node_alloc(p->module_current, NODE_ATOM, token);
         break;
@@ -852,7 +853,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
 
     case TOKEN_DISTINCT: {
         Node *value = parse_expr(p, POWER_PRE, false, compounds_allowed, NULL);
-        static_assert(COUNT_NODES == 29, "");
+        static_assert(COUNT_NODES == 30, "");
         switch (value->kind) {
         case NODE_ENUM:
         case NODE_TRAIT:
@@ -1301,6 +1302,32 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         unary->end = expect_token(p, TOKEN_RPAREN);
     } break;
 
+    case TOKEN_DIRECTIVE_EMBED: {
+        node = node_alloc(p->module_current, NODE_EMBED, token);
+        Node_Embed *embed = (Node_Embed *) node;
+        embed->path = expect_token(p, TOKEN_STRING);
+
+        if (!p->state.in_compile_time_condition) {
+            if (!p->embed_interns->hasheq) {
+                p->embed_interns->hasheq = ht_hasheq_sv;
+            }
+
+            SV *previous = ht_get(p->embed_interns, embed->path.as.string);
+            if (previous) {
+                embed->contents = *previous;
+            } else {
+                const char *path = arena_sv_to_cstr(&temp_arena, embed->path.as.string);
+                if (!read_file(path, &embed->contents, &default_arena)) {
+                    error_node(EK_ERROR, node, "Could not read file '%s'", path);
+                    exit(1);
+                }
+                arena_reset(&temp_arena, path);
+                ht_set(p->embed_interns, embed->path.as.string, embed->contents);
+            }
+            embed->read = true;
+        }
+    } break;
+
     case TOKEN_DIRECTIVE_IMPORT: {
         node = node_alloc(p->module_current, NODE_IMPORT, token);
         Node_Import *import = (Node_Import *) node;
@@ -1548,7 +1575,7 @@ static void local_assert(Parser *p, bool expected_is_local, Token token, const c
     }
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 static Node *parse_stmt(Parser *p) {
     Node *node = NULL;
 

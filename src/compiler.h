@@ -69,7 +69,10 @@ typedef struct {
     Optimization_Level optimization_level;
 
     // These are used only by the analyzer
+    Embed_Interns *embed_interns;
+
     Type main_fn_type;
+    Type char_slice_type;
     DA(Type_Struct_Field) struct_fields;
 
     DA(Node *) designated_initializers;

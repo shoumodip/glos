@@ -550,7 +550,7 @@ void compile_optional_arguments(Compiler *c, Typed_LLVM_Value *args, const Type_
 
 LLVMValueRef compile_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_INT:
     case TOKEN_BOOL:
@@ -584,10 +584,10 @@ LLVMValueRef compile_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
     case TOKEN_ISTRING: {
         LLVMValueRef memory =
             compile_const_value_into_memory(c, compile_string_into_const_value(c, n->token.as.string));
+
         if (ref) {
             return memory;
         }
-
         return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, memory, "");
     }
 
@@ -596,6 +596,21 @@ LLVMValueRef compile_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
 
     case TOKEN_DIRECTIVE_PLATFORM:
         return compile_const_value(c, get_platform(c, NULL), n->type);
+
+    case TOKEN_DIRECTIVE_LOCATION: {
+        LLVMValueRef fields[3];
+        fields[0] = compile_string_into_const_value(c, sv_from_cstr(n->token.pos.path));
+        fields[1] = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), n->token.pos.row + 1, true);
+        fields[2] = LLVMConstInt(LLVMInt64TypeInContext(c->llvm_context), n->token.pos.col + 1, true);
+
+        LLVMValueRef memory =
+            compile_const_value_into_memory(c, LLVMConstStructInContext(c->llvm_context, fields, len(fields), false));
+
+        if (ref) {
+            return memory;
+        }
+        return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, memory, "");
+    }
 
     default:
         unreachable();
@@ -606,7 +621,7 @@ LLVMValueRef compile_expr_unary(Compiler *c, Node_Unary *unary, bool ref) {
     Node *n = (Node *) unary;
 
     LLVMValueRef value = NULL;
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         value = compile_expr(c, unary->value, false);
@@ -738,7 +753,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             LLVMValueRef (*f)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
         } Op;
 
-        static_assert(COUNT_TOKENS == 88, "");
+        static_assert(COUNT_TOKENS == 90, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_ADD] = {.i = LLVMBuildAdd, .f = LLVMBuildFAdd},
             [TOKEN_SUB] = {.i = LLVMBuildSub, .f = LLVMBuildFSub},
@@ -796,7 +811,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             LLVMRealPredicate f;
         } Op;
 
-        static_assert(COUNT_TOKENS == 88, "");
+        static_assert(COUNT_TOKENS == 90, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_GT] = {.i = LLVMIntSGT, .u = LLVMIntUGT, .f = LLVMRealOGT},
             [TOKEN_GE] = {.i = LLVMIntSGE, .u = LLVMIntUGE, .f = LLVMRealOGE},
@@ -838,7 +853,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             LLVMValueRef (*f)(LLVMBuilderRef, LLVMValueRef, LLVMValueRef, const char *);
         } Op;
 
-        static_assert(COUNT_TOKENS == 88, "");
+        static_assert(COUNT_TOKENS == 90, "");
         static const Op ops[COUNT_TOKENS] = {
             [TOKEN_ADD_SET] = {.i = LLVMBuildAdd, .f = LLVMBuildFAdd},
             [TOKEN_SUB_SET] = {.i = LLVMBuildSub, .f = LLVMBuildFSub},
@@ -955,7 +970,7 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
         }
     }
 
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_SET: {
         const size_t group_values_count_save = c->group_values.count;
@@ -1734,7 +1749,7 @@ LLVMValueRef compile_expr_index(Compiler *c, Node_Index *index, bool ref) {
     return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, ptr, "");
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
     if (!n) {
         return NULL;
@@ -1755,6 +1770,20 @@ LLVMValueRef compile_expr_impl(Compiler *c, Node *n, bool ref) {
     switch (n->kind) {
     case NODE_ATOM:
         return compile_expr_atom(c, (Node_Atom *) n, ref);
+
+    case NODE_EMBED: {
+        Node_Embed *embed = (Node_Embed *) n;
+        assert(embed->read);
+
+        if (!embed->llvm) {
+            embed->llvm = compile_const_value_into_memory(c, compile_string_into_const_value(c, embed->contents));
+        }
+
+        if (ref) {
+            return embed->llvm;
+        }
+        return LLVMBuildLoad2(c->llvm_builder, n->type.llvm, embed->llvm, "");
+    } break;
 
     case NODE_GROUP: {
         Node_Group *group = (Node_Group *) n;

@@ -31,7 +31,7 @@ static void check_whether_member_access_is_valid(Compiler *c, Node_Member *m) {
     }
 }
 
-static_assert(COUNT_TOKENS == 88, "");
+static_assert(COUNT_TOKENS == 90, "");
 static Node_Fn *check_assignment_lhs_for_arithmetics(Compiler *c, Node_Binary *binary, Node *n) {
     const Token_Kind op = binary->node.token.kind;
     switch (op) {
@@ -118,7 +118,7 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
 
 void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_valid) {
     Node *n = (Node *) atom;
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_INT:
         n->type = (Type) {.kind = TYPE_INT};
@@ -159,6 +159,10 @@ void check_expr_atom(Compiler *c, Node_Atom *atom, Ref_Kind ref, bool *is_ref_va
 
     case TOKEN_DIRECTIVE_PLATFORM:
         get_platform(c, &n->type);
+        break;
+
+    case TOKEN_DIRECTIVE_LOCATION:
+        n->type = c->source_code_location_type;
         break;
 
     case TOKEN_DIRECTIVE_CALLER_LOCATION:
@@ -206,7 +210,7 @@ void check_expr_group(Compiler *c, Node_Group *group, Ref_Kind ref, bool *is_ref
 
 void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
     Node *n = (Node *) unary;
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_SUB:
         check_expr(c, unary->value, REF_NONE);
@@ -278,7 +282,7 @@ void check_expr_unary(Compiler *c, Node_Unary *unary, bool *is_ref_valid) {
 
 void check_expr_binary(Compiler *c, Node_Binary *binary, bool check_children) {
     Node *n = (Node *) binary;
-    static_assert(COUNT_TOKENS == 88, "");
+    static_assert(COUNT_TOKENS == 90, "");
     switch (n->token.kind) {
     case TOKEN_ADD:
     case TOKEN_SUB:
@@ -1857,7 +1861,7 @@ void check_expr_indexable(Compiler *c, Node_Indexable *indexable, Ref_Kind ref, 
     *is_ref_valid = ref == REF_ADDR || ref == REF_ADDR_MEMBER;
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     if (!n) {
         return;
@@ -1869,6 +1873,30 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
     case NODE_ATOM:
         check_expr_atom(c, (Node_Atom *) n, ref, &is_ref_valid);
         break;
+
+    case NODE_EMBED: {
+        Node_Embed *embed = (Node_Embed *) n;
+        if (!embed->read) {
+            if (!c->embed_interns->hasheq) {
+                c->embed_interns->hasheq = ht_hasheq_sv;
+            }
+
+            SV *previous = ht_get(c->embed_interns, embed->path.as.string);
+            if (previous) {
+                embed->contents = *previous;
+            } else {
+                const char *path = arena_sv_to_cstr(&temp_arena, embed->path.as.string);
+                if (!read_file(path, &embed->contents, &default_arena)) {
+                    error_node(EK_ERROR, n, "Could not read file '%s'", path);
+                    exit(c, 1);
+                }
+                arena_reset(&temp_arena, path);
+                ht_set(c->embed_interns, embed->path.as.string, embed->contents);
+            }
+            embed->read = true;
+        }
+        n->type = c->char_slice_type;
+    } break;
 
     case NODE_GROUP:
         check_expr_group(c, (Node_Group *) n, ref, &is_ref_valid);

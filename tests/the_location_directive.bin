@@ -1,0 +1,6 @@
+EXIT 0
+STDOUT 46
+tests/the_location_directive.glos:2:16: Here!
+
+STDERR 0
+

@@ -368,11 +368,11 @@ void set_auto_cast(Compiler *c, Node *n, i64 index, Auto_Cast_Kind kind, Type fr
     }
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 void cast_untyped(Compiler *c, Node *n, Type expected) {
     switch (n->kind) {
     case NODE_ATOM: {
-        static_assert(COUNT_TOKENS == 88, "");
+        static_assert(COUNT_TOKENS == 90, "");
         switch (n->token.kind) {
         case TOKEN_INT:
             n->type = expected;

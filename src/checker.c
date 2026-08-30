@@ -66,15 +66,25 @@ void check_nodes(Compiler *c) {
 
     c->methods_table.hasheq = ht_hasheq_method_spec;
 
+    // The type of the 'main' function
     {
         Type_Fn *fn_spec = arena_alloc(&default_arena, sizeof(*fn_spec));
 
-        const Type unit = {.kind = TYPE_VOID};
-        fn_spec->return_type = arena_clone(&default_arena, &unit, sizeof(unit));
+        const Type void_type = {.kind = TYPE_VOID};
+        fn_spec->return_type = arena_clone(&default_arena, &void_type, sizeof(void_type));
 
         c->main_fn_type = (Type) {
             .kind = TYPE_FN,
             .spec.fn = fn_spec,
+        };
+    }
+
+    // []char
+    {
+        const Type char_type = {.kind = TYPE_CHAR};
+        c->char_slice_type = (Type) {
+            .kind = TYPE_SLICE,
+            .spec.slice.element = arena_clone(&default_arena, &char_type, sizeof(char_type)),
         };
     }
 

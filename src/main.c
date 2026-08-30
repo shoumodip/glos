@@ -181,7 +181,8 @@ int main(int argc, char **argv) {
     const char *output_path = NULL;
     Link_Flags  link_flags = {0};
 
-    Compiler compiler = {.optimization_level = O1};
+    Embed_Interns embed_interns = {0};
+    Compiler      compiler = {.optimization_level = O1, .embed_interns = &embed_interns};
     while (argc) {
         const char *arg = shift(&argc, &argv, program, "Input path");
         if (*arg == '-') {
@@ -282,6 +283,8 @@ int main(int argc, char **argv) {
 
          .cwd = sv_from_cstr(cwd),
          .std = sv_from_cstr(get_std_dir_path(&default_arena)),
+
+         .embed_interns = &embed_interns,
     };
 
     compiler.parser = &parser;
@@ -428,6 +431,7 @@ int main(int argc, char **argv) {
     modules_free(&modules);
     parser_free(&parser);
     arena_free(&default_arena);
+    ht_free(&embed_interns);
     cmd_free(&cmd);
     da_free(&link_flags);
     return result;

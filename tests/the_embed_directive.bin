@@ -1,0 +1,8 @@
+EXIT 0
+STDOUT 74
+main :: () {
+    print(string(#embed "tests/the_embed_directive.glos"))
+}
+
+STDERR 0
+

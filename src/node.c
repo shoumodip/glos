@@ -911,10 +911,11 @@ void const_value_debug(FILE *f, Type type, Const_Value v) {
     default_sb.count = start;
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 size_t node_size(Node_Kind kind) {
     static const size_t sizes[COUNT_NODES] = {
         [NODE_ATOM] = sizeof(Node_Atom), // This comment is here to prevent clang-format from messing this up
+        [NODE_EMBED] = sizeof(Node_Embed),
         [NODE_GROUP] = sizeof(Node_Group),
         [NODE_UNARY] = sizeof(Node_Unary),
         [NODE_BINARY] = sizeof(Node_Binary),
@@ -1104,7 +1105,7 @@ static void polymorphs_debug_impl(FILE *f, Polymorphs ns, int depth, const char 
     }
 }
 
-static_assert(COUNT_NODES == 29, "");
+static_assert(COUNT_NODES == 30, "");
 static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label) {
     if (!n) {
         return;
@@ -1124,6 +1125,11 @@ static void node_debug_impl(FILE *f, const Node *n, int depth, const char *label
         } else {
             fprintf(f, "Atom " SV_Fmt "\n", SV_Arg(n->token.sv));
         }
+    } break;
+
+    case NODE_EMBED: {
+        Node_Embed *embed = (Node_Embed *) n;
+        fprintf(f, "Embed '" SV_Fmt "'\n", SV_Arg(embed->path.as.string));
     } break;
 
     case NODE_GROUP: {

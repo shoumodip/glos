@@ -71,7 +71,7 @@ main :: () {
     l = f64(b)
     println(l)
 
-    // If the expression is constant, the the compiler will perform range checks.
+    // If the expression is constant, then the compiler will perform range checks.
     // a = u8(2.0 - 3.6) // Try uncommenting this, and see what happens
 
     // Bitwise operators are not defined for floats. The following line is an error.

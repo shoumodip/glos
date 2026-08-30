@@ -248,7 +248,7 @@ Token lexer_get_string(Lexer *l, Pos pos, Pos start) {
     return token;
 }
 
-static_assert(COUNT_TOKENS == 88, "");
+static_assert(COUNT_TOKENS == 90, "");
 Token lexer_iter(Lexer *l) {
     skip_whitespace(l);
 
@@ -588,6 +588,8 @@ Token lexer_iter(Lexer *l) {
             token.kind = TOKEN_DIRECTIVE_ASSERT;
         } else if (sv_match(token.sv, "#link")) {
             token.kind = TOKEN_DIRECTIVE_LINK;
+        } else if (sv_match(token.sv, "#embed")) {
+            token.kind = TOKEN_DIRECTIVE_EMBED;
         } else if (sv_match(token.sv, "#import")) {
             token.kind = TOKEN_DIRECTIVE_IMPORT;
         } else if (sv_match(token.sv, "#static")) {
@@ -600,6 +602,8 @@ Token lexer_iter(Lexer *l) {
             token.kind = TOKEN_DIRECTIVE_MAIN;
         } else if (sv_match(token.sv, "#platform")) {
             token.kind = TOKEN_DIRECTIVE_PLATFORM;
+        } else if (sv_match(token.sv, "#location")) {
+            token.kind = TOKEN_DIRECTIVE_LOCATION;
         } else if (sv_match(token.sv, "#caller_location")) {
             token.kind = TOKEN_DIRECTIVE_CALLER_LOCATION;
         } else {
