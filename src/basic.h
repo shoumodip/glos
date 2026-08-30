@@ -345,8 +345,8 @@ extern Arena temp_arena;
 extern Arena default_arena;
 
 // FS
-bool read_fp(FILE *f, SV *out, Arena *a); // This appends a NULL at the end
-bool read_file(const char *path, SV *out, Arena *a);
+bool read_fp(FILE *f, SV *out, Arena *a, bool convert_windows_line_endings_to_unix); // This appends a NULL at the end
+bool read_file(const char *path, SV *out, Arena *a, bool convert_windows_line_endings_to_unix);
 
 bool delete_file(const char *path);
 bool create_directory(const char *path);

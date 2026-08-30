@@ -1317,7 +1317,7 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
                 embed->contents = *previous;
             } else {
                 const char *path = arena_sv_to_cstr(&temp_arena, embed->path.as.string);
-                if (!read_file(path, &embed->contents, &default_arena)) {
+                if (!read_file(path, &embed->contents, &default_arena, false)) {
                     error_node(EK_ERROR, node, "Could not read file '%s'", path);
                     exit(1);
                 }

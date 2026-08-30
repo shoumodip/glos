@@ -843,6 +843,8 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
                 return LLVMBuildICmp(c->llvm_builder, op.i, lhs, rhs, "");
             }
         }
+
+        // TODO: Optimize: `s == ""` and `s != ""`
     }
 
     // Arithmetic assignment
@@ -998,25 +1000,26 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
     case TOKEN_LOR: {
         LLVMValueRef lhs = compile_expr(c, binary->lhs, false);
 
-        LLVMBasicBlockRef true_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
-        LLVMBasicBlockRef false_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+        LLVMBasicBlockRef lhs_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+        LLVMBasicBlockRef rhs_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
         LLVMBasicBlockRef merge_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
-        LLVMBuildCondBr(c->llvm_builder, lhs, true_block, false_block);
+        LLVMBuildCondBr(c->llvm_builder, lhs, lhs_block, rhs_block);
 
         // Short circuit if lhs is true
-        LLVMPositionBuilderAtEnd(c->llvm_builder, true_block);
+        LLVMPositionBuilderAtEnd(c->llvm_builder, lhs_block);
         LLVMBuildBr(c->llvm_builder, merge_block);
 
         // Check rhs if lhs is false
-        LLVMPositionBuilderAtEnd(c->llvm_builder, false_block);
+        LLVMPositionBuilderAtEnd(c->llvm_builder, rhs_block);
         LLVMValueRef rhs = compile_expr(c, binary->rhs, false);
+        rhs_block = LLVMGetInsertBlock(c->llvm_builder);
         LLVMBuildBr(c->llvm_builder, merge_block);
 
         // Merge
         LLVMPositionBuilderAtEnd(c->llvm_builder, merge_block);
         LLVMValueRef      phi = LLVMBuildPhi(c->llvm_builder, n->type.llvm, "");
         LLVMValueRef      phi_values[] = {lhs, rhs};
-        LLVMBasicBlockRef phi_blocks[] = {true_block, false_block};
+        LLVMBasicBlockRef phi_blocks[] = {lhs_block, rhs_block};
         LLVMAddIncoming(phi, phi_values, phi_blocks, len(phi_blocks));
         return phi;
     }
@@ -1024,25 +1027,26 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
     case TOKEN_LAND: {
         LLVMValueRef lhs = compile_expr(c, binary->lhs, false);
 
-        LLVMBasicBlockRef true_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
-        LLVMBasicBlockRef false_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+        LLVMBasicBlockRef lhs_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+        LLVMBasicBlockRef rhs_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
         LLVMBasicBlockRef merge_block = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
-        LLVMBuildCondBr(c->llvm_builder, lhs, true_block, false_block);
+        LLVMBuildCondBr(c->llvm_builder, lhs, rhs_block, lhs_block);
 
         // Short circuit if lhs is false
-        LLVMPositionBuilderAtEnd(c->llvm_builder, false_block);
+        LLVMPositionBuilderAtEnd(c->llvm_builder, lhs_block);
         LLVMBuildBr(c->llvm_builder, merge_block);
 
         // Check rhs if lhs is true
-        LLVMPositionBuilderAtEnd(c->llvm_builder, true_block);
+        LLVMPositionBuilderAtEnd(c->llvm_builder, rhs_block);
         LLVMValueRef rhs = compile_expr(c, binary->rhs, false);
+        rhs_block = LLVMGetInsertBlock(c->llvm_builder);
         LLVMBuildBr(c->llvm_builder, merge_block);
 
         // Merge
         LLVMPositionBuilderAtEnd(c->llvm_builder, merge_block);
         LLVMValueRef      phi = LLVMBuildPhi(c->llvm_builder, n->type.llvm, "");
         LLVMValueRef      phi_values[] = {lhs, rhs};
-        LLVMBasicBlockRef phi_blocks[] = {false_block, true_block};
+        LLVMBasicBlockRef phi_blocks[] = {lhs_block, rhs_block};
         LLVMAddIncoming(phi, phi_values, phi_blocks, len(phi_blocks));
         return phi;
     }

@@ -1886,7 +1886,7 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
                 embed->contents = *previous;
             } else {
                 const char *path = arena_sv_to_cstr(&temp_arena, embed->path.as.string);
-                if (!read_file(path, &embed->contents, &default_arena)) {
+                if (!read_file(path, &embed->contents, &default_arena, false)) {
                     error_node(EK_ERROR, n, "Could not read file '%s'", path);
                     exit(c, 1);
                 }

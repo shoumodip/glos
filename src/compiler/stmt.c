@@ -290,6 +290,10 @@ void compile_stmt_for(Compiler *c, Node_For *forr) {
     LLVMBasicBlockRef end = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
 
     LLVMBasicBlockRef start = body;
+    if (forr->condition) {
+        start = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
+    }
+
     LLVMBasicBlockRef update = start;
     if (forr->update) {
         update = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
@@ -301,11 +305,11 @@ void compile_stmt_for(Compiler *c, Node_For *forr) {
     LLVMBasicBlockRef llvm_loop_condition_save = c->llvm_loop_continue;
     c->llvm_loop_continue = update;
 
-    size_t loop_defers_start_save = c->loop_defers_start;
+    const size_t loop_defers_start_save = c->loop_defers_start;
+    c->loop_defers_start = c->defers.count;
     {
         // Condition
         if (forr->condition) {
-            start = LLVMAppendBasicBlockInContext(c->llvm_context, c->llvm_fn, "");
             LLVMSetCurrentDebugLocation2(c->llvm_builder, NULL);
             LLVMBuildBr(c->llvm_builder, start);
             LLVMPositionBuilderAtEnd(c->llvm_builder, start);

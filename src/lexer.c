@@ -13,7 +13,7 @@ static SV first_line(SV sv) {
 
 bool lexer_open(Lexer *l, const char *path) {
     memset(l, 0, sizeof(*l));
-    if (!read_file(path, &l->sv, &default_arena)) {
+    if (!read_file(path, &l->sv, &default_arena, true)) {
         return false;
     }
 

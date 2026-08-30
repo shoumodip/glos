@@ -772,6 +772,7 @@ void check_ident(Compiler *c, Node *n, Ref_Kind ref) {
         unreachable();
     }
 
+    // TODO: Allow assigning to '_'
     if (sv_match(n->token.sv, "_")) {
         error_token(EK_ERROR, n->token, "Identifier '_' cannot be used as a value");
         exit(c, 1);

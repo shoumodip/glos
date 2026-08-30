@@ -668,7 +668,7 @@ Arena temp_arena = {.capacity = 16 * 1024 * 1024};
 Arena default_arena;
 
 // FS
-bool read_fp(FILE *f, SV *out, Arena *a) {
+bool read_fp(FILE *f, SV *out, Arena *a, bool convert_windows_line_endings_to_unix) {
     bool result = true;
 
     char  *start = arena_alloc(a, 0);
@@ -696,16 +696,17 @@ bool read_fp(FILE *f, SV *out, Arena *a) {
 #undef CHUNK_SIZE
     }
 
-    size_t j = 0;
-    for (size_t i = 0; i < count; i++) {
-        char it = start[i];
-        if (it == '\r' && i + 1 < count && start[i + 1] == '\n') {
-            it = start[++i];
+    if (convert_windows_line_endings_to_unix) {
+        size_t j = 0;
+        for (size_t i = 0; i < count; i++) {
+            char it = start[i];
+            if (it == '\r' && i + 1 < count && start[i + 1] == '\n') {
+                it = start[++i];
+            }
+            start[j++] = it;
         }
-        start[j++] = it;
+        count = j;
     }
-
-    count = j;
     arena_reset(a, start + count);
 
     if (count % 8 == 0) {
@@ -724,7 +725,7 @@ defer:
     return result;
 }
 
-bool read_file(const char *path, SV *out, Arena *a) {
+bool read_file(const char *path, SV *out, Arena *a, bool convert_windows_line_endings_to_unix) {
     bool result = true;
 
     FILE *f = fopen(path, "r");
@@ -732,7 +733,7 @@ bool read_file(const char *path, SV *out, Arena *a) {
         return_defer(false);
     }
 
-    if (!read_fp(f, out, a)) {
+    if (!read_fp(f, out, a, convert_windows_line_endings_to_unix)) {
         return_defer(false);
     }
 
