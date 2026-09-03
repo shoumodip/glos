@@ -10,8 +10,8 @@ main :: () {
     d: u64 = 69_420_1337_80085 // You can put underscores in between the digits for readability
 
     e: s8  = -69
-    f: s16 = -420
-    g: s32 = -1337_80085
+    f: s16 = -0b110_100_100      // Binary literals
+    g: s32 = -0o776_251_165      // Octal literals
     h: s64 = -69_420_1337_80085
 
     // By default, integer literals are 's64'
