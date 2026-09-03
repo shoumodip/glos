@@ -263,10 +263,29 @@ Token lexer_iter(Lexer *l) {
     }
 
     if (isdigit(*l->sv.data)) {
-        int base = 10;
         token.kind = TOKEN_INT;
-        if (*l->sv.data == '0' && peek_char(l, 1) == 'x') {
+
+        int         base = 10;
+        const char *digit = "digit";
+        if (*l->sv.data == '0' && peek_char(l, 1) == 'b') {
+            base = 2;
+            digit = "binary digit";
+            next_char(l);
+            next_char(l);
+            while (l->sv.count > 0 && ((*l->sv.data >= '0' && *l->sv.data <= '1') || *l->sv.data == '_')) {
+                next_char(l);
+            }
+        } else if (*l->sv.data == '0' && peek_char(l, 1) == 'o') {
+            base = 8;
+            digit = "octal digit";
+            next_char(l);
+            next_char(l);
+            while (l->sv.count > 0 && ((*l->sv.data >= '0' && *l->sv.data <= '7') || *l->sv.data == '_')) {
+                next_char(l);
+            }
+        } else if (*l->sv.data == '0' && peek_char(l, 1) == 'x') {
             base = 16;
+            digit = "hexadecimal digit";
             next_char(l);
             next_char(l);
             while (l->sv.count > 0 && (isxdigit(*l->sv.data) || *l->sv.data == '_')) {
@@ -290,11 +309,16 @@ Token lexer_iter(Lexer *l) {
         token.sv.count -= l->sv.count;
 
         if (l->sv.count && is_ident(*l->sv.data)) {
-            error_invalid(l->pos, l->sv, "digit");
+            error_invalid(l->pos, l->sv, digit);
+        }
+
+        if (base != 10 && token.sv.count == 2) {
+            error_token(EK_ERROR, token, "Numeric prefix without any following digits is not allowed");
+            exit(1);
         }
 
         char *buffer = arena_alloc(&temp_arena, token.sv.count + 1);
-        for (size_t i = 0, j = 0; i < token.sv.count; i++) {
+        for (size_t i = (base != 10) * 2, j = 0; i < token.sv.count; i++) {
             const char it = token.sv.data[i];
             if (it != '_') {
                 buffer[j++] = it;

@@ -1,5 +1,5 @@
 EXIT 0
-STDOUT 135
+STDOUT 147
 69
 420
 69
@@ -29,6 +29,9 @@ true
 false
 true
 false
+69
+420
+1337
 
 STDERR 0
 

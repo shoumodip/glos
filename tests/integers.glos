@@ -38,4 +38,9 @@ main :: () {
 
     println(1 != 2)
     println(1 != 1)
+
+    // Integer literals in other bases
+    println(0b1000101)
+    println(0o644)
+    println(0x539)
 }
