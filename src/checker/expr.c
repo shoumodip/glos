@@ -1876,24 +1876,9 @@ void check_expr(Compiler *c, Node *n, Ref_Kind ref) {
 
     case NODE_EMBED: {
         Node_Embed *embed = (Node_Embed *) n;
-        if (!embed->read) {
-            if (!c->embed_interns->hasheq) {
-                c->embed_interns->hasheq = ht_hasheq_sv;
-            }
-
-            SV *previous = ht_get(c->embed_interns, embed->path.as.string);
-            if (previous) {
-                embed->contents = *previous;
-            } else {
-                const char *path = arena_sv_to_cstr(&temp_arena, embed->path.as.string);
-                if (!read_file(path, &embed->contents, &default_arena, false)) {
-                    error_node(EK_ERROR, n, "Could not read file '%s'", path);
-                    exit(c, 1);
-                }
-                arena_reset(&temp_arena, path);
-                ht_set(c->embed_interns, embed->path.as.string, embed->contents);
-            }
-            embed->read = true;
+        if (!embed->read && !parser_embed(c->parser, embed)) {
+            error_node(EK_ERROR, n, "Could not read file '" SV_Fmt "'", SV_Arg(embed->path.as.string));
+            exit(c, 1);
         }
         n->type = c->char_slice_type;
     } break;

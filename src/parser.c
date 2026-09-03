@@ -458,45 +458,93 @@ static void definition_lhs_setup(Parser *p, Node_Define *define, bool is_static)
     }
 }
 
+static const char *search_paths_find(Parser *p, SV path, bool onlydirs, SV *root, Arena *a) {
+    SV          root_path = {0};
+    const char *absolute_path = NULL;
+
+    // Inside the current module
+    {
+        root_path = sv_from_cstr(p->module_current->absolute_path);
+        absolute_path = get_absolute_path(root_path, path, a);
+        if (onlydirs ? directory_exists(absolute_path) : file_exists(absolute_path)) {
+            if (root) {
+                *root = root_path;
+            }
+            return absolute_path;
+        }
+
+        root_path = (SV) {0};
+        arena_reset(a, absolute_path);
+    }
+
+    // Inside root
+    {
+        root_path = p->root;
+        absolute_path = get_absolute_path(root_path, path, a);
+
+        if (onlydirs ? directory_exists(absolute_path) : file_exists(absolute_path)) {
+            if (root) {
+                *root = root_path;
+            }
+            return absolute_path;
+        }
+
+        root_path = (SV) {0};
+        arena_reset(a, absolute_path);
+    }
+
+    // Inside std
+    {
+        root_path = p->std;
+        absolute_path = get_absolute_path(root_path, path, a);
+
+        if (onlydirs ? directory_exists(absolute_path) : file_exists(absolute_path)) {
+            if (root) {
+                *root = root_path;
+            }
+            return absolute_path;
+        }
+
+        root_path = (SV) {0};
+        arena_reset(a, absolute_path);
+    }
+
+    return NULL;
+}
+
+bool parser_embed(Parser *p, Node_Embed *embed) {
+    if (!p->embed_interns->hasheq) {
+        p->embed_interns->hasheq = ht_hasheq_sv;
+    }
+
+    SV *previous = ht_get(p->embed_interns, embed->path.as.string);
+    if (previous) {
+        embed->contents = *previous;
+    } else {
+        const char *path = search_paths_find(p, embed->path.as.string, false, NULL, &temp_arena);
+        if (!path) {
+            return false;
+        }
+
+        if (!read_file(path, &embed->contents, &default_arena, false)) {
+            arena_reset(&temp_arena, path);
+            return false;
+        }
+
+        arena_reset(&temp_arena, path);
+        ht_set(p->embed_interns, embed->path.as.string, embed->contents);
+    }
+    embed->read = true;
+    return true;
+}
+
 bool parser_import(Parser *p, Node_Import *import) {
     if (import->module) {
         return false;
     }
 
     SV          root = {0};
-    const char *absolute_path = NULL;
-    if (!absolute_path) {
-        // Directory inside the current module
-        root = sv_from_cstr(p->module_current->absolute_path);
-        absolute_path = get_absolute_path(root, import->path.as.string, &default_arena);
-        if (!directory_exists(absolute_path)) {
-            arena_reset(&default_arena, absolute_path);
-            root = (SV) {0};
-            absolute_path = NULL;
-        }
-    }
-
-    if (!absolute_path) {
-        // Directory inside root
-        root = p->root;
-        absolute_path = get_absolute_path(root, import->path.as.string, &default_arena);
-        if (!directory_exists(absolute_path)) {
-            arena_reset(&default_arena, absolute_path);
-            root = (SV) {0};
-            absolute_path = NULL;
-        }
-    }
-
-    if (!absolute_path) {
-        // Directory inside std
-        root = p->std;
-        absolute_path = get_absolute_path(root, import->path.as.string, &default_arena);
-        if (!directory_exists(absolute_path)) {
-            arena_reset(&default_arena, absolute_path);
-            root = (SV) {0};
-            absolute_path = NULL;
-        }
-    }
+    const char *absolute_path = search_paths_find(p, import->path.as.string, true, &root, &default_arena);
 
     if (!absolute_path) {
         error_node(EK_ERROR, (Node *) import, "Could not find module '" SV_Fmt "'", SV_Arg(import->path.as.string));
@@ -1308,23 +1356,10 @@ static Node *parse_expr(Parser *p, Power mbp, bool groups_allowed, bool compound
         embed->path = expect_token(p, TOKEN_STRING);
 
         if (!p->state.in_compile_time_condition) {
-            if (!p->embed_interns->hasheq) {
-                p->embed_interns->hasheq = ht_hasheq_sv;
+            if (!parser_embed(p, embed)) {
+                error_node(EK_ERROR, node, "Could not read file '" SV_Fmt "'", SV_Arg(embed->path.as.string));
+                exit(1);
             }
-
-            SV *previous = ht_get(p->embed_interns, embed->path.as.string);
-            if (previous) {
-                embed->contents = *previous;
-            } else {
-                const char *path = arena_sv_to_cstr(&temp_arena, embed->path.as.string);
-                if (!read_file(path, &embed->contents, &default_arena, false)) {
-                    error_node(EK_ERROR, node, "Could not read file '%s'", path);
-                    exit(1);
-                }
-                arena_reset(&temp_arena, path);
-                ht_set(p->embed_interns, embed->path.as.string, embed->contents);
-            }
-            embed->read = true;
         }
     } break;
 

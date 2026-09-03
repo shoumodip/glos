@@ -1,0 +1,29 @@
+main :: () {
+    // Use the '#embed' directive to bake binary resources into the executable.
+    CONTENTS :: #embed "21_some_helpful_compiler_directives.glos"
+
+    println("```")
+    print(string(CONTENTS))
+    println("```")
+
+    // The '#embed' directive creates a '[]char' value.
+    println("typeof(CONTENTS) = \{typeof(CONTENTS)}")
+    println()
+
+    // Use the '#location' directive to get the current source code location.
+    //
+    // The structure is defined in the builtin standard module of Glos:
+    //
+    //     Source_Code_Location :: struct {
+    //         path: string
+    //         row:  s64
+    //         col:  s64
+    //     }
+    //
+    here := #location
+    println(here, "Here")
+    println()
+    println("    Path   = \{here.path}")
+    println("    Row    = \{here.row}")
+    println("    Column = \{here.col}")
+}

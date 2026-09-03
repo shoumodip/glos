@@ -58,6 +58,10 @@ typedef enum {
 
 void parser_free(Parser *p);
 
+// Return true if successful
+// Return false if file could not be read
+bool parser_embed(Parser *p, Node_Embed *embed);
+
 // Return true if actually imported
 // Return false if was imported before, and reusing that
 bool parser_import(Parser *p, Node_Import *import);
