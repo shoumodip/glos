@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 163
+tests/error_reporting_take_the_parenthesis_into_consideration_when_calculating_view.glos:1:13: Error: Expected 'string', got 's64'
+
+    s: string = (17 * 2) + 35
+
+

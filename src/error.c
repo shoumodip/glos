@@ -79,6 +79,14 @@ static void range_apply_node(Range *r, const Node *n) {
     }
 
     range_apply_token(r, n->token);
+    if (n->lparen.kind == TOKEN_LPAREN) {
+        range_apply_token(r, n->lparen);
+    }
+
+    if (n->lparen.kind == TOKEN_RPAREN) {
+        range_apply_token(r, n->rparen);
+    }
+
     switch (n->kind) {
     case NODE_ATOM:
         // Pass

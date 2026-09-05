@@ -500,9 +500,12 @@ typedef struct {
 
 struct Node {
     Node_Kind kind;
-    Token     token;
     Type      type;
     Node     *next;
+
+    Token token;
+    Token lparen;
+    Token rparen;
 
     bool is_memory;
     bool is_called;
