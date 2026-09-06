@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 164
+tests/error_cannot_perform_arithmetic_assignment_with_underscore_inside_grouped_lhs.glos:3:8: Error: Identifier '_' cannot be used as a value
+
+    a, _ += 69, 420
+
+

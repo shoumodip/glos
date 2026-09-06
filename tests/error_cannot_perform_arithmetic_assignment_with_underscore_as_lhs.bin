@@ -1,0 +1,9 @@
+EXIT 1
+STDOUT 0
+
+STDERR 144
+tests/error_cannot_perform_arithmetic_assignment_with_underscore_as_lhs.glos:2:5: Error: Identifier '_' cannot be used as a value
+
+    _ += 69
+
+

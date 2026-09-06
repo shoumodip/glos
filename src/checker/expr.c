@@ -98,19 +98,34 @@ static void check_assignment(Compiler *c, Node_Binary *binary) {
 
         assert(is_rhs_group);
         for (size_t i = 0; i < lhs_count; i++) {
-            i64   lhs_group_index = -1;
-            Node *lhs = get_node_from_group(binary->lhs, i, &lhs_group_index);
+            Node *lhs = get_node_from_group(binary->lhs, i, NULL);
             i64   rhs_group_index = -1;
             Node *rhs = get_node_from_group(binary->rhs, i, &rhs_group_index);
-            type_assert_grouped(c, rhs, lhs->type, rhs_group_index, &lhs->token);
 
-            if (binary->overloads) {
-                binary->overloads[i] = check_assignment_lhs_for_arithmetics(c, binary, lhs);
+            if (lhs->kind == NODE_ATOM && lhs->token.kind == TOKEN_IDENT && sv_match(lhs->token.sv, "_")) {
+                if (binary->node.token.kind != TOKEN_SET) {
+                    error_token(EK_ERROR, lhs->token, "Identifier '_' cannot be used as a value");
+                    exit(c, 1);
+                }
+            } else {
+                type_assert_grouped(c, rhs, lhs->type, rhs_group_index, &lhs->token);
+                if (binary->overloads) {
+                    binary->overloads[i] = check_assignment_lhs_for_arithmetics(c, binary, lhs);
+                }
             }
         }
     } else {
-        type_assert(c, binary->rhs, binary->lhs->type);
-        binary->overload = check_assignment_lhs_for_arithmetics(c, binary, binary->lhs);
+        if (binary->lhs->kind == NODE_ATOM && binary->lhs->token.kind == TOKEN_IDENT &&
+            sv_match(binary->lhs->token.sv, "_")) //
+        {
+            if (binary->node.token.kind != TOKEN_SET) {
+                error_token(EK_ERROR, binary->lhs->token, "Identifier '_' cannot be used as a value");
+                exit(c, 1);
+            }
+        } else {
+            type_assert(c, binary->rhs, binary->lhs->type);
+            binary->overload = check_assignment_lhs_for_arithmetics(c, binary, binary->lhs);
+        }
     }
 
     binary->node.type = (Type) {.kind = TYPE_VOID};

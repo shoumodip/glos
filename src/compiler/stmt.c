@@ -2,6 +2,10 @@
 #include "compiler.h"
 
 void compile_var_def(Compiler *c, Node_Atom *it) {
+    if (sv_match(it->node.token.sv, "_")) {
+        return;
+    }
+
     const void *checkpoint = arena_alloc(&temp_arena, 0);
 
     compile_type(c, &it->node.type);
@@ -168,11 +172,15 @@ void compile_stmt_define(Compiler *c, Node_Define *define) {
             LLVMValueRef value = compile_expr(c, define->expr, false);
             set_debug_pos(c, define->node.token.pos);
             if (define->count == 1) {
-                LLVMBuildStore(c->llvm_builder, value, vars[0]);
+                if (vars[0]) {
+                    LLVMBuildStore(c->llvm_builder, value, vars[0]);
+                }
             } else {
                 for (size_t i = 0; i < define->count; i++) {
-                    LLVMValueRef value = c->group_values.data[group_values_count_save + i];
-                    LLVMBuildStore(c->llvm_builder, value, vars[i]);
+                    if (vars[i]) {
+                        LLVMValueRef value = c->group_values.data[group_values_count_save + i];
+                        LLVMBuildStore(c->llvm_builder, value, vars[i]);
+                    }
                 }
             }
 

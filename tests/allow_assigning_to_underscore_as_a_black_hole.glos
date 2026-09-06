@@ -1,0 +1,8 @@
+main :: () {
+    _ = 69
+    _ = "Noice!"
+
+    a: string
+    a, _ = "Foo", 420
+    println(a)
+}

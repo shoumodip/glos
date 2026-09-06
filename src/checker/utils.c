@@ -303,7 +303,9 @@ Node *get_node_from_group(Node *n, size_t index, i64 *group_index) {
 
     if (n->kind == NODE_CALL) {
         assert(index < n->type.spec.group.count);
-        *group_index = index;
+        if (group_index) {
+            *group_index = index;
+        }
     }
 
     return n;

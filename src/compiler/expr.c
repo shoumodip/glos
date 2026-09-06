@@ -1,4 +1,4 @@
-#include "../checker.h"
+#include "../checker/checker.h"
 #include "../error.h"
 #include "compiler.h"
 
@@ -564,6 +564,9 @@ LLVMValueRef compile_expr_atom(Compiler *c, Node_Atom *atom, bool ref) {
         return LLVMConstReal(n->type.llvm, n->token.as.real);
 
     case TOKEN_IDENT:
+        if (sv_match(n->token.sv, "_")) {
+            return NULL;
+        }
         return compile_ident(c, n, (Node_Atom *) atom->definition, ref);
 
     case TOKEN_STRING: {
@@ -985,12 +988,23 @@ LLVMValueRef compile_expr_binary(Compiler *c, Node_Binary *binary) {
             const size_t count = binary->lhs->type.spec.group.count;
             assert(c->group_values.count == group_values_count_save + count * 2);
             for (size_t i = 0; i < count; i++) {
+                Node *lhs = get_node_from_group(binary->lhs, i, NULL);
+                if (lhs->kind == NODE_ATOM && lhs->token.kind == TOKEN_IDENT && sv_match(lhs->token.sv, "_")) {
+                    continue;
+                }
+
                 LLVMValueRef ptr = c->group_values.data[group_values_count_save + i];
                 LLVMValueRef value = c->group_values.data[group_values_count_save + count + i];
                 LLVMBuildStore(c->llvm_builder, value, ptr);
             }
         } else {
-            LLVMBuildStore(c->llvm_builder, rhs, lhs);
+            if (binary->lhs->kind == NODE_ATOM && binary->lhs->token.kind == TOKEN_IDENT &&
+                sv_match(binary->lhs->token.sv, "_")) //
+            {
+                // Pass
+            } else {
+                LLVMBuildStore(c->llvm_builder, rhs, lhs);
+            }
         }
 
         c->group_values.count = group_values_count_save;
