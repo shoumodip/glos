@@ -1517,6 +1517,12 @@ void check_expr_call(Compiler *c, Node_Call *call) {
                     from->emit_type_info->is_meta = false;
                     from->type = c->type_info_pointer_type;
                     same = true;
+                } else if (
+                    type_eq(*to_type, (Type) {.kind = TYPE_CHAR, .ref = 1}) &&   //
+                    from->kind == NODE_ATOM && from->token.kind == TOKEN_STRING) //
+                {
+                    same = true;
+                    from->type = *to_type;
                 } else if (type_is_scalar(*to_type)) {
                     type_assert_scalar(c, from);
 
